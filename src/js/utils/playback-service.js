@@ -4,8 +4,19 @@
  * devices, and playing on a specific device.
  */
 
-const APP_FALLBACK_DELAY_MS = 1200;
+const APP_FALLBACK_DELAY_MS = 1800;
 const SPOTIFY_APP_FALLBACK_DELAY_MS = 2500;
+
+function openWebFallbackInNewTab(webUrl) {
+  if (typeof window?.open !== 'function') {
+    return;
+  }
+
+  const popup = window.open(webUrl, '_blank', 'noopener,noreferrer');
+  if (popup && typeof popup.opener !== 'undefined') {
+    popup.opener = null;
+  }
+}
 
 function openNativeAppWithFallback(
   appUrl,
@@ -68,7 +79,7 @@ function openNativeAppWithFallback(
 
   const fallbackTimer = setTimeout(() => {
     if (shouldFallbackToWeb()) {
-      window.location.href = webUrl;
+      openWebFallbackInNewTab(webUrl);
     }
     cleanup();
   }, fallbackDelayMs);
@@ -82,7 +93,7 @@ function openNativeAppWithFallback(
   } catch (_err) {
     clearTimeout(fallbackTimer);
     cleanup();
-    window.location.href = webUrl;
+    openWebFallbackInNewTab(webUrl);
   }
 }
 

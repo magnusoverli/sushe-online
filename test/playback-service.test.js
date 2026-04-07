@@ -96,6 +96,7 @@ describe('playback-service', async () => {
       const originalDocument = globalThis.document;
       const originalSetTimeout = globalThis.setTimeout;
       const originalClearTimeout = globalThis.clearTimeout;
+      const originalOpen = globalThis.window.open;
       let scheduledFallback = null;
 
       globalThis.fetch = mock.fn(() =>
@@ -112,6 +113,7 @@ describe('playback-service', async () => {
       };
       globalThis.window.addEventListener = mock.fn();
       globalThis.window.removeEventListener = mock.fn();
+      globalThis.window.open = mock.fn();
       globalThis.setTimeout = (fn) => {
         scheduledFallback = fn;
         return 1;
@@ -136,13 +138,18 @@ describe('playback-service', async () => {
         scheduledFallback();
 
         assert.strictEqual(
-          globalThis.window.location.href,
+          globalThis.window.open.mock.calls[0].arguments[0],
           'https://listen.tidal.com/album/xyz789'
+        );
+        assert.strictEqual(
+          globalThis.window.open.mock.calls[0].arguments[1],
+          '_blank'
         );
       } finally {
         globalThis.document = originalDocument;
         globalThis.setTimeout = originalSetTimeout;
         globalThis.clearTimeout = originalClearTimeout;
+        globalThis.window.open = originalOpen;
         delete globalThis.window.addEventListener;
         delete globalThis.window.removeEventListener;
       }
@@ -181,6 +188,7 @@ describe('playback-service', async () => {
       const originalDocument = globalThis.document;
       const originalSetTimeout = globalThis.setTimeout;
       const originalClearTimeout = globalThis.clearTimeout;
+      const originalOpen = globalThis.window.open;
       let scheduledFallback = null;
 
       globalThis.fetch = mock.fn(() =>
@@ -197,6 +205,7 @@ describe('playback-service', async () => {
       };
       globalThis.window.addEventListener = mock.fn();
       globalThis.window.removeEventListener = mock.fn();
+      globalThis.window.open = mock.fn();
       globalThis.setTimeout = (fn) => {
         scheduledFallback = fn;
         return 1;
@@ -220,13 +229,18 @@ describe('playback-service', async () => {
         scheduledFallback();
 
         assert.strictEqual(
-          globalThis.window.location.href,
+          globalThis.window.open.mock.calls[0].arguments[0],
           'https://play.qobuz.com/album/0060252792762'
+        );
+        assert.strictEqual(
+          globalThis.window.open.mock.calls[0].arguments[1],
+          '_blank'
         );
       } finally {
         globalThis.document = originalDocument;
         globalThis.setTimeout = originalSetTimeout;
         globalThis.clearTimeout = originalClearTimeout;
+        globalThis.window.open = originalOpen;
         delete globalThis.window.addEventListener;
         delete globalThis.window.removeEventListener;
       }
@@ -237,6 +251,7 @@ describe('playback-service', async () => {
       const originalDocument = globalThis.document;
       const originalSetTimeout = globalThis.setTimeout;
       const originalClearTimeout = globalThis.clearTimeout;
+      const originalOpen = globalThis.window.open;
       let scheduledFallback = null;
 
       globalThis.fetch = mock.fn(() =>
@@ -253,6 +268,7 @@ describe('playback-service', async () => {
       };
       globalThis.window.addEventListener = mock.fn();
       globalThis.window.removeEventListener = mock.fn();
+      globalThis.window.open = mock.fn();
       globalThis.setTimeout = (fn) => {
         scheduledFallback = fn;
         return 1;
@@ -277,13 +293,18 @@ describe('playback-service', async () => {
         scheduledFallback();
 
         assert.strictEqual(
-          globalThis.window.location.href,
+          globalThis.window.open.mock.calls[0].arguments[0],
           'https://open.spotify.com/album/abc123'
+        );
+        assert.strictEqual(
+          globalThis.window.open.mock.calls[0].arguments[1],
+          '_blank'
         );
       } finally {
         globalThis.document = originalDocument;
         globalThis.setTimeout = originalSetTimeout;
         globalThis.clearTimeout = originalClearTimeout;
+        globalThis.window.open = originalOpen;
         delete globalThis.window.addEventListener;
         delete globalThis.window.removeEventListener;
       }

@@ -15,10 +15,24 @@ const { test, expect } = require('@playwright/test');
 
 // Test configuration - use a consistent test user
 const TEST_USER = {
-  email: 'e2e_integration_test@example.com',
-  username: 'e2e_integration',
-  password: 'TestPassword123!',
+  email: process.env.E2E_API_TEST_EMAIL || 'e2e_integration_test@example.com',
+  username: process.env.E2E_API_TEST_USERNAME || 'e2e_integration',
+  password: process.env.E2E_API_TEST_PASSWORD || 'TestPassword123!',
 };
+
+async function tryLogin(page, user) {
+  await page.goto('/login');
+  await page.fill('input[name="email"]', user.email);
+  await page.fill('input[name="password"]', user.password);
+  await page.click('button[type="submit"]');
+
+  await page.waitForURL(
+    (url) => url.pathname === '/' || url.pathname === '/login',
+    { timeout: 10000 }
+  );
+
+  return page.url().endsWith('/') || page.url().includes('/?');
+}
 
 /**
  * Auto-approve a user directly in the database.
@@ -43,44 +57,79 @@ async function approveUserInDB(email) {
 }
 
 /**
+ * If the test user already exists but credentials are stale,
+ * force it to a known approved state for this suite.
+ */
+async function syncExistingUserInDB(user) {
+  const DATABASE_URL = process.env.DATABASE_URL;
+  if (!DATABASE_URL) {
+    return false;
+  }
+
+  const { Pool } = require('pg');
+  const bcrypt = require('bcryptjs');
+  const pool = new Pool({ connectionString: DATABASE_URL, max: 1 });
+
+  try {
+    const hash = await bcrypt.hash(user.password, 12);
+    const result = await pool.query(
+      `UPDATE users
+       SET username = $2,
+           hash = $3,
+           approval_status = 'approved',
+           updated_at = NOW()
+       WHERE email = $1`,
+      [user.email, user.username, hash]
+    );
+
+    return result.rowCount > 0;
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
  * Setup: Ensure test user exists and is approved, then login.
  * This handles the approval workflow that blocks new registrations.
  * When DATABASE_URL is available (CI), auto-approves via direct DB query.
  */
 async function setupAuthenticatedUser(page) {
   // First, try to login with existing test user
-  await page.goto('/login');
-  await page.fill('input[name="email"]', TEST_USER.email);
-  await page.fill('input[name="password"]', TEST_USER.password);
-  await page.click('button[type="submit"]');
-
-  // Wait for response - could be home (success), login (wrong creds), or login with error (pending)
-  await page.waitForURL(
-    (url) => url.pathname === '/' || url.pathname === '/login',
-    { timeout: 10000 }
-  );
-
-  // If we're on home page, we're logged in!
-  if (page.url().endsWith('/') || page.url().includes('/?')) {
+  if (await tryLogin(page, TEST_USER)) {
     return { email: TEST_USER.email, username: TEST_USER.username };
   }
 
   // Check for pending approval message — try auto-approving via DB
   const pageContent = await page.content();
-  if (pageContent.includes('pending approval')) {
+  if (
+    pageContent.includes('pending approval') ||
+    pageContent.includes('pending admin approval')
+  ) {
     const approved = await approveUserInDB(TEST_USER.email);
     if (approved) {
       // Retry login after approval
-      await page.goto('/login');
-      await page.fill('input[name="email"]', TEST_USER.email);
-      await page.fill('input[name="password"]', TEST_USER.password);
-      await page.click('button[type="submit"]');
-      await page.waitForURL('/', { timeout: 10000 });
-      return { email: TEST_USER.email, username: TEST_USER.username };
+      if (await tryLogin(page, TEST_USER)) {
+        return { email: TEST_USER.email, username: TEST_USER.username };
+      }
     }
+
+    if (!process.env.DATABASE_URL) {
+      test.skip(
+        true,
+        'Skipping API integration e2e tests: test user is pending approval and DATABASE_URL is not available for auto-approval.'
+      );
+      return null;
+    }
+
     throw new Error(
       'Test user exists but is pending approval. Please approve the user in admin panel.'
     );
+  }
+
+  // User may already exist with stale credentials - repair and retry when DB access is available
+  const synced = await syncExistingUserInDB(TEST_USER);
+  if (synced && (await tryLogin(page, TEST_USER))) {
+    return { email: TEST_USER.email, username: TEST_USER.username };
   }
 
   // User doesn't exist — register them
@@ -91,22 +140,42 @@ async function setupAuthenticatedUser(page) {
   await page.fill('input[name="confirmPassword"]', TEST_USER.password);
   await page.click('button[type="submit"]');
 
-  // Registration redirects to login with pending message
-  await page.waitForURL('/login', { timeout: 10000 });
+  // Registration should redirect to login; if it does not, recover if possible.
+  await page.waitForURL(
+    (url) => url.pathname === '/login' || url.pathname === '/register',
+    {
+      timeout: 10000,
+    }
+  );
+
+  if (new URL(page.url()).pathname === '/register') {
+    if (synced && (await tryLogin(page, TEST_USER))) {
+      return { email: TEST_USER.email, username: TEST_USER.username };
+    }
+
+    throw new Error(
+      'Registration did not redirect to /login. The test account likely already exists with different credentials or registration validation failed.'
+    );
+  }
 
   // Try auto-approving via DB (works in CI where DATABASE_URL is set)
   const approved = await approveUserInDB(TEST_USER.email);
   if (approved) {
     // Retry login after approval
-    await page.goto('/login');
-    await page.fill('input[name="email"]', TEST_USER.email);
-    await page.fill('input[name="password"]', TEST_USER.password);
-    await page.click('button[type="submit"]');
-    await page.waitForURL('/', { timeout: 10000 });
-    return { email: TEST_USER.email, username: TEST_USER.username };
+    if (await tryLogin(page, TEST_USER)) {
+      return { email: TEST_USER.email, username: TEST_USER.username };
+    }
   }
 
   // No DB access — manual approval required
+  if (!process.env.DATABASE_URL) {
+    test.skip(
+      true,
+      'Skipping API integration e2e tests: no DATABASE_URL available to auto-approve newly registered test users.'
+    );
+    return null;
+  }
+
   throw new Error(
     `Test user "${TEST_USER.email}" registered but needs admin approval.\n` +
       'To run integration tests:\n' +
