@@ -1,10 +1,31 @@
 [
   {
+    "date": "2026-04-07",
+    "category": "feature",
+    "description": "Added mobile album playback and Tidal deep links",
+    "hash": "601f439dd9a84e7a1de02e8e528cd9501b4ea7b9",
+    "commitMessage": "Add mobile cover-tap album playback and Tidal deep links"
+  },
+  {
+    "date": "2026-04-06",
+    "category": "perf",
+    "description": "Faster album syncing and loading",
+    "hash": "d8374d16846afe34d9e0e02da1e0665c67fbab60",
+    "commitMessage": "Harden core service workflows and reduce sync latency\n\nImprove Group 3 service correctness by adding transactional updates, stricter reorder validation, and safer metadata handling. Also reduce list/playcount/playlist overhead with scoped queries, bulk updates, paginated playlist lookups, and expanded regression coverage."
+  },
+  {
     "date": "2026-04-06",
     "category": "perf",
     "description": "Faster album syncing and improved performance",
     "hash": "d8374d16846afe34d9e0e02da1e0665c67fbab60",
     "commitMessage": "Harden core service workflows and reduce sync latency\n\nImprove Group 3 service correctness by adding transactional updates, stricter reorder validation, and safer metadata handling. Also reduce list/playcount/playlist overhead with scoped queries, bulk updates, paginated playlist lookups, and expanded regression coverage."
+  },
+  {
+    "date": "2026-04-05",
+    "category": "feature",
+    "description": "Added Deathrock to available genres",
+    "hash": "120ea298f67fb48e72d81b5d88f119f2cabe93ab",
+    "commitMessage": "Add Deathrock to allowed genres"
   },
   {
     "date": "2026-04-05",
