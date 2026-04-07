@@ -1,6 +1,6 @@
 /**
  * Music service chooser utility.
- * Resolves which music service (Spotify/Tidal) to use based on
+ * Resolves which music service (Spotify/Tidal/Qobuz) to use based on
  * user preferences and connected services.
  */
 
@@ -8,14 +8,26 @@
  * Choose which music service to use for playback.
  * Resolves user preference, connected services, and shows a picker if both are available.
  *
- * @param {Function} showServicePicker - Function to show service picker UI (returns Promise<'spotify'|'tidal'>)
+ * @param {Function} showServicePicker - Function to show service picker UI
  * @param {Function} showToast - Function to show toast notifications
- * @returns {Promise<'spotify'|'tidal'|null>} The chosen service, or null if none available
+ * @returns {Promise<'spotify'|'tidal'|'qobuz'|null>} The chosen service, or null if none available
  */
 export function chooseService(showServicePicker, showToast) {
-  const hasSpotify = window.currentUser?.spotifyAuth;
-  const hasTidal = window.currentUser?.tidalAuth;
-  const preferred = window.currentUser?.musicService;
+  const user = window.currentUser;
+  if (!user) {
+    return Promise.resolve(null);
+  }
+
+  const hasSpotify = user.spotifyAuth;
+  const hasTidal = user.tidalAuth;
+  const preferred = user.musicService;
+  const hasQobuz = true;
+
+  const pickerServices = {
+    spotify: !!hasSpotify,
+    tidal: !!hasTidal,
+    qobuz: hasQobuz,
+  };
 
   if (preferred === 'spotify' && hasSpotify) {
     return Promise.resolve('spotify');
@@ -23,12 +35,17 @@ export function chooseService(showServicePicker, showToast) {
   if (preferred === 'tidal' && hasTidal) {
     return Promise.resolve('tidal');
   }
+  if (preferred === 'qobuz' && hasQobuz) {
+    return Promise.resolve('qobuz');
+  }
   if (hasSpotify && hasTidal) {
-    return showServicePicker(true, true);
+    return showServicePicker(pickerServices);
   } else if (hasSpotify) {
     return Promise.resolve('spotify');
   } else if (hasTidal) {
     return Promise.resolve('tidal');
+  } else if (hasQobuz) {
+    return showServicePicker(pickerServices);
   } else {
     showToast('No music service connected', 'error');
     return Promise.resolve(null);

@@ -67,6 +67,30 @@ describe('playback-service', async () => {
       );
     });
 
+    it('should open Qobuz album with correct URL and endpoint', async () => {
+      const mockShowToast = mock.fn();
+      globalThis.fetch = mock.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: '0060252792762' }),
+        })
+      );
+
+      await openInMusicApp(
+        'qobuz',
+        'album',
+        { artist: 'Radiohead', album: 'OK Computer' },
+        mockShowToast
+      );
+
+      const fetchUrl = globalThis.fetch.mock.calls[0].arguments[0];
+      assert.ok(fetchUrl.startsWith('/api/qobuz/album?'));
+      assert.strictEqual(
+        globalThis.window.location.href,
+        'qobuzapp://album/0060252792762'
+      );
+    });
+
     it('should fall back to Tidal web URL when app launch is not detected', async () => {
       const mockShowToast = mock.fn();
       const originalDocument = globalThis.document;
@@ -150,6 +174,62 @@ describe('playback-service', async () => {
         globalThis.window.location.href,
         'spotify:track:track1'
       );
+    });
+
+    it('should fall back to Qobuz web URL when app launch is not detected', async () => {
+      const mockShowToast = mock.fn();
+      const originalDocument = globalThis.document;
+      const originalSetTimeout = globalThis.setTimeout;
+      const originalClearTimeout = globalThis.clearTimeout;
+      let scheduledFallback = null;
+
+      globalThis.fetch = mock.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: '0060252792762' }),
+        })
+      );
+
+      globalThis.document = {
+        visibilityState: 'visible',
+        addEventListener: mock.fn(),
+        removeEventListener: mock.fn(),
+      };
+      globalThis.window.addEventListener = mock.fn();
+      globalThis.window.removeEventListener = mock.fn();
+      globalThis.setTimeout = (fn) => {
+        scheduledFallback = fn;
+        return 1;
+      };
+      globalThis.clearTimeout = () => {};
+
+      try {
+        await openInMusicApp(
+          'qobuz',
+          'album',
+          { artist: 'Radiohead', album: 'OK Computer' },
+          mockShowToast
+        );
+
+        assert.strictEqual(
+          globalThis.window.location.href,
+          'qobuzapp://album/0060252792762'
+        );
+        assert.strictEqual(typeof scheduledFallback, 'function');
+
+        scheduledFallback();
+
+        assert.strictEqual(
+          globalThis.window.location.href,
+          'https://play.qobuz.com/album/0060252792762'
+        );
+      } finally {
+        globalThis.document = originalDocument;
+        globalThis.setTimeout = originalSetTimeout;
+        globalThis.clearTimeout = originalClearTimeout;
+        delete globalThis.window.addEventListener;
+        delete globalThis.window.removeEventListener;
+      }
     });
 
     it('should fall back to Spotify web URL when app launch is not detected', async () => {
@@ -434,6 +514,25 @@ describe('playback-service', async () => {
       assert.strictEqual(
         mockShowToast.mock.calls[0].arguments[0],
         'Invalid response'
+      );
+    });
+
+    it('should show unsupported service error without calling fetch', async () => {
+      const mockShowToast = mock.fn();
+      globalThis.fetch = mock.fn();
+
+      await openInMusicApp(
+        'deezer',
+        'album',
+        { artist: 'Radiohead', album: 'OK Computer' },
+        mockShowToast
+      );
+
+      assert.strictEqual(globalThis.fetch.mock.calls.length, 0);
+      assert.strictEqual(mockShowToast.mock.calls.length, 1);
+      assert.strictEqual(
+        mockShowToast.mock.calls[0].arguments[0],
+        'Unsupported music service: deezer'
       );
     });
   });

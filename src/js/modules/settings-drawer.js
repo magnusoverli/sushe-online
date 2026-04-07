@@ -948,13 +948,14 @@ export function createSettingsDrawer(deps = {}) {
             <div class="settings-row">
               <div class="settings-row-label">
                 <label class="settings-label" for="musicServiceSelect">Default Music Service</label>
-                <p class="settings-description">Choose your default music service for playlist creation</p>
+                <p class="settings-description">Choose your default music service for playback and playlist creation</p>
               </div>
               <div class="settings-row-control">
                 <select id="musicServiceSelect" class="settings-select">
                   <option value="" ${!data.musicService ? 'selected' : ''}>Ask each time</option>
                   <option value="spotify" ${data.musicService === 'spotify' ? 'selected' : ''} ${!data.spotifyAuth ? 'disabled' : ''}>Spotify</option>
                   <option value="tidal" ${data.musicService === 'tidal' ? 'selected' : ''} ${!data.tidalAuth ? 'disabled' : ''}>Tidal</option>
+                  <option value="qobuz" ${data.musicService === 'qobuz' ? 'selected' : ''}>Qobuz</option>
                 </select>
               </div>
             </div>

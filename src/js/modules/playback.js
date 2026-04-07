@@ -44,6 +44,7 @@ export function createPlayback(deps = {}) {
     const hasTidal = window.currentUser?.tidalAuth;
     const musicService = window.currentUser?.musicService;
 
+    if (musicService === 'qobuz') return 'qobuz';
     if (musicService === 'tidal' && hasTidal) return 'tidal';
     if (musicService === 'spotify' && hasSpotify) return 'spotify';
     if (hasTidal && !hasSpotify) return 'tidal';
@@ -80,13 +81,20 @@ export function createPlayback(deps = {}) {
 
     const hasSpotify = window.currentUser?.spotifyAuth;
     const hasTidal = window.currentUser?.tidalAuth;
+    const hasQobuzPreferred = window.currentUser?.musicService === 'qobuz';
     const primaryService = getPrimaryService();
 
     // Build menu items
     let menuItems = [];
 
     // Add "Open in [Service]" option based on user's preference/connected service
-    if (primaryService === 'tidal') {
+    if (primaryService === 'qobuz') {
+      menuItems.push(`
+      <button class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-play-action="open-app">
+        <i class="fas fa-compact-disc mr-2"></i>Open in Qobuz
+      </button>
+    `);
+    } else if (primaryService === 'tidal') {
       menuItems.push(`
       <button class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-play-action="open-app">
         <svg class="inline-block w-4 h-4 mr-2 align-text-bottom" viewBox="0 0 24 24" fill="currentColor">
@@ -144,7 +152,7 @@ export function createPlayback(deps = {}) {
     }
 
     // If no services connected
-    if (!hasSpotify && !hasTidal) {
+    if (!hasSpotify && !hasTidal && !hasQobuzPreferred) {
       menuItems.push(`
       <div class="px-4 py-2 text-sm text-gray-500">No music service connected</div>
     `);

@@ -514,6 +514,17 @@ describe('POST /settings/update-music-service', () => {
     assert.strictEqual(response.body.success, true);
   });
 
+  it('should update to qobuz', async () => {
+    const { app } = createTestApp();
+
+    const response = await request(app)
+      .post('/settings/update-music-service')
+      .send({ musicService: 'qobuz' });
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(response.body.success, true);
+  });
+
   it('should clear preference with null', async () => {
     const { app } = createTestApp();
 

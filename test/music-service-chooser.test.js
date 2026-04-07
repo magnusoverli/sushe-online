@@ -74,19 +74,27 @@ describe('music-service-chooser', async () => {
     assert.strictEqual(result, 'tidal');
   });
 
-  it('should show toast and return null when no service connected', async () => {
+  it('should show picker when only qobuz is available', async () => {
     globalThis.window.currentUser = {
       spotifyAuth: false,
       tidalAuth: false,
       musicService: null,
     };
     const result = await chooseService(mockShowServicePicker, mockShowToast);
-    assert.strictEqual(result, null);
-    assert.strictEqual(mockShowToast.mock.calls.length, 1);
-    assert.strictEqual(
-      mockShowToast.mock.calls[0].arguments[0],
-      'No music service connected'
-    );
+    assert.strictEqual(result, 'spotify');
+    assert.strictEqual(mockShowServicePicker.mock.calls.length, 1);
+    assert.strictEqual(mockShowToast.mock.calls.length, 0);
+  });
+
+  it('should return qobuz when preferred is qobuz', async () => {
+    globalThis.window.currentUser = {
+      spotifyAuth: false,
+      tidalAuth: false,
+      musicService: 'qobuz',
+    };
+    const result = await chooseService(mockShowServicePicker, mockShowToast);
+    assert.strictEqual(result, 'qobuz');
+    assert.strictEqual(mockShowServicePicker.mock.calls.length, 0);
   });
 
   it('should return null when no currentUser', async () => {

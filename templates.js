@@ -1089,6 +1089,9 @@ const serviceSelectModalComponent = () =>
         <button id="serviceTidalBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200 flex items-center justify-center">
           <i class="fas fa-wave-square mr-2"></i>Tidal
         </button>
+        <button id="serviceQobuzBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200 flex items-center justify-center">
+          <i class="fas fa-compact-disc mr-2"></i>Qobuz
+        </button>
       </div>
     `,
     footer: `

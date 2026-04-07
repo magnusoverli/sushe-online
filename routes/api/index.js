@@ -254,6 +254,7 @@ module.exports = (app, deps) => {
   require('./proxies')(app, sharedDeps);
   require('./spotify')(app, sharedDeps);
   require('./tidal')(app, sharedDeps);
+  require('./qobuz')(app, sharedDeps);
   require('./playlists')(app, sharedDeps);
   require('./lastfm')(app, sharedDeps);
   require('./telegram')(app, sharedDeps);

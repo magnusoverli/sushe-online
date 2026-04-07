@@ -101,10 +101,25 @@ function openTidalAppWithFallback(type, id) {
   );
 }
 
+function openQobuzAppWithFallback(id) {
+  const encodedId = encodeURIComponent(id);
+  openNativeAppWithFallback(
+    `qobuzapp://album/${encodedId}`,
+    `https://play.qobuz.com/album/${encodedId}`
+  );
+}
+
+function getPlaybackLookupEndpoint(service, type) {
+  if (service === 'spotify') return `/api/spotify/${type}`;
+  if (service === 'tidal') return `/api/tidal/${type}`;
+  if (service === 'qobuz') return '/api/qobuz/album';
+  return null;
+}
+
 /**
  * Open an album or track in the user's connected music service.
  *
- * @param {string} service - 'spotify' or 'tidal'
+ * @param {string} service - 'spotify', 'tidal', or 'qobuz'
  * @param {'album'|'track'} type - Whether to open an album or track
  * @param {Object} params - Search parameters
  * @param {string} params.artist - Artist name
@@ -131,8 +146,11 @@ export async function openInMusicApp(service, type, params, showToast) {
   }
   const query = queryParts.join('&');
 
-  const endpoint =
-    service === 'spotify' ? `/api/spotify/${type}` : `/api/tidal/${type}`;
+  const endpoint = getPlaybackLookupEndpoint(service, type);
+  if (!endpoint) {
+    showToast(`Unsupported music service: ${service}`, 'error');
+    return;
+  }
 
   try {
     const r = await fetch(`${endpoint}?${query}`, { credentials: 'include' });
@@ -150,8 +168,10 @@ export async function openInMusicApp(service, type, params, showToast) {
     if (data.id) {
       if (service === 'spotify') {
         openSpotifyAppWithFallback(type, data.id);
-      } else {
+      } else if (service === 'tidal') {
         openTidalAppWithFallback(type, data.id);
+      } else {
+        openQobuzAppWithFallback(data.id);
       }
     } else if (data.error) {
       showToast(data.error, 'error');

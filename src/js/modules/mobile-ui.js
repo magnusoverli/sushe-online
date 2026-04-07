@@ -180,15 +180,19 @@ export function createMobileUI(deps = {}) {
 
     const hasSpotify = window.currentUser?.spotifyAuth;
     const hasTidal = window.currentUser?.tidalAuth;
-    const hasAnyService = hasSpotify || hasTidal;
     const hasLastfm = !!window.currentUser?.lastfmUsername;
     const musicService = window.currentUser?.musicService;
+    const hasQobuzPreferred = musicService === 'qobuz';
+    const hasAnyService = hasSpotify || hasTidal || hasQobuzPreferred;
 
     // Determine which service to show for "Open in..." based on preference
     // Priority: user preference > only connected service > Spotify (if both)
     let primaryServiceName = '';
     let showSpotifyConnect = false;
-    if (musicService === 'tidal' && hasTidal) {
+    if (musicService === 'qobuz') {
+      primaryServiceName = 'Qobuz';
+      showSpotifyConnect = false;
+    } else if (musicService === 'tidal' && hasTidal) {
       primaryServiceName = 'Tidal';
       showSpotifyConnect = false; // User explicitly chose Tidal
     } else if (musicService === 'spotify' && hasSpotify) {

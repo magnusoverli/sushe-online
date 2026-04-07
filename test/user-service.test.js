@@ -42,7 +42,11 @@ describe('user-service constants', () => {
   });
 
   it('should export ALLOWED_MUSIC_SERVICES', () => {
-    assert.deepStrictEqual(ALLOWED_MUSIC_SERVICES, ['spotify', 'tidal']);
+    assert.deepStrictEqual(ALLOWED_MUSIC_SERVICES, [
+      'spotify',
+      'tidal',
+      'qobuz',
+    ]);
   });
 
   it('should export ALLOWED_GRID_COLUMNS', () => {
@@ -177,6 +181,10 @@ describe('userService.validateSetting', () => {
     );
     assert.strictEqual(
       service.validateSetting('musicService', 'tidal').valid,
+      true
+    );
+    assert.strictEqual(
+      service.validateSetting('musicService', 'qobuz').valid,
       true
     );
   });

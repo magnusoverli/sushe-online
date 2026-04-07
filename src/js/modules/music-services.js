@@ -130,7 +130,7 @@ export async function updatePlaylist(listName, listData = []) {
     ) {
       const shouldRedirect = await showConfirmation(
         'Music Service Required',
-        'No music service selected! Please choose Spotify or Tidal as your preferred service in Settings.',
+        'No music service selected! Please choose Spotify, Tidal, or Qobuz as your preferred service in Settings.',
         'Would you like to go to Settings now?',
         'Go to Settings'
       );
@@ -150,18 +150,33 @@ export async function updatePlaylist(listName, listData = []) {
   }
 }
 
-export function showServicePicker(hasSpotify, hasTidal) {
+export function showServicePicker(serviceAvailability, hasTidalLegacy) {
   const modal = document.getElementById('serviceSelectModal');
   const spotifyBtn = document.getElementById('serviceSpotifyBtn');
   const tidalBtn = document.getElementById('serviceTidalBtn');
+  const qobuzBtn = document.getElementById('serviceQobuzBtn');
   const cancelBtn = document.getElementById('serviceCancelBtn');
 
-  if (!modal || !spotifyBtn || !tidalBtn || !cancelBtn) {
+  if (!modal || !spotifyBtn || !tidalBtn || !qobuzBtn || !cancelBtn) {
     return Promise.resolve(null);
   }
 
-  spotifyBtn.classList.toggle('hidden', !hasSpotify);
-  tidalBtn.classList.toggle('hidden', !hasTidal);
+  const services =
+    typeof serviceAvailability === 'object' && serviceAvailability !== null
+      ? {
+          spotify: !!serviceAvailability.spotify,
+          tidal: !!serviceAvailability.tidal,
+          qobuz: !!serviceAvailability.qobuz,
+        }
+      : {
+          spotify: !!serviceAvailability,
+          tidal: !!hasTidalLegacy,
+          qobuz: false,
+        };
+
+  spotifyBtn.classList.toggle('hidden', !services.spotify);
+  tidalBtn.classList.toggle('hidden', !services.tidal);
+  qobuzBtn.classList.toggle('hidden', !services.qobuz);
 
   modal.classList.remove('hidden');
 
@@ -170,6 +185,7 @@ export function showServicePicker(hasSpotify, hasTidal) {
       modal.classList.add('hidden');
       spotifyBtn.onclick = null;
       tidalBtn.onclick = null;
+      qobuzBtn.onclick = null;
       cancelBtn.onclick = null;
       modal.onclick = null;
       document.removeEventListener('keydown', escHandler);
@@ -189,6 +205,10 @@ export function showServicePicker(hasSpotify, hasTidal) {
     tidalBtn.onclick = () => {
       cleanup();
       resolve('tidal');
+    };
+    qobuzBtn.onclick = () => {
+      cleanup();
+      resolve('qobuz');
     };
     cancelBtn.onclick = () => {
       cleanup();
