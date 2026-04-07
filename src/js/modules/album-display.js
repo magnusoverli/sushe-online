@@ -1155,9 +1155,10 @@ export function createAlbumDisplay(deps = {}) {
                     border: 1px solid ${c.border}; border-radius: 50%;
                     background: rgba(17, 24, 39, 0.7);
                     box-shadow: 0 0 ${c.size} ${c.shadow};
-                    color: white; font-size: 9px; font-weight: 500; pointer-events: none;"
+                    color: white; font-size: 9px; font-weight: 500; line-height: 1;
+                    font-variant-numeric: tabular-nums; pointer-events: none;"
              data-position-element="true">
-          <span style="transform: translateY(0.5px)">${position}</span>
+          <span style="display: block; line-height: 1">${position}</span>
         </div>`;
     };
 
