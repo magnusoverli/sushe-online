@@ -354,6 +354,73 @@ describe('album-display module', () => {
     });
   });
 
+  describe('playAlbumFromMobileCover', () => {
+    let createAlbumDisplay;
+
+    beforeEach(async () => {
+      const module = await import('../src/js/modules/album-display.js');
+      createAlbumDisplay = module.createAlbumDisplay;
+    });
+
+    it('should trigger metadata-based album playback', () => {
+      const playAlbumByMetadata = mock.fn();
+      const showToast = mock.fn();
+      const module = createAlbumDisplay({ playAlbumByMetadata, showToast });
+
+      const album = {
+        artist: 'Opeth',
+        album: 'Blackwater Park',
+        album_id: 'album-123',
+        release_date: '2001-03-12',
+      };
+
+      const didPlay = module.playAlbumFromMobileCover(album);
+
+      assert.strictEqual(didPlay, true);
+      assert.strictEqual(playAlbumByMetadata.mock.calls.length, 1);
+      assert.deepStrictEqual(playAlbumByMetadata.mock.calls[0].arguments, [
+        'Opeth',
+        'Blackwater Park',
+        {
+          albumId: 'album-123',
+          releaseDate: '2001-03-12',
+        },
+      ]);
+      assert.strictEqual(showToast.mock.calls.length, 0);
+    });
+
+    it('should show error toast when album is missing', () => {
+      const playAlbumByMetadata = mock.fn();
+      const showToast = mock.fn();
+      const module = createAlbumDisplay({ playAlbumByMetadata, showToast });
+
+      const didPlay = module.playAlbumFromMobileCover(null);
+
+      assert.strictEqual(didPlay, false);
+      assert.strictEqual(playAlbumByMetadata.mock.calls.length, 0);
+      assert.deepStrictEqual(showToast.mock.calls[0].arguments, [
+        'Album not found',
+        'error',
+      ]);
+    });
+
+    it('should show error toast when playback dependency is unavailable', () => {
+      const showToast = mock.fn();
+      const module = createAlbumDisplay({ showToast });
+
+      const didPlay = module.playAlbumFromMobileCover({
+        artist: 'Agalloch',
+        album: 'The Mantle',
+      });
+
+      assert.strictEqual(didPlay, false);
+      assert.deepStrictEqual(showToast.mock.calls[0].arguments, [
+        'Play album is unavailable',
+        'error',
+      ]);
+    });
+  });
+
   describe('detectUpdateType', () => {
     let createAlbumDisplay;
 

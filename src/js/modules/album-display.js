@@ -290,6 +290,7 @@ const pollingControllers = new Map(); // listId -> AbortController
  * @param {Function} deps.showMobileEditForm - Show mobile edit form
  * @param {Function} deps.showMobileAlbumMenu - Show mobile album menu
  * @param {Function} deps.showMobileSummarySheet - Show mobile summary sheet
+ * @param {Function} deps.playAlbumByMetadata - Play album by artist/album metadata
  * @param {Function} deps.playTrackSafe - Play track safely by album ID
  * @param {Function} deps.reapplyNowPlayingBorder - Re-apply now playing border
  * @param {Function} deps.initializeUnifiedSorting - Initialize drag-drop sorting
@@ -315,6 +316,7 @@ export function createAlbumDisplay(deps = {}) {
     showMobileEditForm,
     showMobileAlbumMenu,
     showMobileSummarySheet,
+    playAlbumByMetadata,
     playTrackSafe,
     reapplyNowPlayingBorder,
     initializeUnifiedSorting,
@@ -1271,6 +1273,31 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
+   * Trigger album playback from a mobile cover tap.
+   * Uses metadata-based playback to route through the preferred music service.
+   * @param {Object} album - Album object from list data
+   * @returns {boolean} Whether playback was triggered
+   */
+  function playAlbumFromMobileCover(album) {
+    if (!album) {
+      showToast('Album not found', 'error');
+      return false;
+    }
+
+    if (typeof playAlbumByMetadata !== 'function') {
+      showToast('Play album is unavailable', 'error');
+      return false;
+    }
+
+    playAlbumByMetadata(album.artist, album.album, {
+      albumId: album.album_id,
+      releaseDate: album.release_date,
+    });
+
+    return true;
+  }
+
+  /**
    * Attach event handlers to mobile card
    * @param {HTMLElement} card - Card element
    * @param {number} index - Album index
@@ -1284,6 +1311,33 @@ export function createAlbumDisplay(deps = {}) {
     const comment = album ? album.comments || album.comment || '' : '';
     const contentDiv = card.querySelector('.flex-1.min-w-0');
     if (contentDiv) attachLinkPreview(contentDiv, comment);
+
+    // Tap album cover to play album in preferred music service
+    const coverTapTarget = card.querySelector('.mobile-album-cover');
+    if (coverTapTarget && album) {
+      coverTapTarget.style.cursor = 'pointer';
+      coverTapTarget.addEventListener(
+        'touchstart',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+
+      coverTapTarget.addEventListener(
+        'touchend',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+
+      coverTapTarget.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        playAlbumFromMobileCover(album);
+      });
+    }
 
     // Attach summary badge handler (if summary exists)
     const summaryBadge = card.querySelector('.summary-badge-mobile');
@@ -3295,5 +3349,6 @@ export function createAlbumDisplay(deps = {}) {
     processAlbumData,
     createAlbumItem,
     detectUpdateType,
+    playAlbumFromMobileCover,
   };
 }

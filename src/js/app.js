@@ -172,8 +172,8 @@ const getRecommendationsModule = createLazyModule(() =>
     updateMobileHeader,
     showLoadingSpinner,
     refreshRecommendationYears,
-    playAlbumByMetadata: (artist, album) =>
-      getPlaybackModule().playAlbumByMetadata(artist, album),
+    playAlbumByMetadata: (artist, album, options) =>
+      getPlaybackModule().playAlbumByMetadata(artist, album, options),
     showPlayAlbumSubmenuForAlbum: (album, menuOptions) =>
       getPlaybackModule().showPlayAlbumSubmenuForAlbum(album, menuOptions),
     createContextSubmenuController,
@@ -348,6 +348,8 @@ const getAlbumDisplayModule = createLazyModule(() =>
     showMobileAlbumMenu: (el) => window.showMobileAlbumMenu(el),
     showMobileSummarySheet: (summary, albumName, artist) =>
       window.showMobileSummarySheet(summary, albumName, artist),
+    playAlbumByMetadata: (artist, album, options) =>
+      getPlaybackModule().playAlbumByMetadata(artist, album, options),
     playTrackSafe: (albumId) => window.playTrackSafe(albumId),
     getTrackName,
     getTrackLength,
