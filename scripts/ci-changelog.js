@@ -28,6 +28,11 @@ const CHANGELOG_JSON_PATH = path.join(
 );
 
 const VALID_CATEGORIES = new Set(['feature', 'fix', 'ui', 'perf', 'security']);
+const HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
+
+function isValidHash(value) {
+  return typeof value === 'string' && HASH_PATTERN.test(value);
+}
 
 /**
  * Read existing changelog entries.
@@ -53,14 +58,43 @@ function getLastEntryDate(entries) {
 }
 
 /**
+ * Get the hash of the most recent changelog entry that has a valid hash.
+ * @param {Array} entries
+ * @returns {string|null}
+ */
+function getLastEntryHash(entries) {
+  const latest = entries.find((e) => isValidHash(e.hash));
+  return latest ? latest.hash : null;
+}
+
+/**
+ * Check whether a commit hash exists in local history.
+ * @param {string|null} hash
+ * @returns {boolean}
+ */
+function hasCommit(hash) {
+  if (!isValidHash(hash)) return false;
+  try {
+    execSync(`git cat-file -e ${hash}^{commit}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get commits since a given date (or all commits if no date).
  * Returns an array of { hash, date, message, files }.
+ * @param {string|null} sinceHash
  * @param {string|null} sinceDate
  * @returns {Array}
  */
-function getNewCommits(sinceDate) {
+function getNewCommits(sinceHash, sinceDate) {
   let gitCmd = 'git log --format="%H|%ad|%s" --date=short';
-  if (sinceDate) {
+
+  if (sinceHash && hasCommit(sinceHash)) {
+    gitCmd += ` ${sinceHash}..HEAD`;
+  } else if (sinceDate) {
     // Go back one day to avoid timezone edge cases where --since with
     // a date-only value misses same-day commits. Deduplication later
     // prevents repeated entries.
@@ -173,14 +207,68 @@ function preFilter(commits) {
  * @returns {Array}
  */
 function deduplicateCommits(commits, existingEntries) {
-  // Build a set of existing descriptions (lowercased) for fuzzy matching
-  const existing = new Set(
-    existingEntries.map((e) => e.description.toLowerCase())
+  const existingHashes = new Set(
+    existingEntries
+      .map((e) => (isValidHash(e.hash) ? e.hash.toLowerCase() : null))
+      .filter(Boolean)
   );
 
+  // Backward-compat fallback for legacy entries without hash
+  const legacySubjects = new Set(
+    existingEntries
+      .filter(
+        (e) => !isValidHash(e.hash) && typeof e.commitMessage === 'string'
+      )
+      .map((e) => e.commitMessage.split('\n')[0].trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  const seenHashes = new Set();
+
   return commits.filter((c) => {
-    // Don't send commits whose message is already in the changelog verbatim
-    return !existing.has(c.message.toLowerCase());
+    const hash = c.hash.toLowerCase();
+    if (existingHashes.has(hash) || seenHashes.has(hash)) {
+      return false;
+    }
+
+    if (legacySubjects.has(c.message.trim().toLowerCase())) {
+      return false;
+    }
+
+    seenHashes.add(hash);
+    return true;
+  });
+}
+
+/**
+ * Deduplicate changelog entries.
+ * - Preferred key: commit hash (when valid)
+ * - Fallback key: date+category+description for legacy entries without hash
+ * Keeps first occurrence.
+ * @param {Array} entries
+ * @returns {Array}
+ */
+function deduplicateEntries(entries) {
+  const seenHashes = new Set();
+  const seenFallback = new Set();
+
+  return entries.filter((entry) => {
+    if (!entry || typeof entry.description !== 'string') return false;
+
+    if (isValidHash(entry.hash)) {
+      const hash = entry.hash.toLowerCase();
+      entry.hash = hash;
+      if (seenHashes.has(hash)) return false;
+      seenHashes.add(hash);
+      return true;
+    }
+
+    const fallbackKey = `${entry.date || ''}|${entry.category || ''}|${entry.description
+      .trim()
+      .toLowerCase()}`;
+    if (seenFallback.has(fallbackKey)) return false;
+    seenFallback.add(fallbackKey);
+    return true;
   });
 }
 
@@ -257,11 +345,8 @@ Return a JSON array of objects with "date", "category", "description", and "hash
           description: entry.description,
         };
         // Include hash and full commit message if available
-        if (
-          typeof entry.hash === 'string' &&
-          /^[0-9a-f]{7,40}$/.test(entry.hash)
-        ) {
-          result.hash = entry.hash;
+        if (typeof entry.hash === 'string' && isValidHash(entry.hash)) {
+          result.hash = entry.hash.toLowerCase();
           // Find the original commit to get the full message
           const original = commits.find((c) => c.hash === entry.hash);
           if (original && original.fullMessage) {
@@ -288,17 +373,39 @@ async function main() {
     process.exit(0);
   }
 
-  const existing = readChangelog();
+  const existingRaw = readChangelog();
+  const existing = deduplicateEntries(existingRaw);
+  const removedExistingDuplicates = existingRaw.length - existing.length;
+  const lastHash = getLastEntryHash(existing);
   const lastDate = getLastEntryDate(existing);
+
+  if (removedExistingDuplicates > 0) {
+    console.log(
+      `Removed ${removedExistingDuplicates} duplicate existing changelog entries`
+    );
+  }
+
   console.log(
     `Last changelog entry: ${lastDate || 'none'} (${existing.length} entries)`
   );
 
-  const allCommits = getNewCommits(lastDate);
+  if (lastHash) {
+    console.log(`Commit checkpoint: ${lastHash}`);
+  }
+
+  const allCommits = getNewCommits(lastHash, lastDate);
   console.log(`Commits since last entry: ${allCommits.length}`);
 
   if (allCommits.length === 0) {
-    console.log('No new commits, nothing to do');
+    if (!dryRun && removedExistingDuplicates > 0) {
+      fs.writeFileSync(
+        CHANGELOG_JSON_PATH,
+        JSON.stringify(existing, null, 2) + '\n',
+        'utf8'
+      );
+      console.log('Changelog cleaned (duplicate entries removed)');
+    }
+    console.log('No new commits, nothing else to do');
     process.exit(0);
   }
 
@@ -309,6 +416,14 @@ async function main() {
   console.log(`After deduplication: ${deduped.length} new candidates`);
 
   if (deduped.length === 0) {
+    if (!dryRun && removedExistingDuplicates > 0) {
+      fs.writeFileSync(
+        CHANGELOG_JSON_PATH,
+        JSON.stringify(existing, null, 2) + '\n',
+        'utf8'
+      );
+      console.log('Changelog cleaned (duplicate entries removed)');
+    }
     console.log('No new user-facing commits found');
     process.exit(0);
   }
@@ -328,7 +443,18 @@ async function main() {
 
   console.log(`Claude identified ${newEntries.length} user-facing changes`);
 
+  newEntries = deduplicateEntries(newEntries);
+  console.log(`After entry deduplication: ${newEntries.length} new entries`);
+
   if (newEntries.length === 0) {
+    if (!dryRun && removedExistingDuplicates > 0) {
+      fs.writeFileSync(
+        CHANGELOG_JSON_PATH,
+        JSON.stringify(existing, null, 2) + '\n',
+        'utf8'
+      );
+      console.log('Changelog cleaned (duplicate entries removed)');
+    }
     console.log('No user-facing changes in this push');
     process.exit(0);
   }
@@ -342,8 +468,10 @@ async function main() {
   }
 
   // Merge new entries into existing, keeping newest-first order
-  const merged = [...newEntries, ...existing].sort(
-    (a, b) => new Date(b.date) - new Date(a.date)
+  const merged = deduplicateEntries(
+    [...newEntries, ...existing].sort(
+      (a, b) => new Date(b.date) - new Date(a.date)
+    )
   );
 
   fs.writeFileSync(
