@@ -1146,16 +1146,16 @@ export function createAlbumDisplay(deps = {}) {
       };
       const c = colors[position] || colors.default;
 
-      // Positioned absolute within the card (which has position: relative)
+      // Positioned near the card's top-right, centered over the menu column width
       return `
         <div class="mobile-position-badge"
-             style="position: absolute; top: 8px; right: -20px; z-index: 10;
+             style="position: absolute; top: 4px; right: 4px; z-index: 10;
                     width: 17px; height: 17px;
                     display: flex; align-items: center; justify-content: center;
                     border: 1px solid ${c.border}; border-radius: 50%;
                     background: rgba(17, 24, 39, 0.7);
                     box-shadow: 0 0 ${c.size} ${c.shadow};
-                    color: white; font-size: 9px; font-weight: 500;"
+                    color: white; font-size: 9px; font-weight: 500; pointer-events: none;"
              data-position-element="true">
           <span style="transform: translateY(0.5px)">${position}</span>
         </div>`;
@@ -1163,9 +1163,8 @@ export function createAlbumDisplay(deps = {}) {
 
     // === BUILD CARD HTML ===
     card.innerHTML = `
-      <!-- POSITION BADGE (positioned relative to card) -->
       ${getPositionBadgeHtml(data.position)}
-      
+
       <div class="flex items-stretch h-full">
         
         <!-- COVER SECTION -->
@@ -1259,7 +1258,7 @@ export function createAlbumDisplay(deps = {}) {
         
         <!-- MENU SECTION -->
         <div class="shrink-0 w-[25px] border-l border-gray-800/50" style="display: flex; align-items: center; justify-content: center;">
-          <button data-album-menu-btn class="no-drag text-gray-400 active:text-gray-200" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; transform: translateX(7px);">
+          <button data-album-menu-btn class="no-drag text-gray-400 active:text-gray-200" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;">
             <i class="fas fa-ellipsis-v fa-fw"></i>
           </button>
         </div>

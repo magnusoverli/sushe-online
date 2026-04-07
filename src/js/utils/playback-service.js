@@ -5,8 +5,13 @@
  */
 
 const APP_FALLBACK_DELAY_MS = 1200;
+const SPOTIFY_APP_FALLBACK_DELAY_MS = 2500;
 
-function openNativeAppWithFallback(appUrl, webUrl) {
+function openNativeAppWithFallback(
+  appUrl,
+  webUrl,
+  fallbackDelayMs = APP_FALLBACK_DELAY_MS
+) {
   const hasDocument = typeof document !== 'undefined';
   const hasWindowEvents = typeof window?.addEventListener === 'function';
   const hasFocusApi = hasDocument && typeof document.hasFocus === 'function';
@@ -66,7 +71,7 @@ function openNativeAppWithFallback(appUrl, webUrl) {
       window.location.href = webUrl;
     }
     cleanup();
-  }, APP_FALLBACK_DELAY_MS);
+  }, fallbackDelayMs);
 
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('blur', markOpened);
@@ -84,7 +89,8 @@ function openNativeAppWithFallback(appUrl, webUrl) {
 function openSpotifyAppWithFallback(type, id) {
   openNativeAppWithFallback(
     `spotify:${type}:${id}`,
-    `https://open.spotify.com/${type}/${encodeURIComponent(id)}`
+    `https://open.spotify.com/${type}/${encodeURIComponent(id)}`,
+    SPOTIFY_APP_FALLBACK_DELAY_MS
   );
 }
 
