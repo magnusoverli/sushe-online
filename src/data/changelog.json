@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-04-07",
+    "category": "feature",
+    "description": "Added Qobuz deep-link playback support",
+    "hash": "1938e83f76a8293cbe74b66beac65a5f686b0466",
+    "commitMessage": "Add Qobuz deep-link playback support\n\nLet users choose Qobuz as their preferred playback target without needing OAuth integration yet.\n\n- Add a Qobuz album lookup endpoint and service that resolves IDs from public search pages\n\n- Wire playback and service chooser flows to open qobuzapp links with web fallback\n\n- Update settings/UI and test coverage for Qobuz preference and playback behavior"
+  },
+  {
+    "date": "2026-04-07",
     "category": "ui",
     "description": "Improved mobile badge positioning and alignment",
     "hash": "76d9e0b3e85ae19da8b36411e2f490370bea56f5",
