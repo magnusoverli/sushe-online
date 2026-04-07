@@ -9,6 +9,7 @@ const APP_FALLBACK_DELAY_MS = 1200;
 function openNativeAppWithFallback(appUrl, webUrl) {
   const hasDocument = typeof document !== 'undefined';
   const hasWindowEvents = typeof window?.addEventListener === 'function';
+  const hasFocusApi = hasDocument && typeof document.hasFocus === 'function';
 
   if (!hasDocument || !hasWindowEvents) {
     window.location.href = appUrl;
@@ -31,10 +32,37 @@ function openNativeAppWithFallback(appUrl, webUrl) {
     document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('blur', markOpened);
     window.removeEventListener('pagehide', markOpened);
+    if (focusProbe !== null) {
+      clearInterval(focusProbe);
+    }
   };
 
+  const shouldFallbackToWeb = () => {
+    if (appLikelyOpened) {
+      return false;
+    }
+
+    if (document.visibilityState === 'hidden') {
+      return false;
+    }
+
+    if (hasFocusApi && !document.hasFocus()) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const focusProbe = hasFocusApi
+    ? setInterval(() => {
+        if (!document.hasFocus()) {
+          markOpened();
+        }
+      }, 100)
+    : null;
+
   const fallbackTimer = setTimeout(() => {
-    if (!appLikelyOpened) {
+    if (shouldFallbackToWeb()) {
       window.location.href = webUrl;
     }
     cleanup();

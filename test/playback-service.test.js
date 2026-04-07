@@ -209,6 +209,78 @@ describe('playback-service', async () => {
       }
     });
 
+    it('should not fall back when focus is lost without blur event', async () => {
+      const mockShowToast = mock.fn();
+      const originalDocument = globalThis.document;
+      const originalSetTimeout = globalThis.setTimeout;
+      const originalClearTimeout = globalThis.clearTimeout;
+      const originalSetInterval = globalThis.setInterval;
+      const originalClearInterval = globalThis.clearInterval;
+      let scheduledFallback = null;
+      let focusProbe = null;
+      let hasFocus = true;
+
+      globalThis.fetch = mock.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: 'xyz789' }),
+        })
+      );
+
+      globalThis.document = {
+        visibilityState: 'visible',
+        hasFocus: () => hasFocus,
+        addEventListener: mock.fn(),
+        removeEventListener: mock.fn(),
+      };
+      globalThis.window.addEventListener = mock.fn();
+      globalThis.window.removeEventListener = mock.fn();
+      globalThis.setTimeout = (fn) => {
+        scheduledFallback = fn;
+        return 1;
+      };
+      globalThis.clearTimeout = () => {};
+      globalThis.setInterval = (fn) => {
+        focusProbe = fn;
+        return 2;
+      };
+      globalThis.clearInterval = () => {};
+
+      try {
+        await openInMusicApp(
+          'tidal',
+          'album',
+          { artist: 'Radiohead', album: 'OK Computer' },
+          mockShowToast
+        );
+
+        assert.strictEqual(
+          globalThis.window.location.href,
+          'tidal://album/xyz789'
+        );
+
+        assert.strictEqual(typeof focusProbe, 'function');
+        assert.strictEqual(typeof scheduledFallback, 'function');
+
+        hasFocus = false;
+        focusProbe();
+        scheduledFallback();
+
+        assert.strictEqual(
+          globalThis.window.location.href,
+          'tidal://album/xyz789'
+        );
+      } finally {
+        globalThis.document = originalDocument;
+        globalThis.setTimeout = originalSetTimeout;
+        globalThis.clearTimeout = originalClearTimeout;
+        globalThis.setInterval = originalSetInterval;
+        globalThis.clearInterval = originalClearInterval;
+        delete globalThis.window.addEventListener;
+        delete globalThis.window.removeEventListener;
+      }
+    });
+
     it('should include albumId and releaseDate when provided', async () => {
       const mockShowToast = mock.fn();
       globalThis.fetch = mock.fn(() =>
