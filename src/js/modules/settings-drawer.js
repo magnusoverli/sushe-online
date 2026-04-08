@@ -20,6 +20,7 @@ import { createSettingsCoreRenderers } from './settings-drawer/renderers/core-re
 import { createSettingsPreferencesRenderer } from './settings-drawer/renderers/preferences-renderer.js';
 import { createSettingsAdminRenderer } from './settings-drawer/renderers/admin-renderer.js';
 import { createSettingsAccountActions } from './settings-drawer/handlers/account-actions.js';
+import { createSettingsPreferenceActions } from './settings-drawer/handlers/preference-actions.js';
 import { createSettingsCoreHandlers } from './settings-drawer/handlers/core-handlers.js';
 import { createSettingsAuditHandlers } from './settings-drawer/handlers/audit-handlers.js';
 import { createSettingsAdminHandlers } from './settings-drawer/handlers/admin-handlers.js';
@@ -90,6 +91,22 @@ export function createSettingsDrawer(deps = {}) {
     apiCall,
     loadCategoryData,
     createSettingsModalBase,
+  });
+
+  const {
+    handleDisconnect,
+    handleMusicServiceChange,
+    handleSyncPreferences,
+    handleSetTimeRange,
+    handleAccentColorChange,
+    handleTimeFormatChange,
+    handleDateFormatChange,
+  } = createSettingsPreferenceActions({
+    categoryData,
+    showConfirmation,
+    apiCall,
+    showToast,
+    loadCategoryData,
   });
 
   const {
@@ -408,255 +425,6 @@ export function createSettingsDrawer(deps = {}) {
 
     // Attach handlers for action bar buttons
     attachActionBarHandlers(categoryId);
-  }
-
-  /**
-   * Handle service disconnect
-   */
-  async function handleDisconnect(service) {
-    const serviceName = service.charAt(0).toUpperCase() + service.slice(1);
-    const confirmed = await showConfirmation(
-      `Disconnect ${serviceName}`,
-      `Are you sure you want to disconnect ${serviceName}?`,
-      'Your listening data will no longer sync from this service.',
-      'Disconnect'
-    );
-
-    if (!confirmed) return;
-
-    try {
-      // Disconnect endpoints are GET requests that redirect
-      window.location.href = `/auth/${service}/disconnect`;
-    } catch (error) {
-      console.error('Error disconnecting service:', error);
-      showToast(`Failed to disconnect ${serviceName}`, 'error');
-    }
-  }
-
-  /**
-   * Handle music service change
-   */
-  async function handleMusicServiceChange(service) {
-    try {
-      const result = await apiCall('/settings/update-music-service', {
-        method: 'POST',
-        body: JSON.stringify({ musicService: service || null }),
-      });
-
-      if (result.success) {
-        showToast('Music service updated!');
-        // Update local cache
-        if (categoryData.integrations) {
-          categoryData.integrations.musicService = service || '';
-        }
-        // Update window.currentUser if available
-        if (window.currentUser) {
-          window.currentUser.musicService = service || null;
-        }
-      } else {
-        showToast(result.error || 'Error updating music service', 'error');
-      }
-    } catch (error) {
-      console.error('Error updating music service:', error);
-      showToast('Error updating music service', 'error');
-    }
-  }
-
-  /**
-   * Handle preferences sync
-   */
-  async function handleSyncPreferences() {
-    const syncBtn = document.getElementById('syncPreferencesBtn');
-    const syncIcon = document.getElementById('syncIcon');
-    const syncText = document.getElementById('syncText');
-
-    if (!syncBtn) return;
-
-    // Disable button and show loading
-    syncBtn.disabled = true;
-    if (syncIcon) {
-      syncIcon.classList.add('fa-spin');
-    }
-    if (syncText) {
-      syncText.textContent = 'Syncing...';
-    }
-
-    try {
-      await apiCall('/api/preferences/sync', {
-        method: 'POST',
-      });
-
-      showToast('Preferences synced successfully', 'success');
-
-      // Reload preferences data
-      categoryData.preferences = null;
-      await loadCategoryData('preferences');
-    } catch (error) {
-      console.error('Error syncing preferences:', error);
-      showToast('Failed to sync preferences', 'error');
-    } finally {
-      // Re-enable button
-      syncBtn.disabled = false;
-      if (syncIcon) {
-        syncIcon.classList.remove('fa-spin');
-      }
-      if (syncText) {
-        syncText.textContent = 'Sync Now';
-      }
-    }
-  }
-
-  /**
-   * Handle time range change for Spotify/Last.fm data
-   */
-  function handleSetTimeRange(service, range) {
-    // Update button states
-    const buttonContainer = document.getElementById(`${service}RangeButtons`);
-    if (buttonContainer) {
-      const buttons = buttonContainer.querySelectorAll('button');
-      const activeClass =
-        service === 'spotify'
-          ? 'bg-green-600 text-white'
-          : 'bg-red-600 text-white';
-      const inactiveClass = 'bg-gray-700 text-gray-300 hover:bg-gray-600';
-
-      buttons.forEach((btn) => {
-        const btnRange = btn.getAttribute('data-range');
-        const isActive = btnRange === range;
-
-        // Remove all state classes
-        btn.classList.remove(
-          'bg-green-600',
-          'bg-red-600',
-          'bg-gray-700',
-          'text-white',
-          'text-gray-300',
-          'hover:bg-gray-600'
-        );
-
-        // Add appropriate classes
-        if (isActive) {
-          activeClass.split(' ').forEach((c) => btn.classList.add(c));
-        } else {
-          inactiveClass.split(' ').forEach((c) => btn.classList.add(c));
-        }
-      });
-    }
-
-    // Show/hide data sections
-    const allSections = document.querySelectorAll(
-      `[data-service="${service}"][data-content]`
-    );
-    allSections.forEach((section) => {
-      const sectionRange = section.getAttribute('data-range');
-      if (sectionRange === range) {
-        section.classList.remove('hidden');
-      } else {
-        section.classList.add('hidden');
-      }
-    });
-  }
-
-  /**
-   * Handle accent color change (auto-save)
-   */
-  async function handleAccentColorChange(color) {
-    try {
-      await apiCall('/settings/update-accent-color', {
-        method: 'POST',
-        body: JSON.stringify({ accentColor: color }),
-      });
-
-      // Update CSS variable immediately
-      document.documentElement.style.setProperty('--accent-color', color);
-
-      showToast('Accent color updated', 'success');
-
-      // Update cached data
-      if (categoryData.visual) {
-        categoryData.visual.accentColor = color;
-      }
-
-      // Update window.currentUser if it exists
-      if (window.currentUser) {
-        window.currentUser.accentColor = color;
-      }
-    } catch (error) {
-      console.error('Error updating accent color:', error);
-      showToast('Failed to update accent color', 'error');
-
-      // Revert color input
-      const input = document.getElementById('accentColor');
-      if (input && categoryData.visual) {
-        input.value = categoryData.visual.accentColor;
-      }
-    }
-  }
-
-  /**
-   * Handle time format change (auto-save)
-   */
-  async function handleTimeFormatChange(timeFormat) {
-    try {
-      await apiCall('/settings/update-time-format', {
-        method: 'POST',
-        body: JSON.stringify({ timeFormat }),
-      });
-
-      showToast('Time format updated', 'success');
-
-      // Update cached data
-      if (categoryData.visual) {
-        categoryData.visual.timeFormat = timeFormat;
-      }
-
-      // Update window.currentUser if it exists
-      if (window.currentUser) {
-        window.currentUser.timeFormat = timeFormat;
-      }
-    } catch (error) {
-      console.error('Error updating time format:', error);
-      showToast('Failed to update time format', 'error');
-
-      // Revert select
-      const select = document.getElementById('timeFormatSelect');
-      if (select && categoryData.visual) {
-        select.value = categoryData.visual.timeFormat;
-      }
-    }
-  }
-
-  /**
-   * Handle date format change (auto-save)
-   */
-  async function handleDateFormatChange(dateFormat) {
-    try {
-      await apiCall('/settings/update-date-format', {
-        method: 'POST',
-        body: JSON.stringify({ dateFormat }),
-      });
-
-      showToast('Date format updated', 'success');
-
-      // Update cached data
-      if (categoryData.visual) {
-        categoryData.visual.dateFormat = dateFormat;
-      }
-
-      // Update window.currentUser if it exists
-      if (window.currentUser) {
-        window.currentUser.dateFormat = dateFormat;
-      }
-    } catch (error) {
-      console.error('Error updating date format:', error);
-      showToast('Failed to update date format', 'error');
-
-      // Revert select
-      const select = document.getElementById('dateFormatSelect');
-      if (select && categoryData.visual) {
-        select.value = categoryData.visual.dateFormat;
-      }
-    }
   }
 
   /**
