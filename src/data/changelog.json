@@ -2,6 +2,13 @@
   {
     "date": "2026-04-08",
     "category": "ui",
+    "description": "Improved recommendation badge tooltip consistency",
+    "hash": "5626000441fe40e2f504dbd7a823cf14b4a3f69d",
+    "commitMessage": "Unify recommendation badge tooltip behavior\n\nReuse the custom recommendation tooltip for list-coverage badges and remove native title tooltips so hover interactions feel consistent. Also align badge visuals and cursor behavior across summary, recommendation, and in-list overlays for a cleaner cover UI."
+  },
+  {
+    "date": "2026-04-08",
+    "category": "ui",
     "description": "Improved recommendation reasoning tooltip experience",
     "hash": "c1fb229e5cf7ee38831a793db756d91113ea45d9",
     "commitMessage": "Polish recommendation reasoning tooltip UX\n\nRemove duplicate browser tooltip behavior, simplify tooltip content, and align recommendation copy/icons so reasoning context is clearer at a glance."
