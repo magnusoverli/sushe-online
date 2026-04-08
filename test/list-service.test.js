@@ -25,6 +25,24 @@ function createServiceDeps(pool) {
   };
 }
 
+function createOwnedListRow() {
+  return {
+    id: 1,
+    _id: 'list1',
+    user_id: 'user1',
+    name: 'My List',
+    year: 2024,
+    is_main: false,
+    group_id: 10,
+    group_external_id: 'group1',
+    group_name: '2024',
+    group_year: 2024,
+    sort_order: 0,
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
+}
+
 describe('list-service reorderItems', () => {
   it('should reject partial order payloads', async () => {
     const client = {
@@ -59,23 +77,7 @@ describe('list-service reorderItems', () => {
       query: mock.fn(async (sql) => {
         if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
           return {
-            rows: [
-              {
-                id: 1,
-                _id: 'list1',
-                user_id: 'user1',
-                name: 'My List',
-                year: 2024,
-                is_main: false,
-                group_id: 10,
-                group_external_id: 'group1',
-                group_name: '2024',
-                group_year: 2024,
-                sort_order: 0,
-                created_at: new Date(),
-                updated_at: new Date(),
-              },
-            ],
+            rows: [createOwnedListRow()],
           };
         }
 
@@ -133,23 +135,7 @@ describe('list-service reorderItems', () => {
       query: mock.fn(async (sql) => {
         if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
           return {
-            rows: [
-              {
-                id: 1,
-                _id: 'list1',
-                user_id: 'user1',
-                name: 'My List',
-                year: 2024,
-                is_main: false,
-                group_id: 10,
-                group_external_id: 'group1',
-                group_name: '2024',
-                group_year: 2024,
-                sort_order: 0,
-                created_at: new Date(),
-                updated_at: new Date(),
-              },
-            ],
+            rows: [createOwnedListRow()],
           };
         }
 
@@ -167,5 +153,92 @@ describe('list-service reorderItems', () => {
     assert.strictEqual(result.itemCount, 2);
     assert.deepStrictEqual(updateParams[1], ['item2', 'item1']);
     assert.deepStrictEqual(updateParams[2], [1, 2]);
+  });
+});
+
+describe('list-service item comments', () => {
+  it('should update comment using album identifier', async () => {
+    let executedUpdateSql = '';
+
+    const client = {
+      query: mock.fn(async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('UPDATE list_items SET comments = $1')) {
+          executedUpdateSql = sql;
+          return { rows: [{ _id: 'item1' }], rowCount: 1 };
+        }
+
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+      release: mock.fn(),
+    };
+
+    const pool = {
+      query: mock.fn(async (sql) => {
+        if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
+          return {
+            rows: [createOwnedListRow()],
+          };
+        }
+
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(async () => client),
+    };
+
+    const service = createListService(createServiceDeps(pool));
+    await service.updateItemComment('list1', 'user1', 'album1', 'Great album');
+
+    assert.ok(executedUpdateSql.includes('SET comments = $1'));
+    assert.strictEqual(client.query.mock.calls.length, 3);
+  });
+
+  it('should fallback to item id for comment 2 updates', async () => {
+    const updateQueries = [];
+
+    const client = {
+      query: mock.fn(async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('UPDATE list_items SET comments_2 = $1')) {
+          updateQueries.push(sql);
+          if (updateQueries.length === 1) {
+            return { rows: [], rowCount: 0 };
+          }
+          return { rows: [{ _id: 'item1' }], rowCount: 1 };
+        }
+
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+      release: mock.fn(),
+    };
+
+    const pool = {
+      query: mock.fn(async (sql) => {
+        if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
+          return {
+            rows: [createOwnedListRow()],
+          };
+        }
+
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(async () => client),
+    };
+
+    const service = createListService(createServiceDeps(pool));
+    await service.updateItemComment2('list1', 'user1', 'item1', 'Second note');
+
+    assert.strictEqual(updateQueries.length, 2);
+    assert.ok(
+      updateQueries[0].includes('WHERE list_id = $3 AND album_id = $4')
+    );
+    assert.ok(updateQueries[1].includes('WHERE _id = $3 AND list_id = $4'));
+    assert.strictEqual(client.query.mock.calls.length, 4);
   });
 });

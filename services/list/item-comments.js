@@ -1,0 +1,80 @@
+/**
+ * List item comment update helpers.
+ *
+ * Keeps comment-field update logic centralized so list-service can expose
+ * multiple comment endpoints without duplicating transactional SQL flow.
+ */
+
+const COMMENT_FIELD_CONFIG = {
+  comments: {
+    action: 'update comment',
+    logMessage: 'Comment updated',
+  },
+  comments_2: {
+    action: 'update comment 2',
+    logMessage: 'Comment 2 updated',
+  },
+};
+
+function createItemComments(deps = {}) {
+  const {
+    pool,
+    withTransaction,
+    TransactionAbort,
+    findListByIdOrThrow,
+    logger,
+  } = deps;
+
+  if (!pool) throw new Error('pool is required');
+  if (!withTransaction) throw new Error('withTransaction is required');
+  if (!TransactionAbort) throw new Error('TransactionAbort is required');
+  if (!findListByIdOrThrow) throw new Error('findListByIdOrThrow is required');
+
+  async function updateItemCommentField(
+    listId,
+    userId,
+    identifier,
+    comment,
+    field
+  ) {
+    const fieldConfig = COMMENT_FIELD_CONFIG[field];
+    if (!fieldConfig) {
+      throw new Error(`Unsupported comment field: ${field}`);
+    }
+
+    const list = await findListByIdOrThrow(listId, userId, fieldConfig.action);
+
+    const trimmedComment = comment ? comment.trim() : null;
+    const now = new Date();
+
+    await withTransaction(pool, async (client) => {
+      let updateResult = await client.query(
+        `UPDATE list_items SET ${field} = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4 RETURNING _id`,
+        [trimmedComment, now, list._id, identifier]
+      );
+
+      if (updateResult.rowCount === 0) {
+        updateResult = await client.query(
+          `UPDATE list_items SET ${field} = $1, updated_at = $2 WHERE _id = $3 AND list_id = $4 RETURNING _id`,
+          [trimmedComment, now, identifier, list._id]
+        );
+      }
+
+      if (updateResult.rowCount === 0) {
+        throw new TransactionAbort(404, {
+          error: 'Album not found in list',
+        });
+      }
+    });
+
+    logger?.info(fieldConfig.logMessage, { userId, listId, identifier });
+  }
+
+  return {
+    updateItemCommentField,
+  };
+}
+
+module.exports = {
+  createItemComments,
+};
