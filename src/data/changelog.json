@@ -2,6 +2,13 @@
   {
     "date": "2026-04-08",
     "category": "ui",
+    "description": "Improved recommendation reasoning tooltip experience",
+    "hash": "c1fb229e5cf7ee38831a793db756d91113ea45d9",
+    "commitMessage": "Polish recommendation reasoning tooltip UX\n\nRemove duplicate browser tooltip behavior, simplify tooltip content, and align recommendation copy/icons so reasoning context is clearer at a glance."
+  },
+  {
+    "date": "2026-04-08",
+    "category": "ui",
     "description": "Simplified recommendation explanations with cleaner tooltips",
     "hash": "d394525b9de41fe1cb68381caa972c12a17470b9",
     "commitMessage": "Replace recommendation reasoning modal with tooltip\n\nUse an inline tooltip styled like the AI summary popover so users can read recommendation reasons without leaving the list view."
