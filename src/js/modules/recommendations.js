@@ -75,6 +75,201 @@ export function createRecommendations(deps = {}) {
   /** Shared submenu controller instance for recommendation context menu */
   let recommendationSubmenuController = null;
 
+  /** Active reasoning tooltip + trigger (desktop recommendations view) */
+  let activeReasoningTooltip = null;
+  let activeReasoningTrigger = null;
+  let reasoningTooltipHideTimeout = null;
+  let reasoningTooltipRemoveTimeout = null;
+  let reasoningTooltipGlobalHandlersBound = false;
+  const REASONING_TOOLTIP_HIDE_DELAY = 80;
+
+  function formatReasoningHtml(reasoning) {
+    if (!reasoning) return '';
+    return escapeHtml(reasoning).replace(/\n/g, '<br>');
+  }
+
+  function clearReasoningTooltipTimeouts() {
+    if (reasoningTooltipHideTimeout) {
+      clearTimeout(reasoningTooltipHideTimeout);
+      reasoningTooltipHideTimeout = null;
+    }
+    if (reasoningTooltipRemoveTimeout) {
+      clearTimeout(reasoningTooltipRemoveTimeout);
+      reasoningTooltipRemoveTimeout = null;
+    }
+  }
+
+  function positionReasoningTooltip(trigger, tooltip) {
+    const triggerRect = trigger.getBoundingClientRect();
+    const tooltipWidth = 320;
+    const gap = 8;
+
+    let left = triggerRect.right + gap;
+    let top = triggerRect.top;
+
+    if (left + tooltipWidth > window.innerWidth - 16) {
+      left = triggerRect.left - tooltipWidth - gap;
+      if (left < 16) {
+        left = Math.max(16, (window.innerWidth - tooltipWidth) / 2);
+      }
+    }
+
+    const tooltipHeight = Math.min(400, tooltip.scrollHeight || 300);
+    if (top + tooltipHeight > window.innerHeight - 16) {
+      top = window.innerHeight - tooltipHeight - 16;
+    }
+    if (top < 16) {
+      top = 16;
+    }
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  }
+
+  function hideReasoningTooltip(immediate = false) {
+    if (!activeReasoningTooltip) return;
+
+    clearReasoningTooltipTimeouts();
+    activeReasoningTooltip.classList.remove('visible');
+
+    const removeNow = () => {
+      if (activeReasoningTooltip?.parentNode) {
+        activeReasoningTooltip.parentNode.removeChild(activeReasoningTooltip);
+      }
+      activeReasoningTooltip = null;
+      activeReasoningTrigger = null;
+    };
+
+    if (immediate) {
+      removeNow();
+      return;
+    }
+
+    reasoningTooltipRemoveTimeout = setTimeout(() => {
+      removeNow();
+      reasoningTooltipRemoveTimeout = null;
+    }, 200);
+  }
+
+  function scheduleHideReasoningTooltip() {
+    if (reasoningTooltipHideTimeout) {
+      clearTimeout(reasoningTooltipHideTimeout);
+    }
+
+    reasoningTooltipHideTimeout = setTimeout(() => {
+      hideReasoningTooltip();
+      reasoningTooltipHideTimeout = null;
+    }, REASONING_TOOLTIP_HIDE_DELAY);
+  }
+
+  function bindReasoningTooltipGlobalHandlers() {
+    if (reasoningTooltipGlobalHandlersBound) {
+      return;
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!activeReasoningTooltip || !activeReasoningTrigger) {
+        return;
+      }
+
+      const target = e.target;
+      if (
+        activeReasoningTooltip.contains(target) ||
+        activeReasoningTrigger.contains(target)
+      ) {
+        return;
+      }
+
+      hideReasoningTooltip(true);
+    });
+
+    window.addEventListener('resize', () => {
+      hideReasoningTooltip(true);
+    });
+
+    document.addEventListener(
+      'scroll',
+      () => {
+        hideReasoningTooltip(true);
+      },
+      true
+    );
+
+    reasoningTooltipGlobalHandlersBound = true;
+  }
+
+  function showReasoningTooltip(trigger, rec) {
+    bindReasoningTooltipGlobalHandlers();
+
+    const reasoning = rec?.reasoning?.trim();
+    if (!reasoning) return;
+
+    clearReasoningTooltipTimeouts();
+
+    if (
+      activeReasoningTooltip &&
+      activeReasoningTrigger === trigger &&
+      activeReasoningTooltip.parentNode
+    ) {
+      activeReasoningTooltip.classList.add('visible');
+      positionReasoningTooltip(trigger, activeReasoningTooltip);
+      return;
+    }
+
+    if (activeReasoningTooltip && activeReasoningTrigger !== trigger) {
+      hideReasoningTooltip(true);
+    }
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'summary-tooltip claude-tooltip';
+    tooltip.innerHTML = `
+      <div class="summary-tooltip-header">
+        <i class="fas fa-robot"></i>
+        <span>${escapeHtml(rec.album)} - ${escapeHtml(rec.artist)}</span>
+      </div>
+      <div class="summary-tooltip-content">${formatReasoningHtml(reasoning)}</div>
+      <div class="summary-tooltip-footer">
+        <span class="summary-tooltip-link" style="cursor: default; opacity: 0.7;">
+          <i class="fas fa-comment-alt"></i>
+          Recommendation reason
+        </span>
+      </div>
+    `;
+
+    tooltip.addEventListener('mouseenter', () => {
+      if (reasoningTooltipHideTimeout) {
+        clearTimeout(reasoningTooltipHideTimeout);
+        reasoningTooltipHideTimeout = null;
+      }
+    });
+    tooltip.addEventListener('mouseleave', () => {
+      scheduleHideReasoningTooltip();
+    });
+
+    document.body.appendChild(tooltip);
+    activeReasoningTooltip = tooltip;
+    activeReasoningTrigger = trigger;
+
+    positionReasoningTooltip(trigger, tooltip);
+
+    requestAnimationFrame(() => {
+      tooltip.classList.add('visible');
+    });
+  }
+
+  function toggleReasoningTooltip(trigger, rec) {
+    if (
+      activeReasoningTooltip &&
+      activeReasoningTrigger === trigger &&
+      activeReasoningTooltip.parentNode
+    ) {
+      hideReasoningTooltip();
+      return;
+    }
+
+    showReasoningTooltip(trigger, rec);
+  }
+
   function clearRecommendationAddListsHideTimeout() {
     if (recommendationAddListsHideTimeout) {
       clearTimeout(recommendationAddListsHideTimeout);
@@ -235,6 +430,8 @@ export function createRecommendations(deps = {}) {
    */
   async function selectRecommendations(year) {
     try {
+      hideReasoningTooltip(true);
+
       const previousListId = getCurrentListId();
 
       setCurrentListId('');
@@ -965,9 +1162,18 @@ export function createRecommendations(deps = {}) {
 
           const viewReasoningBtn = row.querySelector('.view-reasoning-btn');
           if (viewReasoningBtn) {
+            viewReasoningBtn.addEventListener('mouseenter', () => {
+              showReasoningTooltip(viewReasoningBtn, rec);
+            });
+            viewReasoningBtn.addEventListener('mouseleave', () => {
+              if (activeReasoningTrigger === viewReasoningBtn) {
+                scheduleHideReasoningTooltip();
+              }
+            });
             viewReasoningBtn.addEventListener('click', (e) => {
+              e.preventDefault();
               e.stopPropagation();
-              showViewReasoningModal(rec);
+              toggleReasoningTooltip(viewReasoningBtn, rec);
             });
           }
 
@@ -986,6 +1192,8 @@ export function createRecommendations(deps = {}) {
    * Show context menu for a recommendation album (desktop right-click).
    */
   function showRecommendationContextMenu(e, rec, year) {
+    hideReasoningTooltip(true);
+
     hideAllContextMenus();
     if (recommendationSubmenuController) {
       recommendationSubmenuController.hideAll();
