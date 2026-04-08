@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-04-08",
+    "category": "ui",
+    "description": "Simplified recommendation explanations with cleaner tooltips",
+    "hash": "d394525b9de41fe1cb68381caa972c12a17470b9",
+    "commitMessage": "Replace recommendation reasoning modal with tooltip\n\nUse an inline tooltip styled like the AI summary popover so users can read recommendation reasons without leaving the list view."
+  },
+  {
+    "date": "2026-04-08",
     "category": "feature",
     "description": "Show personal list coverage in recommendations",
     "hash": "0d8915cbf884dd5754be2c4bf4c9c0ac2c58d36b",
