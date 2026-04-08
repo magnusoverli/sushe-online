@@ -16,6 +16,7 @@
 const logger = require('../utils/logger');
 const { withTransaction, TransactionAbort } = require('../db/transaction');
 const { buildPartialUpdate } = require('../utils/query-builder');
+const { createItemComments } = require('./list/item-comments');
 const {
   validateYearNotLocked,
   validateMainListNotLocked,
@@ -151,6 +152,14 @@ function createListService(deps = {}) {
     await validateMainListNotLocked(pool, list.year, list.isMain, action);
     return list;
   }
+
+  const { updateItemCommentField } = createItemComments({
+    pool,
+    withTransaction,
+    TransactionAbort,
+    findListByIdOrThrow,
+    logger: log,
+  });
 
   /**
    * Insert albums as list items within a transaction.
@@ -1209,31 +1218,13 @@ function createListService(deps = {}) {
    * @returns {Promise<void>}
    */
   async function updateItemComment(listId, userId, identifier, comment) {
-    const list = await findListByIdOrThrow(listId, userId, 'update comment');
-
-    const trimmedComment = comment ? comment.trim() : null;
-
-    await withTransaction(pool, async (client) => {
-      let updateResult = await client.query(
-        'UPDATE list_items SET comments = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4 RETURNING _id',
-        [trimmedComment, new Date(), list._id, identifier]
-      );
-
-      if (updateResult.rowCount === 0) {
-        updateResult = await client.query(
-          'UPDATE list_items SET comments = $1, updated_at = $2 WHERE _id = $3 AND list_id = $4 RETURNING _id',
-          [trimmedComment, new Date(), identifier, list._id]
-        );
-      }
-
-      if (updateResult.rowCount === 0) {
-        throw new TransactionAbort(404, {
-          error: 'Album not found in list',
-        });
-      }
-    });
-
-    log.info('Comment updated', { userId, listId, identifier });
+    await updateItemCommentField(
+      listId,
+      userId,
+      identifier,
+      comment,
+      'comments'
+    );
   }
 
   /**
@@ -1245,31 +1236,13 @@ function createListService(deps = {}) {
    * @returns {Promise<void>}
    */
   async function updateItemComment2(listId, userId, identifier, comment) {
-    const list = await findListByIdOrThrow(listId, userId, 'update comment 2');
-
-    const trimmedComment = comment ? comment.trim() : null;
-
-    await withTransaction(pool, async (client) => {
-      let updateResult = await client.query(
-        'UPDATE list_items SET comments_2 = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4 RETURNING _id',
-        [trimmedComment, new Date(), list._id, identifier]
-      );
-
-      if (updateResult.rowCount === 0) {
-        updateResult = await client.query(
-          'UPDATE list_items SET comments_2 = $1, updated_at = $2 WHERE _id = $3 AND list_id = $4 RETURNING _id',
-          [trimmedComment, new Date(), identifier, list._id]
-        );
-      }
-
-      if (updateResult.rowCount === 0) {
-        throw new TransactionAbort(404, {
-          error: 'Album not found in list',
-        });
-      }
-    });
-
-    log.info('Comment 2 updated', { userId, listId, identifier });
+    await updateItemCommentField(
+      listId,
+      userId,
+      identifier,
+      comment,
+      'comments_2'
+    );
   }
 
   /**
