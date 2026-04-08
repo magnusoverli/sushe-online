@@ -19,6 +19,9 @@ import { createSettingsDataLoaders } from './settings-drawer/data-loaders.js';
 import { createSettingsCoreRenderers } from './settings-drawer/renderers/core-renderers.js';
 import { createSettingsPreferencesRenderer } from './settings-drawer/renderers/preferences-renderer.js';
 import { createSettingsAdminRenderer } from './settings-drawer/renderers/admin-renderer.js';
+import { createSettingsCoreHandlers } from './settings-drawer/handlers/core-handlers.js';
+import { createSettingsAuditHandlers } from './settings-drawer/handlers/audit-handlers.js';
+import { createSettingsAdminHandlers } from './settings-drawer/handlers/admin-handlers.js';
 
 /**
  * Create settings drawer utilities with injected dependencies
@@ -61,6 +64,82 @@ export function createSettingsDrawer(deps = {}) {
 
   const { renderPreferencesCategory } = createSettingsPreferencesRenderer();
   const { renderAdminCategory } = createSettingsAdminRenderer();
+
+  const {
+    attachActionBarHandlers,
+    attachAccountHandlers,
+    attachIntegrationsHandlers,
+    attachVisualHandlers,
+    attachPreferencesHandlers,
+    attachStatsHandlers,
+  } = createSettingsCoreHandlers({
+    apiCall,
+    showToast,
+    categoryData,
+    loadCategoryData,
+    handleEditEmail,
+    handleSaveEmail,
+    handleCancelEmail,
+    handleChangePassword,
+    handleEditUsername,
+    handleSaveUsername,
+    handleCancelUsername,
+    handleRequestAdmin,
+    handleDisconnect,
+    handleMusicServiceChange,
+    handleAccentColorChange,
+    handleTimeFormatChange,
+    handleDateFormatChange,
+    toggleColumnVisibility,
+    handleSyncPreferences,
+    handleSetTimeRange,
+  });
+
+  const { handleScanDuplicates, handleAuditManualAlbums } =
+    createSettingsAuditHandlers({
+      apiCall,
+      showToast,
+      openDuplicateReviewModal,
+      openManualAlbumAudit,
+    });
+
+  const { attachAdminHandlers } = createSettingsAdminHandlers({
+    showConfirmation,
+    apiCall,
+    showToast,
+    loadAlbumSummaryStats,
+    pollAlbumSummaryStatus,
+    getAlbumSummaryPollInterval: () => albumSummaryPollInterval,
+    setAlbumSummaryPollInterval: (value) => {
+      albumSummaryPollInterval = value;
+    },
+    loadAlbumImageStats,
+    handleAdminEventAction,
+    handleConfigureTelegram,
+    handleDisconnectTelegram,
+    handleToggleTelegramRecommendations,
+    handleTestTelegramRecommendations,
+    handleRestoreDatabase,
+    handleGrantAdmin,
+    handleRevokeAdmin,
+    handleViewUserLists,
+    handleDeleteUser,
+    handleConfirmAggregateReveal,
+    handleRevokeAggregateConfirm,
+    handleResetAggregateReveal,
+    handleRecomputeAggregateList,
+    handleAuditAggregateList,
+    handleShowContributorManager,
+    handleToggleYearLock,
+    handleToggleRecommendationLock,
+    handleShowRecommenderManager,
+    handleFetchAlbumSummaries,
+    handleStopAlbumSummaries,
+    handleRefetchAlbumImages,
+    handleStopRefetchImages,
+    handleScanDuplicates,
+    handleAuditManualAlbums,
+  });
 
   let telegramModalState = null;
 
@@ -300,736 +379,6 @@ export function createSettingsDrawer(deps = {}) {
 
     // Attach handlers for action bar buttons
     attachActionBarHandlers(categoryId);
-  }
-
-  /**
-   * Attach event handlers for action bar buttons
-   * @param {string} _categoryId - Current category ID (unused, reserved for future use)
-   */
-  function attachActionBarHandlers(_categoryId) {
-    const logoutBtn = document.getElementById('actionBarLogout');
-    const syncBtn = document.getElementById('actionBarSync');
-    const syncPrefsBtn = document.getElementById('actionBarSyncPrefs');
-    const refreshBtn = document.getElementById('actionBarRefresh');
-
-    if (logoutBtn) {
-      logoutBtn.addEventListener('click', () => {
-        window.location.href = '/logout';
-      });
-    }
-
-    if (syncBtn) {
-      syncBtn.addEventListener('click', async () => {
-        syncBtn.disabled = true;
-        syncBtn.innerHTML =
-          '<i class="fas fa-spinner fa-spin mr-2"></i>Syncing...';
-        try {
-          await apiCall('/api/preferences/sync', { method: 'POST' });
-          showToast('Services synced successfully');
-          // Reload integrations data
-          delete categoryData.integrations;
-          loadCategoryData('integrations');
-        } catch (_error) {
-          showToast('Failed to sync services', 'error');
-        } finally {
-          syncBtn.disabled = false;
-          syncBtn.innerHTML =
-            '<i class="fas fa-sync-alt mr-2"></i>Sync Services';
-        }
-      });
-    }
-
-    if (syncPrefsBtn) {
-      syncPrefsBtn.addEventListener('click', async () => {
-        syncPrefsBtn.disabled = true;
-        syncPrefsBtn.innerHTML =
-          '<i class="fas fa-spinner fa-spin mr-2"></i>Syncing...';
-        try {
-          await apiCall('/api/preferences/sync', { method: 'POST' });
-          showToast('Preferences synced successfully');
-          // Reload preferences data
-          delete categoryData.preferences;
-          loadCategoryData('preferences');
-        } catch (_error) {
-          showToast('Failed to sync preferences', 'error');
-        } finally {
-          syncPrefsBtn.disabled = false;
-          syncPrefsBtn.innerHTML =
-            '<i class="fas fa-sync-alt mr-2"></i>Sync Now';
-        }
-      });
-    }
-
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', async () => {
-        refreshBtn.disabled = true;
-        refreshBtn.innerHTML =
-          '<i class="fas fa-spinner fa-spin mr-2"></i>Refreshing...';
-        try {
-          // Reload stats data
-          delete categoryData.stats;
-          await loadCategoryData('stats');
-          showToast('Stats refreshed');
-        } catch (_error) {
-          showToast('Failed to refresh stats', 'error');
-        } finally {
-          refreshBtn.disabled = false;
-          refreshBtn.innerHTML = '<i class="fas fa-redo mr-2"></i>Refresh';
-        }
-      });
-    }
-  }
-
-  /**
-   * Attach handlers for Account category
-   */
-  function attachAccountHandlers() {
-    const changeEmailBtn = document.getElementById('changeEmailBtn');
-    const saveEmailBtn = document.getElementById('saveEmailBtn');
-    const cancelEmailBtn = document.getElementById('cancelEmailBtn');
-    const changePasswordBtn = document.getElementById('changePasswordBtn');
-    const editUsernameBtn = document.getElementById('editUsernameBtn');
-    const saveUsernameBtn = document.getElementById('saveUsernameBtn');
-    const cancelUsernameBtn = document.getElementById('cancelUsernameBtn');
-    const requestAdminBtn = document.getElementById('requestAdminBtn');
-
-    if (changeEmailBtn) {
-      changeEmailBtn.addEventListener('click', handleEditEmail);
-    }
-
-    if (saveEmailBtn) {
-      saveEmailBtn.addEventListener('click', handleSaveEmail);
-    }
-
-    if (cancelEmailBtn) {
-      cancelEmailBtn.addEventListener('click', handleCancelEmail);
-    }
-
-    if (changePasswordBtn) {
-      changePasswordBtn.addEventListener('click', handleChangePassword);
-    }
-
-    if (editUsernameBtn) {
-      editUsernameBtn.addEventListener('click', handleEditUsername);
-    }
-
-    if (saveUsernameBtn) {
-      saveUsernameBtn.addEventListener('click', handleSaveUsername);
-    }
-
-    if (cancelUsernameBtn) {
-      cancelUsernameBtn.addEventListener('click', handleCancelUsername);
-    }
-
-    if (requestAdminBtn) {
-      requestAdminBtn.addEventListener('click', handleRequestAdmin);
-    }
-  }
-
-  /**
-   * Attach handlers for Integrations category
-   */
-  function attachIntegrationsHandlers() {
-    const connectSpotifyBtn = document.getElementById('connectSpotifyBtn');
-    const reauthorizeSpotifyBtn = document.getElementById(
-      'reauthorizeSpotifyBtn'
-    );
-    const disconnectSpotifyBtn = document.getElementById(
-      'disconnectSpotifyBtn'
-    );
-    const connectTidalBtn = document.getElementById('connectTidalBtn');
-    const disconnectTidalBtn = document.getElementById('disconnectTidalBtn');
-    const connectLastfmBtn = document.getElementById('connectLastfmBtn');
-    const disconnectLastfmBtn = document.getElementById('disconnectLastfmBtn');
-
-    if (connectSpotifyBtn) {
-      connectSpotifyBtn.addEventListener('click', () => {
-        window.location.href = '/auth/spotify';
-      });
-    }
-
-    if (reauthorizeSpotifyBtn) {
-      reauthorizeSpotifyBtn.addEventListener('click', () => {
-        window.location.href = '/auth/spotify?force=true';
-      });
-    }
-
-    if (disconnectSpotifyBtn) {
-      disconnectSpotifyBtn.addEventListener('click', () =>
-        handleDisconnect('spotify')
-      );
-    }
-
-    if (connectTidalBtn) {
-      connectTidalBtn.addEventListener('click', () => {
-        window.location.href = '/auth/tidal';
-      });
-    }
-
-    if (disconnectTidalBtn) {
-      disconnectTidalBtn.addEventListener('click', () =>
-        handleDisconnect('tidal')
-      );
-    }
-
-    if (connectLastfmBtn) {
-      connectLastfmBtn.addEventListener('click', () => {
-        window.location.href = '/auth/lastfm';
-      });
-    }
-
-    if (disconnectLastfmBtn) {
-      disconnectLastfmBtn.addEventListener('click', () =>
-        handleDisconnect('lastfm')
-      );
-    }
-
-    const musicServiceSelect = document.getElementById('musicServiceSelect');
-    if (musicServiceSelect) {
-      musicServiceSelect.addEventListener('change', (e) => {
-        handleMusicServiceChange(e.target.value);
-      });
-    }
-  }
-
-  /**
-   * Attach handlers for Visual category
-   */
-  function attachVisualHandlers() {
-    const accentColorInput = document.getElementById('accentColor');
-    if (accentColorInput) {
-      accentColorInput.addEventListener('change', (e) => {
-        handleAccentColorChange(e.target.value);
-      });
-    }
-
-    const timeFormatSelect = document.getElementById('timeFormatSelect');
-    if (timeFormatSelect) {
-      timeFormatSelect.addEventListener('change', (e) => {
-        handleTimeFormatChange(e.target.value);
-      });
-    }
-
-    const dateFormatSelect = document.getElementById('dateFormatSelect');
-    if (dateFormatSelect) {
-      dateFormatSelect.addEventListener('change', (e) => {
-        handleDateFormatChange(e.target.value);
-      });
-    }
-
-    // Column visibility toggles
-    const columnToggles = document.getElementById('columnVisibilityToggles');
-    if (columnToggles) {
-      columnToggles
-        .querySelectorAll('input[data-settings-column-id]')
-        .forEach((cb) => {
-          cb.addEventListener('change', () => {
-            toggleColumnVisibility(cb.dataset.settingsColumnId);
-            // The column-config module dispatches 'columnvisibilitychange'
-            // which album-display listens for to trigger a rebuild
-          });
-        });
-    }
-  }
-
-  /**
-   * Attach handlers for Preferences category
-   */
-  function attachPreferencesHandlers() {
-    const syncBtn = document.getElementById('syncPreferencesBtn');
-    if (syncBtn) {
-      syncBtn.addEventListener('click', handleSyncPreferences);
-    }
-
-    // Attach time range button handlers
-    const spotifyRangeButtons = document.getElementById('spotifyRangeButtons');
-    if (spotifyRangeButtons) {
-      spotifyRangeButtons.querySelectorAll('button').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const service = btn.getAttribute('data-service');
-          const range = btn.getAttribute('data-range');
-          handleSetTimeRange(service, range);
-        });
-      });
-    }
-
-    const lastfmRangeButtons = document.getElementById('lastfmRangeButtons');
-    if (lastfmRangeButtons) {
-      lastfmRangeButtons.querySelectorAll('button').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const service = btn.getAttribute('data-service');
-          const range = btn.getAttribute('data-range');
-          handleSetTimeRange(service, range);
-        });
-      });
-    }
-  }
-
-  /**
-   * Attach handlers for Stats category
-   */
-  function attachStatsHandlers() {
-    // Stats category is read-only, no handlers needed
-  }
-
-  /**
-   * Attach handlers for Admin category
-   */
-  function attachAdminHandlers() {
-    // Event action handlers
-    document.querySelectorAll('.admin-event-action').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const eventId = btn.dataset.eventId;
-        const action = btn.dataset.action;
-
-        // Get event data from parent container
-        const eventContainer = btn.closest('[data-event-data]');
-        let eventData = null;
-        try {
-          eventData = JSON.parse(eventContainer?.dataset.eventData || '{}');
-        } catch (e) {
-          console.error('Failed to parse event data:', e);
-        }
-
-        await handleAdminEventAction(eventId, action, eventData);
-      });
-    });
-
-    // Telegram handlers
-    const configureTelegramBtn = document.getElementById(
-      'configureTelegramBtn'
-    );
-    const disconnectTelegramBtn = document.getElementById(
-      'disconnectTelegramBtn'
-    );
-
-    if (configureTelegramBtn) {
-      configureTelegramBtn.addEventListener('click', handleConfigureTelegram);
-    }
-
-    if (disconnectTelegramBtn) {
-      disconnectTelegramBtn.addEventListener('click', handleDisconnectTelegram);
-    }
-
-    // Telegram recommendations handlers
-    const toggleTelegramRecsBtn = document.getElementById(
-      'toggleTelegramRecsBtn'
-    );
-    const testTelegramRecsBtn = document.getElementById('testTelegramRecsBtn');
-
-    if (toggleTelegramRecsBtn) {
-      toggleTelegramRecsBtn.addEventListener(
-        'click',
-        handleToggleTelegramRecommendations
-      );
-    }
-
-    if (testTelegramRecsBtn) {
-      testTelegramRecsBtn.addEventListener(
-        'click',
-        handleTestTelegramRecommendations
-      );
-    }
-
-    // Database restore handler
-    const restoreDatabaseBtn = document.getElementById('restoreDatabaseBtn');
-    if (restoreDatabaseBtn) {
-      restoreDatabaseBtn.addEventListener('click', handleRestoreDatabase);
-    }
-
-    // User management handlers
-    document.querySelectorAll('.admin-grant-admin').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const userId = btn.dataset.userId;
-        await handleGrantAdmin(userId);
-      });
-    });
-
-    document.querySelectorAll('.admin-revoke-admin').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const userId = btn.dataset.userId;
-        await handleRevokeAdmin(userId);
-      });
-    });
-
-    document.querySelectorAll('.admin-view-lists').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const userId = btn.dataset.userId;
-        await handleViewUserLists(userId);
-      });
-    });
-
-    document.querySelectorAll('.admin-delete-user').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const userId = btn.dataset.userId;
-        await handleDeleteUser(userId);
-      });
-    });
-
-    // Aggregate list toggle handlers (collapsible years)
-    document.querySelectorAll('.aggregate-year-toggle').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const year = btn.dataset.year;
-        const content = document.getElementById(
-          `aggregate-year-content-${year}`
-        );
-        const chevron = btn.querySelector('.aggregate-year-chevron');
-        const isExpanded = btn.getAttribute('aria-expanded') === 'true';
-
-        if (isExpanded) {
-          // Collapse
-          content.style.maxHeight = `${content.scrollHeight}px`;
-          content.style.opacity = '1';
-          // Force reflow to ensure transition starts
-          void content.offsetHeight;
-          content.style.maxHeight = '0';
-          content.style.opacity = '0';
-          setTimeout(() => {
-            content.classList.add('hidden');
-          }, 300); // Match transition duration
-          chevron.style.transform = 'rotate(0deg)';
-          btn.setAttribute('aria-expanded', 'false');
-        } else {
-          // Expand
-          content.classList.remove('hidden');
-          // Temporarily set to auto to get actual height
-          content.style.maxHeight = 'none';
-          content.style.opacity = '0';
-          const height = content.scrollHeight;
-          content.style.maxHeight = '0';
-          // Force reflow
-          void content.offsetHeight;
-          // Now animate to full height
-          requestAnimationFrame(() => {
-            content.style.maxHeight = `${height}px`;
-            content.style.opacity = '1';
-          });
-          chevron.style.transform = 'rotate(90deg)';
-          btn.setAttribute('aria-expanded', 'true');
-        }
-      });
-
-      // Keyboard accessibility
-      btn.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          btn.click();
-        }
-      });
-    });
-
-    // Aggregate list handlers
-    document.querySelectorAll('.aggregate-confirm-reveal').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const year = parseInt(btn.dataset.year, 10);
-        await handleConfirmAggregateReveal(year);
-      });
-    });
-
-    document.querySelectorAll('.aggregate-revoke-confirm').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const year = parseInt(btn.dataset.year, 10);
-        await handleRevokeAggregateConfirm(year);
-      });
-    });
-
-    document.querySelectorAll('.aggregate-reset-reveal').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const year = parseInt(btn.dataset.year, 10);
-        await handleResetAggregateReveal(year);
-      });
-    });
-
-    document.querySelectorAll('.aggregate-recompute').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const year = parseInt(btn.dataset.year, 10);
-        await handleRecomputeAggregateList(year);
-      });
-    });
-
-    document.querySelectorAll('.aggregate-audit').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const year = parseInt(btn.dataset.year, 10);
-        await handleAuditAggregateList(year);
-      });
-    });
-
-    document
-      .querySelectorAll('.aggregate-manage-contributors')
-      .forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const year = parseInt(btn.dataset.year, 10);
-          await handleShowContributorManager(year);
-        });
-      });
-
-    document.querySelectorAll('.aggregate-toggle-lock').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const year = parseInt(btn.dataset.year, 10);
-        const isCurrentlyLocked = btn.dataset.locked === 'true';
-        await handleToggleYearLock(year, isCurrentlyLocked);
-      });
-    });
-
-    document.querySelectorAll('.recommendation-toggle-lock').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const year = parseInt(btn.dataset.year, 10);
-        const isCurrentlyLocked = btn.dataset.locked === 'true';
-        await handleToggleRecommendationLock(year, isCurrentlyLocked);
-      });
-    });
-
-    document
-      .querySelectorAll('.recommendation-manage-access')
-      .forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const year = parseInt(btn.dataset.year, 10);
-          await handleShowRecommenderManager(year);
-        });
-      });
-
-    // Album summary handlers
-    const fetchAlbumSummariesBtn = document.getElementById(
-      'fetchAlbumSummariesBtn'
-    );
-    const regenerateAllSummariesBtn = document.getElementById(
-      'regenerateAllSummariesBtn'
-    );
-    const stopAlbumSummariesBtn = document.getElementById(
-      'stopAlbumSummariesBtn'
-    );
-
-    if (fetchAlbumSummariesBtn) {
-      fetchAlbumSummariesBtn.addEventListener(
-        'click',
-        handleFetchAlbumSummaries
-      );
-    }
-
-    if (regenerateAllSummariesBtn) {
-      regenerateAllSummariesBtn.addEventListener('click', async () => {
-        // Show confirmation modal with cost warning
-        const confirmed = await showConfirmation(
-          'Regenerate All Album Summaries',
-          'Are you sure you want to regenerate ALL album summaries?',
-          'This will regenerate summaries for all albums (including those with existing summaries) and will incur API costs. This action should only be used when necessary.',
-          'Regenerate All'
-        );
-
-        if (!confirmed) return;
-
-        const fetchBtn = document.getElementById('fetchAlbumSummariesBtn');
-        try {
-          fetchBtn.disabled = true;
-          regenerateAllSummariesBtn.disabled = true;
-          regenerateAllSummariesBtn.textContent = 'Starting...';
-
-          const response = await apiCall('/api/admin/album-summaries/fetch', {
-            method: 'POST',
-            body: JSON.stringify({ includeRetries: true, regenerateAll: true }),
-          });
-
-          if (response.success) {
-            showToast('Regenerating all album summaries...', 'success');
-            await loadAlbumSummaryStats();
-            // Start polling for batch status updates
-            if (!albumSummaryPollInterval) {
-              albumSummaryPollInterval = setInterval(
-                pollAlbumSummaryStatus,
-                2000
-              );
-            }
-          } else {
-            showToast('Failed to start regeneration', 'error');
-          }
-        } catch (error) {
-          console.error('Error regenerating all summaries:', error);
-          showToast('Error regenerating summaries', 'error');
-        } finally {
-          fetchBtn.disabled = false;
-          regenerateAllSummariesBtn.disabled = false;
-          regenerateAllSummariesBtn.textContent = 'Regenerate All';
-        }
-      });
-    }
-
-    if (stopAlbumSummariesBtn) {
-      stopAlbumSummariesBtn.addEventListener('click', handleStopAlbumSummaries);
-    }
-
-    // Load album summary stats on admin panel load
-    loadAlbumSummaryStats();
-
-    // Album image refetch handlers
-    const refetchAlbumImagesBtn = document.getElementById(
-      'refetchAlbumImagesBtn'
-    );
-    const stopRefetchImagesBtn = document.getElementById(
-      'stopRefetchImagesBtn'
-    );
-
-    if (refetchAlbumImagesBtn) {
-      refetchAlbumImagesBtn.addEventListener('click', handleRefetchAlbumImages);
-    }
-
-    if (stopRefetchImagesBtn) {
-      stopRefetchImagesBtn.addEventListener('click', handleStopRefetchImages);
-    }
-
-    // Load album image stats on admin panel load
-    loadAlbumImageStats();
-
-    // Duplicate scanner handlers
-    const scanDuplicatesBtn = document.getElementById('scanDuplicatesBtn');
-    if (scanDuplicatesBtn) {
-      scanDuplicatesBtn.addEventListener('click', handleScanDuplicates);
-    }
-
-    // Manual album reconciliation handler
-    const auditManualAlbumsBtn = document.getElementById(
-      'auditManualAlbumsBtn'
-    );
-    if (auditManualAlbumsBtn) {
-      auditManualAlbumsBtn.addEventListener('click', handleAuditManualAlbums);
-    }
-  }
-
-  /**
-   * Handle duplicate album scanning - opens review modal
-   */
-  async function handleScanDuplicates() {
-    const scanBtn = document.getElementById('scanDuplicatesBtn');
-    const statusDiv = document.getElementById('duplicateScanStatus');
-    const thresholdSelect = document.getElementById('duplicateThreshold');
-    const threshold = thresholdSelect
-      ? parseFloat(thresholdSelect.value)
-      : 0.15;
-
-    try {
-      scanBtn.disabled = true;
-      scanBtn.textContent = 'Scanning...';
-      statusDiv.classList.remove('hidden');
-      statusDiv.innerHTML =
-        '<i class="fas fa-spinner fa-spin mr-2"></i>Scanning database for potential duplicates...';
-
-      const response = await apiCall(
-        `/admin/api/scan-duplicates?threshold=${threshold}`
-      );
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      if (response.pairs.length === 0) {
-        statusDiv.innerHTML = `
-          <span class="text-green-400">
-            <i class="fas fa-check-circle mr-2"></i>
-            No potential duplicates found (${response.totalAlbums} albums, ${response.excludedPairs} marked distinct)
-          </span>
-        `;
-        showToast('No potential duplicates found', 'success');
-      } else {
-        statusDiv.innerHTML = `
-          <span class="text-yellow-400">
-            Found ${response.potentialDuplicates} potential duplicates. Opening review...
-          </span>
-        `;
-
-        // Open the review modal
-        const result = await openDuplicateReviewModal(response.pairs);
-
-        // Update status after review
-        statusDiv.innerHTML = `
-          <span class="text-gray-400">
-            Last scan: ${response.potentialDuplicates} found, ${result.resolved} resolved, ${result.remaining} remaining
-          </span>
-        `;
-      }
-    } catch (error) {
-      console.error('Error scanning for duplicates:', error);
-      statusDiv.innerHTML = `
-        <span class="text-red-400">
-          <i class="fas fa-exclamation-triangle mr-2"></i>
-          Error: ${error.message}
-        </span>
-      `;
-      showToast('Error scanning for duplicates', 'error');
-    } finally {
-      scanBtn.disabled = false;
-      scanBtn.textContent = 'Scan & Review';
-    }
-  }
-
-  /**
-   * Handle manual album audit - pre-fetches data and shows inline message if nothing to review
-   */
-  async function handleAuditManualAlbums() {
-    const auditBtn = document.getElementById('auditManualAlbumsBtn');
-    const statusDiv = document.getElementById('manualAlbumAuditStatus');
-    const thresholdSelect = document.getElementById('manualAlbumThreshold');
-    const threshold = thresholdSelect
-      ? parseFloat(thresholdSelect.value)
-      : 0.15;
-
-    try {
-      auditBtn.disabled = true;
-      auditBtn.textContent = 'Checking...';
-      statusDiv.classList.remove('hidden');
-      statusDiv.innerHTML =
-        '<i class="fas fa-spinner fa-spin mr-2"></i>Scanning manual albums...';
-
-      const data = await apiCall(
-        `/api/admin/audit/manual-albums?threshold=${threshold}`
-      );
-
-      const hasIntegrityIssues =
-        data.integrityIssues && data.integrityIssues.length > 0;
-      const hasMatches = data.totalWithMatches > 0;
-
-      if (!hasIntegrityIssues && !hasMatches) {
-        // Nothing to review - show inline message like duplicate scanner
-        statusDiv.innerHTML = `
-          <span class="text-green-400">
-            <i class="fas fa-check-circle mr-2"></i>
-            No manual albums need review (${data.totalManual} manual albums checked)
-          </span>
-        `;
-        showToast('No manual albums need review', 'success');
-      } else {
-        // Has items to review - open the modal with pre-fetched data
-        const issueCount = hasIntegrityIssues ? data.integrityIssues.length : 0;
-        const matchCount = data.totalWithMatches;
-
-        statusDiv.innerHTML = `
-          <span class="text-yellow-400">
-            Found ${issueCount > 0 ? `${issueCount} integrity issue${issueCount !== 1 ? 's' : ''}` : ''}${issueCount > 0 && matchCount > 0 ? ' and ' : ''}${matchCount > 0 ? `${matchCount} album${matchCount !== 1 ? 's' : ''} to review` : ''}. Opening review...
-          </span>
-        `;
-
-        // Open modal with pre-fetched data
-        await openManualAlbumAudit(threshold, data);
-
-        // Update status after review
-        statusDiv.innerHTML = `
-          <span class="text-gray-400">
-            Last audit: ${data.totalManual} manual albums checked
-          </span>
-        `;
-      }
-    } catch (error) {
-      console.error('Error auditing manual albums:', error);
-      statusDiv.innerHTML = `
-        <span class="text-red-400">
-          <i class="fas fa-exclamation-triangle mr-2"></i>
-          Error: ${error.message}
-        </span>
-      `;
-      showToast('Error auditing manual albums', 'error');
-    } finally {
-      auditBtn.disabled = false;
-      auditBtn.textContent = 'Audit Manual Albums';
-    }
   }
 
   /**
