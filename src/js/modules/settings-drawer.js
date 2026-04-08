@@ -23,6 +23,7 @@ import { createSettingsAccountActions } from './settings-drawer/handlers/account
 import { createSettingsPreferenceActions } from './settings-drawer/handlers/preference-actions.js';
 import { createSettingsTelegramActions } from './settings-drawer/handlers/telegram-actions.js';
 import { createSettingsAdminActions } from './settings-drawer/handlers/admin-actions.js';
+import { createSettingsAlbumSummaryActions } from './settings-drawer/handlers/album-summary-actions.js';
 import { createSettingsCoreHandlers } from './settings-drawer/handlers/core-handlers.js';
 import { createSettingsAuditHandlers } from './settings-drawer/handlers/audit-handlers.js';
 import { createSettingsAdminHandlers } from './settings-drawer/handlers/admin-handlers.js';
@@ -174,6 +175,22 @@ export function createSettingsDrawer(deps = {}) {
       loadCategoryData,
       createSettingsModalBase,
     });
+
+  let albumSummaryPollInterval = null;
+
+  const {
+    loadAlbumSummaryStats,
+    pollAlbumSummaryStatus,
+    handleFetchAlbumSummaries,
+    handleStopAlbumSummaries,
+  } = createSettingsAlbumSummaryActions({
+    apiCall,
+    showToast,
+    getAlbumSummaryPollInterval: () => albumSummaryPollInterval,
+    setAlbumSummaryPollInterval: (value) => {
+      albumSummaryPollInterval = value;
+    },
+  });
 
   const { attachAdminHandlers } = createSettingsAdminHandlers({
     showConfirmation,
@@ -451,196 +468,11 @@ export function createSettingsDrawer(deps = {}) {
     attachActionBarHandlers(categoryId);
   }
 
-  // ============ ALBUM SUMMARY HANDLERS ============
-
-  let albumSummaryPollInterval = null;
-
-  // ============ IMAGE REFETCH HANDLERS ============
+  // ============ ALBUM IMAGE HANDLERS ============
 
   let imageRefetchPollInterval = null;
   let imageRefetchPollCount = 0;
   const STATS_REFRESH_INTERVAL = 10; // Refresh stats every N polls (~15 seconds)
-
-  /**
-   * Load and display album summary statistics
-   */
-  async function loadAlbumSummaryStats() {
-    const statsEl = document.getElementById('albumSummaryStats');
-    if (!statsEl) return;
-
-    try {
-      const response = await apiCall('/api/admin/album-summaries/stats');
-      const { stats, batchStatus } = response;
-
-      if (!stats) {
-        statsEl.innerHTML =
-          '<div class="text-gray-400 text-sm">No stats available</div>';
-        return;
-      }
-
-      statsEl.innerHTML = `
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-white text-lg">${stats.totalAlbums || 0}</div>
-            <div class="text-xs text-gray-400 uppercase">Total Albums</div>
-          </div>
-          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-green-400 text-lg">${stats.withSummary || 0}</div>
-            <div class="text-xs text-gray-400 uppercase">With Summary</div>
-          </div>
-          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-yellow-400 text-lg">${stats.attemptedNoSummary || 0}</div>
-            <div class="text-xs text-gray-400 uppercase">No Summary Found</div>
-          </div>
-          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-blue-400 text-lg">${stats.neverAttempted || 0}</div>
-            <div class="text-xs text-gray-400 uppercase">Never Attempted</div>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 gap-2">
-          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-orange-400 text-lg">${stats.fromClaude || 0}</div>
-            <div class="text-xs text-gray-400 uppercase"><i class="fas fa-robot mr-1"></i>From Claude AI</div>
-          </div>
-        </div>
-      `;
-
-      // Update UI based on batch status
-      updateAlbumSummaryUI(batchStatus);
-    } catch (error) {
-      console.error('Error loading album summary stats:', error);
-      statsEl.innerHTML =
-        '<div class="text-red-400 text-sm">Failed to load stats</div>';
-    }
-  }
-
-  /**
-   * Update album summary UI based on batch status
-   */
-  function updateAlbumSummaryUI(status) {
-    const fetchBtn = document.getElementById('fetchAlbumSummariesBtn');
-    const regenerateBtn = document.getElementById('regenerateAllSummariesBtn');
-    const stopBtn = document.getElementById('stopAlbumSummariesBtn');
-    const progressEl = document.getElementById('albumSummaryProgress');
-    const progressBar = document.getElementById('albumSummaryProgressBar');
-    const progressText = document.getElementById('albumSummaryProgressText');
-
-    if (!fetchBtn || !stopBtn || !progressEl) return;
-
-    if (status?.running) {
-      // Hide both action buttons, show stop button
-      fetchBtn.classList.add('hidden');
-      if (regenerateBtn) regenerateBtn.classList.add('hidden');
-      stopBtn.classList.remove('hidden');
-      progressEl.classList.remove('hidden');
-
-      const progress = status.progress || 0;
-      progressBar.style.width = `${progress}%`;
-      progressText.textContent = `Processing: ${status.processed || 0}/${status.total || 0} (${status.found || 0} found, ${status.notFound || 0} not found, ${status.errors || 0} errors)`;
-
-      // Start polling if not already
-      if (!albumSummaryPollInterval) {
-        albumSummaryPollInterval = setInterval(pollAlbumSummaryStatus, 2000);
-      }
-    } else {
-      // Show both action buttons, hide stop button
-      fetchBtn.classList.remove('hidden');
-      if (regenerateBtn) regenerateBtn.classList.remove('hidden');
-      stopBtn.classList.add('hidden');
-      progressEl.classList.add('hidden');
-
-      // Stop polling
-      if (albumSummaryPollInterval) {
-        clearInterval(albumSummaryPollInterval);
-        albumSummaryPollInterval = null;
-      }
-    }
-  }
-
-  /**
-   * Poll album summary batch status
-   */
-  async function pollAlbumSummaryStatus() {
-    try {
-      const response = await apiCall('/api/admin/album-summaries/status');
-      updateAlbumSummaryUI(response.status);
-
-      // If job finished, reload stats (silently handle errors to avoid false positives)
-      if (!response.status?.running) {
-        try {
-          await loadAlbumSummaryStats();
-        } catch (statsError) {
-          // Silently handle stats loading errors - these are not critical failures
-          // The batch job completed successfully, stats loading failure is just a UI refresh issue
-          console.error(
-            'Error loading album summary stats after batch completion:',
-            statsError
-          );
-        }
-      }
-    } catch (error) {
-      // Only log polling errors, don't show toast (polling failures are expected during network issues)
-      console.error('Error polling album summary status:', error);
-    }
-  }
-
-  /**
-   * Handle fetch album summaries button
-   */
-  async function handleFetchAlbumSummaries() {
-    const fetchBtn = document.getElementById('fetchAlbumSummariesBtn');
-
-    try {
-      fetchBtn.disabled = true;
-      fetchBtn.textContent = 'Starting...';
-
-      const response = await apiCall('/api/admin/album-summaries/fetch', {
-        method: 'POST',
-        body: JSON.stringify({ includeRetries: true, regenerateAll: false }),
-      });
-
-      if (response.success) {
-        showToast('Album summary fetch started', 'success');
-        updateAlbumSummaryUI(response.status);
-      }
-    } catch (error) {
-      console.error('Error starting album summary fetch:', error);
-      showToast(error.data?.error || 'Failed to start fetch', 'error');
-    } finally {
-      fetchBtn.disabled = false;
-      fetchBtn.textContent = 'Fetch Missing';
-    }
-  }
-
-  /**
-   * Handle stop album summaries button
-   */
-  async function handleStopAlbumSummaries() {
-    const stopBtn = document.getElementById('stopAlbumSummariesBtn');
-
-    try {
-      stopBtn.disabled = true;
-      stopBtn.textContent = 'Stopping...';
-
-      const response = await apiCall('/api/admin/album-summaries/stop', {
-        method: 'POST',
-      });
-
-      if (response.success) {
-        showToast('Album summary fetch stopped', 'success');
-        updateAlbumSummaryUI(response.status);
-        await loadAlbumSummaryStats();
-      }
-    } catch (error) {
-      console.error('Error stopping album summary fetch:', error);
-      showToast('Failed to stop fetch', 'error');
-    } finally {
-      stopBtn.disabled = false;
-      stopBtn.textContent = 'Stop';
-    }
-  }
-
-  // ============ ALBUM IMAGE HANDLERS ============
 
   /**
    * Load and display album image statistics
