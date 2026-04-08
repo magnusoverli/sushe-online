@@ -1,5 +1,19 @@
 [
   {
+    "date": "2026-04-08",
+    "category": "feature",
+    "description": "Show personal list coverage in recommendations",
+    "hash": "0d8915cbf884dd5754be2c4bf4c9c0ac2c58d36b",
+    "commitMessage": "Show personal list coverage in recommendations\n\nAdd per-user list-name metadata and a cover badge tooltip so recommendation views clearly show where the viewer already has each album saved."
+  },
+  {
+    "date": "2026-04-07",
+    "category": "fix",
+    "description": "Improved playback fallback behavior",
+    "hash": "da96530accfe3066b93998a1de2e7c8fa4d96b44",
+    "commitMessage": "Tweak playback fallback behavior and stabilize API e2e auth setup\n\nReduce accidental double-open flow by waiting slightly longer before web fallback and opening fallback links in a new tab instead of replacing the current page.\n\nAlso harden api-integration e2e user bootstrapping so pending-approval and stale-test-user states skip or recover cleanly instead of timing out on redirect expectations."
+  },
+  {
     "date": "2026-04-07",
     "category": "feature",
     "description": "Added Qobuz deep-link playback support",
