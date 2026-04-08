@@ -2698,7 +2698,7 @@ body.now-playing-bar-visible #addAlbumFAB {
   right: 2px;
   width: 20px;
   height: 20px;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.75);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -2738,7 +2738,7 @@ body.now-playing-bar-visible #addAlbumFAB {
   height: 24px;
   top: 2px;
   right: 2px;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.75);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -2770,7 +2770,7 @@ body.now-playing-bar-visible #addAlbumFAB {
   left: 2px;
   width: 20px;
   height: 20px;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.75);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -2797,7 +2797,7 @@ body.now-playing-bar-visible #addAlbumFAB {
   left: 2px;
   width: 24px;
   height: 24px;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.75);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -2825,13 +2825,16 @@ body.now-playing-bar-visible #addAlbumFAB {
   right: 2px;
   width: 20px;
   height: 20px;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.75);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: help;
-  transition: all 0.2s ease;
+  cursor: pointer;
+  transform: scale(1);
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
   z-index: 1;
 }
 
@@ -2851,13 +2854,16 @@ body.now-playing-bar-visible #addAlbumFAB {
   right: 2px;
   width: 24px;
   height: 24px;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.75);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: default;
-  transition: all 0.2s ease;
+  transform: scale(1);
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
   z-index: 1;
   -webkit-tap-highlight-color: transparent;
 }
@@ -2974,6 +2980,10 @@ body.now-playing-bar-visible #addAlbumFAB {
 
 .summary-tooltip.recommendation-tooltip .summary-tooltip-link:hover {
   background: #1d4ed8; /* blue-700 */
+}
+
+.view-reasoning-btn {
+  cursor: default;
 }
 
 /* Legacy class aliases for backwards compatibility */

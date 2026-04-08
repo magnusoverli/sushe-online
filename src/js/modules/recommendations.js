@@ -75,7 +75,7 @@ export function createRecommendations(deps = {}) {
   /** Shared submenu controller instance for recommendation context menu */
   let recommendationSubmenuController = null;
 
-  /** Active reasoning tooltip + trigger (desktop recommendations view) */
+  /** Active recommendation-detail tooltip + trigger (reasoning/lists) */
   let activeReasoningTooltip = null;
   let activeReasoningTrigger = null;
   let reasoningTooltipHideTimeout = null;
@@ -209,11 +209,13 @@ export function createRecommendations(deps = {}) {
     reasoningTooltipGlobalHandlersBound = true;
   }
 
-  function showReasoningTooltip(trigger, rec) {
+  function showRecommendationDetailTooltip(
+    trigger,
+    { headerText, contentHtml, iconClass = 'fas fa-thumbs-up', iconColor = '' }
+  ) {
     bindReasoningTooltipGlobalHandlers();
 
-    const reasoning = rec?.reasoning?.trim();
-    if (!reasoning) return;
+    if (!contentHtml) return;
 
     clearReasoningTooltipTimeouts();
 
@@ -233,12 +235,13 @@ export function createRecommendations(deps = {}) {
 
     const tooltip = document.createElement('div');
     tooltip.className = 'summary-tooltip recommendation-tooltip';
+    const iconStyle = iconColor ? ` style="color: ${iconColor};"` : '';
     tooltip.innerHTML = `
       <div class="summary-tooltip-header">
-        <i class="fas fa-thumbs-up"></i>
-        <span>${escapeHtml(rec.album)} - ${escapeHtml(rec.artist)}</span>
+        <i class="${iconClass}"${iconStyle}></i>
+        <span>${escapeHtml(headerText)}</span>
       </div>
-      <div class="summary-tooltip-content">${formatReasoningHtml(reasoning, rec.recommended_by)}</div>
+      <div class="summary-tooltip-content">${contentHtml}</div>
     `;
 
     tooltip.addEventListener('mouseenter', () => {
@@ -262,6 +265,17 @@ export function createRecommendations(deps = {}) {
     });
   }
 
+  function showReasoningTooltip(trigger, rec) {
+    const reasoning = rec?.reasoning?.trim();
+    if (!reasoning) return;
+
+    showRecommendationDetailTooltip(trigger, {
+      headerText: `${rec.album} - ${rec.artist}`,
+      contentHtml: formatReasoningHtml(reasoning, rec.recommended_by),
+      iconClass: 'fas fa-thumbs-up',
+    });
+  }
+
   function toggleReasoningTooltip(trigger, rec) {
     if (
       activeReasoningTooltip &&
@@ -273,6 +287,53 @@ export function createRecommendations(deps = {}) {
     }
 
     showReasoningTooltip(trigger, rec);
+  }
+
+  function formatInUserListsTooltip(listNames) {
+    if (!Array.isArray(listNames) || listNames.length === 0) {
+      return '';
+    }
+
+    const header = listNames.length === 1 ? 'In your list:' : 'In your lists:';
+    const items = listNames
+      .map((name) => `&bull; ${escapeHtml(name)}`)
+      .join('<br>');
+
+    return `<span class="font-semibold text-gray-200">${header}</span><br>${items}`;
+  }
+
+  function formatInUserListsAriaLabel(listNames) {
+    if (!Array.isArray(listNames) || listNames.length === 0) {
+      return '';
+    }
+
+    const header = listNames.length === 1 ? 'In your list' : 'In your lists';
+    return `${header}: ${listNames.join(', ')}`;
+  }
+
+  function showInUserListsTooltip(trigger, rec, listNames) {
+    const tooltipHtml = formatInUserListsTooltip(listNames);
+    if (!tooltipHtml) return;
+
+    showRecommendationDetailTooltip(trigger, {
+      headerText: `${rec.album} - ${rec.artist}`,
+      contentHtml: tooltipHtml,
+      iconClass: 'fas fa-list',
+      iconColor: '#10b981',
+    });
+  }
+
+  function toggleInUserListsTooltip(trigger, rec, listNames) {
+    if (
+      activeReasoningTooltip &&
+      activeReasoningTrigger === trigger &&
+      activeReasoningTooltip.parentNode
+    ) {
+      hideReasoningTooltip();
+      return;
+    }
+
+    showInUserListsTooltip(trigger, rec, listNames);
   }
 
   function clearRecommendationAddListsHideTimeout() {
@@ -488,16 +549,6 @@ export function createRecommendations(deps = {}) {
 
   // ============ MOBILE CARD CREATION ============
 
-  function formatInUserListsTooltip(listNames) {
-    if (!Array.isArray(listNames) || listNames.length === 0) {
-      return '';
-    }
-
-    const header = listNames.length === 1 ? 'In your list:' : 'In your lists:';
-    const lines = listNames.map((name) => `- ${name}`);
-    return [header, ...lines].join('\n');
-  }
-
   /**
    * Create a mobile recommendation card element.
    * @param {Object} rec - Recommendation object
@@ -528,12 +579,13 @@ export function createRecommendations(deps = {}) {
           (name) => typeof name === 'string' && name.trim().length > 0
         )
       : [];
-    const inUserListsTooltip = formatInUserListsTooltip(inUserListNames);
+    const inUserListsAriaLabel = formatInUserListsAriaLabel(inUserListNames);
     const inUserListsBadgeHtml =
       inUserListNames.length > 0
         ? `<div class="in-user-lists-badge-mobile"
-                 title="${escapeHtmlAttr(inUserListsTooltip)}"
-                 aria-label="${escapeHtmlAttr(inUserListsTooltip)}">
+                 aria-label="${escapeHtmlAttr(inUserListsAriaLabel)}"
+                 role="button"
+                 tabindex="0">
              <i class="fas fa-list"></i>
            </div>`
         : '';
@@ -622,6 +674,28 @@ export function createRecommendations(deps = {}) {
    * Attach event handlers to mobile recommendation card.
    */
   function attachRecommendationCardHandlers(card, rec, year, locked) {
+    const inUserListNames = Array.isArray(rec.in_user_list_names)
+      ? rec.in_user_list_names.filter(
+          (name) => typeof name === 'string' && name.trim().length > 0
+        )
+      : [];
+
+    const inUserListsBadge = card.querySelector('.in-user-lists-badge-mobile');
+    if (inUserListsBadge && inUserListNames.length > 0) {
+      inUserListsBadge.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleInUserListsTooltip(inUserListsBadge, rec, inUserListNames);
+      });
+
+      inUserListsBadge.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggleInUserListsTooltip(inUserListsBadge, rec, inUserListNames);
+      });
+    }
+
     const viewReasoningBtn = card.querySelector('.view-reasoning-mobile-btn');
     if (viewReasoningBtn) {
       viewReasoningBtn.addEventListener(
@@ -1103,12 +1177,14 @@ export function createRecommendations(deps = {}) {
                 (name) => typeof name === 'string' && name.trim().length > 0
               )
             : [];
-          const inUserListsTooltip = formatInUserListsTooltip(inUserListNames);
+          const inUserListsAriaLabel =
+            formatInUserListsAriaLabel(inUserListNames);
           const inUserListsBadgeHtml =
             inUserListNames.length > 0
               ? `<div class="in-user-lists-badge"
-                   title="${escapeHtmlAttr(inUserListsTooltip)}"
-                   aria-label="${escapeHtmlAttr(inUserListsTooltip)}">
+                   aria-label="${escapeHtmlAttr(inUserListsAriaLabel)}"
+                   role="button"
+                   tabindex="0">
                  <i class="fas fa-list"></i>
                </div>`
               : '';
@@ -1179,6 +1255,29 @@ export function createRecommendations(deps = {}) {
               e.preventDefault();
               e.stopPropagation();
               toggleReasoningTooltip(viewReasoningBtn, rec);
+            });
+          }
+
+          const inUserListsBadge = row.querySelector('.in-user-lists-badge');
+          if (inUserListsBadge && inUserListNames.length > 0) {
+            inUserListsBadge.addEventListener('mouseenter', () => {
+              showInUserListsTooltip(inUserListsBadge, rec, inUserListNames);
+            });
+            inUserListsBadge.addEventListener('mouseleave', () => {
+              if (activeReasoningTrigger === inUserListsBadge) {
+                scheduleHideReasoningTooltip();
+              }
+            });
+            inUserListsBadge.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleInUserListsTooltip(inUserListsBadge, rec, inUserListNames);
+            });
+            inUserListsBadge.addEventListener('keydown', (e) => {
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              e.preventDefault();
+              e.stopPropagation();
+              toggleInUserListsTooltip(inUserListsBadge, rec, inUserListNames);
             });
           }
 
