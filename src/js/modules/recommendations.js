@@ -34,6 +34,7 @@ export function createRecommendations(deps = {}) {
     showReasoningModal,
     showViewReasoningModal,
     escapeHtml,
+    escapeHtmlAttr = escapeHtml,
     positionContextMenu,
     createActionSheet,
     groupListsByYear,
@@ -285,6 +286,16 @@ export function createRecommendations(deps = {}) {
 
   // ============ MOBILE CARD CREATION ============
 
+  function formatInUserListsTooltip(listNames) {
+    if (!Array.isArray(listNames) || listNames.length === 0) {
+      return '';
+    }
+
+    const header = listNames.length === 1 ? 'In your list:' : 'In your lists:';
+    const lines = listNames.map((name) => `- ${name}`);
+    return [header, ...lines].join('\n');
+  }
+
   /**
    * Create a mobile recommendation card element.
    * @param {Object} rec - Recommendation object
@@ -310,6 +321,20 @@ export function createRecommendations(deps = {}) {
     });
 
     const hasReasoning = rec.reasoning && rec.reasoning.trim().length > 0;
+    const inUserListNames = Array.isArray(rec.in_user_list_names)
+      ? rec.in_user_list_names.filter(
+          (name) => typeof name === 'string' && name.trim().length > 0
+        )
+      : [];
+    const inUserListsTooltip = formatInUserListsTooltip(inUserListNames);
+    const inUserListsBadgeHtml =
+      inUserListNames.length > 0
+        ? `<div class="in-user-lists-badge-mobile"
+                 title="${escapeHtmlAttr(inUserListsTooltip)}"
+                 aria-label="${escapeHtmlAttr(inUserListsTooltip)}">
+             <i class="fas fa-list"></i>
+           </div>`
+        : '';
 
     card.innerHTML = `
       <div class="flex items-stretch h-full">
@@ -317,6 +342,7 @@ export function createRecommendations(deps = {}) {
         <!-- COVER SECTION -->
         <div class="shrink-0 w-[88px] flex flex-col items-center pt-2 pl-1">
           <div class="mobile-album-cover relative w-20 h-20 flex items-center justify-center bg-gray-800 rounded-lg">
+            ${inUserListsBadgeHtml}
             <img src="/api/albums/${encodeURIComponent(rec.album_id)}/cover" 
                  alt="${escapeHtml(rec.album)}"
                  class="album-cover-blur w-[75px] h-[75px] rounded-lg object-cover"
@@ -870,6 +896,20 @@ export function createRecommendations(deps = {}) {
                 day: '2-digit',
               })
             : '';
+          const inUserListNames = Array.isArray(rec.in_user_list_names)
+            ? rec.in_user_list_names.filter(
+                (name) => typeof name === 'string' && name.trim().length > 0
+              )
+            : [];
+          const inUserListsTooltip = formatInUserListsTooltip(inUserListNames);
+          const inUserListsBadgeHtml =
+            inUserListNames.length > 0
+              ? `<div class="in-user-lists-badge"
+                   title="${escapeHtmlAttr(inUserListsTooltip)}"
+                   aria-label="${escapeHtmlAttr(inUserListsTooltip)}">
+                 <i class="fas fa-list"></i>
+               </div>`
+              : '';
 
           row.innerHTML = `
             <div class="cover-cell flex items-center justify-center">
@@ -880,6 +920,7 @@ export function createRecommendations(deps = {}) {
                      loading="lazy"
                      decoding="async"
                      onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded-sm bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'">
+                ${inUserListsBadgeHtml}
               </div>
             </div>
             <div class="album-cell flex flex-col justify-center min-w-0">

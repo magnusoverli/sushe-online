@@ -59,6 +59,15 @@ describe('Recommendations Feature', () => {
 
   after(async () => {
     // Cleanup - delete in FK-safe order (recommendation_access references users)
+    await pool.query(
+      "DELETE FROM list_items WHERE list_id IN (SELECT _id FROM lists WHERE user_id IN (SELECT _id FROM users WHERE email LIKE 'rec-%@test.com'))"
+    );
+    await pool.query(
+      "DELETE FROM lists WHERE user_id IN (SELECT _id FROM users WHERE email LIKE 'rec-%@test.com')"
+    );
+    await pool.query(
+      "DELETE FROM list_groups WHERE user_id IN (SELECT _id FROM users WHERE email LIKE 'rec-%@test.com')"
+    );
     await pool.query('DELETE FROM recommendation_access WHERE year = $1', [
       testYear,
     ]);
@@ -72,6 +81,16 @@ describe('Recommendations Feature', () => {
   });
 
   beforeEach(async () => {
+    await pool.query(
+      "DELETE FROM list_items WHERE list_id IN (SELECT _id FROM lists WHERE user_id IN (SELECT _id FROM users WHERE email LIKE 'rec-%@test.com'))"
+    );
+    await pool.query(
+      "DELETE FROM lists WHERE user_id IN (SELECT _id FROM users WHERE email LIKE 'rec-%@test.com')"
+    );
+    await pool.query(
+      "DELETE FROM list_groups WHERE user_id IN (SELECT _id FROM users WHERE email LIKE 'rec-%@test.com')"
+    );
+
     // Clean recommendations and settings before each test
     await pool.query('DELETE FROM recommendations WHERE year = $1', [testYear]);
     await pool.query('DELETE FROM recommendation_settings WHERE year = $1', [
@@ -122,6 +141,59 @@ describe('Recommendations Feature', () => {
       assert.ok(rec.recommender_id);
       assert.ok(rec.artist);
       assert.ok(rec.album);
+      assert.ok(Array.isArray(rec.in_user_list_names));
+    });
+
+    it('should include names of user lists containing the album for that year', async () => {
+      await addRecommendation(
+        pool,
+        testYear,
+        testAlbumId,
+        regularUser2._id,
+        'Great recommendation'
+      );
+
+      const agent = request.agent(app);
+      await loginAs(agent, regularUser);
+
+      const firstListName = 'Rec badge list A';
+      const secondListName = 'Rec badge list B';
+
+      const createFirst = await agent
+        .post('/api/lists')
+        .send({ name: firstListName, year: testYear })
+        .expect(201);
+      const createSecond = await agent
+        .post('/api/lists')
+        .send({ name: secondListName, year: testYear })
+        .expect(201);
+
+      const albumToAdd = {
+        album_id: testAlbumId,
+        artist: 'Test Artist',
+        album: 'Test Album',
+        release_date: '2024-01-01',
+      };
+
+      await agent
+        .patch(`/api/lists/${createFirst.body._id}/items`)
+        .send({ added: [albumToAdd] })
+        .expect(200);
+      await agent
+        .patch(`/api/lists/${createSecond.body._id}/items`)
+        .send({ added: [albumToAdd] })
+        .expect(200);
+
+      const res = await agent
+        .get(`/api/recommendations/${testYear}`)
+        .expect(200);
+
+      assert.strictEqual(res.body.recommendations.length, 1);
+      const rec = res.body.recommendations[0];
+      assert.deepStrictEqual(rec.in_user_list_names, [
+        firstListName,
+        secondListName,
+      ]);
     });
 
     it('should require authentication', async () => {

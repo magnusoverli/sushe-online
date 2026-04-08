@@ -19,7 +19,7 @@ import {
   showViewReasoningModal,
 } from './modules/modals.js';
 import { positionContextMenu } from './modules/context-menu.js';
-import { escapeHtml } from './modules/html-utils.js';
+import { escapeHtml, escapeHtmlAttr } from './modules/html-utils.js';
 import { checkListSetupStatus } from './modules/list-setup-wizard.js';
 import { createSettingsDrawer } from './modules/settings-drawer.js';
 import { initAboutModal } from './modules/about-modal.js';
@@ -152,6 +152,7 @@ const getRecommendationsModule = createLazyModule(() =>
     showReasoningModal,
     showViewReasoningModal,
     escapeHtml,
+    escapeHtmlAttr,
     positionContextMenu,
     createActionSheet,
     groupListsByYear,

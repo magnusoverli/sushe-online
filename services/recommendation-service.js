@@ -114,13 +114,22 @@ function createRecommendationService(deps = {}) {
         a.country,
         a.genre_1,
         a.genre_2,
-        u.username as recommended_by
+        u.username as recommended_by,
+        user_lists.list_names as in_user_list_names
       FROM recommendations r
       JOIN albums a ON r.album_id = a.album_id
       JOIN users u ON r.recommended_by = u._id
+      LEFT JOIN LATERAL (
+        SELECT ARRAY_AGG(DISTINCT l.name ORDER BY l.name) as list_names
+        FROM list_items li
+        JOIN lists l ON li.list_id = l._id
+        WHERE li.album_id = r.album_id
+          AND l.user_id = $2
+          AND l.year = $1
+      ) user_lists ON TRUE
       WHERE r.year = $1
       ORDER BY r.created_at DESC`,
-      [year]
+      [year, userId]
     );
 
     return {
@@ -139,6 +148,7 @@ function createRecommendationService(deps = {}) {
         recommender_id: row.recommender_id,
         reasoning: row.reasoning,
         created_at: row.created_at,
+        in_user_list_names: row.in_user_list_names || [],
       })),
     };
   }

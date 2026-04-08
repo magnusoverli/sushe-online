@@ -2818,6 +2818,60 @@ body.now-playing-bar-visible #addAlbumFAB {
   transform: scale(0.95);
 }
 
+/* Badge for recommendation albums already present in your own lists for the same year */
+.in-user-lists-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+  transition: all 0.2s ease;
+  z-index: 1;
+}
+
+.in-user-lists-badge i {
+  font-size: 10px;
+  color: #10b981;
+}
+
+.in-user-lists-badge:hover {
+  background: rgba(0, 0, 0, 1);
+  transform: scale(1.1);
+}
+
+.in-user-lists-badge-mobile {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 24px;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  transition: all 0.2s ease;
+  z-index: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.in-user-lists-badge-mobile i {
+  font-size: 11px;
+  color: #10b981;
+}
+
+.in-user-lists-badge-mobile:active {
+  background: rgba(0, 0, 0, 1);
+  transform: scale(0.95);
+}
+
 /* Base summary tooltip styles */
 .summary-tooltip {
   position: fixed;
