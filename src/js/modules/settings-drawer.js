@@ -19,6 +19,7 @@ import { createSettingsDataLoaders } from './settings-drawer/data-loaders.js';
 import { createSettingsCoreRenderers } from './settings-drawer/renderers/core-renderers.js';
 import { createSettingsPreferencesRenderer } from './settings-drawer/renderers/preferences-renderer.js';
 import { createSettingsAdminRenderer } from './settings-drawer/renderers/admin-renderer.js';
+import { createSettingsAccountActions } from './settings-drawer/handlers/account-actions.js';
 import { createSettingsCoreHandlers } from './settings-drawer/handlers/core-handlers.js';
 import { createSettingsAuditHandlers } from './settings-drawer/handlers/audit-handlers.js';
 import { createSettingsAdminHandlers } from './settings-drawer/handlers/admin-handlers.js';
@@ -65,6 +66,32 @@ export function createSettingsDrawer(deps = {}) {
   const { renderPreferencesCategory } = createSettingsPreferencesRenderer();
   const { renderAdminCategory } = createSettingsAdminRenderer();
 
+  const accountHandlerBinding = {
+    attach: () => {},
+  };
+
+  const {
+    handleEditEmail,
+    handleSaveEmail,
+    handleCancelEmail,
+    handleChangePassword,
+    handleEditUsername,
+    handleSaveUsername,
+    handleCancelUsername,
+    handleRequestAdmin,
+  } = createSettingsAccountActions({
+    categoryData,
+    renderCategoryContent,
+    reattachAccountHandlers: () => {
+      accountHandlerBinding.attach();
+    },
+    showToast,
+    showConfirmation,
+    apiCall,
+    loadCategoryData,
+    createSettingsModalBase,
+  });
+
   const {
     attachActionBarHandlers,
     attachAccountHandlers,
@@ -94,6 +121,8 @@ export function createSettingsDrawer(deps = {}) {
     handleSyncPreferences,
     handleSetTimeRange,
   });
+
+  accountHandlerBinding.attach = attachAccountHandlers;
 
   const { handleScanDuplicates, handleAuditManualAlbums } =
     createSettingsAuditHandlers({
@@ -382,240 +411,6 @@ export function createSettingsDrawer(deps = {}) {
   }
 
   /**
-   * Handle email edit
-   */
-  function handleEditEmail() {
-    if (!categoryData.account) {
-      categoryData.account = {};
-    }
-    categoryData.account.editingEmail = true;
-    categoryData.account.tempEmail =
-      categoryData.account.email || window.currentUser?.email || '';
-    renderCategoryContent('account');
-    attachAccountHandlers();
-
-    // Focus the input
-    setTimeout(() => {
-      const input = document.getElementById('emailInput');
-      if (input) {
-        input.focus();
-        input.select();
-      }
-    }, 100);
-  }
-
-  /**
-   * Handle email save
-   */
-  async function handleSaveEmail() {
-    const input = document.getElementById('emailInput');
-    if (!input) return;
-
-    const newEmail = input.value.trim();
-
-    // Validate
-    if (!newEmail) {
-      showToast('Email cannot be empty', 'error');
-      return;
-    }
-
-    // Basic email format validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(newEmail)) {
-      showToast('Please enter a valid email address', 'error');
-      return;
-    }
-
-    if (
-      newEmail === (categoryData.account?.email || window.currentUser?.email)
-    ) {
-      // No change, just cancel
-      handleCancelEmail();
-      return;
-    }
-
-    // Show confirmation modal
-    const confirmed = await showConfirmation(
-      'Change Email',
-      'Are you sure you want to change your email address?',
-      'You will need to verify your new email address.',
-      'Change Email'
-    );
-
-    if (!confirmed) {
-      handleCancelEmail();
-      return;
-    }
-
-    try {
-      const response = await apiCall('/settings/update-email', {
-        method: 'POST',
-        body: JSON.stringify({ email: newEmail }),
-      });
-
-      if (response.success) {
-        showToast('Email updated successfully', 'success');
-
-        // Update cached data
-        if (categoryData.account) {
-          categoryData.account.email = newEmail;
-          categoryData.account.editingEmail = false;
-          delete categoryData.account.tempEmail;
-        }
-
-        // Update window.currentUser
-        if (window.currentUser) {
-          window.currentUser.email = newEmail;
-        }
-
-        // Re-render
-        renderCategoryContent('account');
-        attachAccountHandlers();
-      }
-    } catch (error) {
-      console.error('Error updating email:', error);
-      const errorMsg =
-        error.data?.error || error.message || 'Failed to update email';
-      showToast(errorMsg, 'error');
-    }
-  }
-
-  /**
-   * Handle email cancel
-   */
-  function handleCancelEmail() {
-    if (categoryData.account) {
-      categoryData.account.editingEmail = false;
-      delete categoryData.account.tempEmail;
-    }
-    renderCategoryContent('account');
-    attachAccountHandlers();
-  }
-
-  /**
-   * Handle password change
-   */
-  async function handleChangePassword() {
-    // Create and show password change modal
-    const modal = createPasswordModal();
-    document.body.appendChild(modal);
-    modal.classList.remove('hidden');
-
-    // Focus first input
-    setTimeout(() => {
-      const currentPasswordInput = modal.querySelector('#currentPasswordInput');
-      if (currentPasswordInput) {
-        currentPasswordInput.focus();
-      }
-    }, 100);
-  }
-
-  /**
-   * Handle username edit
-   */
-  function handleEditUsername() {
-    if (!categoryData.account) {
-      categoryData.account = {};
-    }
-    categoryData.account.editingUsername = true;
-    categoryData.account.tempUsername =
-      categoryData.account.username || window.currentUser?.username || '';
-    renderCategoryContent('account');
-    attachAccountHandlers();
-
-    // Focus the input
-    setTimeout(() => {
-      const input = document.getElementById('usernameInput');
-      if (input) {
-        input.focus();
-        input.select();
-      }
-    }, 100);
-  }
-
-  /**
-   * Handle username save
-   */
-  async function handleSaveUsername() {
-    const input = document.getElementById('usernameInput');
-    if (!input) return;
-
-    const newUsername = input.value.trim();
-
-    // Validate
-    if (!newUsername) {
-      showToast('Username cannot be empty', 'error');
-      return;
-    }
-
-    if (newUsername.length < 3 || newUsername.length > 30) {
-      showToast('Username must be 3-30 characters', 'error');
-      return;
-    }
-
-    if (!/^[a-zA-Z0-9_]+$/.test(newUsername)) {
-      showToast(
-        'Username can only contain letters, numbers, and underscores',
-        'error'
-      );
-      return;
-    }
-
-    if (
-      newUsername ===
-      (categoryData.account?.username || window.currentUser?.username)
-    ) {
-      // No change, just cancel
-      handleCancelUsername();
-      return;
-    }
-
-    try {
-      const response = await apiCall('/settings/update-username', {
-        method: 'POST',
-        body: JSON.stringify({ username: newUsername }),
-      });
-
-      if (response.success) {
-        showToast('Username updated successfully', 'success');
-
-        // Update cached data
-        if (categoryData.account) {
-          categoryData.account.username = newUsername;
-          categoryData.account.editingUsername = false;
-          delete categoryData.account.tempUsername;
-        }
-
-        // Update window.currentUser
-        if (window.currentUser) {
-          window.currentUser.username = newUsername;
-        }
-
-        // Re-render
-        renderCategoryContent('account');
-        attachAccountHandlers();
-      }
-    } catch (error) {
-      console.error('Error updating username:', error);
-      const errorMsg =
-        error.data?.error || error.message || 'Failed to update username';
-      showToast(errorMsg, 'error');
-    }
-  }
-
-  /**
-   * Handle username cancel
-   */
-  function handleCancelUsername() {
-    if (categoryData.account) {
-      categoryData.account.editingUsername = false;
-      delete categoryData.account.tempUsername;
-    }
-    renderCategoryContent('account');
-    attachAccountHandlers();
-  }
-
-  /**
    * Handle service disconnect
    */
   async function handleDisconnect(service) {
@@ -861,170 +656,6 @@ export function createSettingsDrawer(deps = {}) {
       if (select && categoryData.visual) {
         select.value = categoryData.visual.dateFormat;
       }
-    }
-  }
-
-  /**
-   * Create password change modal
-   */
-  function createPasswordModal() {
-    const { modal, close } = createSettingsModalBase({
-      id: 'passwordChangeModal',
-      title: 'Change Password',
-      bodyHtml: `
-          <form id="passwordChangeForm">
-            <div class="settings-form-group">
-              <label class="settings-label" for="currentPasswordInput">Current Password</label>
-              <input type="password" id="currentPasswordInput" class="settings-input" required />
-            </div>
-            <div class="settings-form-group">
-              <label class="settings-label" for="newPasswordInput">New Password</label>
-              <input type="password" id="newPasswordInput" class="settings-input" required minlength="8" />
-              <p class="settings-description">Must be at least 8 characters</p>
-            </div>
-            <div class="settings-form-group">
-              <label class="settings-label" for="confirmPasswordInput">Confirm New Password</label>
-              <input type="password" id="confirmPasswordInput" class="settings-input" required minlength="8" />
-            </div>
-            <div id="passwordError" class="text-red-500 text-sm mt-2 hidden"></div>
-          </form>`,
-      footerHtml: `
-          <button id="cancelPasswordBtn" class="settings-button">Cancel</button>
-          <button id="savePasswordBtn" class="settings-button">Change Password</button>`,
-    });
-
-    // Attach handlers
-    const cancelBtn = modal.querySelector('#cancelPasswordBtn');
-    const saveBtn = modal.querySelector('#savePasswordBtn');
-    const form = modal.querySelector('#passwordChangeForm');
-
-    cancelBtn?.addEventListener('click', close);
-
-    form?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      await handleSavePassword(modal);
-    });
-
-    saveBtn?.addEventListener('click', async () => {
-      await handleSavePassword(modal);
-    });
-
-    return modal;
-  }
-
-  /**
-   * Handle password save
-   */
-  async function handleSavePassword(modal) {
-    const currentPassword = modal.querySelector('#currentPasswordInput').value;
-    const newPassword = modal.querySelector('#newPasswordInput').value;
-    const confirmPassword = modal.querySelector('#confirmPasswordInput').value;
-    const errorEl = modal.querySelector('#passwordError');
-    const saveBtn = modal.querySelector('#savePasswordBtn');
-
-    // Clear previous errors
-    errorEl.classList.add('hidden');
-    errorEl.textContent = '';
-
-    // Validate
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      errorEl.textContent = 'All fields are required';
-      errorEl.classList.remove('hidden');
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      errorEl.textContent = 'New password must be at least 8 characters';
-      errorEl.classList.remove('hidden');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      errorEl.textContent = 'New passwords do not match';
-      errorEl.classList.remove('hidden');
-      return;
-    }
-
-    // Disable button and show loading
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Changing...';
-
-    try {
-      const response = await apiCall('/settings/change-password', {
-        method: 'POST',
-        body: JSON.stringify({
-          currentPassword,
-          newPassword,
-          confirmPassword,
-        }),
-      });
-
-      if (response.success) {
-        showToast('Password updated successfully', 'success');
-
-        // Close modal
-        modal.classList.add('hidden');
-        setTimeout(() => {
-          document.body.removeChild(modal);
-        }, 300);
-      }
-    } catch (error) {
-      console.error('Error changing password:', error);
-      const errorMsg =
-        error.data?.error || error.message || 'Failed to change password';
-      errorEl.textContent = errorMsg;
-      errorEl.classList.remove('hidden');
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Change Password';
-    }
-  }
-
-  /**
-   * Handle admin request
-   */
-  async function handleRequestAdmin() {
-    const input = document.getElementById('adminCodeInput');
-    if (!input) return;
-
-    const code = input.value.trim().toUpperCase();
-
-    if (!code) {
-      showToast('Please enter an admin code', 'error');
-      return;
-    }
-
-    const btn = document.getElementById('requestAdminBtn');
-    if (!btn) return;
-
-    // Disable button and show loading
-    btn.disabled = true;
-    btn.textContent = 'Submitting...';
-
-    try {
-      const response = await apiCall('/settings/request-admin', {
-        method: 'POST',
-        body: JSON.stringify({ code }),
-      });
-
-      if (response.success) {
-        showToast('Admin access granted!', 'success');
-
-        // Update window.currentUser
-        if (window.currentUser) {
-          window.currentUser.role = 'admin';
-        }
-
-        // Reload account data to show updated role
-        categoryData.account = null;
-        await loadCategoryData('account');
-      }
-    } catch (error) {
-      console.error('Error requesting admin:', error);
-      const errorMsg =
-        error.data?.error || error.message || 'Failed to request admin access';
-      showToast(errorMsg, 'error');
-      btn.disabled = false;
-      btn.textContent = 'Submit';
     }
   }
 
