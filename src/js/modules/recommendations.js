@@ -83,9 +83,20 @@ export function createRecommendations(deps = {}) {
   let reasoningTooltipGlobalHandlersBound = false;
   const REASONING_TOOLTIP_HIDE_DELAY = 80;
 
-  function formatReasoningHtml(reasoning) {
+  function formatReasoningHtml(reasoning, recommenderName = '') {
     if (!reasoning) return '';
-    return escapeHtml(reasoning).replace(/\n/g, '<br>');
+
+    const safeName =
+      typeof recommenderName === 'string' ? recommenderName.trim() : '';
+    const escapedReasoning = escapeHtml(reasoning).replace(/\n/g, '<br>');
+
+    if (!safeName) {
+      return escapedReasoning;
+    }
+
+    const escapedName = escapeHtml(safeName);
+
+    return `<span class="font-semibold text-gray-200">${escapedName}:</span><br>${escapedReasoning}`;
   }
 
   function clearReasoningTooltipTimeouts() {
@@ -221,19 +232,13 @@ export function createRecommendations(deps = {}) {
     }
 
     const tooltip = document.createElement('div');
-    tooltip.className = 'summary-tooltip claude-tooltip';
+    tooltip.className = 'summary-tooltip recommendation-tooltip';
     tooltip.innerHTML = `
       <div class="summary-tooltip-header">
-        <i class="fas fa-robot"></i>
+        <i class="fas fa-thumbs-up"></i>
         <span>${escapeHtml(rec.album)} - ${escapeHtml(rec.artist)}</span>
       </div>
-      <div class="summary-tooltip-content">${formatReasoningHtml(reasoning)}</div>
-      <div class="summary-tooltip-footer">
-        <span class="summary-tooltip-link" style="cursor: default; opacity: 0.7;">
-          <i class="fas fa-comment-alt"></i>
-          Recommendation reason
-        </span>
-      </div>
+      <div class="summary-tooltip-content">${formatReasoningHtml(reasoning, rec.recommended_by)}</div>
     `;
 
     tooltip.addEventListener('mouseenter', () => {
@@ -1045,7 +1050,7 @@ export function createRecommendations(deps = {}) {
         <div class="genre-1-cell">Genre 1</div>
         <div class="genre-2-cell">Genre 2</div>
         <div class="recommended-by-cell">Recommended By</div>
-        <div class="date-added-cell">Date Added</div>
+        <div class="date-added-cell">Date Recommended</div>
       `;
 
       const rowsContainer = document.createElement('div');
@@ -1139,7 +1144,7 @@ export function createRecommendations(deps = {}) {
               <span class="album-cell-text text-blue-400 truncate flex-1 min-w-0" title="${escapeHtml(rec.recommended_by)}">${escapeHtml(rec.recommended_by)}</span>
               <span class="ml-1 shrink-0">
                 <button class="view-reasoning-btn text-gray-500 hover:text-blue-400 p-1 transition-colors shrink-0" 
-                        title="View reasoning"
+                        aria-label="View reasoning"
                         data-rec-index="${recommendations.indexOf(rec)}">
                   <i class="fas fa-comment-alt text-xs"></i>
                 </button>
