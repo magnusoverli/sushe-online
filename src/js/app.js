@@ -54,6 +54,7 @@ import { createAlbumContextMenu } from './modules/album-context-menu.js';
 import { createListReorder } from './modules/list-reorder.js';
 import { createAppShellUi } from './modules/app-shell-ui.js';
 import { createListSelection } from './modules/list-selection.js';
+import { createYearLockStatusRefresh } from './modules/year-lock-status-refresh.js';
 
 // Centralized state store
 import {
@@ -1449,45 +1450,17 @@ function selectRecommendations(year) {
   return getRecommendationsModule().selectRecommendations(year);
 }
 
-/**
- * Refresh the locked year status for the current list
- * Called after locking/unlocking a year in admin settings
- * @param {number} year - Year that was locked/unlocked
- */
-window.refreshLockedYearStatus = async function (year) {
-  // Invalidate the cache so we fetch fresh status
-  invalidateLockedYearsCache();
+const { refreshLockedYearStatus } = createYearLockStatusRefresh({
+  invalidateLockedYearsCache,
+  getListMetadata,
+  getCurrentListId,
+  isListLocked,
+  getSortingModule,
+  showYearLockUI,
+  clearYearLockUI,
+});
 
-  // Get the current list's year and main status
-  const currentMeta = getListMetadata(getCurrentListId());
-  const currentYear = currentMeta?.year;
-  const currentIsMain = currentMeta?.isMain || false;
-
-  // If the current list belongs to the year that was locked/unlocked
-  // and the list is the main list for that year
-  if (currentYear && currentYear === year && currentIsMain) {
-    const isLocked = await isListLocked(currentYear, currentIsMain);
-
-    // Get the album container
-    const container = document.getElementById('albumContainer');
-    if (!container) return;
-
-    // Get the sorting module
-    const sorting = getSortingModule();
-    if (!sorting) return;
-
-    if (isLocked) {
-      // Main list is now locked - disable sorting and show lock UI
-      sorting.destroySorting(container);
-      showYearLockUI(container, currentYear);
-    } else {
-      // Main list is now unlocked - enable sorting and clear lock UI
-      const isMobile = window.innerWidth < 1024;
-      sorting.initializeUnifiedSorting(container, isMobile);
-      clearYearLockUI(container);
-    }
-  }
-};
+window.refreshLockedYearStatus = refreshLockedYearStatus;
 
 // Debounced save function (factory from utils/save-optimizer.js)
 const debouncedSaveList = createDebouncedSave({ saveList, showToast });
