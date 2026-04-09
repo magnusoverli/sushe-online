@@ -55,6 +55,8 @@ import { createListReorder } from './modules/list-reorder.js';
 import { createAppShellUi } from './modules/app-shell-ui.js';
 import { createListSelection } from './modules/list-selection.js';
 import { createYearLockStatusRefresh } from './modules/year-lock-status-refresh.js';
+import { createAppStartupUi } from './modules/app-startup-ui.js';
+import { registerAppWindowGlobals } from './modules/app-window-globals.js';
 
 // Centralized state store
 import {
@@ -128,6 +130,12 @@ const {
   updateHeaderTitle,
   isTextTruncated,
 } = createAppShellUi({ getCurrentListId });
+
+const {
+  convertFlashToToast,
+  initializeSidebarCollapse,
+  registerBeforeUnloadListSaver,
+} = createAppStartupUi({ showToast, logger: console });
 
 /**
  * Get or initialize the link preview module
@@ -1460,110 +1468,56 @@ const { refreshLockedYearStatus } = createYearLockStatusRefresh({
   clearYearLockUI,
 });
 
-window.refreshLockedYearStatus = refreshLockedYearStatus;
-
 // Debounced save function (factory from utils/save-optimizer.js)
 const debouncedSaveList = createDebouncedSave({ saveList, showToast });
 
-// ============ WINDOW GLOBALS ============
-// Consolidated window assignments for backward compatibility.
-// Other modules (musicbrainz.js, list-nav.js, etc.) access these via window.*.
-
-// Core API and data
-window.apiCall = apiCall;
-window.showToast = showToast;
-window.showReasoningModal = showReasoningModal;
-
-// List data accessors
-window.getListData = getListData;
-window.setListData = setListData;
-window.getListMetadata = getListMetadata;
-window.updateListMetadata = updateListMetadata;
-window.isListDataLoaded = isListDataLoaded;
-
-// List operations
-window.saveList = saveList;
-window.loadLists = loadLists;
-window.selectList = selectList;
-window.updateListNav = updateListNav;
-window.collapseGroupsForActiveList = collapseGroupsForActiveList;
-window.updatePlaylist = updatePlaylist;
-window.toggleMainStatus = toggleMainStatus;
-window.displayAlbums = displayAlbums;
-
-// Group helpers
-window.getGroup = getGroup;
-window.updateGroupsFromServer = updateGroupsFromServer;
-
-// Navigation and state helpers
-window.getCurrentListName = getCurrentListName;
-window.findListByName = findListByName;
-window.isViewingRecommendations = isViewingRecommendations;
-window.getCurrentRecommendationsYear = getCurrentRecommendationsYear;
-window.selectRecommendations = selectRecommendations;
-window.clearSnapshotFromStorage = clearSnapshotFromStorage;
-
-// Mobile UI
-window.showMobileAlbumMenu = showMobileAlbumMenu;
-window.showMobileMoveToListSheet = showMobileMoveToListSheet;
-window.showMobileListMenu = showMobileListMenu;
-window.showMobileCategoryMenu = showMobileCategoryMenu;
-window.showMobileEditForm = showMobileEditForm;
-window.showMobileEditFormSafe = showMobileEditFormSafe;
-window.showMobileSummarySheet = showMobileSummarySheet;
-window.openRenameCategoryModal = openRenameCategoryModal;
-
-// Playback
-window.playAlbum = playAlbum;
-window.playTrack = playTrack;
-window.playTrackSafe = function (albumId) {
-  return getPlaybackModule().playTrackSafe(albumId);
-};
-window.playSpecificTrack = playSpecificTrack;
-window.playAlbumSafe = playAlbumSafe;
-window.removeAlbumSafe = removeAlbumSafe;
-
-// Track utilities
-window.fetchTracksForAlbum = fetchTracksForAlbum;
-window.getTrackName = getTrackName;
-window.getTrackLength = getTrackLength;
-window.formatTrackTime = formatTrackTime;
+registerAppWindowGlobals({
+  apiCall,
+  showToast,
+  showReasoningModal,
+  getListData,
+  setListData,
+  getListMetadata,
+  updateListMetadata,
+  isListDataLoaded,
+  saveList,
+  loadLists,
+  selectList,
+  updateListNav,
+  collapseGroupsForActiveList,
+  updatePlaylist,
+  toggleMainStatus,
+  displayAlbums,
+  getGroup,
+  updateGroupsFromServer,
+  getCurrentListName,
+  findListByName,
+  isViewingRecommendations,
+  getCurrentRecommendationsYear,
+  selectRecommendations,
+  clearSnapshotFromStorage,
+  showMobileAlbumMenu,
+  showMobileMoveToListSheet,
+  showMobileListMenu,
+  showMobileCategoryMenu,
+  showMobileEditForm,
+  showMobileEditFormSafe,
+  showMobileSummarySheet,
+  openRenameCategoryModal,
+  playAlbum,
+  playTrack,
+  getPlaybackModule,
+  playSpecificTrack,
+  playAlbumSafe,
+  removeAlbumSafe,
+  fetchTracksForAlbum,
+  getTrackName,
+  getTrackLength,
+  formatTrackTime,
+  refreshLockedYearStatus,
+});
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Convert server-side flash messages to toast notifications
-  function convertFlashToToast() {
-    // Add 'js-enabled' class to body to enable CSS that hides flash messages
-    document.body.classList.add('js-enabled');
-
-    // Find all flash messages with data-flash attribute
-    const flashMessages = document.querySelectorAll('[data-flash]');
-
-    console.log('Flash messages found:', flashMessages.length);
-    flashMessages.forEach((element) => {
-      const type = element.dataset.flash; // 'error', 'success', 'info'
-      let message;
-
-      // For login.ejs which uses data-flash-content
-      if (element.dataset.flashContent) {
-        message = element.dataset.flashContent;
-      } else {
-        // For templates.js which has text content directly
-        message = element.textContent.trim();
-      }
-
-      console.log('Processing flash:', {
-        type,
-        message,
-        hasContent: !!message,
-      });
-
-      if (message) {
-        showToast(message, type);
-      }
-    });
-  }
-
-  // Call the conversion function immediately - this works on all pages
   convertFlashToToast();
 
   // Check if we're on a main app page (not auth pages)
@@ -1603,42 +1557,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize about modal
   initAboutModal();
-
-  // Sidebar collapse functionality
-  function initializeSidebarCollapse() {
-    const sidebar = document.getElementById('sidebar');
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    const mainContent = document.querySelector('.main-content');
-
-    if (!sidebar || !sidebarToggle || !mainContent) return;
-
-    // Check localStorage for saved state
-    const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-
-    // Apply initial state (the inline <head> script already handled the visual state
-    // via .sidebar-is-collapsed on <html> to prevent flash — now apply the proper classes
-    // and remove the pre-paint override so transitions work normally going forward)
-    if (isCollapsed) {
-      sidebar.classList.add('collapsed');
-      mainContent.classList.add('sidebar-collapsed');
-    }
-    document.documentElement.classList.remove('sidebar-is-collapsed');
-
-    // Toggle handler
-    sidebarToggle.addEventListener('click', () => {
-      const isCurrentlyCollapsed = sidebar.classList.contains('collapsed');
-
-      if (isCurrentlyCollapsed) {
-        sidebar.classList.remove('collapsed');
-        mainContent.classList.remove('sidebar-collapsed');
-        localStorage.setItem('sidebarCollapsed', 'false');
-      } else {
-        sidebar.classList.add('collapsed');
-        mainContent.classList.add('sidebar-collapsed');
-        localStorage.setItem('sidebarCollapsed', 'true');
-      }
-    });
-  }
 
   // Initialize sidebar collapse first
   initializeSidebarCollapse();
@@ -1929,14 +1847,4 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Failed to initialize', 'error');
     });
 });
-// Add this right after the DOMContentLoaded event listener
-window.addEventListener('beforeunload', () => {
-  if (getCurrentListId()) {
-    try {
-      localStorage.setItem('lastSelectedList', getCurrentListId());
-    } catch (e) {
-      // Silently fail - not critical during page unload
-      console.warn('Failed to save last selected list on unload:', e.name);
-    }
-  }
-});
+registerBeforeUnloadListSaver(getCurrentListId);
