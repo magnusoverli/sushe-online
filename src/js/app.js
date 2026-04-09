@@ -57,6 +57,7 @@ import { createListSelection } from './modules/list-selection.js';
 import { createYearLockStatusRefresh } from './modules/year-lock-status-refresh.js';
 import { createAppStartupUi } from './modules/app-startup-ui.js';
 import { registerAppWindowGlobals } from './modules/app-window-globals.js';
+import { createAppDiscoveryImport } from './modules/app-discovery-import.js';
 
 // Centralized state store
 import {
@@ -135,7 +136,29 @@ const {
   convertFlashToToast,
   initializeSidebarCollapse,
   registerBeforeUnloadListSaver,
+  cleanupLegacyListCache,
+  hydrateSidebarFromCachedNames,
 } = createAppStartupUi({ showToast, logger: console });
+
+const { registerDiscoveryAddAlbumHandler, initializeFileImportHandlers } =
+  createAppDiscoveryImport({
+    showToast,
+    getListData,
+    apiCall,
+    saveList,
+    getLists,
+    getCurrentListId,
+    selectList,
+    importList,
+    updateListNav,
+    setPendingImport: (value) => {
+      pendingImportData = value;
+    },
+    setPendingImportFilename: (value) => {
+      pendingImportFilename = value;
+    },
+    logger: console,
+  });
 
 /**
  * Get or initialize the link preview module
@@ -1582,45 +1605,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Clean up old cache keys from previous implementation
-  try {
-    localStorage.removeItem('lists_cache');
-    localStorage.removeItem('lists_cache_timestamp');
-    // Clean up individual list caches
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('lastSelectedListData_')) {
-        localStorage.removeItem(key);
-      }
-    }
-  } catch (err) {
-    console.warn('Failed to clean up old cache:', err);
-  }
-
-  // Quickly populate sidebar using cached list names
-  const cachedLists = localStorage.getItem('cachedListNames');
-  if (cachedLists) {
-    try {
-      const names = JSON.parse(cachedLists);
-      names.forEach((name) => {
-        if (!getLists()[name]) {
-          // Initialize with metadata object structure (data loaded later)
-          getLists()[name] = {
-            name: name,
-            year: null,
-            isMain: false,
-            count: 0,
-            _data: null,
-            updatedAt: null,
-            createdAt: null,
-          };
-        }
-      });
-      updateListNav();
-    } catch (err) {
-      console.warn('Failed to parse cached list names:', err);
-    }
-  }
+  cleanupLegacyListCache();
+  hydrateSidebarFromCachedNames(getLists, updateListNav);
 
   // Initialize features after list data is loaded
   // Note: loadLists() was started immediately after auth check for faster loading
@@ -1638,199 +1624,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Initialize real-time sync for cross-device list updates
       initializeRealtimeSync();
 
-      // Handle discovery module's album add requests
-      window.addEventListener('discovery-add-album', async (e) => {
-        const { artist, album, listName } = e.detail;
-        if (!artist || !album || !listName) {
-          showToast('Missing album information', 'error');
-          return;
-        }
-
-        try {
-          // Search MusicBrainz for the album
-          showToast(`Searching for "${album}" by ${artist}...`, 'info');
-
-          const searchQuery = encodeURIComponent(`${artist} ${album}`);
-          const mbResponse = await fetch(
-            `/api/proxy/musicbrainz?endpoint=release-group/?query=${searchQuery}&type=album&limit=5&fmt=json`,
-            { credentials: 'include' }
-          );
-
-          if (!mbResponse.ok) {
-            throw new Error('MusicBrainz search failed');
-          }
-
-          const mbData = await mbResponse.json();
-          const releaseGroups = mbData['release-groups'] || [];
-
-          if (releaseGroups.length === 0) {
-            showToast(
-              `Could not find "${album}" on MusicBrainz. Try adding manually.`,
-              'error'
-            );
-            return;
-          }
-
-          // Find best match (exact or closest)
-          const normalizeStr = (s) =>
-            s?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
-          const targetArtist = normalizeStr(artist);
-          const targetAlbum = normalizeStr(album);
-
-          let bestMatch = releaseGroups[0];
-          for (const rg of releaseGroups) {
-            const rgArtist = normalizeStr(
-              rg['artist-credit']?.[0]?.name ||
-                rg['artist-credit']?.[0]?.artist?.name
-            );
-            const rgAlbum = normalizeStr(rg.title);
-            if (rgArtist === targetArtist && rgAlbum === targetAlbum) {
-              bestMatch = rg;
-              break;
-            }
-          }
-
-          // Build album object
-          const artistName =
-            bestMatch['artist-credit']?.[0]?.name ||
-            bestMatch['artist-credit']?.[0]?.artist?.name ||
-            artist;
-          const albumTitle = bestMatch.title || album;
-          const releaseDate = bestMatch['first-release-date'] || '';
-
-          const newAlbum = {
-            artist: artistName,
-            album: albumTitle,
-            album_id: bestMatch.id,
-            release_date: releaseDate,
-            country: '',
-            genre_1: '',
-            genre_2: '',
-          };
-
-          // Get the target list data
-          let targetListData = getListData(listName);
-          if (!targetListData) {
-            // Fetch the list data if not cached
-            targetListData = await apiCall(
-              `/api/lists/${encodeURIComponent(listName)}`
-            );
-          }
-
-          if (!targetListData) {
-            targetListData = [];
-          }
-
-          // Check for duplicates
-          const isDuplicate = targetListData.some(
-            (a) =>
-              a.artist?.toLowerCase() === artistName.toLowerCase() &&
-              a.album?.toLowerCase() === albumTitle.toLowerCase()
-          );
-
-          if (isDuplicate) {
-            showToast(
-              `"${albumTitle}" already exists in "${listName}"`,
-              'error'
-            );
-            return;
-          }
-
-          // Add to list
-          targetListData.push(newAlbum);
-          await saveList(listName, targetListData);
-
-          // Force refresh from server to get merged album data (e.g., genres from canonical albums table)
-          // Clear the local cache so selectList will refetch
-          const listMetadata = getLists()[listName];
-          if (listMetadata) {
-            listMetadata._data = null;
-          }
-
-          // Refresh if viewing the same list
-          if (getCurrentListId() === listName) {
-            selectList(listName);
-          }
-
-          // Refresh discovery module's user lists cache
-          import('./modules/discovery.js').then(({ refreshUserLists }) => {
-            refreshUserLists();
-          });
-
-          showToast(`Added "${albumTitle}" to "${listName}"`);
-        } catch (err) {
-          console.error('Error adding album from discovery:', err);
-          showToast('Failed to add album. Try adding manually.', 'error');
-        }
-      });
-
-      // Note: Last list selection is now handled in loadLists() for faster display
-
-      // Initialize file import handlers
-      const importBtn = document.getElementById('importBtn');
-      const fileInput = document.getElementById('fileInput');
-
-      if (importBtn && fileInput) {
-        importBtn.onclick = () => {
-          fileInput.click();
-        };
-
-        fileInput.onchange = async (e) => {
-          const file = e.target.files[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-              try {
-                const parsed = JSON.parse(e.target.result);
-
-                // Handle both old format (array) and new format (wrapped with metadata)
-                let albums, metadata, fileName;
-                if (Array.isArray(parsed)) {
-                  // Old format: just an array of albums
-                  albums = parsed;
-                  metadata = null;
-                  fileName = file.name.replace(/\.json$/, '');
-                } else if (parsed.albums && Array.isArray(parsed.albums)) {
-                  // New format: wrapped with metadata
-                  albums = parsed.albums;
-                  metadata = parsed._metadata || null;
-                  fileName =
-                    metadata?.list_name || file.name.replace(/\.json$/, '');
-                } else {
-                  throw new Error(
-                    'Invalid JSON format: expected array or object with albums array'
-                  );
-                }
-
-                // Check for existing list
-                if (getLists()[fileName]) {
-                  // Show import conflict modal
-                  pendingImportData = { albums, metadata };
-                  pendingImportFilename = fileName;
-                  document.getElementById('conflictListName').textContent =
-                    fileName;
-                  document
-                    .getElementById('importConflictModal')
-                    .classList.remove('hidden');
-                } else {
-                  // Import directly
-                  await importList(fileName, albums, metadata);
-                  updateListNav();
-                  selectList(fileName);
-                  showToast(`Successfully imported ${albums.length} albums`);
-                }
-              } catch (err) {
-                showToast('Error importing file: ' + err.message, 'error');
-              }
-            };
-            reader.onerror = () => {
-              showToast('Error reading file', 'error');
-            };
-            reader.readAsText(file);
-          }
-          e.target.value = ''; // Reset file input
-        };
-      }
+      registerDiscoveryAddAlbumHandler();
+      initializeFileImportHandlers();
 
       // Confirmation modal handlers are managed by showConfirmation function
       // No static handlers needed since we use the Promise-based approach
