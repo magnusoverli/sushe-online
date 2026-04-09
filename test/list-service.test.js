@@ -9,8 +9,15 @@ function createServiceDeps(pool) {
   return {
     pool,
     logger: createMockLogger(),
-    listsAsync: {},
-    listItemsAsync: {},
+    listsAsync: {
+      find: mock.fn(async () => []),
+      findWithCounts: mock.fn(async () => []),
+      findAllUserListsWithItems: mock.fn(async () => []),
+    },
+    listItemsAsync: {
+      count: mock.fn(async () => 0),
+      findWithAlbumData: mock.fn(async () => []),
+    },
     crypto: { randomBytes: () => Buffer.from('123456789012') },
     validateYear: () => ({ valid: true, value: 2024 }),
     helpers: {
@@ -240,5 +247,151 @@ describe('list-service item comments', () => {
     );
     assert.ok(updateQueries[1].includes('WHERE _id = $3 AND list_id = $4'));
     assert.strictEqual(client.query.mock.calls.length, 4);
+  });
+});
+
+describe('list-service fetchers and setup status', () => {
+  it('should return list metadata with counts', async () => {
+    const pool = {
+      query: mock.fn(async (sql) => {
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(),
+    };
+
+    const deps = createServiceDeps(pool);
+    deps.listsAsync.find = mock.fn(async () => []);
+    deps.listsAsync.findWithCounts = mock.fn(async () => [
+      {
+        _id: 'list1',
+        name: 'My List',
+        year: 2024,
+        isMain: true,
+        itemCount: 42,
+        group: { _id: 'group1' },
+        sortOrder: 0,
+        updatedAt: 'updated',
+        createdAt: 'created',
+      },
+    ]);
+
+    const service = createListService(deps);
+    const result = await service.getAllLists('user1', { full: false });
+
+    assert.deepStrictEqual(result.list1, {
+      _id: 'list1',
+      name: 'My List',
+      year: 2024,
+      isMain: true,
+      count: 42,
+      groupId: 'group1',
+      sortOrder: 0,
+      updatedAt: 'updated',
+      createdAt: 'created',
+    });
+  });
+
+  it('should compute setup status for missing year and missing main list', async () => {
+    const pool = {
+      query: mock.fn(async () => ({
+        rows: [
+          {
+            _id: 'list1',
+            name: 'Main 2024',
+            year: 2024,
+            is_main: true,
+            group_id: null,
+            group_year: null,
+          },
+          {
+            _id: 'list2',
+            name: 'No Main 2023',
+            year: 2023,
+            is_main: false,
+            group_id: null,
+            group_year: null,
+          },
+          {
+            _id: 'list3',
+            name: 'Needs Year',
+            year: null,
+            is_main: false,
+            group_id: 9,
+            group_year: 2022,
+          },
+        ],
+      })),
+      connect: mock.fn(),
+    };
+
+    const service = createListService(createServiceDeps(pool));
+    const result = await service.getSetupStatus('user1', {
+      listSetupDismissedUntil: '2026-01-01',
+    });
+
+    assert.strictEqual(result.needsSetup, true);
+    assert.deepStrictEqual(result.listsWithoutYear, [
+      { id: 'list3', name: 'Needs Year' },
+    ]);
+    assert.deepStrictEqual(result.yearsNeedingMain, [2023]);
+    assert.strictEqual(result.dismissedUntil, '2026-01-01');
+  });
+
+  it('should return mapped list items with recommendation metadata', async () => {
+    const pool = {
+      query: mock.fn(async (sql) => {
+        if (sql.includes('FROM recommendations r')) {
+          return {
+            rows: [
+              {
+                year: 2024,
+                album_id: 'album1',
+                created_at: '2025-01-01',
+                recommended_by: 'alice',
+              },
+            ],
+          };
+        }
+
+        if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
+          return { rows: [createOwnedListRow()] };
+        }
+
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(),
+    };
+
+    const deps = createServiceDeps(pool);
+    deps.listItemsAsync.findWithAlbumData = mock.fn(async () => [
+      {
+        _id: 'item1',
+        artist: 'Artist',
+        album: 'Album',
+        albumId: 'album1',
+        releaseDate: '2024-01-01',
+        country: 'NO',
+        genre1: 'Metal',
+        genre2: 'Prog',
+        primaryTrack: 'Track',
+        secondaryTrack: null,
+        comments: '',
+        comments2: '',
+        tracks: null,
+        coverImageFormat: 'jpeg',
+        summary: '',
+        summarySource: '',
+      },
+    ]);
+
+    const service = createListService(deps);
+    const result = await service.getListById('list1', 'user1');
+
+    assert.strictEqual(
+      result.items[0].cover_image_url,
+      '/api/albums/album1/cover'
+    );
+    assert.strictEqual(result.items[0].recommended_by, 'alice');
+    assert.strictEqual(result.items[0].recommended_at, '2025-01-01');
   });
 });

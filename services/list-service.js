@@ -1,50 +1,15 @@
-/**
- * List Service
- *
- * Owns all list-related business logic:
- * - CRUD operations for lists
- * - Item management (add, remove, reorder, comments)
- * - Main list status toggling with mutual exclusion
- * - Setup wizard (status check, bulk update, dismiss)
- * - Group resolution (year groups, uncategorized)
- * - Year-lock validation
- *
- * This service encapsulates database access and business rules,
- * keeping route handlers thin (request parsing + response formatting).
- */
-
 const logger = require('../utils/logger');
 const { withTransaction, TransactionAbort } = require('../db/transaction');
 const { buildPartialUpdate } = require('../utils/query-builder');
 const { createItemComments } = require('./list/item-comments');
-const {
-  mapListRowToItem,
-  mapAlbumDataItemToResponse,
-} = require('./list/item-mapper');
+const { createListFetchers } = require('./list/fetchers');
+const { createSetupStatus } = require('./list/setup-status');
 const {
   validateYearNotLocked,
   validateMainListNotLocked,
   isYearLocked,
 } = require('../utils/year-lock');
 
-// ============================================
-// FACTORY
-// ============================================
-
-/**
- * Create a list service instance with injected dependencies.
- * @param {Object} deps - Dependencies
- * @param {Object} deps.pool - PostgreSQL connection pool (required)
- * @param {Object} [deps.logger] - Logger instance
- * @param {Object} deps.listsAsync - Async lists datastore
- * @param {Object} deps.listItemsAsync - Async list items datastore
- * @param {Object} deps.crypto - Node.js crypto module
- * @param {Function} deps.validateYear - Year validation function
- * @param {Object} deps.helpers - Shared route helpers (upsertAlbumRecord, etc.)
- * @param {Function} deps.getPointsForPosition - Scoring function
- * @param {Function} [deps.refreshPlaycountsInBackground] - Playcount refresh function
- * @returns {Object} List service methods
- */
 // eslint-disable-next-line max-lines-per-function
 function createListService(deps = {}) {
   const pool = deps.pool;
@@ -64,17 +29,6 @@ function createListService(deps = {}) {
     deleteGroupIfEmptyAutoGroup,
   } = helpers;
 
-  // ============================================
-  // INTERNAL HELPERS
-  // ============================================
-
-  /**
-   * Fetch recommendation data for given years and build per-year maps.
-   * Returns a Map<year, Map<album_id, { recommendedBy, recommendedAt }>>.
-   * @param {number[]} years - Array of years to query
-   * @param {Object} [context] - Logging context (e.g. { userId } or { listId })
-   * @returns {Promise<Map<number, Map<string, Object>>>}
-   */
   async function fetchRecommendationMaps(years, context = {}) {
     const result = new Map();
     if (!years || years.length === 0) return result;
@@ -107,12 +61,6 @@ function createListService(deps = {}) {
     return result;
   }
 
-  /**
-   * Find a list by ID and verify ownership.
-   * @param {string} listId - The list _id
-   * @param {string} userId - The user _id
-   * @returns {Object|null} The list or null if not found/unauthorized
-   */
   async function findListById(listId, userId) {
     const result = await pool.query(
       `SELECT l.*, g._id as group_external_id, g.name as group_name, g.year as group_year
@@ -140,14 +88,6 @@ function createListService(deps = {}) {
     };
   }
 
-  /**
-   * Find a list by ID, verify ownership, and validate year lock.
-   * Throws TransactionAbort if not found or year is locked.
-   * @param {string} listId - The list _id
-   * @param {string} userId - The user _id
-   * @param {string} action - Description of the action (for error message)
-   * @returns {Promise<Object>} The list object
-   */
   async function findListByIdOrThrow(listId, userId, action) {
     const list = await findListById(listId, userId);
     if (!list) {
@@ -165,15 +105,6 @@ function createListService(deps = {}) {
     logger: log,
   });
 
-  /**
-   * Insert albums as list items within a transaction.
-   * Handles upsertAlbumRecord + list_items INSERT for each album.
-   * @param {Object} client - Database transaction client
-   * @param {string} listId - The list _id
-   * @param {Array<Object>} albums - Array of album objects
-   * @param {Date} timestamp - Timestamp for created_at/updated_at
-   * @returns {Promise<void>}
-   */
   async function insertListItems(client, listId, albums, timestamp) {
     for (let i = 0; i < albums.length; i++) {
       const album = albums[i];
@@ -200,15 +131,6 @@ function createListService(deps = {}) {
     }
   }
 
-  /**
-   * Check if a list name is already taken within a group.
-   * Throws TransactionAbort(409) if duplicate found.
-   * @param {Object} client - Database transaction client
-   * @param {string} userId - User ID
-   * @param {string} name - List name to check
-   * @param {number} groupId - Internal group ID
-   * @param {string} [excludeListId] - List _id to exclude (for updates)
-   */
   async function checkDuplicateListName(
     client,
     userId,
@@ -231,13 +153,6 @@ function createListService(deps = {}) {
     }
   }
 
-  /**
-   * Process item removals from a list.
-   * @param {Object} client - Database transaction client
-   * @param {string} listId - The list _id
-   * @param {Array<string>} removed - Array of album_id values to remove
-   * @returns {Promise<number>} Number of items removed
-   */
   async function processRemovals(client, listId, removed) {
     if (!removed || !Array.isArray(removed)) return 0;
     const validIds = removed.filter(Boolean);
@@ -249,15 +164,6 @@ function createListService(deps = {}) {
     return result.rowCount;
   }
 
-  /**
-   * Process item additions to a list using batch operations.
-   * Handles deduplication against existing items.
-   * @param {Object} client - Database transaction client
-   * @param {Object} list - The list object from findListById
-   * @param {Array<Object>} added - Array of album items to add
-   * @param {Date} timestamp - Timestamp for created_at/updated_at
-   * @returns {Promise<{addedItems: Array, duplicateAlbums: Array, changeCount: number}>}
-   */
   async function processAdditions(client, list, added, timestamp) {
     const addedItems = [];
     const duplicateAlbums = [];
@@ -390,14 +296,6 @@ function createListService(deps = {}) {
     return { addedItems, duplicateAlbums, changeCount };
   }
 
-  /**
-   * Process position updates for existing items.
-   * @param {Object} client - Database transaction client
-   * @param {string} listId - The list _id
-   * @param {Array<Object>} updated - Array of {album_id, position} objects
-   * @param {Date} timestamp - Timestamp for updated_at
-   * @returns {Promise<number>} Number of items updated
-   */
   async function processPositionUpdates(client, listId, updated, timestamp) {
     if (!updated || !Array.isArray(updated)) return 0;
     const validItems = updated.filter((item) => item && item.album_id);
@@ -413,11 +311,6 @@ function createListService(deps = {}) {
     return result.rowCount;
   }
 
-  /**
-   * Trigger async playcount refresh for newly added albums (fire-and-forget).
-   * @param {Object} user - User object with _id and lastfmUsername
-   * @param {Array<Object>} addedItems - Array of {album_id, _id} objects
-   */
   function triggerPlaycountRefresh(user, addedItems) {
     if (
       addedItems.length === 0 ||
@@ -466,221 +359,28 @@ function createListService(deps = {}) {
       });
   }
 
-  // ============================================
-  // PUBLIC SERVICE METHODS
-  // ============================================
+  const listFetchers = createListFetchers({
+    listsAsync,
+    listItemsAsync,
+    fetchRecommendationMaps,
+    findListById,
+    getPointsForPosition,
+    logger: log,
+  });
+  const setupStatus = createSetupStatus({ pool });
 
-  /**
-   * Build full-mode list data with all album details.
-   * @param {string} userId - User ID
-   * @param {Array} userLists - Pre-fetched user lists
-   * @returns {Promise<Object>} Lists keyed by _id with album items
-   */
-  async function buildFullListData(userId, userLists) {
-    if (typeof listsAsync.findAllUserListsWithItems !== 'function') {
-      log.error('Full list fetch requires optimized DB method', { userId });
-      throw new Error('Error fetching lists');
-    }
-
-    const allRows = await listsAsync.findAllUserListsWithItems(userId);
-    const listMap = new Map();
-    const listsObj = {};
-
-    for (const list of userLists) {
-      listMap.set(list._id, { ...list, items: [] });
-    }
-
-    // Fetch recommendation data for all list years (for cross-referencing)
-    const yearsSet = new Set();
-    for (const list of userLists) {
-      if (list.year) yearsSet.add(list.year);
-    }
-    const recommendationsByYear = await fetchRecommendationMaps(
-      Array.from(yearsSet),
-      { userId }
-    );
-
-    for (const row of allRows) {
-      if (!row.list_id) continue;
-      if (!listMap.has(row.list_id)) {
-        listMap.set(row.list_id, {
-          _id: row.list_id,
-          name: row.list_name,
-          year: row.year,
-          isMain: row.is_main,
-          items: [],
-        });
-      }
-      if (row.position !== null && row.item_id !== null) {
-        const listEntry = listMap.get(row.list_id);
-        const yearRecMap = recommendationsByYear.get(listEntry.year) || null;
-        listEntry.items.push(mapListRowToItem(row, yearRecMap));
-      }
-    }
-
-    for (const [listId, listData] of listMap) {
-      listsObj[listId] = listData.items;
-    }
-
-    return listsObj;
-  }
-
-  /**
-   * Build metadata-mode list data (no album details).
-   * @param {string} userId - User ID
-   * @param {Array} userLists - Pre-fetched user lists
-   * @returns {Promise<Object>} Lists keyed by _id with metadata only
-   */
-  async function buildMetadataListData(userId, userLists) {
-    const listsObj = {};
-
-    if (typeof listsAsync.findWithCounts === 'function') {
-      const listsWithCounts = await listsAsync.findWithCounts({ userId });
-      for (const list of listsWithCounts) {
-        listsObj[list._id] = {
-          _id: list._id,
-          name: list.name,
-          year: list.year || null,
-          isMain: list.isMain || false,
-          count: list.itemCount,
-          groupId: list.group?._id || null,
-          sortOrder: list.sortOrder || 0,
-          updatedAt: list.updatedAt,
-          createdAt: list.createdAt,
-        };
-      }
-    } else {
-      for (const list of userLists) {
-        const count = await listItemsAsync.count({ listId: list._id });
-        listsObj[list._id] = {
-          _id: list._id,
-          name: list.name,
-          year: list.year || null,
-          isMain: list.isMain || false,
-          count: count,
-          groupId: list.groupId || null,
-          sortOrder: list.sortOrder || 0,
-          updatedAt: list.updatedAt,
-          createdAt: list.createdAt,
-        };
-      }
-    }
-
-    return listsObj;
-  }
-
-  /**
-   * Get all lists for a user.
-   * @param {string} userId - User ID
-   * @param {Object} options - Options
-   * @param {boolean} [options.full=false] - Return full album data
-   * @returns {Promise<Object>} Lists keyed by _id
-   */
   async function getAllLists(userId, { full = false } = {}) {
-    const userLists = await listsAsync.find({ userId });
-
-    if (full) {
-      return buildFullListData(userId, userLists);
-    }
-    return buildMetadataListData(userId, userLists);
+    return listFetchers.getAllLists(userId, { full });
   }
 
-  /**
-   * Get a single list by ID with items.
-   * @param {string} listId - List ID
-   * @param {string} userId - User ID
-   * @param {Object} [options] - Options
-   * @param {boolean} [options.isExport=false] - Include base64 cover images and points
-   * @returns {Promise<{list: Object, items: Array}|null>} List data or null
-   */
   async function getListById(listId, userId, { isExport = false } = {}) {
-    const list = await findListById(listId, userId);
-    if (!list) return null;
-
-    const items = await listItemsAsync.findWithAlbumData(list._id, userId);
-
-    // Cross-reference with recommendations for this list's year
-    const recMaps = await fetchRecommendationMaps(
-      list.year ? [list.year] : [],
-      { listId }
-    );
-    const recommendationMap = recMaps.get(list.year) || new Map();
-
-    const data = items.map((item, index) =>
-      mapAlbumDataItemToResponse(item, {
-        recommendationMap,
-        isExport,
-        index,
-        getPointsForPosition,
-      })
-    );
-
-    return { list, items: data };
+    return listFetchers.getListByIdWithItems(listId, userId, { isExport });
   }
 
-  /**
-   * Get setup wizard status for a user.
-   * @param {string} userId - User ID
-   * @param {Object} user - User object (for dismissedUntil)
-   * @returns {Promise<Object>} Setup status data
-   */
   async function getSetupStatus(userId, user) {
-    const result = await pool.query(
-      `SELECT l._id, l.name, l.year, l.is_main, l.group_id, g.year as group_year
-       FROM lists l
-       LEFT JOIN list_groups g ON l.group_id = g.id
-       WHERE l.user_id = $1`,
-      [userId]
-    );
-
-    const listRows = result.rows;
-
-    const listsWithoutYear = listRows.filter(
-      (l) => l.year === null && l.group_id !== null && l.group_year !== null
-    );
-    const yearsWithLists = [
-      ...new Set(listRows.filter((l) => l.year !== null).map((l) => l.year)),
-    ];
-
-    const yearsWithMainList = listRows
-      .filter((l) => l.is_main && l.year !== null)
-      .map((l) => l.year);
-
-    const yearsNeedingMain = yearsWithLists.filter(
-      (year) => !yearsWithMainList.includes(year)
-    );
-
-    const needsSetup =
-      listsWithoutYear.length > 0 || yearsNeedingMain.length > 0;
-
-    return {
-      needsSetup,
-      listsWithoutYear: listsWithoutYear.map((l) => ({
-        id: l._id,
-        name: l.name,
-      })),
-      yearsNeedingMain,
-      yearsSummary: yearsWithLists.map((year) => ({
-        year,
-        hasMain: yearsWithMainList.includes(year),
-        lists: listRows
-          .filter((l) => l.year === year)
-          .map((l) => ({
-            id: l._id,
-            name: l.name,
-            isMain: l.is_main,
-          })),
-      })),
-      dismissedUntil: user.listSetupDismissedUntil || null,
-    };
+    return setupStatus.getSetupStatus(userId, user);
   }
 
-  /**
-   * Bulk update lists (year assignment and main list designation).
-   * @param {string} userId - User ID
-   * @param {Array<Object>} updates - Array of {listId, year, isMain}
-   * @returns {Promise<{results: Array, yearsToRecompute: Set}>}
-   */
   async function bulkUpdate(userId, updates) {
     const results = [];
     const yearsToRecompute = new Set();
@@ -765,11 +465,6 @@ function createListService(deps = {}) {
     return { results, yearsToRecompute };
   }
 
-  /**
-   * Dismiss setup wizard for 24 hours.
-   * @param {string} userId - User ID
-   * @returns {Promise<Date>} When the dismissal expires
-   */
   async function dismissSetup(userId) {
     const dismissedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await pool.query(
@@ -779,16 +474,6 @@ function createListService(deps = {}) {
     return dismissedUntil;
   }
 
-  /**
-   * Create a new list.
-   * @param {string} userId - User ID
-   * @param {Object} data - List data
-   * @param {string} data.name - List name
-   * @param {string} [data.groupId] - Target group external ID
-   * @param {number} [data.year] - Year for list
-   * @param {Array<Object>} [data.albums] - Initial albums
-   * @returns {Promise<{listId: string, name: string, year: number|null, count: number}>}
-   */
   async function createList(
     userId,
     { name, groupId: requestGroupId, year, albums: rawAlbums }
@@ -874,16 +559,6 @@ function createListService(deps = {}) {
     };
   }
 
-  /**
-   * Update list metadata (rename, change year, move to group).
-   * @param {string} listId - List ID
-   * @param {string} userId - User ID
-   * @param {Object} changes - Changes to apply
-   * @param {string} [changes.name] - New name
-   * @param {number} [changes.year] - New year
-   * @param {string} [changes.groupId] - New group external ID
-   * @returns {Promise<{list: Object, targetYear: number|null}>}
-   */
   async function updateListMetadata(
     listId,
     userId,
@@ -1002,13 +677,6 @@ function createListService(deps = {}) {
     });
   }
 
-  /**
-   * Replace all items in a list.
-   * @param {string} listId - List ID
-   * @param {string} userId - User ID
-   * @param {Array<Object>} rawAlbums - New album list
-   * @returns {Promise<{list: Object, count: number}>}
-   */
   async function replaceListItems(listId, userId, rawAlbums) {
     const list = await findListByIdOrThrow(listId, userId, 'modify list items');
     const timestamp = new Date();
@@ -1036,13 +704,6 @@ function createListService(deps = {}) {
     return { list, count: rawAlbums.length };
   }
 
-  /**
-   * Reorder list items (drag-and-drop).
-   * @param {string} listId - List ID
-   * @param {string} userId - User ID
-   * @param {Array} order - Order array (strings or objects with _id)
-   * @returns {Promise<{list: Object, itemCount: number}>}
-   */
   async function reorderItems(listId, userId, order) {
     if (!Array.isArray(order)) {
       throw new TransactionAbort(400, { error: 'Invalid order array' });
@@ -1146,14 +807,6 @@ function createListService(deps = {}) {
     return { list, itemCount: effectivePos };
   }
 
-  /**
-   * Update a single album's comment.
-   * @param {string} listId - List ID
-   * @param {string} userId - User ID
-   * @param {string} identifier - Album ID or item ID
-   * @param {string|null} comment - New comment
-   * @returns {Promise<void>}
-   */
   async function updateItemComment(listId, userId, identifier, comment) {
     await updateItemCommentField(
       listId,
@@ -1164,14 +817,6 @@ function createListService(deps = {}) {
     );
   }
 
-  /**
-   * Update a single album's comment 2.
-   * @param {string} listId - List ID
-   * @param {string} userId - User ID
-   * @param {string} identifier - Album ID or item ID
-   * @param {string|null} comment - New comment 2
-   * @returns {Promise<void>}
-   */
   async function updateItemComment2(listId, userId, identifier, comment) {
     await updateItemCommentField(
       listId,
@@ -1182,17 +827,6 @@ function createListService(deps = {}) {
     );
   }
 
-  /**
-   * Incremental list update (add/remove/update items without full rebuild).
-   * @param {string} listId - List ID
-   * @param {string} userId - User ID
-   * @param {Object} changes - Changes
-   * @param {Array} [changes.added] - Albums to add
-   * @param {Array} [changes.removed] - Album IDs to remove
-   * @param {Array} [changes.updated] - Position updates
-   * @param {Object} user - User object (for playcount refresh)
-   * @returns {Promise<{list: Object, changeCount: number, addedItems: Array, duplicateAlbums: Array}>}
-   */
   async function incrementalUpdate(
     listId,
     userId,
@@ -1244,13 +878,6 @@ function createListService(deps = {}) {
     return { list, changeCount, addedItems, duplicateAlbums };
   }
 
-  /**
-   * Toggle main list status for a year.
-   * @param {string} listId - List ID
-   * @param {string} userId - User ID
-   * @param {boolean} isMain - Whether to set or unset main
-   * @returns {Promise<Object>} Result with list, year, and previous main info
-   */
   async function toggleMainStatus(listId, userId, isMain) {
     return withTransaction(pool, async (client) => {
       const listResult = await client.query(
@@ -1328,12 +955,6 @@ function createListService(deps = {}) {
     });
   }
 
-  /**
-   * Delete a list.
-   * @param {string} listId - List ID
-   * @param {string} userId - User ID
-   * @returns {Promise<Object>} The deleted list data
-   */
   async function deleteList(listId, userId) {
     return withTransaction(pool, async (client) => {
       const listResult = await client.query(
@@ -1364,10 +985,6 @@ function createListService(deps = {}) {
       return foundList;
     });
   }
-
-  // ============================================
-  // EXPORTS
-  // ============================================
 
   return {
     findListById,

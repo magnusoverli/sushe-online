@@ -1,0 +1,67 @@
+function createSetupStatus(deps = {}) {
+  const { pool } = deps;
+
+  if (!pool) throw new Error('pool is required');
+
+  async function getSetupStatus(userId, user) {
+    const result = await pool.query(
+      `SELECT l._id, l.name, l.year, l.is_main, l.group_id, g.year as group_year
+       FROM lists l
+       LEFT JOIN list_groups g ON l.group_id = g.id
+       WHERE l.user_id = $1`,
+      [userId]
+    );
+
+    const listRows = result.rows;
+
+    const listsWithoutYear = listRows.filter(
+      (list) =>
+        list.year === null && list.group_id !== null && list.group_year !== null
+    );
+    const yearsWithLists = [
+      ...new Set(
+        listRows.filter((list) => list.year !== null).map((list) => list.year)
+      ),
+    ];
+
+    const yearsWithMainList = listRows
+      .filter((list) => list.is_main && list.year !== null)
+      .map((list) => list.year);
+
+    const yearsNeedingMain = yearsWithLists.filter(
+      (year) => !yearsWithMainList.includes(year)
+    );
+
+    const needsSetup =
+      listsWithoutYear.length > 0 || yearsNeedingMain.length > 0;
+
+    return {
+      needsSetup,
+      listsWithoutYear: listsWithoutYear.map((list) => ({
+        id: list._id,
+        name: list.name,
+      })),
+      yearsNeedingMain,
+      yearsSummary: yearsWithLists.map((year) => ({
+        year,
+        hasMain: yearsWithMainList.includes(year),
+        lists: listRows
+          .filter((list) => list.year === year)
+          .map((list) => ({
+            id: list._id,
+            name: list.name,
+            isMain: list.is_main,
+          })),
+      })),
+      dismissedUntil: user.listSetupDismissedUntil || null,
+    };
+  }
+
+  return {
+    getSetupStatus,
+  };
+}
+
+module.exports = {
+  createSetupStatus,
+};
