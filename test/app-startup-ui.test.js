@@ -201,4 +201,113 @@ describe('app-startup-ui module', () => {
       'QuotaExceededError',
     ]);
   });
+
+  it('cleans up legacy list cache keys safely', () => {
+    const removed = [];
+    const warnings = [];
+    const keys = [
+      'foo',
+      'lastSelectedListData_alpha',
+      'lastSelectedListData_beta',
+      'cachedListNames',
+    ];
+
+    const storage = {
+      get length() {
+        return keys.length;
+      },
+      key(index) {
+        return keys[index] || null;
+      },
+      removeItem(key) {
+        removed.push(key);
+      },
+      getItem() {
+        return null;
+      },
+      setItem() {},
+    };
+
+    const ui = createAppStartupUi({
+      storage,
+      logger: { log: () => {}, warn: (...args) => warnings.push(args) },
+      showToast: () => {},
+      doc: {
+        body: { classList: createClassList() },
+        querySelectorAll() {
+          return [];
+        },
+        getElementById() {
+          return null;
+        },
+        querySelector() {
+          return null;
+        },
+        documentElement: { classList: createClassList() },
+      },
+      win: null,
+    });
+
+    ui.cleanupLegacyListCache();
+
+    assert.ok(removed.includes('lists_cache'));
+    assert.ok(removed.includes('lists_cache_timestamp'));
+    assert.ok(removed.includes('lastSelectedListData_alpha'));
+    assert.ok(removed.includes('lastSelectedListData_beta'));
+    assert.strictEqual(warnings.length, 0);
+  });
+
+  it('hydrates sidebar list names from cache and updates nav', () => {
+    const warnings = [];
+    const lists = {};
+    let navUpdated = 0;
+
+    const storage = {
+      getItem(key) {
+        if (key === 'cachedListNames') {
+          return JSON.stringify(['list-one', 'list-two']);
+        }
+        return null;
+      },
+      setItem() {},
+      removeItem() {},
+      key() {
+        return null;
+      },
+      length: 0,
+    };
+
+    const ui = createAppStartupUi({
+      storage,
+      logger: { log: () => {}, warn: (...args) => warnings.push(args) },
+      showToast: () => {},
+      doc: {
+        body: { classList: createClassList() },
+        querySelectorAll() {
+          return [];
+        },
+        getElementById() {
+          return null;
+        },
+        querySelector() {
+          return null;
+        },
+        documentElement: { classList: createClassList() },
+      },
+      win: null,
+    });
+
+    ui.hydrateSidebarFromCachedNames(
+      () => lists,
+      () => {
+        navUpdated += 1;
+      }
+    );
+
+    assert.ok(lists['list-one']);
+    assert.ok(lists['list-two']);
+    assert.strictEqual(lists['list-one'].name, 'list-one');
+    assert.strictEqual(navUpdated, 1);
+    assert.strictEqual(warnings.length, 0);
+  });
 });

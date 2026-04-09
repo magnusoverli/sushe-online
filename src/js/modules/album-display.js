@@ -27,35 +27,10 @@ import {
   toggleColumn,
   setAllColumns,
 } from './column-config.js';
-
-/**
- * Apply column visibility changes in-place without rebuilding the DOM.
- * Toggles .column-hidden on affected cells and updates grid templates.
- * All cells are always in the DOM; hidden ones carry .column-hidden.
- */
-function applyVisibilityInPlace() {
-  const container = document.getElementById('albumContainer');
-  if (!container) return;
-
-  const newTemplate = computeGridTemplate(getVisibleColumns());
-
-  // Update header
-  const hdr = container.querySelector('.album-header');
-  if (hdr) hdr.style.gridTemplateColumns = newTemplate;
-
-  // Update all rows
-  container.querySelectorAll('.album-row').forEach((row) => {
-    row.style.gridTemplateColumns = newTemplate;
-  });
-
-  // Toggle .column-hidden on cells by their cellClass
-  for (const col of getToggleableColumns()) {
-    const visible = isColumnVisible(col.id);
-    container
-      .querySelectorAll(`.${col.cellClass}`)
-      .forEach((cell) => cell.classList.toggle('column-hidden', !visible));
-  }
-}
+import {
+  createAlbumDisplayShared,
+  PLACEHOLDER_GIF,
+} from './album-display-shared.js';
 
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
@@ -67,200 +42,25 @@ let lastRenderedFingerprint = null;
 let lastRenderedMutableState = null;
 let positionElementCache = new WeakMap();
 
-// Fingerprint cache using WeakMap for automatic garbage collection
-// When album arrays are replaced, old fingerprints are automatically cleaned up
-const fingerprintCache = new WeakMap();
-
-// Cache all frequently-updated DOM elements per row for faster incremental updates
-// Structure: WeakMap<row, { position, artist, country, genre1, genre2, comment, track, releaseDate }>
-let rowElementsCache = new WeakMap();
-
-// Lazy loading observer for album cover images
-let coverImageObserver = null;
-
-// 1x1 transparent GIF placeholder for lazy loading
-const PLACEHOLDER_GIF =
-  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-
 // Album cover preview state
 let coverPreviewActive = null; // Stores { overlay, clone, originalRect }
 
-/**
- * Initialize the IntersectionObserver for lazy loading cover images
- * Images with data-lazy-src will have their src swapped when visible
- */
-function initCoverImageObserver() {
-  if (coverImageObserver) return;
+const albumDisplayShared = createAlbumDisplayShared({
+  computeGridTemplate,
+  getVisibleColumns,
+  getToggleableColumns,
+  isColumnVisible,
+});
 
-  coverImageObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const img = entry.target;
-          const lazySrc = img.dataset.lazySrc;
-          if (lazySrc) {
-            img.src = lazySrc;
-            delete img.dataset.lazySrc;
-          }
-          coverImageObserver.unobserve(img);
-        }
-      });
-    },
-    {
-      rootMargin: '200px', // Pre-load images 200px before they enter viewport
-      threshold: 0,
-    }
-  );
-}
-
-/**
- * Observe all lazy-load images in the container
- * @param {HTMLElement} container - Container with album items
- */
-function observeLazyImages(container) {
-  if (!coverImageObserver) {
-    initCoverImageObserver();
-  }
-
-  const lazyImages = container.querySelectorAll('img[data-lazy-src]');
-  lazyImages.forEach((img) => {
-    coverImageObserver.observe(img);
-  });
-}
-
-/**
- * Cache DOM element references for a desktop row
- * @param {HTMLElement} row - Row element
- */
-function cacheDesktopRowElements(row) {
-  const cache = {
-    position:
-      row.querySelector('[data-position-element="true"]') ||
-      row.querySelector('.position-display'),
-    albumName: row.querySelector('.font-semibold.text-gray-100'),
-    releaseDate: row.querySelector('.release-date-display'),
-    artist: row.querySelector('.artist-cell span'),
-    countryCell: row.querySelector('.country-cell'),
-    genre1Cell: row.querySelector('.genre-1-cell'),
-    genre2Cell: row.querySelector('.genre-2-cell'),
-    commentCell: row.querySelector('.comment-cell'),
-    comment2Cell: row.querySelector('.comment-2-cell'),
-    trackCell: row.querySelector('.track-cell'),
-  };
-
-  // Cache the spans inside cells
-  if (cache.countryCell) {
-    cache.countrySpan = cache.countryCell.querySelector('span');
-  }
-  if (cache.genre1Cell) {
-    cache.genre1Span = cache.genre1Cell.querySelector('span');
-  }
-  if (cache.genre2Cell) {
-    cache.genre2Span = cache.genre2Cell.querySelector('span');
-  }
-  if (cache.commentCell) {
-    cache.commentSpan = cache.commentCell.querySelector('span');
-  }
-  if (cache.comment2Cell) {
-    cache.comment2Span = cache.comment2Cell.querySelector('span');
-  }
-  if (cache.trackCell) {
-    cache.trackSpan = cache.trackCell.querySelector('span');
-  }
-
-  rowElementsCache.set(row, cache);
-  return cache;
-}
-
-/**
- * Cache DOM element references for a mobile card
- * @param {HTMLElement} card - Card element (the inner .album-card, not the wrapper)
- */
-function cacheMobileCardElements(card) {
-  const cache = {
-    position: card.querySelector('[data-position-element="true"]'),
-    releaseDate: card.querySelector('.release-date-display'),
-    artistText: card.querySelector('[data-field="artist-mobile-text"]'),
-    countryText: card.querySelector('[data-field="country-mobile-text"]'),
-    genreText: card.querySelector('[data-field="genre-mobile-text"]'),
-    trackText: card.querySelector('[data-field="track-mobile-text"]'),
-  };
-
-  rowElementsCache.set(card, cache);
-  return cache;
-}
-
-/**
- * Get cached elements for a row, or create cache if missing
- * @param {HTMLElement} row - Row or card element
- * @param {boolean} isMobile - Whether this is a mobile card
- * @returns {Object} Cached element references
- */
-function getCachedElements(row, isMobile) {
-  let cache = rowElementsCache.get(row);
-  if (!cache) {
-    cache = isMobile
-      ? cacheMobileCardElements(row)
-      : cacheDesktopRowElements(row);
-  }
-  return cache;
-}
-
-/**
- * Generate a lightweight fingerprint string for change detection
- * Only includes mutable fields that trigger UI updates
- * Uses WeakMap cache to avoid recalculating for same array reference
- * @param {Array} albums - Album array
- * @returns {string} Fingerprint string
- */
-function generateAlbumFingerprint(albums) {
-  if (!albums || albums.length === 0) return '';
-
-  // Check cache first - avoid recalculation for same array reference
-  const cached = fingerprintCache.get(albums);
-  if (cached !== undefined) {
-    return cached;
-  }
-
-  // Generate fingerprint
-  const fingerprint = albums
-    .map(
-      (a) =>
-        `${a._id || ''}|${a.track_pick || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}|${a.comments_2 || ''}`
-    )
-    .join('::');
-
-  // Cache for future calls with same array reference
-  fingerprintCache.set(albums, fingerprint);
-
-  return fingerprint;
-}
-
-/**
- * Invalidate cached fingerprint for an album array
- * Call this when mutating album data in place
- * @param {Array} albums - Album array to invalidate
- */
-function invalidateFingerprint(albums) {
-  if (albums) {
-    fingerprintCache.delete(albums);
-  }
-}
-
-/**
- * Generate per-album mutable field strings for change detection.
- * Returns an array of fingerprint strings instead of an array of objects,
- * dramatically reducing GC pressure (primitives vs N 9-property objects).
- * @param {Array} albums - Album array
- * @returns {Array<string>|null} Array of field fingerprint strings
- */
-function extractMutableFingerprints(albums) {
-  if (!albums || albums.length === 0) return null;
-  return albums.map(
-    (a) =>
-      `${a._id || ''}|${a.artist || ''}|${a.album || ''}|${a.release_date || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}|${a.comments_2 || ''}|${a.track_pick || ''}`
-  );
-}
+const {
+  applyVisibilityInPlace,
+  observeLazyImages,
+  getCachedElements,
+  resetRowElementsCache,
+  generateAlbumFingerprint,
+  invalidateFingerprint,
+  extractMutableFingerprints,
+} = albumDisplayShared;
 
 // Last.fm playcount cache: { listItemId: { playcount, status } | null }
 // status can be: 'success', 'not_found', 'error', or null (not yet fetched)
@@ -2727,7 +2527,7 @@ export function createAlbumDisplay(deps = {}) {
 
     // Full rebuild path - clear element caches
     positionElementCache = new WeakMap();
-    rowElementsCache = new WeakMap();
+    resetRowElementsCache();
 
     let albumContainer;
 

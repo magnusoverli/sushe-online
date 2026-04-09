@@ -4,132 +4,21 @@ const {
   generateAccentCssVars,
   generateAccentOverrides,
 } = require('./utils/color-utils');
+const {
+  createAssetHelper,
+  escapeHtml,
+  safeJsonStringify,
+  modalShell,
+  menuItem,
+  formatDate,
+  formatDateTime,
+} = require('./utils/template-helpers');
 const fs = require('fs');
 const path = require('path');
 const ejs = require('ejs');
 // Use a timestamp-based asset version to avoid browser caching issues
 const assetVersion = process.env.ASSET_VERSION || Date.now().toString();
-const asset = (p) => `${p}?v=${assetVersion}`;
-
-// HTML escape function to prevent XSS in server-rendered templates
-const escapeHtml = (str) => {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-};
-
-// Safe JSON serialization for embedding in <script> tags
-// Escapes </script> and <!-- sequences to prevent XSS breakout
-const safeJsonStringify = (obj) => {
-  return JSON.stringify(obj)
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e')
-    .replace(/&/g, '\\u0026');
-};
-
-// =============================================================================
-// Template DRY helpers — shared HTML patterns
-// =============================================================================
-
-/**
- * Generate a modal shell with overlay, container, header, body, and optional footer.
- * @param {object} opts
- * @param {string} opts.id - Modal element id
- * @param {string} opts.body - Inner HTML for the modal body
- * @param {string} [opts.maxWidth='max-w-md'] - Tailwind max-width class
- * @param {string} [opts.title] - Header title text
- * @param {string} [opts.subtitle] - Header subtitle HTML
- * @param {string} [opts.footer] - Footer inner HTML
- * @param {string} [opts.extraContainerClass] - Extra classes on the container div
- * @param {string} [opts.extraOverlayClass] - Extra classes on the overlay div
- * @returns {string} Complete modal HTML
- */
-const modalShell = ({
-  id,
-  body,
-  maxWidth = 'max-w-md',
-  title,
-  subtitle,
-  footer,
-  extraContainerClass = '',
-  extraOverlayClass = '',
-}) => {
-  const header =
-    title != null
-      ? `<div class="p-6 border-b border-gray-800">
-        <h3 class="text-2xl font-bold text-white">${title}</h3>
-        ${subtitle ? `<p class="text-sm text-gray-400 mt-1">${subtitle}</p>` : ''}
-      </div>`
-      : '';
-  const footerHtml = footer
-    ? `<div class="p-6 border-t border-gray-800 flex gap-3 justify-end">${footer}</div>`
-    : '';
-  return `<div id="${id}" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal${extraOverlayClass ? ' ' + extraOverlayClass : ''}">
-    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full ${maxWidth}${extraContainerClass ? ' ' + extraContainerClass : ''}">
-      ${header}
-      <div class="p-6${title ? '' : ' pt-6'}">${body}</div>
-      ${footerHtml}
-    </div>
-  </div>`;
-};
-
-/**
- * Generate a context menu button item.
- * @param {object} opts
- * @param {string} opts.id - Button id
- * @param {string} opts.icon - Font Awesome icon class (e.g., 'fa-edit')
- * @param {string} opts.label - Button label text
- * @param {string} [opts.hoverColor='hover:text-white'] - Hover text color class
- * @param {boolean} [opts.hasSubmenu=false] - Show chevron for submenu
- * @param {boolean} [opts.hidden=false] - Start hidden
- * @param {string} [opts.iconColor] - Custom icon color class
- * @returns {string} Button HTML
- */
-const menuItem = ({
-  id,
-  icon,
-  label,
-  hoverColor = 'hover:text-white',
-  hasSubmenu = false,
-  hidden = false,
-  iconColor = '',
-}) => {
-  const hiddenClass = hidden ? 'hidden ' : '';
-  const iconColorClass = iconColor ? ` ${iconColor}` : '';
-  if (hasSubmenu) {
-    return `<button id="${id}" class="${hiddenClass}w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 ${hoverColor} transition-colors whitespace-nowrap relative">
-      <span><i class="fas ${icon} ctx-menu-icon${iconColorClass}"></i>${label}</span>
-      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
-    </button>`;
-  }
-  return `<button id="${id}" class="${hiddenClass}ctx-menu-item ${hoverColor}">
-      <i class="fas ${icon} ctx-menu-icon${iconColorClass}"></i>${label}
-    </button>`;
-};
-
-const formatDate = (date, format = 'MM/DD/YYYY') => {
-  if (!date) return '';
-  const locale = format === 'DD/MM/YYYY' ? 'en-GB' : 'en-US';
-  return new Date(date).toLocaleDateString(locale);
-};
-
-const formatDateTime = (date, hour12, format = 'MM/DD/YYYY') => {
-  if (!date) return '';
-  const locale = format === 'DD/MM/YYYY' ? 'en-GB' : 'en-US';
-  const options = {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12,
-  };
-  return new Date(date).toLocaleString(locale, options);
-};
+const asset = createAssetHelper(assetVersion);
 
 const viewsDir = path.join(__dirname, 'views');
 // Precompile EJS templates for caching

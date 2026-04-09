@@ -83,9 +83,63 @@ export function createAppStartupUi(deps = {}) {
     });
   }
 
+  function cleanupLegacyListCache() {
+    if (!storage) return;
+
+    try {
+      storage.removeItem('lists_cache');
+      storage.removeItem('lists_cache_timestamp');
+
+      for (let i = storage.length - 1; i >= 0; i--) {
+        const key = storage.key(i);
+        if (key && key.startsWith('lastSelectedListData_')) {
+          storage.removeItem(key);
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to clean up old cache:', error);
+    }
+  }
+
+  function hydrateSidebarFromCachedNames(getLists, updateListNav) {
+    if (!storage || typeof getLists !== 'function') {
+      return;
+    }
+
+    const cachedLists = storage.getItem('cachedListNames');
+    if (!cachedLists) {
+      return;
+    }
+
+    try {
+      const names = JSON.parse(cachedLists);
+      names.forEach((name) => {
+        if (!getLists()[name]) {
+          getLists()[name] = {
+            name,
+            year: null,
+            isMain: false,
+            count: 0,
+            _data: null,
+            updatedAt: null,
+            createdAt: null,
+          };
+        }
+      });
+
+      if (typeof updateListNav === 'function') {
+        updateListNav();
+      }
+    } catch (error) {
+      logger.warn('Failed to parse cached list names:', error);
+    }
+  }
+
   return {
     convertFlashToToast,
     initializeSidebarCollapse,
     registerBeforeUnloadListSaver,
+    cleanupLegacyListCache,
+    hydrateSidebarFromCachedNames,
   };
 }
