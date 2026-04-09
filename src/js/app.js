@@ -51,6 +51,8 @@ import { createListCrud } from './modules/list-crud.js';
 import { init as initColumnConfig } from './modules/column-config.js';
 import { createPlayback } from './modules/playback.js';
 import { createAlbumContextMenu } from './modules/album-context-menu.js';
+import { createListReorder } from './modules/list-reorder.js';
+import { createAppShellUi } from './modules/app-shell-ui.js';
 
 // Centralized state store
 import {
@@ -117,6 +119,13 @@ let currentContextGroup = null;
 let pendingImportData = null;
 let pendingImportFilename = null;
 let trackAbortController = null;
+
+const {
+  updateMobileHeader,
+  showLoadingSpinner,
+  updateHeaderTitle,
+  isTextTruncated,
+} = createAppShellUi({ getCurrentListId });
 
 /**
  * Get or initialize the link preview module
@@ -685,42 +694,7 @@ function makeComment2Editable(commentDiv, albumIndex) {
   return getEditableFieldsModule().makeComment2Editable(commentDiv, albumIndex);
 }
 
-/**
- * Lightweight reorder function for drag-and-drop.
- * Sends album_id (or albumId) when present; falls back to list item _id for
- * legacy items without album_id. Preserves array indices so unidentifiable
- * items are skipped without shifting others' positions.
- *
- * @param {string} listName - Name of the list to reorder
- * @param {Array} list - Array of album objects in new order (may have _id, album_id, or albumId)
- */
-async function saveReorder(listName, list) {
-  if (!list || !Array.isArray(list)) {
-    console.error('List data not found:', listName);
-    return;
-  }
-
-  try {
-    // Prefer album_id, then albumId; if neither, use list item _id for legacy rows.
-    // null preserves the index so the server can skip unidentifiable items without shifting positions.
-    const order = list.map((a) => {
-      const id = a.album_id || a.albumId;
-      if (id) return id;
-      if (a._id) return { _id: a._id };
-      return null;
-    });
-
-    await apiCall(`/api/lists/${encodeURIComponent(listName)}/reorder`, {
-      method: 'POST',
-      body: JSON.stringify({ order }),
-    });
-
-    console.log('List reordered successfully:', listName);
-  } catch (error) {
-    console.error('Error reordering list:', error);
-    throw error;
-  }
-}
+const { saveReorder } = createListReorder({ apiCall, logger: console });
 
 /**
  * Get or initialize the sorting module
@@ -1437,29 +1411,6 @@ async function saveList(listId, data, year = undefined) {
   }
 }
 
-function updateMobileHeader() {
-  const headerContainer = document.getElementById('dynamicHeader');
-  if (headerContainer && window.currentUser) {
-    headerContainer.innerHTML = window.headerComponent(
-      window.currentUser,
-      'home',
-      getCurrentListId() || ''
-    );
-  }
-}
-
-// Helper function to show loading spinner
-function showLoadingSpinner(container) {
-  container.replaceChildren(); // Clear immediately
-  const spinner = document.createElement('div');
-  spinner.className = 'text-center text-gray-500 mt-20 px-4';
-  spinner.innerHTML = `
-    <i class="fas fa-spinner fa-spin text-4xl text-gray-600"></i>
-    <p class="text-sm mt-4">Loading...</p>
-  `;
-  container.appendChild(spinner);
-}
-
 // Select and display a list by ID
 async function selectList(listId) {
   try {
@@ -1630,35 +1581,6 @@ window.refreshLockedYearStatus = async function (year) {
     }
   }
 };
-
-function updateHeaderTitle(listName) {
-  const headerAddAlbumBtn = document.getElementById('headerAddAlbumBtn');
-  const mobileListName = document.getElementById('mobileCurrentListName');
-
-  if (listName) {
-    // Show the add album button in header if it exists
-    if (headerAddAlbumBtn) {
-      headerAddAlbumBtn.classList.remove('hidden');
-    }
-    // Update mobile header with current list name
-    if (mobileListName) {
-      mobileListName.textContent = listName;
-      mobileListName.classList.remove('hidden');
-    }
-  } else {
-    // Hide mobile list name when no list selected
-    if (mobileListName) {
-      mobileListName.classList.add('hidden');
-      mobileListName.textContent = '';
-    }
-  }
-}
-
-// Helper function to check if text is truncated
-function isTextTruncated(element) {
-  // For elements with line-clamp, check if scrollHeight exceeds clientHeight
-  return element.scrollHeight > element.clientHeight;
-}
 
 // Debounced save function (factory from utils/save-optimizer.js)
 const debouncedSaveList = createDebouncedSave({ saveList, showToast });
