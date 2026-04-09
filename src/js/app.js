@@ -53,6 +53,7 @@ import { createPlayback } from './modules/playback.js';
 import { createAlbumContextMenu } from './modules/album-context-menu.js';
 import { createListReorder } from './modules/list-reorder.js';
 import { createAppShellUi } from './modules/app-shell-ui.js';
+import { createListSelection } from './modules/list-selection.js';
 
 // Centralized state store
 import {
@@ -1412,125 +1413,31 @@ async function saveList(listId, data, year = undefined) {
 }
 
 // Select and display a list by ID
+const getListSelectionModule = createLazyModule(() =>
+  createListSelection({
+    setCurrentListId,
+    setCurrentRecommendationsYear,
+    getCurrentListId,
+    getRealtimeSyncModuleInstance,
+    clearPlaycountCache,
+    getLists,
+    updateListNavActiveState,
+    updateHeaderTitle,
+    updateMobileHeader,
+    showLoadingSpinner,
+    getListData,
+    isListDataLoaded,
+    apiCall,
+    setListData,
+    displayAlbums,
+    fetchAndDisplayPlaycounts,
+    showToast,
+    logger: console,
+  })
+);
+
 async function selectList(listId) {
-  try {
-    // Track previous list for realtime sync unsubscription
-    const previousListId = getCurrentListId();
-
-    setCurrentListId(listId);
-    // Clear recommendations state when selecting a regular list
-    setCurrentRecommendationsYear(null);
-
-    // Update realtime sync subscriptions
-    const rtSync = getRealtimeSyncModuleInstance();
-    if (rtSync) {
-      if (previousListId && previousListId !== listId) {
-        rtSync.unsubscribeFromList(previousListId);
-      }
-      if (listId) {
-        rtSync.subscribeToList(listId);
-      }
-    }
-
-    // Clear playcount cache when switching lists (playcounts are list-item specific)
-    clearPlaycountCache();
-
-    // Get the list name for display purposes
-    const listName = getLists()[listId]?.name || '';
-
-    // === IMMEDIATE UI UPDATES (before network call) ===
-    // Update active state in sidebar immediately (optimized - no full rebuild)
-    updateListNavActiveState(listId);
-
-    // Update the header title immediately
-    updateHeaderTitle(listName);
-
-    // Update the header with current list name (moved here - doesn't depend on fetched data)
-    updateMobileHeader();
-
-    // Show/hide FAB based on whether a list is selected (mobile only)
-    const fab = document.getElementById('addAlbumFAB');
-    if (fab) {
-      fab.style.display = listId ? 'flex' : 'none';
-    }
-
-    // Show loading spinner immediately to provide instant visual feedback
-    const container = document.getElementById('albumContainer');
-    if (container && listId) {
-      showLoadingSpinner(container);
-    }
-
-    // Save to localStorage immediately (synchronous) - now stores ID
-    if (listId) {
-      try {
-        localStorage.setItem('lastSelectedList', listId);
-      } catch (e) {
-        // Silently fail if localStorage is full - not critical
-        if (e.name === 'QuotaExceededError') {
-          console.warn(
-            'LocalStorage quota exceeded, skipping lastSelectedList save'
-          );
-        }
-      }
-    }
-
-    // === FETCH AND RENDER DATA ===
-    // Fetch list data from server (server caches for 5min)
-    if (listId) {
-      try {
-        // Use helper to check if data is loaded
-        let data = getListData(listId);
-
-        // OPTIMIZATION: Only fetch if data is missing or not loaded
-        // This avoids duplicate fetches when loadLists() already loaded the data
-        const needsFetch = !isListDataLoaded(listId);
-
-        if (needsFetch) {
-          data = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
-          // Use helper to store data (preserves metadata)
-          setListData(listId, data);
-        }
-
-        // Display the fetched data with images (single render)
-        // Pass forceFullRebuild flag to skip incremental update checks when switching lists
-        if (getCurrentListId() === listId) {
-          displayAlbums(data, { forceFullRebuild: true });
-          // Fetch Last.fm playcounts in background (non-blocking)
-          if (listId) {
-            fetchAndDisplayPlaycounts(listId).catch((err) => {
-              console.warn('Background playcount fetch failed:', err);
-            });
-          }
-          // Refresh mobile bar visibility when list changes
-          if (window.refreshMobileBarVisibility) {
-            window.refreshMobileBarVisibility();
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to fetch list data:', err);
-        showToast('Error loading list data', 'error');
-      }
-    }
-
-    // Tracks are fetched only when: (1) adding an album, (2) opening the track
-    // cell / mobile fetch when tracks are missing. No list-wide pre-fetch.
-
-    // Persist the selection without blocking UI if changed (now by ID)
-    if (listId && listId !== window.lastSelectedList) {
-      apiCall('/api/user/last-list', {
-        method: 'POST',
-        body: JSON.stringify({ listId }),
-      })
-        .then(() => {
-          window.lastSelectedList = listId;
-        })
-        .catch((error) => {
-          console.warn('Failed to save list preference:', error);
-        });
-    }
-  } catch (_error) {
-    showToast('Error loading list', 'error');
-  }
+  return getListSelectionModule().selectList(listId);
 }
 
 // ============ RECOMMENDATIONS MODULE BRIDGE ============
