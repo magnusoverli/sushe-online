@@ -72,6 +72,9 @@ jobs:
       - name: Run linter
         run: npm run lint
 
+      - name: Run structural baseline guardrail
+        run: npm run lint:structure:baseline
+
       - name: Run tests
         run: npm test
 

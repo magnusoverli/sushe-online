@@ -18,6 +18,10 @@ const { withTransaction, TransactionAbort } = require('../db/transaction');
 const { buildPartialUpdate } = require('../utils/query-builder');
 const { createItemComments } = require('./list/item-comments');
 const {
+  mapListRowToItem,
+  mapAlbumDataItemToResponse,
+} = require('./list/item-mapper');
+const {
   validateYearNotLocked,
   validateMainListNotLocked,
   isYearLocked,
@@ -467,38 +471,6 @@ function createListService(deps = {}) {
   // ============================================
 
   /**
-   * Map a database row from findAllUserListsWithItems to a list item object.
-   * @param {Object} row - Database row
-   * @param {Map<string, Object>|null} yearRecMap - Recommendation map for this list's year
-   * @returns {Object} List item object
-   */
-  function mapRowToListItem(row, yearRecMap) {
-    const rec = yearRecMap?.get(row.album_id) || null;
-    return {
-      _id: row.item_id,
-      artist: row.artist || '',
-      album: row.album || '',
-      album_id: row.album_id || '',
-      release_date: row.release_date || '',
-      country: row.country || '',
-      genre_1: row.genre_1 || '',
-      genre_2: row.genre_2 || '',
-      track_pick: row.primary_track || '',
-      primary_track: row.primary_track || null,
-      secondary_track: row.secondary_track || null,
-      comments: row.comments || '',
-      comments_2: row.comments_2 || '',
-      tracks: row.tracks || null,
-      cover_image: row.cover_image || '',
-      cover_image_format: row.cover_image_format || '',
-      summary: row.summary || '',
-      summary_source: row.summary_source || '',
-      recommended_by: rec?.recommendedBy || null,
-      recommended_at: rec?.recommendedAt || null,
-    };
-  }
-
-  /**
    * Build full-mode list data with all album details.
    * @param {string} userId - User ID
    * @param {Array} userLists - Pre-fetched user lists
@@ -542,7 +514,7 @@ function createListService(deps = {}) {
       if (row.position !== null && row.item_id !== null) {
         const listEntry = listMap.get(row.list_id);
         const yearRecMap = recommendationsByYear.get(listEntry.year) || null;
-        listEntry.items.push(mapRowToListItem(row, yearRecMap));
+        listEntry.items.push(mapListRowToItem(row, yearRecMap));
       }
     }
 
@@ -634,49 +606,14 @@ function createListService(deps = {}) {
     );
     const recommendationMap = recMaps.get(list.year) || new Map();
 
-    const data = items.map((item, index) => {
-      const rec = recommendationMap.get(item.albumId) || null;
-      return {
-        _id: item._id,
-        artist: item.artist,
-        album: item.album,
-        album_id: item.albumId,
-        release_date: item.releaseDate,
-        country: item.country,
-        genre_1: item.genre1,
-        genre_2: item.genre2,
-        track_pick: item.primaryTrack || '',
-        primary_track: item.primaryTrack || null,
-        secondary_track: item.secondaryTrack || null,
-        comments: item.comments,
-        comments_2: item.comments2 || '',
-        tracks: item.tracks,
-        cover_image_format: item.coverImageFormat,
-        summary: item.summary || '',
-        summary_source: item.summarySource || '',
-        recommended_by: rec?.recommendedBy || null,
-        recommended_at: rec?.recommendedAt || null,
-        ...(isExport
-          ? {
-              cover_image: item.coverImage
-                ? Buffer.isBuffer(item.coverImage)
-                  ? item.coverImage.toString('base64')
-                  : item.coverImage
-                : '',
-              rank: index + 1,
-              points: getPointsForPosition(index + 1),
-            }
-          : (() => {
-              if (item.albumId) {
-                return {
-                  cover_image_url: `/api/albums/${item.albumId}/cover`,
-                };
-              } else {
-                return {};
-              }
-            })()),
-      };
-    });
+    const data = items.map((item, index) =>
+      mapAlbumDataItemToResponse(item, {
+        recommendationMap,
+        isExport,
+        index,
+        getPointsForPosition,
+      })
+    );
 
     return { list, items: data };
   }
