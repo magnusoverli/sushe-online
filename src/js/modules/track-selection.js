@@ -249,8 +249,10 @@ export function createTrackSelection(deps = {}) {
     });
 
     // Get current picks
-    const currentPrimary = album.track_picks?.primary || album.track_pick;
-    const currentSecondary = album.track_picks?.secondary || null;
+    const currentPrimary =
+      album.primary_track || album.track_picks?.primary || album.track_pick;
+    const currentSecondary =
+      album.secondary_track || album.track_picks?.secondary || null;
     const currentPrimaryName = getTrackName(currentPrimary);
     const currentSecondaryName = getTrackName(currentSecondary);
 
