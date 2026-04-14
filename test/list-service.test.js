@@ -581,3 +581,95 @@ describe('list-service management operations', () => {
     );
   });
 });
+
+describe('list-service write operations', () => {
+  it('createList should create an uncategorized list without albums', async () => {
+    const client = {
+      query: mock.fn(async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.startsWith('SELECT 1 FROM lists WHERE user_id = $1')) {
+          return { rows: [] };
+        }
+
+        if (sql.includes('SELECT COALESCE(MAX(sort_order), -1) + 1')) {
+          return { rows: [{ next_order: 3 }] };
+        }
+
+        if (sql.startsWith('INSERT INTO lists')) {
+          return { rows: [], rowCount: 1 };
+        }
+
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+      release: mock.fn(),
+    };
+
+    const pool = {
+      query: mock.fn(async (sql) => {
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(async () => client),
+    };
+
+    const deps = createServiceDeps(pool);
+    deps.helpers.findOrCreateUncategorizedGroup = mock.fn(async () => 42);
+
+    const service = createListService(deps);
+    const result = await service.createList('user1', { name: 'New List' });
+
+    assert.strictEqual(result.name, 'New List');
+    assert.strictEqual(result.year, null);
+    assert.strictEqual(result.count, 0);
+    assert.strictEqual(result.groupId, null);
+    assert.strictEqual(
+      deps.helpers.findOrCreateUncategorizedGroup.mock.calls.length,
+      1
+    );
+  });
+
+  it('incrementalUpdate should handle empty changes with zero updates', async () => {
+    const client = {
+      query: mock.fn(async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.startsWith('UPDATE lists SET updated_at = $1 WHERE _id = $2')) {
+          return { rows: [], rowCount: 1 };
+        }
+
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+      release: mock.fn(),
+    };
+
+    const pool = {
+      query: mock.fn(async (sql) => {
+        if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
+          return { rows: [createOwnedListRow()] };
+        }
+
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(async () => client),
+    };
+
+    const deps = createServiceDeps(pool);
+    const service = createListService(deps);
+
+    const result = await service.incrementalUpdate(
+      'list1',
+      'user1',
+      { added: [], removed: [], updated: [] },
+      { _id: 'user1', lastfmUsername: 'listener' }
+    );
+
+    assert.strictEqual(result.changeCount, 0);
+    assert.deepStrictEqual(result.addedItems, []);
+    assert.deepStrictEqual(result.duplicateAlbums, []);
+    assert.strictEqual(result.list._id, 'list1');
+  });
+});
