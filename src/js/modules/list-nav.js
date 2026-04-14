@@ -62,18 +62,7 @@ export function createListNav(deps = {}) {
    */
   function getGroupExpandState() {
     try {
-      // Try new key first, fall back to old key for migration
-      let state = localStorage.getItem('groupExpandState');
-      if (!state) {
-        // Migrate from old yearExpandState
-        state = localStorage.getItem('yearExpandState');
-        if (state) {
-          // Convert year keys to group IDs if possible
-          // For now, just use the old state structure
-          localStorage.setItem('groupExpandState', state);
-          localStorage.removeItem('yearExpandState');
-        }
-      }
+      const state = localStorage.getItem('groupExpandState');
       return state ? JSON.parse(state) : {};
     } catch (_e) {
       return {};
@@ -152,7 +141,7 @@ export function createListNav(deps = {}) {
 
   /**
    * Toggle group section expand/collapse
-   * @param {string} groupId - Group ID or group name for legacy support
+   * @param {string} groupId - Group ID or fallback state key
    * @param {HTMLElement} container - Container element
    */
   function toggleGroupSection(groupId, container) {
@@ -196,24 +185,6 @@ export function createListNav(deps = {}) {
         chevron.classList.toggle('fa-chevron-right', isExpanded);
         chevron.classList.toggle('fa-chevron-down', !isExpanded);
       }
-    }
-  }
-
-  // Legacy function for backward compatibility during transition
-  function getYearExpandState() {
-    return getGroupExpandState();
-  }
-
-  function saveYearExpandState(state) {
-    saveGroupExpandState(state);
-  }
-
-  function toggleYearSection(year, container) {
-    // Find the section by year data attribute for legacy support
-    const section = container.querySelector(`[data-year-section="${year}"]`);
-    if (section) {
-      const groupId = section.getAttribute('data-group-id') || year;
-      toggleGroupSection(groupId, container);
     }
   }
 
@@ -269,72 +240,6 @@ export function createListNav(deps = {}) {
     return { groups: groupsWithLists, orphaned };
   }
 
-  /**
-   * Legacy function: Group lists by year (for backward compatibility)
-   * @returns {Object} { listsByYear: Object, uncategorized: Array, sortedYears: Array }
-   */
-  function groupListsByYear() {
-    // If groups are available, use the new system
-    if (getGroups && getSortedGroups) {
-      const { groups: groupsWithLists, orphaned } = groupListsByGroup();
-
-      // Convert to legacy format for backward compatibility
-      const listsByYear = {};
-      const uncategorized = [...orphaned];
-      const sortedYears = [];
-
-      groupsWithLists.forEach((group) => {
-        if (group.isYearGroup && group.year) {
-          listsByYear[group.year] = group.lists;
-          sortedYears.push(String(group.year));
-        } else {
-          // Collections go to uncategorized in legacy view
-          uncategorized.push(...group.lists);
-        }
-      });
-
-      // Sort years descending
-      sortedYears.sort((a, b) => parseInt(b) - parseInt(a));
-
-      return { listsByYear, uncategorized, sortedYears };
-    }
-
-    // Fallback to old behavior if groups not available
-    // lists is now keyed by listId, not name
-    const lists = getLists();
-    const listsByYear = {};
-    const uncategorized = [];
-
-    Object.keys(lists).forEach((listId) => {
-      const meta = getListMetadata(listId);
-      const year = meta?.year;
-
-      if (year) {
-        if (!listsByYear[year]) {
-          listsByYear[year] = [];
-        }
-        listsByYear[year].push({
-          _id: listId,
-          name: meta?.name || 'Unknown',
-          meta,
-        });
-      } else {
-        uncategorized.push({
-          _id: listId,
-          name: meta?.name || 'Unknown',
-          meta,
-        });
-      }
-    });
-
-    // Sort years descending
-    const sortedYears = Object.keys(listsByYear).sort(
-      (a, b) => parseInt(b) - parseInt(a)
-    );
-
-    return { listsByYear, uncategorized, sortedYears };
-  }
-
   // ============ HTML GENERATION ============
 
   /**
@@ -374,23 +279,6 @@ export function createListNav(deps = {}) {
       </div>
       ${rightSide}
     `;
-  }
-
-  /**
-   * Legacy: Generate HTML for year section header
-   * @param {string} year - Year label
-   * @param {boolean} isExpanded - Whether section is expanded
-   * @param {boolean} isMobile - Whether rendering for mobile
-   * @param {string} groupId - Group ID for menu button
-   * @returns {string} HTML string
-   */
-  function createYearHeaderHTML(
-    year,
-    isExpanded,
-    isMobile = false,
-    groupId = ''
-  ) {
-    return createGroupHeaderHTML(year, isExpanded, true, isMobile, groupId);
   }
 
   /**
@@ -457,7 +345,7 @@ export function createListNav(deps = {}) {
    * Create a list button element with event handlers
    * @param {string} listId - List ID
    * @param {boolean} isMobile - Whether rendering for mobile
-   * @param {HTMLElement} _container - Parent container (unused but kept for signature compatibility)
+   * @param {HTMLElement} _container - Parent container (unused in current implementation)
    * @returns {HTMLElement} List item element
    */
   function createListButton(listId, isMobile, _container) {
@@ -609,9 +497,6 @@ export function createListNav(deps = {}) {
     section.className = `group-section ${isYearGroup ? 'year-group' : 'collection-group'}`;
     section.setAttribute('data-group-section', stateKey);
     section.setAttribute('data-group-id', _id || '');
-    if (year) {
-      section.setAttribute('data-year-section', year); // Legacy support
-    }
 
     // Group header - use div wrapper for proper layout with menu button
     const headerWrapper = document.createElement('div');
@@ -670,7 +555,6 @@ export function createListNav(deps = {}) {
     // Lists container
     const listsContainer = document.createElement('ul');
     listsContainer.className = `group-lists pl-[19px] ${isExpanded ? '' : 'collapsed'}`;
-    // Add legacy class for CSS compatibility
     if (isYearGroup) {
       listsContainer.classList.add('year-lists');
     }
@@ -819,26 +703,6 @@ export function createListNav(deps = {}) {
     });
   }
 
-  /**
-   * Legacy: Create a year section element
-   * @param {string} year - Year label
-   * @param {Array} yearLists - Lists for this year
-   * @param {boolean} isMobile - Whether rendering for mobile
-   * @param {HTMLElement} container - Parent container
-   * @returns {HTMLElement} Section element
-   */
-  function createYearSection(year, yearLists, isMobile, container) {
-    // Convert to group format and use createGroupSection
-    const group = {
-      _id: null,
-      name: year,
-      year: year === 'uncategorized' ? null : parseInt(year, 10),
-      isYearGroup: year !== 'uncategorized',
-      lists: yearLists,
-    };
-    return createGroupSection(group, isMobile, container);
-  }
-
   // ============ MAIN RENDER FUNCTION ============
 
   /**
@@ -849,60 +713,33 @@ export function createListNav(deps = {}) {
   function renderListItems(container, isMobile = false) {
     container.innerHTML = '';
 
-    // Use new group-based rendering if groups are available
-    if (getGroups && getSortedGroups) {
-      const { groups: groupsWithLists, orphaned } = groupListsByGroup();
-
-      // On first render of page load, collapse all groups except the active list's group
-      if (!hasInitializedExpandState) {
-        hasInitializedExpandState =
-          initializeExpandStateForActiveList(groupsWithLists, orphaned) ===
-          true;
-      }
-
-      // Render each group section
-      // Show all collections (even empty), but only show year-groups with lists
-      groupsWithLists.forEach((group) => {
-        if (group.lists.length > 0 || !group.isYearGroup) {
-          const section = createGroupSection(group, isMobile, container);
-          container.appendChild(section);
-        }
-      });
-
-      // Add orphaned lists if any (shouldn't happen after migration)
-      if (orphaned.length > 0) {
-        const orphanedGroup = {
-          _id: 'orphaned',
-          name: 'Uncategorized',
-          year: null,
-          isYearGroup: false,
-          lists: orphaned,
-        };
-        const section = createGroupSection(orphanedGroup, isMobile, container);
-        container.appendChild(section);
-      }
-
+    if (!getGroups || !getSortedGroups) {
       return;
     }
 
-    // Legacy fallback: use year-based rendering
-    const { listsByYear, uncategorized, sortedYears } = groupListsByYear();
+    const { groups: groupsWithLists, orphaned } = groupListsByGroup();
 
-    // Create year sections
-    sortedYears.forEach((year) => {
-      const yearLists = listsByYear[year];
-      const section = createYearSection(year, yearLists, isMobile, container);
-      container.appendChild(section);
+    if (!hasInitializedExpandState) {
+      hasInitializedExpandState =
+        initializeExpandStateForActiveList(groupsWithLists, orphaned) === true;
+    }
+
+    groupsWithLists.forEach((group) => {
+      if (group.lists.length > 0 || !group.isYearGroup) {
+        const section = createGroupSection(group, isMobile, container);
+        container.appendChild(section);
+      }
     });
 
-    // Add uncategorized section if there are any
-    if (uncategorized.length > 0) {
-      const section = createYearSection(
-        'uncategorized',
-        uncategorized.map((item) => ({ name: item.name })),
-        isMobile,
-        container
-      );
+    if (orphaned.length > 0) {
+      const orphanedGroup = {
+        _id: 'orphaned',
+        name: 'Uncategorized',
+        year: null,
+        isYearGroup: false,
+        lists: orphaned,
+      };
+      const section = createGroupSection(orphanedGroup, isMobile, container);
       container.appendChild(section);
     }
   }
@@ -1313,16 +1150,10 @@ export function createListNav(deps = {}) {
     updateListNav,
     updateListNavActiveState,
     collapseGroupsForActiveList,
-    getYearExpandState,
-    saveYearExpandState,
-    toggleYearSection,
-    groupListsByYear,
-    createYearHeaderHTML,
     createListButtonHTML,
     createRecommendationsButtonHTML,
     createListButton,
     createRecommendationsButton,
-    createYearSection,
     renderListItems,
   };
 }

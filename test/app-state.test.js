@@ -57,13 +57,14 @@ describe('app-state', async () => {
         },
       };
       mod.setLists(newLists);
-      assert.strictEqual(mod.getLists(), newLists);
+      assert.deepStrictEqual(mod.getLists(), newLists);
     });
 
     it('setLists syncs to window.lists', () => {
       const newLists = { id1: { _id: 'id1', name: 'Test' } };
       mod.setLists(newLists);
-      assert.strictEqual(window.lists, newLists);
+      assert.deepStrictEqual(window.lists, newLists);
+      assert.strictEqual(window.lists, mod.getLists());
     });
 
     it('getListData returns null for nonexistent list', () => {
