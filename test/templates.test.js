@@ -689,6 +689,18 @@ describe('templates utilities', () => {
       assert.ok(result.includes('/styles/output.css'));
       assert.ok(result.includes('/styles/app.css'));
     });
+
+    it('should render viewport height script with valid template literal syntax', () => {
+      const user = { username: 'test' };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(
+        result.includes(
+          "document.documentElement.style.setProperty('--vh', `${vh}px`);"
+        )
+      );
+      assert.ok(!result.includes("setProperty('--vh', \\`\\${vh}px\\`);"));
+    });
   });
 
   describe('headerComponent', () => {
