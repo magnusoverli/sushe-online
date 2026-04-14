@@ -114,6 +114,82 @@ const createMockPool = (config = null) => {
   };
 };
 
+const createRecommendationMockPool = () => {
+  let storedConfig = null;
+  const threadsByYear = new Map();
+
+  return {
+    query: async (sql, params = []) => {
+      if (sql.includes('SELECT') && sql.includes('telegram_config')) {
+        return storedConfig ? { rows: [storedConfig] } : { rows: [] };
+      }
+
+      if (sql.includes('DELETE') && sql.includes('telegram_config')) {
+        storedConfig = null;
+        return { rows: [] };
+      }
+
+      if (sql.includes('INSERT INTO telegram_config')) {
+        storedConfig = {
+          id: 1,
+          bot_token_encrypted: params[0],
+          chat_id: params[1],
+          thread_id: params[2],
+          chat_title: params[3],
+          topic_name: params[4],
+          webhook_secret: params[5],
+          enabled: params[6],
+          configured_at: new Date(),
+          configured_by: params[7],
+          recommendations_enabled: false,
+        };
+        return { rows: [storedConfig] };
+      }
+
+      if (sql.includes('UPDATE telegram_config SET recommendations_enabled')) {
+        if (storedConfig) {
+          storedConfig.recommendations_enabled = params[0];
+        }
+        return { rows: [] };
+      }
+
+      if (
+        sql.includes('SELECT thread_id FROM telegram_recommendation_threads')
+      ) {
+        const threadId = threadsByYear.get(params[0]);
+        return threadId ? { rows: [{ thread_id: threadId }] } : { rows: [] };
+      }
+
+      if (sql.includes('INSERT INTO telegram_recommendation_threads')) {
+        threadsByYear.set(params[0], params[1]);
+        return { rows: [] };
+      }
+
+      if (
+        sql.includes(
+          'SELECT year, thread_id, topic_name, created_at FROM telegram_recommendation_threads'
+        )
+      ) {
+        const rows = Array.from(threadsByYear.entries())
+          .sort(([yearA], [yearB]) => yearB - yearA)
+          .map(([year, threadId]) => ({
+            year,
+            thread_id: threadId,
+            topic_name: `Recommendations ${year}`,
+            created_at: new Date(),
+          }));
+        return { rows };
+      }
+
+      if (sql.includes('telegram_admins')) {
+        return { rows: [] };
+      }
+
+      return { rows: [] };
+    },
+  };
+};
+
 // =============================================================================
 // validateToken tests
 // =============================================================================
@@ -483,4 +559,119 @@ test('disconnect should remove config and webhook', async () => {
   // Verify disconnected
   configured = await notifier.isConfigured();
   assert.strictEqual(configured, false);
+});
+
+// =============================================================================
+// recommendations notifier tests
+// =============================================================================
+
+test('sendRecommendationNotification should create thread and send message', async () => {
+  const logger = createMockLogger();
+  const encryptionKey = 'test-key-that-is-at-least-32-chars!';
+  const pool = createRecommendationMockPool();
+  let createForumTopicCalls = 0;
+  let sendMessageBody = null;
+
+  const fetch = async (url, options) => {
+    const method = url.split('/').pop().split('?')[0];
+
+    if (method === 'createForumTopic') {
+      createForumTopicCalls += 1;
+      return {
+        ok: true,
+        json: async () => ({ ok: true, result: { message_thread_id: 4242 } }),
+      };
+    }
+
+    if (method === 'sendMessage') {
+      sendMessageBody = JSON.parse(options.body);
+      return {
+        ok: true,
+        json: async () => ({ ok: true, result: { message_id: 777 } }),
+      };
+    }
+
+    return {
+      ok: true,
+      json: async () => ({ ok: true, result: true }),
+    };
+  };
+
+  const notifier = createTelegramNotifier({
+    logger,
+    pool,
+    fetch,
+    encryptionKey,
+    baseUrl: 'https://test.example.com',
+  });
+
+  await notifier.saveConfig({
+    botToken: '123:ABC',
+    chatId: -123,
+    chatTitle: 'Test Group',
+    configuredBy: 'admin-1',
+  });
+  await notifier.setRecommendationsEnabled(true);
+
+  const result = await notifier.sendRecommendationNotification({
+    artist: 'Test Artist',
+    album: 'Test Album',
+    year: 2025,
+    release_date: '2025-02-03',
+    recommended_by: 'alice',
+    reasoning: 'Great record',
+  });
+
+  assert.strictEqual(result.success, true);
+  assert.strictEqual(createForumTopicCalls, 1);
+  assert.ok(sendMessageBody);
+  assert.strictEqual(sendMessageBody.message_thread_id, 4242);
+  assert.ok(sendMessageBody.text.includes('Test Album'));
+});
+
+test('getRecommendationThreads should return year-sorted threads', async () => {
+  const logger = createMockLogger();
+  const encryptionKey = 'test-key-that-is-at-least-32-chars!';
+  const pool = createRecommendationMockPool();
+  const fetch = createMockFetch({
+    createForumTopic: {
+      ok: true,
+      result: { message_thread_id: 9001 },
+    },
+  });
+
+  const notifier = createTelegramNotifier({
+    logger,
+    pool,
+    fetch,
+    encryptionKey,
+    baseUrl: 'https://test.example.com',
+  });
+
+  await notifier.saveConfig({
+    botToken: '123:ABC',
+    chatId: -123,
+    chatTitle: 'Test Group',
+    configuredBy: 'admin-1',
+  });
+  await notifier.setRecommendationsEnabled(true);
+
+  await notifier.sendRecommendationNotification({
+    artist: 'Artist A',
+    album: 'Album A',
+    year: 2024,
+    recommended_by: 'alice',
+  });
+  await notifier.sendRecommendationNotification({
+    artist: 'Artist B',
+    album: 'Album B',
+    year: 2025,
+    recommended_by: 'bob',
+  });
+
+  const threads = await notifier.getRecommendationThreads();
+
+  assert.strictEqual(threads.length, 2);
+  assert.strictEqual(threads[0].year, 2025);
+  assert.strictEqual(threads[1].year, 2024);
 });
