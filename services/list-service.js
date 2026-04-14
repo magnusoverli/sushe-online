@@ -3,6 +3,10 @@ const { withTransaction, TransactionAbort } = require('../db/transaction');
 const { buildPartialUpdate } = require('../utils/query-builder');
 const { createItemComments } = require('./list/item-comments');
 const { createListFetchers } = require('./list/fetchers');
+const { createListItemOperations } = require('./list/item-operations');
+const {
+  createListManagementOperations,
+} = require('./list/management-operations');
 const { createSetupStatus } = require('./list/setup-status');
 const {
   validateYearNotLocked,
@@ -22,8 +26,6 @@ function createListService(deps = {}) {
   const { getPointsForPosition, refreshPlaycountsInBackground } = deps;
 
   const {
-    upsertAlbumRecord,
-    batchUpsertAlbumRecords,
     findOrCreateYearGroup,
     findOrCreateUncategorizedGroup,
     deleteGroupIfEmptyAutoGroup,
@@ -105,259 +107,14 @@ function createListService(deps = {}) {
     logger: log,
   });
 
-  async function insertListItems(client, listId, albums, timestamp) {
-    for (let i = 0; i < albums.length; i++) {
-      const album = albums[i];
-      const albumId = await upsertAlbumRecord(album, timestamp, client);
-
-      const itemId = crypto.randomBytes(12).toString('hex');
-      await client.query(
-        `INSERT INTO list_items (
-          _id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [
-          itemId,
-          listId,
-          albumId,
-          i + 1,
-          album.comments || null,
-          album.comments_2 || null,
-          album.primary_track || null,
-          album.secondary_track || null,
-          timestamp,
-          timestamp,
-        ]
-      );
-    }
-  }
-
-  async function checkDuplicateListName(
-    client,
-    userId,
-    name,
-    groupId,
-    excludeListId
-  ) {
-    const params = [userId, name, groupId];
-    let query =
-      'SELECT 1 FROM lists WHERE user_id = $1 AND name = $2 AND group_id = $3';
-    if (excludeListId) {
-      query += ' AND _id != $4';
-      params.push(excludeListId);
-    }
-    const duplicateCheck = await client.query(query, params);
-    if (duplicateCheck.rows.length > 0) {
-      throw new TransactionAbort(409, {
-        error: 'A list with this name already exists in this category',
-      });
-    }
-  }
-
-  async function processRemovals(client, listId, removed) {
-    if (!removed || !Array.isArray(removed)) return 0;
-    const validIds = removed.filter(Boolean);
-    if (validIds.length === 0) return 0;
-    const result = await client.query(
-      'DELETE FROM list_items WHERE list_id = $1 AND album_id = ANY($2::text[])',
-      [listId, validIds]
-    );
-    return result.rowCount;
-  }
-
-  async function processAdditions(client, list, added, timestamp) {
-    const addedItems = [];
-    const duplicateAlbums = [];
-    let changeCount = 0;
-
-    if (!added || !Array.isArray(added) || added.length === 0) {
-      return { addedItems, duplicateAlbums, changeCount };
-    }
-
-    // Get current max position to auto-append new items at the end
-    const maxPosResult = await client.query(
-      'SELECT COALESCE(MAX(position), 0) as max_pos FROM list_items WHERE list_id = $1',
-      [list._id]
-    );
-    let nextPosition = maxPosResult.rows[0].max_pos + 1;
-
-    // Filter out empty items
-    const validItems = added.filter((item) => item);
-    if (validItems.length === 0) {
-      return { addedItems, duplicateAlbums, changeCount };
-    }
-
-    // Use batch operations for all items (1 or more)
-    const upsertResults = await batchUpsertAlbumRecords(
-      validItems,
-      timestamp,
-      client
-    );
-
-    // Build array of album IDs for duplicate check
-    const albumIds = Array.from(upsertResults.values()).map((r) => r.albumId);
-
-    // Batch check for duplicates using ANY
-    const duplicateCheck = await client.query(
-      `SELECT album_id, _id FROM list_items 
-       WHERE list_id = $1 AND album_id = ANY($2::text[])`,
-      [list._id, albumIds]
-    );
-
-    const duplicateSet = new Set(duplicateCheck.rows.map((r) => r.album_id));
-
-    // Prepare batch insert for non-duplicate items
-    const itemsToInsert = [];
-    validItems.forEach((item) => {
-      const key = `${item.artist}|${item.album}`;
-      const upsertResult = upsertResults.get(key);
-
-      if (!upsertResult) {
-        log.warn('Album not found in upsert results', {
-          artist: item.artist,
-          album: item.album,
-        });
-        return;
-      }
-
-      if (duplicateSet.has(upsertResult.albumId)) {
-        duplicateAlbums.push({
-          album_id: upsertResult.albumId,
-          artist: item.artist || '',
-          album: item.album || '',
-        });
-      } else {
-        const itemId = crypto.randomBytes(12).toString('hex');
-        const position =
-          item.position !== undefined && item.position !== null
-            ? item.position
-            : nextPosition++;
-
-        itemsToInsert.push({
-          _id: itemId,
-          album_id: upsertResult.albumId,
-          position,
-          comments: item.comments || null,
-          comments_2: item.comments_2 || null,
-          primary_track: item.primary_track || null,
-          secondary_track: item.secondary_track || null,
-        });
-
-        addedItems.push({
-          album_id: upsertResult.albumId,
-          _id: itemId,
-        });
-      }
-    });
-
-    // Batch insert all list items if any
-    if (itemsToInsert.length > 0) {
-      const itemIds = itemsToInsert.map((i) => i._id);
-      const listIds = itemsToInsert.map(() => list._id);
-      const albumIdsToInsert = itemsToInsert.map((i) => i.album_id);
-      const positions = itemsToInsert.map((i) => i.position);
-      const comments = itemsToInsert.map((i) => i.comments);
-      const comments2 = itemsToInsert.map((i) => i.comments_2);
-      const primaryTracks = itemsToInsert.map((i) => i.primary_track);
-      const secondaryTracks = itemsToInsert.map((i) => i.secondary_track);
-      const createdAts = itemsToInsert.map(() => timestamp);
-      const updatedAts = itemsToInsert.map(() => timestamp);
-
-      await client.query(
-        `INSERT INTO list_items (
-          _id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track, 
-          created_at, updated_at
-        )
-        SELECT * FROM UNNEST(
-          $1::text[], $2::text[], $3::text[], $4::int[], $5::text[], $6::text[],
-          $7::text[], $8::text[], $9::timestamptz[], $10::timestamptz[]
-        ) AS t(_id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track, created_at, updated_at)`,
-        [
-          itemIds,
-          listIds,
-          albumIdsToInsert,
-          positions,
-          comments,
-          comments2,
-          primaryTracks,
-          secondaryTracks,
-          createdAts,
-          updatedAts,
-        ]
-      );
-
-      changeCount += itemsToInsert.length;
-
-      log.debug('Batch insert list items', {
-        listId: list._id,
-        count: itemsToInsert.length,
-      });
-    }
-
-    return { addedItems, duplicateAlbums, changeCount };
-  }
-
-  async function processPositionUpdates(client, listId, updated, timestamp) {
-    if (!updated || !Array.isArray(updated)) return 0;
-    const validItems = updated.filter((item) => item && item.album_id);
-    if (validItems.length === 0) return 0;
-    const albumIds = validItems.map((i) => i.album_id);
-    const positions = validItems.map((i) => i.position);
-    const result = await client.query(
-      `UPDATE list_items SET position = t.position, updated_at = $1
-       FROM UNNEST($2::text[], $3::int[]) AS t(album_id, position)
-       WHERE list_items.list_id = $4 AND list_items.album_id = t.album_id`,
-      [timestamp, albumIds, positions, listId]
-    );
-    return result.rowCount;
-  }
-
-  function triggerPlaycountRefresh(user, addedItems) {
-    if (
-      addedItems.length === 0 ||
-      !user.lastfmUsername ||
-      !refreshPlaycountsInBackground
-    )
-      return;
-
-    const albumIds = addedItems.map((item) => item.album_id);
-    pool
-      .query(
-        `SELECT album_id, artist, album FROM albums WHERE album_id = ANY($1::text[])`,
-        [albumIds]
-      )
-      .then((result) => {
-        if (result.rows.length > 0) {
-          const albumsToRefresh = result.rows.map((album) => ({
-            itemId: album.album_id,
-            artist: album.artist,
-            album: album.album,
-            albumId: album.album_id,
-          }));
-
-          log.debug('Triggering playcount refresh for added albums', {
-            userId: user._id,
-            albumCount: albumsToRefresh.length,
-          });
-
-          refreshPlaycountsInBackground(
-            user._id,
-            user.lastfmUsername,
-            albumsToRefresh,
-            pool,
-            log
-          ).catch((err) => {
-            log.warn('Playcount refresh for added albums failed', {
-              error: err.message,
-            });
-          });
-        }
-      })
-      .catch((err) => {
-        log.warn('Failed to look up albums for playcount refresh', {
-          error: err.message,
-        });
-      });
-  }
+  const itemOperations = createListItemOperations({
+    pool,
+    crypto,
+    upsertAlbumRecord: helpers.upsertAlbumRecord,
+    batchUpsertAlbumRecords: helpers.batchUpsertAlbumRecords,
+    refreshPlaycountsInBackground,
+    logger: log,
+  });
 
   const listFetchers = createListFetchers({
     listsAsync,
@@ -365,7 +122,17 @@ function createListService(deps = {}) {
     fetchRecommendationMaps,
     findListById,
     getPointsForPosition,
-    logger: log,
+  });
+  const managementOperations = createListManagementOperations({
+    pool,
+    withTransaction,
+    TransactionAbort,
+    validateYear,
+    validateMainListNotLocked,
+    validateYearNotLocked,
+    isYearLocked,
+    buildPartialUpdate,
+    deleteGroupIfEmptyAutoGroup,
   });
   const setupStatus = createSetupStatus({ pool });
 
@@ -382,87 +149,7 @@ function createListService(deps = {}) {
   }
 
   async function bulkUpdate(userId, updates) {
-    const results = [];
-    const yearsToRecompute = new Set();
-
-    await withTransaction(pool, async (client) => {
-      for (const update of updates) {
-        const { listId, year, isMain: updateIsMain } = update;
-
-        if (!listId) {
-          results.push({ listId, success: false, error: 'Missing listId' });
-          continue;
-        }
-
-        const listCheck = await client.query(
-          'SELECT _id, year, is_main FROM lists WHERE _id = $1 AND user_id = $2',
-          [listId, userId]
-        );
-
-        if (listCheck.rows.length === 0) {
-          results.push({ listId, success: false, error: 'List not found' });
-          continue;
-        }
-
-        const oldList = listCheck.rows[0];
-        const oldYear = oldList.year;
-        const newYear = year !== undefined ? year : oldList.year;
-        const newIsMain =
-          updateIsMain !== undefined ? updateIsMain : oldList.is_main;
-
-        if (newYear !== null && (newYear < 1000 || newYear > 9999)) {
-          results.push({ listId, success: false, error: 'Invalid year' });
-          continue;
-        }
-
-        // Check year lock rules for main list changes
-        const effectiveYear = newYear || oldYear;
-        if (effectiveYear) {
-          const yearLocked = await isYearLocked(pool, effectiveYear);
-          if (yearLocked) {
-            if (
-              updateIsMain !== undefined &&
-              updateIsMain !== oldList.is_main
-            ) {
-              results.push({
-                listId,
-                success: false,
-                error: `Cannot change main status: Year ${effectiveYear} is locked`,
-              });
-              continue;
-            }
-            if (oldList.is_main) {
-              results.push({
-                listId,
-                success: false,
-                error: `Cannot update main list: Year ${effectiveYear} is locked`,
-              });
-              continue;
-            }
-          }
-        }
-
-        if (newIsMain && newYear !== null) {
-          await client.query(
-            `UPDATE lists SET is_main = FALSE, updated_at = NOW() 
-             WHERE user_id = $1 AND year = $2 AND is_main = TRUE AND _id != $3`,
-            [userId, newYear, listId]
-          );
-        }
-
-        await client.query(
-          `UPDATE lists SET year = $1, is_main = $2, updated_at = NOW() WHERE _id = $3`,
-          [newYear, newIsMain, listId]
-        );
-
-        results.push({ listId, success: true });
-
-        if (oldYear !== null) yearsToRecompute.add(oldYear);
-        if (newYear !== null && newIsMain) yearsToRecompute.add(newYear);
-      }
-    });
-
-    return { results, yearsToRecompute };
+    return managementOperations.bulkUpdate(userId, updates);
   }
 
   async function dismissSetup(userId) {
@@ -508,7 +195,7 @@ function createListService(deps = {}) {
         groupIdInternal = await findOrCreateUncategorizedGroup(client, userId);
       }
 
-      await checkDuplicateListName(
+      await managementOperations.checkDuplicateListName(
         client,
         userId,
         trimmedName,
@@ -536,7 +223,12 @@ function createListService(deps = {}) {
       );
 
       if (rawAlbums && Array.isArray(rawAlbums)) {
-        await insertListItems(client, listId, rawAlbums, timestamp);
+        await itemOperations.insertListItems(
+          client,
+          listId,
+          rawAlbums,
+          timestamp
+        );
       }
 
       return resultYear;
@@ -564,116 +256,10 @@ function createListService(deps = {}) {
     userId,
     { name: newName, year, groupId: newGroupId }
   ) {
-    return withTransaction(pool, async (client) => {
-      const listResult = await client.query(
-        `SELECT l.id, l._id, l.name, l.year, l.group_id, l.is_main, g.year as group_year
-         FROM lists l
-         LEFT JOIN list_groups g ON l.group_id = g.id
-         WHERE l._id = $1 AND l.user_id = $2`,
-        [listId, userId]
-      );
-
-      if (listResult.rows.length === 0) {
-        throw new TransactionAbort(404, { error: 'List not found' });
-      }
-
-      const list = listResult.rows[0];
-      const fields = [];
-
-      let targetGroupId = list.group_id;
-      let targetYear = list.year;
-
-      if (newGroupId !== undefined) {
-        if (newGroupId === null) {
-          throw new TransactionAbort(400, {
-            error: 'Lists must belong to a category',
-          });
-        }
-
-        const groupResult = await client.query(
-          `SELECT id, year FROM list_groups WHERE _id = $1 AND user_id = $2`,
-          [newGroupId, userId]
-        );
-
-        if (groupResult.rows.length === 0) {
-          throw new TransactionAbort(400, { error: 'Invalid group' });
-        }
-
-        targetGroupId = groupResult.rows[0].id;
-        targetYear = groupResult.rows[0].year;
-
-        fields.push({ column: 'group_id', value: targetGroupId });
-        fields.push({ column: 'year', value: targetYear });
-      } else if (year !== undefined) {
-        const yearValidation = validateYear(year);
-        if (year !== null && !yearValidation.valid) {
-          throw new TransactionAbort(400, { error: yearValidation.error });
-        }
-        targetYear = year === null ? null : yearValidation.value;
-
-        fields.push({ column: 'year', value: targetYear });
-      }
-
-      try {
-        await validateMainListNotLocked(
-          pool,
-          list.year,
-          list.is_main,
-          'update list'
-        );
-        if (targetYear !== list.year) {
-          await validateMainListNotLocked(
-            pool,
-            targetYear,
-            list.is_main,
-            'update list'
-          );
-        }
-      } catch (lockErr) {
-        throw new TransactionAbort(403, {
-          error: lockErr.body?.error || lockErr.message,
-          yearLocked: true,
-        });
-      }
-
-      if (newName !== undefined) {
-        if (typeof newName !== 'string' || newName.trim().length === 0) {
-          throw new TransactionAbort(400, {
-            error: 'List name cannot be empty',
-          });
-        }
-
-        const trimmedName = newName.trim();
-
-        if (trimmedName !== list.name) {
-          await checkDuplicateListName(
-            client,
-            userId,
-            trimmedName,
-            targetGroupId,
-            listId
-          );
-        }
-
-        fields.push({ column: 'name', value: newName.trim() });
-      }
-
-      if (fields.length === 0) {
-        throw new TransactionAbort(400, { error: 'No updates provided' });
-      }
-
-      const update = buildPartialUpdate('lists', 'id', list.id, fields);
-      await client.query(update.query, update.values);
-
-      return {
-        list: {
-          _id: list._id,
-          name: list.name,
-          year: list.year,
-          is_main: list.is_main,
-        },
-        targetYear,
-      };
+    return managementOperations.updateListMetadata(listId, userId, {
+      name: newName,
+      year,
+      groupId: newGroupId,
     });
   }
 
@@ -686,7 +272,12 @@ function createListService(deps = {}) {
         list._id,
       ]);
 
-      await insertListItems(client, list._id, rawAlbums, timestamp);
+      await itemOperations.insertListItems(
+        client,
+        list._id,
+        rawAlbums,
+        timestamp
+      );
 
       await client.query('UPDATE lists SET updated_at = $1 WHERE _id = $2', [
         timestamp,
@@ -841,14 +432,23 @@ function createListService(deps = {}) {
     const duplicateAlbums = [];
 
     await withTransaction(pool, async (client) => {
-      changeCount += await processRemovals(client, list._id, removed);
+      changeCount += await itemOperations.processRemovals(
+        client,
+        list._id,
+        removed
+      );
 
-      const addResult = await processAdditions(client, list, added, timestamp);
+      const addResult = await itemOperations.processAdditions(
+        client,
+        list,
+        added,
+        timestamp
+      );
       addedItems.push(...addResult.addedItems);
       duplicateAlbums.push(...addResult.duplicateAlbums);
       changeCount += addResult.changeCount;
 
-      changeCount += await processPositionUpdates(
+      changeCount += await itemOperations.processPositionUpdates(
         client,
         list._id,
         updated,
@@ -873,117 +473,17 @@ function createListService(deps = {}) {
     });
 
     // Trigger async playcount refresh for newly added albums
-    triggerPlaycountRefresh(user, addedItems);
+    itemOperations.triggerPlaycountRefresh(user, addedItems);
 
     return { list, changeCount, addedItems, duplicateAlbums };
   }
 
   async function toggleMainStatus(listId, userId, isMain) {
-    return withTransaction(pool, async (client) => {
-      const listResult = await client.query(
-        `SELECT l.id, l._id, l.name, l.year, l.is_main, g.year as group_year
-         FROM lists l
-         LEFT JOIN list_groups g ON l.group_id = g.id
-         WHERE l._id = $1 AND l.user_id = $2`,
-        [listId, userId]
-      );
-
-      if (listResult.rows.length === 0) {
-        throw new TransactionAbort(404, { error: 'List not found' });
-      }
-
-      const list = listResult.rows[0];
-      const listYear = list.year || list.group_year;
-
-      try {
-        await validateYearNotLocked(pool, listYear, 'change main status');
-      } catch (lockErr) {
-        throw new TransactionAbort(403, {
-          error: lockErr.body?.error || lockErr.message,
-          yearLocked: true,
-          year: listYear,
-        });
-      }
-
-      if (isMain === false) {
-        await client.query(
-          `UPDATE lists SET is_main = FALSE, updated_at = NOW() WHERE id = $1`,
-          [list.id]
-        );
-        return { list, year: listYear, isRemoval: true };
-      }
-
-      if (!listYear) {
-        throw new TransactionAbort(400, {
-          error: 'List must be assigned to a year to be marked as main',
-        });
-      }
-
-      const previousMainResult = await client.query(
-        `SELECT l._id, l.name FROM lists l
-         LEFT JOIN list_groups g ON l.group_id = g.id
-         WHERE l.user_id = $1 
-           AND (l.year = $2 OR g.year = $2)
-           AND l.is_main = TRUE
-           AND l._id != $3`,
-        [userId, listYear, listId]
-      );
-
-      await client.query(
-        `UPDATE lists SET is_main = FALSE, updated_at = NOW() 
-         WHERE user_id = $1 
-           AND id IN (
-             SELECT l.id FROM lists l
-             LEFT JOIN list_groups g ON l.group_id = g.id
-             WHERE l.user_id = $1 AND (l.year = $2 OR g.year = $2)
-           )`,
-        [userId, listYear]
-      );
-
-      await client.query(
-        `UPDATE lists SET is_main = TRUE, updated_at = NOW() 
-         WHERE id = $1`,
-        [list.id]
-      );
-
-      return {
-        list,
-        year: listYear,
-        isRemoval: false,
-        previousMainResult: previousMainResult.rows,
-      };
-    });
+    return managementOperations.toggleMainStatus(listId, userId, isMain);
   }
 
   async function deleteList(listId, userId) {
-    return withTransaction(pool, async (client) => {
-      const listResult = await client.query(
-        `SELECT id, _id, name, year, group_id, is_main FROM lists WHERE _id = $1 AND user_id = $2`,
-        [listId, userId]
-      );
-
-      if (listResult.rows.length === 0) {
-        throw new TransactionAbort(404, { error: 'List not found' });
-      }
-
-      const foundList = listResult.rows[0];
-
-      if (foundList.is_main) {
-        throw new TransactionAbort(403, {
-          error: 'Cannot delete main list. Unset main status first.',
-        });
-      }
-
-      await client.query('DELETE FROM list_items WHERE list_id = $1', [
-        foundList._id,
-      ]);
-
-      await client.query('DELETE FROM lists WHERE id = $1', [foundList.id]);
-
-      await deleteGroupIfEmptyAutoGroup(client, foundList.group_id);
-
-      return foundList;
-    });
+    return managementOperations.deleteList(listId, userId);
   }
 
   return {

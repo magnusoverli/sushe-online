@@ -26,9 +26,6 @@ function createListFetchers(deps = {}) {
   if (typeof listItemsAsync.findWithAlbumData !== 'function') {
     throw new Error('listItemsAsync.findWithAlbumData is required');
   }
-  if (typeof listItemsAsync.count !== 'function') {
-    throw new Error('listItemsAsync.count is required');
-  }
   if (!fetchRecommendationMaps) {
     throw new Error('fetchRecommendationMaps is required');
   }
