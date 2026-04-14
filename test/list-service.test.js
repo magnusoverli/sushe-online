@@ -395,3 +395,189 @@ describe('list-service fetchers and setup status', () => {
     assert.strictEqual(result.items[0].recommended_at, '2025-01-01');
   });
 });
+
+describe('list-service management operations', () => {
+  it('bulkUpdate should reject invalid year updates', async () => {
+    const client = {
+      query: mock.fn(async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('SELECT _id, year, is_main FROM lists')) {
+          return { rows: [{ _id: 'list1', year: 2024, is_main: false }] };
+        }
+
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+      release: mock.fn(),
+    };
+
+    const pool = {
+      query: mock.fn(async (sql) => {
+        if (sql.includes('SELECT locked FROM master_lists')) {
+          return { rows: [{ locked: false }] };
+        }
+
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(async () => client),
+    };
+
+    const service = createListService(createServiceDeps(pool));
+    const result = await service.bulkUpdate('user1', [
+      { listId: 'list1', year: 999, isMain: false },
+    ]);
+
+    assert.strictEqual(result.results[0].success, false);
+    assert.strictEqual(result.results[0].error, 'Invalid year');
+  });
+
+  it('updateListMetadata should reject empty updates', async () => {
+    const client = {
+      query: mock.fn(async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
+          return {
+            rows: [
+              {
+                id: 1,
+                _id: 'list1',
+                name: 'My List',
+                year: 2024,
+                group_id: 10,
+                is_main: false,
+                group_year: 2024,
+              },
+            ],
+          };
+        }
+
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+      release: mock.fn(),
+    };
+
+    const pool = {
+      query: mock.fn(async (sql) => {
+        if (sql.includes('SELECT locked FROM master_lists')) {
+          return { rows: [{ locked: false }] };
+        }
+
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(async () => client),
+    };
+
+    const service = createListService(createServiceDeps(pool));
+
+    await assert.rejects(
+      () => service.updateListMetadata('list1', 'user1', {}),
+      (err) => {
+        assert.ok(err instanceof TransactionAbort);
+        assert.strictEqual(err.statusCode, 400);
+        assert.strictEqual(err.body.error, 'No updates provided');
+        return true;
+      }
+    );
+  });
+
+  it('toggleMainStatus should unset main when requested', async () => {
+    const client = {
+      query: mock.fn(async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
+          return {
+            rows: [
+              {
+                id: 1,
+                _id: 'list1',
+                name: 'My List',
+                year: 2024,
+                is_main: true,
+                group_year: 2024,
+              },
+            ],
+          };
+        }
+
+        if (sql.includes('UPDATE lists SET is_main = FALSE')) {
+          return { rows: [], rowCount: 1 };
+        }
+
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+      release: mock.fn(),
+    };
+
+    const pool = {
+      query: mock.fn(async (sql) => {
+        if (sql.includes('SELECT locked FROM master_lists')) {
+          return { rows: [{ locked: false }] };
+        }
+
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(async () => client),
+    };
+
+    const service = createListService(createServiceDeps(pool));
+    const result = await service.toggleMainStatus('list1', 'user1', false);
+
+    assert.strictEqual(result.isRemoval, true);
+    assert.strictEqual(result.year, 2024);
+  });
+
+  it('deleteList should block deletion of main list', async () => {
+    const client = {
+      query: mock.fn(async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('SELECT id, _id, name, year, group_id, is_main')) {
+          return {
+            rows: [
+              {
+                id: 1,
+                _id: 'list1',
+                name: 'Main List',
+                year: 2024,
+                group_id: 10,
+                is_main: true,
+              },
+            ],
+          };
+        }
+
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+      release: mock.fn(),
+    };
+
+    const pool = {
+      query: mock.fn(async (sql) => {
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(async () => client),
+    };
+
+    const service = createListService(createServiceDeps(pool));
+
+    await assert.rejects(
+      () => service.deleteList('list1', 'user1'),
+      (err) => {
+        assert.ok(err instanceof TransactionAbort);
+        assert.strictEqual(err.statusCode, 403);
+        assert.match(err.body.error, /cannot delete main list/i);
+        return true;
+      }
+    );
+  });
+});
