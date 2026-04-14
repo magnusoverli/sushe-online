@@ -174,7 +174,7 @@ export function createAlbumDisplay(deps = {}) {
     let comment2 = album.comments_2 || '';
     if (comment2 === 'Comment 2') comment2 = '';
 
-    // Support both URL-based images (new) and base64 (fallback/legacy)
+    // Support both URL-based images and stored base64 data.
     const coverImageUrl = album.cover_image_url || '';
     const coverImage = album.cover_image || '';
     const imageFormat = album.cover_image_format || 'PNG';
@@ -233,21 +233,17 @@ export function createAlbumDisplay(deps = {}) {
       }
     }
 
-    // Process primary track pick (new normalized field or legacy)
-    const primaryTrack = album.primary_track || album.track_pick || '';
+    // Process primary and secondary track picks.
+    const primaryTrack =
+      album.primary_track ||
+      album.track_picks?.primary ||
+      album.track_pick ||
+      '';
     const primaryData = processTrackPick(primaryTrack, album.tracks);
 
-    // Process secondary track pick (new normalized field)
-    const secondaryTrack = album.secondary_track || '';
+    const secondaryTrack =
+      album.secondary_track || album.track_picks?.secondary || '';
     const secondaryData = processTrackPick(secondaryTrack, album.tracks);
-
-    // Legacy compatibility: keep old fields
-    const trackPick = primaryTrack;
-    const trackPickDisplay = primaryData.display || 'Select Track';
-    const trackPickClass = primaryData.display
-      ? primaryData.class
-      : 'text-gray-800 italic';
-    const trackPickDuration = primaryData.duration;
 
     // Album summary (from Claude AI)
     const summary = album.summary || '';
@@ -287,12 +283,6 @@ export function createAlbumDisplay(deps = {}) {
       coverImageUrl,
       coverImage,
       imageFormat,
-      // Legacy track pick fields (for backward compatibility)
-      trackPick,
-      trackPickDisplay,
-      trackPickClass,
-      trackPickDuration,
-      // New dual track pick fields
       primaryTrack,
       primaryTrackDisplay: primaryData.display,
       primaryTrackClass: primaryData.display
@@ -390,16 +380,19 @@ export function createAlbumDisplay(deps = {}) {
     let comment2 = album.comments_2 || '';
     if (comment2 === 'Comment 2') comment2 = '';
 
-    const primaryTrack = album.primary_track || album.track_pick || '';
-    const trackPick = primaryTrack;
+    const primaryTrack =
+      album.primary_track ||
+      album.track_picks?.primary ||
+      album.track_pick ||
+      '';
 
     // Inline track display logic (avoids processTrackPick closure allocation)
-    let trackPickDisplay = 'Select Track';
-    let trackPickClass = 'text-gray-800 italic';
-    let trackPickDuration = '';
+    let primaryTrackDisplay = 'Select Track';
+    let primaryTrackClass = 'text-gray-800 italic';
+    let primaryTrackDuration = '';
 
     if (primaryTrack) {
-      trackPickClass = 'text-gray-300';
+      primaryTrackClass = 'text-gray-300';
       if (album.tracks && Array.isArray(album.tracks)) {
         const trackMatch = album.tracks.find(
           (t) => getTrackName(t) === primaryTrack
@@ -407,21 +400,21 @@ export function createAlbumDisplay(deps = {}) {
         if (trackMatch) {
           const trackName = getTrackName(trackMatch);
           const match = trackName.match(/^(\d+)[.\s-]?\s*(.*)$/);
-          trackPickDisplay = match
+          primaryTrackDisplay = match
             ? match[2]
               ? `${match[1]}. ${match[2]}`
               : `Track ${match[1]}`
             : trackName;
-          trackPickDuration = formatTrackTime(getTrackLength(trackMatch));
+          primaryTrackDuration = formatTrackTime(getTrackLength(trackMatch));
         } else if (primaryTrack.match(/^\d+$/)) {
-          trackPickDisplay = `Track ${primaryTrack}`;
+          primaryTrackDisplay = `Track ${primaryTrack}`;
         } else {
-          trackPickDisplay = primaryTrack;
+          primaryTrackDisplay = primaryTrack;
         }
       } else if (primaryTrack.match(/^\d+$/)) {
-        trackPickDisplay = `Track ${primaryTrack}`;
+        primaryTrackDisplay = `Track ${primaryTrack}`;
       } else {
-        trackPickDisplay = primaryTrack;
+        primaryTrackDisplay = primaryTrack;
       }
     }
 
@@ -443,10 +436,10 @@ export function createAlbumDisplay(deps = {}) {
       genre2Class: genre2 ? 'text-gray-300' : 'text-gray-800 italic',
       comment,
       comment2,
-      trackPick,
-      trackPickDisplay,
-      trackPickClass,
-      trackPickDuration,
+      primaryTrack,
+      primaryTrackDisplay,
+      primaryTrackClass,
+      primaryTrackDuration,
     };
   }
 
@@ -1672,21 +1665,22 @@ export function createAlbumDisplay(deps = {}) {
 
           // Update track pick using cached span
           if (cache.trackSpan) {
-            cache.trackSpan.textContent = data.trackPickDisplay;
-            cache.trackSpan.className = `text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100`;
-            cache.trackSpan.title = data.trackPick || 'Click to select track';
+            cache.trackSpan.textContent = data.primaryTrackDisplay;
+            cache.trackSpan.className = `text-sm ${data.primaryTrackClass} truncate cursor-pointer hover:text-gray-100`;
+            cache.trackSpan.title =
+              data.primaryTrack || 'Click to select track';
             // Update duration span (sibling of trackSpan)
             const trackCell = cache.trackSpan.parentElement;
             if (trackCell) {
               const existingDuration = trackCell.querySelector('.shrink-0');
-              if (data.trackPickDuration) {
+              if (data.primaryTrackDuration) {
                 if (existingDuration) {
-                  existingDuration.textContent = data.trackPickDuration;
+                  existingDuration.textContent = data.primaryTrackDuration;
                 } else {
                   const durationSpan = document.createElement('span');
                   durationSpan.className =
                     'text-xs text-gray-500 shrink-0 ml-2';
-                  durationSpan.textContent = data.trackPickDuration;
+                  durationSpan.textContent = data.primaryTrackDuration;
                   trackCell.appendChild(durationSpan);
                 }
               } else if (existingDuration) {
@@ -1711,15 +1705,16 @@ export function createAlbumDisplay(deps = {}) {
           const trackMobile = cache.trackText;
           if (trackMobile) {
             const trackDisplay =
-              data.trackPick && data.trackPickDisplay !== 'Select Track'
-                ? data.trackPickDisplay
+              data.primaryTrack && data.primaryTrackDisplay !== 'Select Track'
+                ? data.primaryTrackDisplay
                 : '';
             trackMobile.textContent = trackDisplay;
 
             const trackPlayBtn = trackMobile.closest('[data-track-play-btn]');
             if (trackPlayBtn) {
               const hasTrack =
-                data.trackPick && data.trackPickDisplay !== 'Select Track';
+                data.primaryTrack &&
+                data.primaryTrackDisplay !== 'Select Track';
               trackPlayBtn.setAttribute(
                 'data-track-play-btn',
                 hasTrack ? 'true' : ''
@@ -1932,11 +1927,6 @@ export function createAlbumDisplay(deps = {}) {
       badge.addEventListener('mouseenter', handleRecommendationBadgeMouseEnter);
       badge.addEventListener('mouseleave', handleBadgeMouseLeave);
     });
-  }
-
-  // Backwards compatibility alias
-  function initLastfmTooltips(container) {
-    initSummaryTooltips(container);
   }
 
   /**
@@ -2738,7 +2728,7 @@ export function createAlbumDisplay(deps = {}) {
 
     // Initialize Last.fm summary tooltips (desktop only)
     if (!isMobile) {
-      initLastfmTooltips(container);
+      initSummaryTooltips(container);
     }
 
     // Update lightweight state instead of expensive deep clone

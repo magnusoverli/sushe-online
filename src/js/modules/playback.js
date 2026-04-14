@@ -360,7 +360,8 @@ export function createPlayback(deps = {}) {
     const album = albums && albums[index];
     if (!album) return;
 
-    const trackPick = album.track_pick;
+    const trackPick =
+      album.primary_track || album.track_picks?.primary || album.track_pick;
     if (!trackPick) {
       showToast('No track selected', 'error');
       return;

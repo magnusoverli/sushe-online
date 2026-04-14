@@ -244,7 +244,7 @@ describe('album-display module', () => {
       assert.strictEqual(data.countryDisplay, 'Country');
       assert.strictEqual(data.genre1Display, 'Genre 1');
       assert.strictEqual(data.genre2Display, 'Genre 2');
-      assert.strictEqual(data.trackPickDisplay, 'Select Track');
+      assert.strictEqual(data.primaryTrackDisplay, '');
     });
 
     it('should handle genre_2 placeholder values', () => {
@@ -294,8 +294,8 @@ describe('album-display module', () => {
         tracks: ['1. First', '2. Second', '3. Favorite Song'],
       };
       let data = module.processAlbumData(album, 0);
-      assert.strictEqual(data.trackPickDisplay, '3. Favorite Song');
-      assert.strictEqual(data.trackPickClass, 'text-gray-300');
+      assert.strictEqual(data.primaryTrackDisplay, '3. Favorite Song');
+      assert.strictEqual(data.primaryTrackClass, 'text-gray-300');
 
       // Test with just track number
       album = {
@@ -303,7 +303,7 @@ describe('album-display module', () => {
         tracks: [],
       };
       data = module.processAlbumData(album, 0);
-      assert.strictEqual(data.trackPickDisplay, 'Track 5');
+      assert.strictEqual(data.primaryTrackDisplay, 'Track 5');
     });
 
     it('should set position only for main lists', () => {

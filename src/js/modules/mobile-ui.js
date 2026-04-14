@@ -1096,9 +1096,15 @@ export function createMobileUI(deps = {}) {
                     const trackLength = formatTrackTime(getTrackLength(t));
                     const isPrimary =
                       trackName ===
-                      (album.primary_track || album.track_pick || '');
+                      (album.primary_track ||
+                        album.track_picks?.primary ||
+                        album.track_pick ||
+                        '');
                     const isSecondary =
-                      trackName === (album.secondary_track || '');
+                      trackName ===
+                      (album.secondary_track ||
+                        album.track_picks?.secondary ||
+                        '');
                     const indicator = isPrimary
                       ? '<span class="text-yellow-400 mr-1">★</span>'
                       : isSecondary
@@ -1126,7 +1132,7 @@ export function createMobileUI(deps = {}) {
               </ul>
             `
                 : `
-              <input type="number" id="editTrackPickNumber" value="${album.primary_track || album.track_pick || ''}"
+              <input type="number" id="editTrackPickNumber" value="${album.primary_track || album.track_picks?.primary || album.track_pick || ''}"
                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
                      placeholder="Enter track number (primary)">
             `
@@ -1268,8 +1274,13 @@ export function createMobileUI(deps = {}) {
     const trackPickContainer = document.getElementById('trackPickContainer');
 
     // Track current selections (will be synced with server)
-    let currentPrimaryTrack = album.primary_track || album.track_pick || '';
-    let currentSecondaryTrack = album.secondary_track || '';
+    let currentPrimaryTrack =
+      album.primary_track ||
+      album.track_picks?.primary ||
+      album.track_pick ||
+      '';
+    let currentSecondaryTrack =
+      album.secondary_track || album.track_picks?.secondary || '';
 
     function updateTrackPickUI() {
       if (!trackPickContainer) return;
@@ -1377,7 +1388,11 @@ export function createMobileUI(deps = {}) {
             // Update local album data for save
             album.primary_track = currentPrimaryTrack;
             album.secondary_track = currentSecondaryTrack;
-            album.track_pick = currentPrimaryTrack; // Legacy field
+            album.track_pick = currentPrimaryTrack;
+            album.track_picks = {
+              primary: currentPrimaryTrack || null,
+              secondary: currentSecondaryTrack || null,
+            };
           } catch (err) {
             console.error('Track pick error:', err);
             showToast('Error updating track selection', 'error');
@@ -1488,6 +1503,10 @@ export function createMobileUI(deps = {}) {
         // Keep the current values which were updated by the track pick handlers
         primary_track: currentPrimaryTrack,
         secondary_track: currentSecondaryTrack,
+        track_picks: {
+          primary: currentPrimaryTrack || null,
+          secondary: currentSecondaryTrack || null,
+        },
         track_pick:
           currentPrimaryTrack ||
           (() => {
