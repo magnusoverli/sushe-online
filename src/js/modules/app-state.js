@@ -13,6 +13,34 @@
 /** Lists keyed by _id. Structure: { _id, name, year, isMain, count, groupId, sortOrder, _data, updatedAt, createdAt } */
 let lists = {};
 
+function createDefaultListEntry(listId, albums = []) {
+  const data = Array.isArray(albums) ? albums : [];
+
+  return {
+    _id: listId,
+    name: 'Unknown',
+    year: null,
+    isMain: false,
+    count: data.length,
+    _data: data,
+    updatedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function normalizeListsMap(newLists = {}) {
+  const normalized = {};
+
+  Object.keys(newLists).forEach((listId) => {
+    const entry = newLists[listId];
+    normalized[listId] = Array.isArray(entry)
+      ? createDefaultListEntry(listId, entry)
+      : entry;
+  });
+
+  return normalized;
+}
+
 /** Groups keyed by _id. Structure: { _id, name, year, sortOrder, listCount, isYearGroup, createdAt, updatedAt } */
 let groups = {};
 
@@ -118,7 +146,7 @@ export function getLists() {
  * @param {Object} newLists - New lists object
  */
 export function setLists(newLists) {
-  lists = newLists;
+  lists = normalizeListsMap(newLists);
   window.lists = lists;
 }
 
@@ -132,18 +160,7 @@ export function getListData(listId) {
     return null;
   }
 
-  const listEntry = lists[listId];
-
-  // Handle legacy array format (for backward compatibility during transition)
-  if (Array.isArray(listEntry)) {
-    console.warn(
-      `Legacy array format detected for list "${listId}". Consider reloading.`
-    );
-    return listEntry;
-  }
-
-  // New metadata object format
-  return listEntry._data || null;
+  return lists[listId]._data || null;
 }
 
 /**
@@ -157,34 +174,8 @@ export function setListData(listId, albums, updateSnapshot = true) {
   if (!listId) return;
 
   if (!lists[listId]) {
-    // Create new metadata object if list doesn't exist
-    lists[listId] = {
-      _id: listId,
-      name: 'Unknown',
-      year: null,
-      isMain: false,
-      count: albums ? albums.length : 0,
-      _data: albums || [],
-      updatedAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-    };
-  } else if (Array.isArray(lists[listId])) {
-    // Handle legacy array format - convert to metadata object
-    console.warn(
-      `Converting legacy array format for list "${listId}" to metadata object.`
-    );
-    lists[listId] = {
-      _id: listId,
-      name: 'Unknown',
-      year: null,
-      isMain: false,
-      count: albums ? albums.length : 0,
-      _data: albums || [],
-      updatedAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-    };
+    lists[listId] = createDefaultListEntry(listId, albums);
   } else {
-    // Update existing metadata object
     lists[listId]._data = albums || [];
     lists[listId].count = albums ? albums.length : 0;
   }
@@ -207,23 +198,7 @@ export function getListMetadata(listId) {
     return null;
   }
 
-  const listEntry = lists[listId];
-
-  // Handle legacy array format
-  if (Array.isArray(listEntry)) {
-    return {
-      _id: listId,
-      name: 'Unknown',
-      year: null,
-      isMain: false,
-      count: listEntry.length,
-      _data: listEntry,
-      updatedAt: null,
-      createdAt: null,
-    };
-  }
-
-  return listEntry;
+  return lists[listId];
 }
 
 /**
@@ -233,22 +208,6 @@ export function getListMetadata(listId) {
  */
 export function updateListMetadata(listId, updates) {
   if (!listId || !lists[listId]) return;
-
-  const listEntry = lists[listId];
-
-  // Handle legacy array format - convert first
-  if (Array.isArray(listEntry)) {
-    lists[listId] = {
-      _id: listId,
-      name: 'Unknown',
-      year: null,
-      isMain: false,
-      count: listEntry.length,
-      _data: listEntry,
-      updatedAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-    };
-  }
 
   // Apply updates
   Object.assign(lists[listId], updates);
@@ -293,12 +252,8 @@ export function isListDataLoaded(listId) {
 
   const listEntry = lists[listId];
 
-  // Legacy array format is always "loaded"
-  if (Array.isArray(listEntry)) return true;
-
-  // Check if _data is populated (not null/empty when count > 0)
   return (
-    listEntry._data !== null &&
+    Array.isArray(listEntry._data) &&
     (listEntry._data.length > 0 || listEntry.count === 0)
   );
 }
@@ -732,12 +687,12 @@ export function setAvailableCountries(countries) {
   window.availableCountries = countries;
 }
 
-// ============ WINDOW GLOBALS (legacy bridge) ============
+// ============ WINDOW GLOBALS (compat bridge) ============
 // Consolidated window.* assignments for consumers not yet migrated.
 // These are set up once by initWindowGlobals() called from app.js.
 
 export function initWindowGlobals() {
-  // Legacy compatibility - expose currentList as alias for currentListId
+  // Keep currentList as alias for modules still reading window.currentList.
   Object.defineProperty(window, 'currentList', {
     get: () => currentListId,
     set: (val) => {
