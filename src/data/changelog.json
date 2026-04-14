@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-04-14",
+    "category": "fix",
+    "description": "Fixed Spotify page script errors",
+    "hash": "eb5b384c2716f88708c28bf94241ef42e6758dd4",
+    "commitMessage": "Fix spotify page inline script escaping regression (#310)"
+  },
+  {
     "date": "2026-04-08",
     "category": "ui",
     "description": "Improved recommendation badge tooltip consistency",
