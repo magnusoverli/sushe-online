@@ -1,0 +1,1659 @@
+/* eslint-disable max-lines-per-function */
+
+function createAggregateListTemplate(deps) {
+  const {
+    asset,
+    generateAccentCssVars,
+    generateAccentOverrides,
+    headerComponent,
+  } = deps;
+
+  return (user, year) => `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#000000">
+  <meta property="og:title" content="AOTY ${year} - SuShe Online">
+  <meta property="og:description" content="Album of the Year ${year}">
+  <meta property="og:image" content="/og-image.png">
+  <title>AOTY ${year} - SuShe Online</title>
+  <link rel="icon" type="image/png" href="/og-image.png">
+  <link rel="apple-touch-icon" href="/og-image.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0">
+  <link href="${asset('/styles/output.css')}" rel="stylesheet">
+  <style>
+    :root {
+      ${generateAccentCssVars(user, { includeSubtle: false })}
+    }
+    
+    ${generateAccentOverrides({ includeBackground: true })}
+    
+    .metal-title {
+      font-family: 'Cinzel', serif;
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+    
+    .album-card {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .album-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    }
+    
+    .position-badge {
+      width: 3rem;
+      height: 3rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      border-radius: 50%;
+      border: 2px solid;
+    }
+    
+    .position-badge.gold { border-color: #fbbf24; box-shadow: 0 0 12px rgba(251, 191, 36, 0.6); }
+    .position-badge.silver { border-color: #9ca3af; box-shadow: 0 0 12px rgba(156, 163, 175, 0.6); }
+    .position-badge.bronze { border-color: #d97706; box-shadow: 0 0 12px rgba(217, 119, 6, 0.6); }
+    
+    .voter-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.125rem 0.375rem;
+      background: #374151;
+      border-radius: 9999px;
+      font-size: 0.65rem;
+      margin: 0.0625rem;
+      white-space: nowrap;
+    }
+    
+    /* Compact card layout */
+    .album-card-compact {
+      position: relative;
+    }
+    
+    .album-card-compact .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    
+    .album-card-compact .card-title-area {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .album-card-compact .card-voters {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      max-width: 45%;
+      gap: 0.125rem;
+    }
+    
+    .album-card-compact .card-stats {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      color: #9ca3af;
+      margin-top: 0.25rem;
+    }
+    
+    .album-card-compact .card-stats .stat-divider {
+      color: #4b5563;
+    }
+    
+    .album-card-compact .card-stats .points {
+      color: var(--accent-color);
+      font-weight: 600;
+    }
+    
+    .confirmation-card {
+      background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+      border: 1px solid #374151;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.5s ease-out forwards;
+    }
+    
+    .reveal-pending {
+      filter: blur(0);
+      background: repeating-linear-gradient(
+        45deg,
+        #1f2937,
+        #1f2937 10px,
+        #111827 10px,
+        #111827 20px
+      );
+    }
+    
+    /* ============ BURNING REVEAL STYLES ============ */
+    
+    /* Album card wrapper for reveal mode */
+    .reveal-card-wrapper {
+      position: relative;
+      overflow: visible;
+    }
+    
+    /* Dark overlay covering unrevealed albums */
+    .burn-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);
+      border-radius: 0.5rem;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.6s ease-out;
+    }
+    
+    .burn-overlay::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 0.5rem;
+      border: 1px solid #333;
+      pointer-events: none;
+    }
+    
+    .burn-overlay .rank-preview {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #444;
+      text-shadow: 0 0 10px rgba(0,0,0,0.8);
+    }
+    
+    /* Burn animation - glow border intensifies then overlay fades */
+    .burn-overlay.burning {
+      animation: burnAway 0.8s ease-out forwards;
+    }
+    
+    .burn-overlay.burning::before {
+      animation: glowBorder 0.8s ease-out forwards;
+    }
+    
+    @keyframes burnAway {
+      0% { opacity: 1; }
+      30% { opacity: 1; }
+      100% { opacity: 0; pointer-events: none; }
+    }
+    
+    @keyframes glowBorder {
+      0% { border-color: #333; box-shadow: none; }
+      20% { border-color: #f97316; box-shadow: 0 0 20px rgba(249, 115, 22, 0.5), inset 0 0 20px rgba(249, 115, 22, 0.1); }
+      50% { border-color: #fbbf24; box-shadow: 0 0 40px rgba(251, 191, 36, 0.6), inset 0 0 30px rgba(251, 191, 36, 0.2); }
+      100% { border-color: transparent; box-shadow: none; }
+    }
+    
+    /* Special glow colors for top 3 */
+    .burn-overlay.burning.bronze::before {
+      animation: glowBorderBronze 1s ease-out forwards;
+    }
+    
+    .burn-overlay.burning.silver::before {
+      animation: glowBorderSilver 1s ease-out forwards;
+    }
+    
+    .burn-overlay.burning.gold::before {
+      animation: glowBorderGold 1.2s ease-out forwards;
+    }
+    
+    /* Intensity level 5 - intro with purple glow */
+    @keyframes glowBorderRank5 {
+      0% { border-color: #333; box-shadow: none; }
+      20% { border-color: #6d28d9; box-shadow: 0 0 20px rgba(109, 40, 217, 0.5), inset 0 0 10px rgba(109, 40, 217, 0.1); }
+      40% { border-color: #7c3aed; box-shadow: 0 0 30px rgba(124, 58, 237, 0.6), inset 0 0 15px rgba(124, 58, 237, 0.15); }
+      60% { border-color: #8b5cf6; box-shadow: 0 0 35px rgba(139, 92, 246, 0.5), inset 0 0 12px rgba(139, 92, 246, 0.1); }
+      100% { border-color: transparent; box-shadow: none; }
+    }
+    
+    .burn-overlay.burning.rank-5::before {
+      animation: glowBorderRank5 1s ease-out forwards;
+    }
+    
+    /* Intensity level 4 - building with brighter purple */
+    @keyframes glowBorderRank4 {
+      0% { border-color: #333; box-shadow: none; }
+      15% { border-color: #7c3aed; box-shadow: 0 0 25px rgba(124, 58, 237, 0.5), inset 0 0 12px rgba(124, 58, 237, 0.1); }
+      30% { border-color: #8b5cf6; box-shadow: 0 0 35px rgba(139, 92, 246, 0.65), inset 0 0 18px rgba(139, 92, 246, 0.15); }
+      50% { border-color: #a78bfa; box-shadow: 0 0 45px rgba(167, 139, 250, 0.75), inset 0 0 25px rgba(167, 139, 250, 0.2); }
+      70% { border-color: #c4b5fd; box-shadow: 0 0 50px rgba(196, 181, 253, 0.65), inset 0 0 20px rgba(196, 181, 253, 0.15); }
+      100% { border-color: transparent; box-shadow: none; }
+    }
+    
+    .burn-overlay.burning.rank-4::before {
+      animation: glowBorderRank4 1.1s ease-out forwards;
+    }
+    
+    /* Intensity level 3 - bronze (intense) */
+    @keyframes glowBorderBronze {
+      0% { border-color: #333; box-shadow: none; }
+      20% { border-color: #b45309; box-shadow: 0 0 30px rgba(180, 83, 9, 0.6), inset 0 0 25px rgba(180, 83, 9, 0.2); }
+      40% { border-color: #d97706; box-shadow: 0 0 50px rgba(217, 119, 6, 0.8), inset 0 0 40px rgba(217, 119, 6, 0.3); }
+      60% { border-color: #f59e0b; box-shadow: 0 0 60px rgba(245, 158, 11, 0.7), inset 0 0 45px rgba(245, 158, 11, 0.25); }
+      100% { border-color: transparent; box-shadow: none; }
+    }
+    
+    .burn-overlay.burning.bronze::before {
+      animation: glowBorderBronze 1.1s ease-out forwards;
+    }
+    
+    /* Intensity level 2 - silver (very intense) */
+    @keyframes glowBorderSilver {
+      0% { border-color: #333; box-shadow: none; }
+      15% { border-color: #6b7280; box-shadow: 0 0 25px rgba(156, 163, 175, 0.5); }
+      30% { border-color: #9ca3af; box-shadow: 0 0 40px rgba(156, 163, 175, 0.7), inset 0 0 30px rgba(156, 163, 175, 0.2); }
+      50% { border-color: #d1d5db; box-shadow: 0 0 70px rgba(209, 213, 219, 1), inset 0 0 50px rgba(209, 213, 219, 0.35); }
+      70% { border-color: #e5e7eb; box-shadow: 0 0 80px rgba(229, 231, 235, 1), inset 0 0 55px rgba(229, 231, 235, 0.4); }
+      100% { border-color: transparent; box-shadow: none; }
+    }
+    
+    .burn-overlay.burning.silver::before {
+      animation: glowBorderSilver 1.3s ease-out forwards;
+    }
+    
+    /* Intensity level 1 - gold (maximum intensity, delayed reveal) */
+    @keyframes glowBorderGold {
+      0% { border-color: #333; box-shadow: none; }
+      10% { border-color: #92400e; box-shadow: 0 0 20px rgba(146, 64, 14, 0.5); }
+      25% { border-color: #b45309; box-shadow: 0 0 40px rgba(180, 83, 9, 0.7), inset 0 0 25px rgba(180, 83, 9, 0.2); }
+      40% { border-color: #d97706; box-shadow: 0 0 60px rgba(217, 119, 6, 0.85), inset 0 0 40px rgba(217, 119, 6, 0.3); }
+      55% { border-color: #f59e0b; box-shadow: 0 0 80px rgba(245, 158, 11, 0.95), inset 0 0 55px rgba(245, 158, 11, 0.4); }
+      70% { border-color: #fbbf24; box-shadow: 0 0 100px rgba(251, 191, 36, 1), inset 0 0 70px rgba(251, 191, 36, 0.5); }
+      85% { border-color: #fcd34d; box-shadow: 0 0 120px rgba(252, 211, 77, 1), inset 0 0 80px rgba(252, 211, 77, 0.55); }
+      100% { border-color: transparent; box-shadow: none; }
+    }
+    
+    .burn-overlay.burning.gold::before {
+      animation: glowBorderGold 2s ease-out forwards;
+    }
+    
+    /* Gold overlay has delayed fade for suspense */
+    .burn-overlay.burning.gold {
+      animation: burnAwayDelayed 2s ease-out forwards;
+    }
+    
+    @keyframes burnAwayDelayed {
+      0% { opacity: 1; }
+      60% { opacity: 1; }
+      100% { opacity: 0; pointer-events: none; }
+    }
+    
+    /* Ember particles */
+    .ember-container {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: visible;
+      z-index: 11;
+    }
+    
+    .ember {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #f97316;
+      box-shadow: 0 0 6px 2px rgba(249, 115, 22, 0.8);
+      opacity: 0;
+    }
+    
+    .ember.active {
+      animation: emberFloat 1.2s ease-out forwards;
+    }
+    
+    @keyframes emberFloat {
+      0% { opacity: 0; transform: translateY(0) scale(1); }
+      10% { opacity: 1; }
+      50% { opacity: 0.8; transform: translateY(-30px) scale(0.8); }
+      100% { opacity: 0; transform: translateY(-80px) scale(0.3); }
+    }
+    
+    /* Floating reveal button */
+    .reveal-button-container {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+    }
+    
+    .reveal-button {
+      padding: 1rem 2rem;
+      font-size: 1.125rem;
+      font-weight: bold;
+      color: white;
+      background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+      border: none;
+      border-radius: 9999px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(220, 38, 38, 0.5), 0 0 40px rgba(220, 38, 38, 0.3);
+      transition: transform 0.2s, box-shadow 0.2s;
+      animation: buttonPulse 2s ease-in-out infinite;
+    }
+    
+    .reveal-button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 30px rgba(220, 38, 38, 0.7), 0 0 50px rgba(220, 38, 38, 0.4);
+    }
+    
+    .reveal-button:active {
+      transform: scale(0.98);
+    }
+    
+    .reveal-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      animation: none;
+    }
+    
+    @keyframes buttonPulse {
+      0%, 100% { box-shadow: 0 4px 20px rgba(220, 38, 38, 0.5), 0 0 40px rgba(220, 38, 38, 0.3); }
+      50% { box-shadow: 0 4px 30px rgba(220, 38, 38, 0.7), 0 0 60px rgba(220, 38, 38, 0.5); }
+    }
+    
+    /* Screen flash for #1 reveal */
+    .screen-flash {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at center, rgba(251, 191, 36, 0.6) 0%, rgba(251, 191, 36, 0.2) 40%, transparent 70%);
+      pointer-events: none;
+      z-index: 50;
+      animation: flashFade 1.5s ease-out forwards;
+    }
+    
+    @keyframes flashFade {
+      0% { opacity: 0; }
+      15% { opacity: 1; }
+      30% { opacity: 0.8; }
+      100% { opacity: 0; }
+    }
+    
+    /* Fireworks container for #1 */
+    .fireworks-container {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 52;
+      overflow: hidden;
+    }
+    
+    /* Individual firework burst */
+    .firework {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+    
+    .firework.launching {
+      animation: fireworkLaunch var(--launch-duration, 0.8s) ease-out forwards;
+    }
+    
+    .firework.exploding {
+      animation: fireworkExplode 0.1s ease-out forwards;
+    }
+    
+    @keyframes fireworkLaunch {
+      0% { transform: translateY(0) scale(1); opacity: 1; }
+      100% { transform: translateY(var(--launch-height, -300px)) scale(0.5); opacity: 0.8; }
+    }
+    
+    @keyframes fireworkExplode {
+      0% { transform: scale(1); }
+      100% { transform: scale(2); opacity: 0; }
+    }
+    
+    /* Firework particle (after explosion) */
+    .firework-particle {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      opacity: 0;
+    }
+    
+    .firework-particle.active {
+      animation: particleFly var(--particle-duration, 1.2s) ease-out forwards;
+    }
+    
+    @keyframes particleFly {
+      0% { opacity: 1; transform: translate(0, 0) scale(1); }
+      50% { opacity: 1; }
+      100% { opacity: 0; transform: translate(var(--px), var(--py)) scale(0.3); }
+    }
+    
+    /* Sparkle trail effect */
+    .sparkle-trail {
+      position: absolute;
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 0 6px 2px currentColor;
+      opacity: 0;
+    }
+    
+    .sparkle-trail.active {
+      animation: sparkleTrail 0.6s ease-out forwards;
+    }
+    
+    @keyframes sparkleTrail {
+      0% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(0); }
+    }
+    
+    /* Celebration confetti burst for #1 */
+    .celebration-burst {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 53;
+    }
+    
+    .confetti {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      opacity: 0;
+    }
+    
+    .confetti.active {
+      animation: confettiBurst 2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    }
+    
+    @keyframes confettiBurst {
+      0% { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+      60% { opacity: 1; }
+      100% { opacity: 0; transform: translate(var(--tx), var(--ty)) rotate(1080deg) scale(0.3); }
+    }
+    
+    /* Golden rays radiating from center */
+    .golden-rays {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 150vmax;
+      height: 150vmax;
+      pointer-events: none;
+      z-index: 49;
+      opacity: 0;
+      animation: raysAppear 10s ease-out forwards;
+    }
+    
+    .golden-rays::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        rgba(251, 191, 36, 0.4) 3deg,
+        rgba(253, 224, 71, 0.2) 6deg,
+        transparent 9deg,
+        transparent 15deg,
+        rgba(251, 191, 36, 0.4) 18deg,
+        rgba(253, 224, 71, 0.2) 21deg,
+        transparent 24deg,
+        transparent 30deg,
+        rgba(251, 191, 36, 0.4) 33deg,
+        rgba(253, 224, 71, 0.2) 36deg,
+        transparent 39deg,
+        transparent 45deg,
+        rgba(251, 191, 36, 0.4) 48deg,
+        rgba(253, 224, 71, 0.2) 51deg,
+        transparent 54deg,
+        transparent 60deg,
+        rgba(251, 191, 36, 0.4) 63deg,
+        rgba(253, 224, 71, 0.2) 66deg,
+        transparent 69deg,
+        transparent 75deg,
+        rgba(251, 191, 36, 0.4) 78deg,
+        rgba(253, 224, 71, 0.2) 81deg,
+        transparent 84deg,
+        transparent 90deg
+      );
+      animation: raysRotate 10s linear forwards;
+    }
+    
+    .golden-rays::after {
+      content: '';
+      position: absolute;
+      inset: 20%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(251, 191, 36, 0.3) 0%, transparent 70%);
+      animation: raysCenterPulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes raysAppear {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+      10% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      80% { opacity: 0.7; transform: translate(-50%, -50%) scale(1.3); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+    }
+    
+    @keyframes raysRotate {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(180deg); }
+    }
+    
+    @keyframes raysCenterPulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+    
+    /* Position pulse for #5-#2 */
+    @keyframes positionPulse {
+      0% { opacity: 0; transform: scale(0.8); }
+      30% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.2); }
+    }
+    
+    /* Mini burst particles for #3 and #2 */
+    @keyframes miniBurstParticle {
+      0% { opacity: 1; transform: translate(0, 0) scale(1); }
+      100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.3); }
+    }
+    
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body class="bg-black text-gray-200 min-h-screen">
+  <div class="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-black -z-10"></div>
+  
+  
+  ${headerComponent(user, 'aggregate')}
+  
+  <!-- Main content -->
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <!-- Title -->
+    <div class="text-center mb-12">
+      <h1 class="metal-title text-4xl md:text-5xl font-bold text-red-600">AOTY ${year}</h1>
+    </div>
+    
+    <!-- Content container - populated by JavaScript -->
+    <div id="aggregateListContent" class="space-y-4">
+      <div class="text-center py-12">
+        <i class="fas fa-spinner fa-spin text-4xl text-gray-500 mb-4"></i>
+        <p class="text-gray-400">Loading aggregate list...</p>
+      </div>
+    </div>
+    
+  </main>
+  
+  <script>
+    const YEAR = ${year};
+    const USER_ID = '${user?._id || ''}';
+    
+    // HTML escape function to prevent XSS
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+    
+    // Fetch wrapper with error handling
+    async function apiFetch(url, options = {}) {
+      const res = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(err.error || 'Request failed');
+      }
+      return res.json();
+    }
+    
+    // Format position with ordinal suffix
+    function formatPosition(pos) {
+      const s = ['th', 'st', 'nd', 'rd'];
+      const v = pos % 100;
+      return pos + (s[(v - 20) % 10] || s[v] || s[0]);
+    }
+    
+    // Build album card HTML (compact layout)
+    function buildAlbumCardHtml(album, index) {
+      const positionClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+      const delay = Math.min(index * 50, 500);
+      
+      const votersHtml = album.voters.map(v => 
+        '<span class="voter-chip"><span class="text-gray-300">' + escapeHtml(v.username) + '</span><span class="text-gray-500 ml-0.5">#' + v.position + '</span></span>'
+      ).join('');
+      
+      return '<div class="album-card album-card-compact bg-gray-800/50 rounded-lg p-3 animate-fade-in" data-rank="' + album.rank + '" style="animation-delay: ' + delay + 'ms; opacity: 0;">' +
+        '<div class="flex items-center gap-3">' +
+          '<div class="position-badge ' + positionClass + ' text-gray-200 shrink-0">' + album.rank + '</div>' +
+          '<div class="shrink-0">' +
+            (album.coverImage ? 
+              '<img src="' + album.coverImage + '" alt="' + escapeHtml(album.album) + '" class="w-14 h-14 md:w-16 md:h-16 rounded-sm object-cover">' :
+              '<div class="w-14 h-14 md:w-16 md:h-16 rounded-sm bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-xl"></i></div>'
+            ) +
+          '</div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<div class="card-header">' +
+              '<div class="card-title-area">' +
+                '<h3 class="font-bold text-white text-sm md:text-base truncate">' + escapeHtml(album.album || 'Unknown Album') + '</h3>' +
+              '</div>' +
+              '<div class="card-voters">' + votersHtml + '</div>' +
+            '</div>' +
+            '<div class="card-stats">' +
+              '<span class="text-gray-400 truncate">' + escapeHtml(album.artist || 'Unknown Artist') + '</span>' +
+              '<span class="stat-divider">·</span>' +
+              '<span class="points">' + album.totalPoints + ' pts</span>' +
+              '<span class="stat-divider">·</span>' +
+              '<span>avg ' + formatPosition(Math.round(album.averagePosition)) + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+    
+    // Render revealed aggregate list (normal mode)
+    function renderAggregateList(data) {
+      const container = document.getElementById('aggregateListContent');
+      
+      if (!data.albums || data.albums.length === 0) {
+        container.innerHTML = '<div class="text-center py-12 text-gray-400">No albums in the aggregate list yet.</div>';
+        return;
+      }
+      
+      const html = data.albums.map((album, index) => buildAlbumCardHtml(album, index)).join('');
+      container.innerHTML = html;
+    }
+    
+    // ============ DRAMATIC BURNING REVEAL ============
+    
+    // Build album card with burn overlay for reveal mode (compact layout)
+    function buildRevealCardHtml(album, index) {
+      const positionClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+      
+      const votersHtml = album.voters.map(v => 
+        '<span class="voter-chip"><span class="text-gray-300">' + escapeHtml(v.username) + '</span><span class="text-gray-500 ml-0.5">#' + v.position + '</span></span>'
+      ).join('');
+      
+      // Card content (compact layout, no fade-in animation)
+      const cardContent = '<div class="album-card album-card-compact bg-gray-800/50 rounded-lg p-3" data-rank="' + album.rank + '">' +
+        '<div class="flex items-center gap-3">' +
+          '<div class="position-badge ' + positionClass + ' text-gray-200 shrink-0">' + album.rank + '</div>' +
+          '<div class="shrink-0">' +
+            (album.coverImage ? 
+              '<img src="' + album.coverImage + '" alt="' + escapeHtml(album.album) + '" class="w-14 h-14 md:w-16 md:h-16 rounded-sm object-cover">' :
+              '<div class="w-14 h-14 md:w-16 md:h-16 rounded-sm bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-xl"></i></div>'
+            ) +
+          '</div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<div class="card-header">' +
+              '<div class="card-title-area">' +
+                '<h3 class="font-bold text-white text-sm md:text-base truncate">' + escapeHtml(album.album || 'Unknown Album') + '</h3>' +
+              '</div>' +
+              '<div class="card-voters">' + votersHtml + '</div>' +
+            '</div>' +
+            '<div class="card-stats">' +
+              '<span class="text-gray-400 truncate">' + escapeHtml(album.artist || 'Unknown Artist') + '</span>' +
+              '<span class="stat-divider">·</span>' +
+              '<span class="points">' + album.totalPoints + ' pts</span>' +
+              '<span class="stat-divider">·</span>' +
+              '<span>avg ' + formatPosition(Math.round(album.averagePosition)) + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+      
+      // Wrap with overlay
+      return '<div class="reveal-card-wrapper" data-reveal-rank="' + album.rank + '">' +
+        cardContent +
+        '<div class="burn-overlay" data-rank="' + album.rank + '">' +
+          '<span class="rank-preview">#' + album.rank + '</span>' +
+          '<div class="ember-container"></div>' +
+        '</div>' +
+      '</div>';
+    }
+    
+    // Create ember particles for an overlay (intensity 1-5, where 1 is #1 position)
+    function spawnEmbers(overlay, intensity) {
+      const container = overlay.querySelector('.ember-container');
+      if (!container) return;
+      
+      // More embers for higher intensity (lower rank number)
+      const baseCount = 8;
+      const emberCount = baseCount + (6 - intensity) * 6; // #5=8, #4=14, #3=20, #2=26, #1=32
+      
+      // Ember colors get more golden for top positions
+      const emberColors = {
+        5: ['#7c3aed', '#8b5cf6'], // purple
+        4: ['#8b5cf6', '#a78bfa'], // lighter purple
+        3: ['#d97706', '#f59e0b'], // bronze/orange
+        2: ['#9ca3af', '#d1d5db', '#e5e7eb'], // silver
+        1: ['#f59e0b', '#fbbf24', '#fcd34d', '#fef3c7'] // gold
+      };
+      
+      const colors = emberColors[intensity] || ['#f97316'];
+      
+      for (let i = 0; i < emberCount; i++) {
+        const ember = document.createElement('div');
+        ember.className = 'ember';
+        
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        ember.style.background = color;
+        ember.style.boxShadow = '0 0 6px 2px ' + color;
+        
+        // Random position along edges
+        const edge = Math.floor(Math.random() * 4);
+        let left, top;
+        
+        switch(edge) {
+          case 0: // top
+            left = Math.random() * 100;
+            top = 0;
+            break;
+          case 1: // right
+            left = 100;
+            top = Math.random() * 100;
+            break;
+          case 2: // bottom
+            left = Math.random() * 100;
+            top = 100;
+            break;
+          case 3: // left
+            left = 0;
+            top = Math.random() * 100;
+            break;
+        }
+        
+        ember.style.left = left + '%';
+        ember.style.top = top + '%';
+        
+        // Stagger ember spawning more for intense reveals
+        const maxDelay = 0.2 + (6 - intensity) * 0.15;
+        ember.style.animationDelay = (Math.random() * maxDelay) + 's';
+        
+        // Longer float duration for top positions
+        const floatDuration = 1 + (6 - intensity) * 0.2;
+        ember.style.animationDuration = floatDuration + 's';
+        
+        container.appendChild(ember);
+        
+        // Trigger animation
+        requestAnimationFrame(() => ember.classList.add('active'));
+      }
+    }
+    
+    // ============ RETRO SOUND EFFECTS (Web Audio API) ============
+    
+    let audioCtx = null;
+    
+    function getAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+    
+    // Play a single 8-bit style note
+    function playNote(frequency, duration, type, volume, delay) {
+      const ctx = getAudioContext();
+      const startTime = ctx.currentTime + (delay || 0);
+      
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = type || 'square';
+      osc.frequency.setValueAtTime(frequency, startTime);
+      
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(volume || 0.15, startTime + 0.01);
+      gain.gain.linearRampToValueAtTime(volume || 0.15, startTime + duration - 0.02);
+      gain.gain.linearRampToValueAtTime(0, startTime + duration);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+    }
+    
+    // Drum roll sound (building intensity)
+    function playDrumRoll(intensity) {
+      const baseFreq = 80 + (6 - intensity) * 20; // Higher pitch for higher ranks
+      const speed = 0.08 - (6 - intensity) * 0.01; // Faster for higher ranks
+      const count = 6 + (6 - intensity) * 2;
+      
+      for (let i = 0; i < count; i++) {
+        playNote(baseFreq + Math.random() * 20, 0.05, 'triangle', 0.1, i * speed);
+      }
+    }
+    
+    // Coin/powerup sound for positions 5-2
+    function playCoinSound(rank) {
+      const baseFreq = 400 + (5 - rank) * 100; // Higher for better ranks
+      playNote(baseFreq, 0.1, 'square', 0.12, 0);
+      playNote(baseFreq * 1.5, 0.15, 'square', 0.1, 0.08);
+    }
+    
+    // Mario-style fanfare for #1
+    function playVictoryFanfare() {
+      const notes = [
+        // Opening flourish
+        { f: 392, d: 0.1, t: 0 },      // G4
+        { f: 523, d: 0.1, t: 0.1 },    // C5
+        { f: 659, d: 0.1, t: 0.2 },    // E5
+        { f: 784, d: 0.15, t: 0.3 },   // G5
+        { f: 1047, d: 0.2, t: 0.45 },  // C6
+        { f: 988, d: 0.1, t: 0.65 },   // B5
+        { f: 1047, d: 0.4, t: 0.75 },  // C6 (held)
+        
+        // Secondary melody
+        { f: 659, d: 0.1, t: 1.2 },    // E5
+        { f: 784, d: 0.1, t: 1.3 },    // G5
+        { f: 1047, d: 0.1, t: 1.4 },   // C6
+        { f: 1175, d: 0.15, t: 1.5 },  // D6
+        { f: 1319, d: 0.3, t: 1.65 },  // E6
+        
+        // Final triumphant notes
+        { f: 1047, d: 0.15, t: 2.0 },  // C6
+        { f: 1175, d: 0.15, t: 2.15 }, // D6
+        { f: 1319, d: 0.5, t: 2.3 },   // E6 (finale)
+      ];
+      
+      notes.forEach(n => {
+        playNote(n.f, n.d, 'square', 0.12, n.t);
+        // Add harmony
+        playNote(n.f * 0.5, n.d, 'triangle', 0.06, n.t);
+      });
+      
+      // Bass drum hits
+      [0, 0.45, 1.2, 2.0, 2.3].forEach(t => {
+        playNote(60, 0.15, 'triangle', 0.15, t);
+      });
+      
+      // Shimmer effect at end
+      for (let i = 0; i < 8; i++) {
+        playNote(1319 + i * 50, 0.08, 'sine', 0.04, 2.5 + i * 0.05);
+      }
+    }
+    
+    // Firework explosion sound
+    function playFireworkSound() {
+      const ctx = getAudioContext();
+      const now = ctx.currentTime;
+      
+      // White noise burst for explosion
+      const bufferSize = ctx.sampleRate * 0.3;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+      }
+      
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+      
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(3000, now);
+      filter.frequency.exponentialRampToValueAtTime(200, now + 0.3);
+      
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+      
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      
+      noise.start(now);
+      noise.stop(now + 0.3);
+    }
+    
+    // Create position-specific screen effects (graduated intensity for #5-#2)
+    function triggerPositionEffect(rank) {
+      const effectColors = {
+        5: { color: 'rgba(124, 58, 237, 0.15)', duration: 400 },  // Subtle purple pulse
+        4: { color: 'rgba(139, 92, 246, 0.25)', duration: 500 },  // Purple pulse
+        3: { color: 'rgba(217, 119, 6, 0.35)', duration: 600 },   // Bronze pulse
+        2: { color: 'rgba(209, 213, 219, 0.4)', duration: 700 }   // Silver pulse
+      };
+      
+      const effect = effectColors[rank];
+      if (!effect) return;
+      
+      // Create screen pulse
+      const pulse = document.createElement('div');
+      pulse.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:45;' +
+        'background:radial-gradient(circle at center, ' + effect.color + ' 0%, transparent 70%);' +
+        'animation: positionPulse ' + effect.duration + 'ms ease-out forwards;';
+      document.body.appendChild(pulse);
+      setTimeout(() => pulse.remove(), effect.duration);
+      
+      // Add mini firework burst for #3 and #2
+      if (rank <= 3) {
+        const burstCount = rank === 2 ? 3 : 2;
+        for (let i = 0; i < burstCount; i++) {
+          setTimeout(() => {
+            triggerMiniBurst(rank);
+          }, i * 150);
+        }
+      }
+    }
+    
+    // Mini burst effect for positions 3 and 2
+    function triggerMiniBurst(rank) {
+      const colors = rank === 2 ? 
+        ['#9ca3af', '#d1d5db', '#e5e7eb'] : 
+        ['#d97706', '#f59e0b', '#fbbf24'];
+      
+      const burst = document.createElement('div');
+      burst.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:46;';
+      
+      const particleCount = rank === 2 ? 15 : 10;
+      
+      for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        const angle = (i / particleCount) * Math.PI * 2;
+        const distance = 60 + Math.random() * 40;
+        const tx = Math.cos(angle) * distance;
+        const ty = Math.sin(angle) * distance;
+        
+        particle.style.cssText = 'position:absolute;width:6px;height:6px;border-radius:50%;' +
+          'background:' + color + ';box-shadow:0 0 8px ' + color + ';' +
+          'animation: miniBurstParticle 0.8s ease-out forwards;' +
+          '--tx:' + tx + 'px;--ty:' + ty + 'px;';
+        
+        burst.appendChild(particle);
+      }
+      
+      document.body.appendChild(burst);
+      setTimeout(() => burst.remove(), 1000);
+    }
+    
+    // Create spectacular fireworks celebration for #1
+    function triggerCelebration() {
+      const colors = ['#fbbf24', '#f59e0b', '#dc2626', '#22c55e', '#3b82f6', '#a855f7', '#ec4899', '#14b8a6'];
+      const goldColors = ['#fbbf24', '#f59e0b', '#fcd34d', '#fef3c7'];
+      
+      // Golden rays - larger and longer (10 seconds)
+      const rays = document.createElement('div');
+      rays.className = 'golden-rays';
+      document.body.appendChild(rays);
+      setTimeout(() => rays.remove(), 10000);
+      
+      // Multiple screen flashes
+      for (let f = 0; f < 3; f++) {
+        setTimeout(() => {
+          const flash = document.createElement('div');
+          flash.className = 'screen-flash';
+          flash.style.animationDuration = (1.5 - f * 0.3) + 's';
+          document.body.appendChild(flash);
+          setTimeout(() => flash.remove(), 1500);
+        }, f * 800);
+      }
+      
+      // Fireworks container
+      const fireworksContainer = document.createElement('div');
+      fireworksContainer.className = 'fireworks-container';
+      document.body.appendChild(fireworksContainer);
+      
+      // Wave 1: Initial burst - 8 fireworks
+      const wave1Positions = [
+        { x: 20, y: 100 }, { x: 80, y: 100 },
+        { x: 35, y: 100 }, { x: 65, y: 100 },
+        { x: 15, y: 100 }, { x: 85, y: 100 },
+        { x: 50, y: 100 }, { x: 45, y: 100 }
+      ];
+      
+      for (let i = 0; i < wave1Positions.length; i++) {
+        const delay = i * 150 + Math.random() * 100;
+        const pos = wave1Positions[i];
+        const launchHeight = 280 + Math.random() * 180;
+        const explodeY = 100 - (launchHeight / window.innerHeight * 100);
+        
+        setTimeout(() => {
+          launchFirework(fireworksContainer, pos.x, pos.y, explodeY, launchHeight, colors);
+          setTimeout(() => playFireworkSound(), 600); // Sound on explosion
+        }, delay);
+      }
+      
+      // Wave 2: Second burst at 1.5s - 6 more fireworks
+      const wave2Positions = [
+        { x: 25, y: 100 }, { x: 75, y: 100 },
+        { x: 40, y: 100 }, { x: 60, y: 100 },
+        { x: 10, y: 100 }, { x: 90, y: 100 }
+      ];
+      
+      for (let i = 0; i < wave2Positions.length; i++) {
+        const delay = 1500 + i * 180 + Math.random() * 120;
+        const pos = wave2Positions[i];
+        const launchHeight = 300 + Math.random() * 200;
+        const explodeY = 100 - (launchHeight / window.innerHeight * 100);
+        
+        setTimeout(() => {
+          launchFirework(fireworksContainer, pos.x, pos.y, explodeY, launchHeight, goldColors);
+          setTimeout(() => playFireworkSound(), 600);
+        }, delay);
+      }
+      
+      // Wave 3: Final golden burst at 3s - 4 big golden fireworks
+      const wave3Positions = [
+        { x: 30, y: 100 }, { x: 70, y: 100 },
+        { x: 50, y: 100 }, { x: 50, y: 100 }
+      ];
+      
+      for (let i = 0; i < wave3Positions.length; i++) {
+        const delay = 3000 + i * 250 + Math.random() * 100;
+        const pos = wave3Positions[i];
+        const launchHeight = 350 + Math.random() * 150;
+        const explodeY = 100 - (launchHeight / window.innerHeight * 100);
+        
+        setTimeout(() => {
+          launchFirework(fireworksContainer, pos.x, pos.y, explodeY, launchHeight, goldColors, true);
+          setTimeout(() => {
+            playFireworkSound();
+            // Extra bass boom for big bursts
+            playNote(50, 0.3, 'triangle', 0.2, 0);
+          }, 600);
+        }, delay);
+      }
+      
+      // Multiple confetti bursts throughout celebration
+      for (let burst = 0; burst < 5; burst++) {
+        setTimeout(() => {
+          triggerConfettiBurst(colors, burst === 4 ? 80 : 50);
+        }, burst * 1000);
+      }
+      
+      // Extended gold confetti bursts (lasting until 10 seconds)
+      const goldBurstTimes = [3500, 5000, 6500, 8000, 9000];
+      goldBurstTimes.forEach((time, i) => {
+        setTimeout(() => {
+          triggerConfettiBurst(goldColors, 40 + i * 10);
+          // Accompanying firework sounds
+          playFireworkSound();
+          if (i % 2 === 0) {
+            playNote(60 + i * 10, 0.2, 'triangle', 0.15, 0);
+          }
+        }, time);
+      });
+      
+      // Extra finale fireworks at 7s and 9s
+      [7000, 9000].forEach((time, idx) => {
+        setTimeout(() => {
+          const pos = { x: 30 + idx * 40, y: 100 };
+          launchFirework(fireworksContainer, pos.x, pos.y, 30, 400, goldColors, true);
+          setTimeout(() => {
+            playFireworkSound();
+            playNote(50, 0.3, 'triangle', 0.2, 0);
+          }, 600);
+        }, time);
+      });
+      
+      setTimeout(() => fireworksContainer.remove(), 11000);
+    }
+    
+    // Separate confetti burst function for reuse
+    function triggerConfettiBurst(colors, count) {
+      const burst = document.createElement('div');
+      burst.className = 'celebration-burst';
+      
+      for (let i = 0; i < count; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+        
+        const angle = (Math.random() * 360) * (Math.PI / 180);
+        const distance = 150 + Math.random() * 350;
+        const tx = Math.cos(angle) * distance;
+        const ty = Math.sin(angle) * distance - 180;
+        
+        confetti.style.setProperty('--tx', tx + 'px');
+        confetti.style.setProperty('--ty', ty + 'px');
+        confetti.style.animationDelay = (Math.random() * 0.4) + 's';
+        
+        burst.appendChild(confetti);
+      }
+      
+      document.body.appendChild(burst);
+      
+      requestAnimationFrame(() => {
+        burst.querySelectorAll('.confetti').forEach(c => c.classList.add('active'));
+      });
+      
+      setTimeout(() => burst.remove(), 2500);
+    }
+    
+    // Launch a single firework (bigBurst = true for finale fireworks)
+    function launchFirework(container, startX, startY, explodeY, launchHeight, colors, bigBurst) {
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      
+      // Create launch trail
+      const firework = document.createElement('div');
+      firework.className = 'firework';
+      firework.style.left = startX + '%';
+      firework.style.top = startY + '%';
+      firework.style.background = color;
+      firework.style.boxShadow = '0 0 ' + (bigBurst ? '12px 5px ' : '8px 3px ') + color;
+      firework.style.width = bigBurst ? '8px' : '6px';
+      firework.style.height = bigBurst ? '8px' : '6px';
+      firework.style.setProperty('--launch-height', '-' + launchHeight + 'px');
+      firework.style.setProperty('--launch-duration', (0.6 + Math.random() * 0.3) + 's');
+      
+      container.appendChild(firework);
+      
+      // Add sparkle trail during launch
+      const trailInterval = setInterval(() => {
+        const sparkle = document.createElement('div');
+        sparkle.className = 'sparkle-trail';
+        sparkle.style.left = firework.getBoundingClientRect().left + 'px';
+        sparkle.style.top = firework.getBoundingClientRect().top + 'px';
+        sparkle.style.color = color;
+        if (bigBurst) {
+          sparkle.style.width = '5px';
+          sparkle.style.height = '5px';
+        }
+        container.appendChild(sparkle);
+        requestAnimationFrame(() => sparkle.classList.add('active'));
+        setTimeout(() => sparkle.remove(), 600);
+      }, bigBurst ? 40 : 50);
+      
+      requestAnimationFrame(() => firework.classList.add('launching'));
+      
+      // Explode after launch
+      const launchDuration = parseFloat(firework.style.getPropertyValue('--launch-duration')) * 1000;
+      setTimeout(() => {
+        clearInterval(trailInterval);
+        firework.classList.remove('launching');
+        firework.classList.add('exploding');
+        
+        // Create explosion particles (more for big bursts)
+        const baseCount = bigBurst ? 35 : 20;
+        const particleCount = baseCount + Math.floor(Math.random() * (bigBurst ? 20 : 15));
+        const explodeX = startX;
+        
+        for (let i = 0; i < particleCount; i++) {
+          const particle = document.createElement('div');
+          particle.className = 'firework-particle';
+          particle.style.left = explodeX + '%';
+          particle.style.top = explodeY + '%';
+          
+          // Use multiple colors for big bursts
+          const particleColor = bigBurst ? colors[Math.floor(Math.random() * colors.length)] : color;
+          particle.style.background = particleColor;
+          particle.style.boxShadow = '0 0 ' + (bigBurst ? '10px 4px ' : '6px 2px ') + particleColor;
+          
+          if (bigBurst) {
+            particle.style.width = '6px';
+            particle.style.height = '6px';
+          }
+          
+          // Circular explosion pattern (larger for big bursts)
+          const angle = (i / particleCount) * Math.PI * 2 + Math.random() * 0.3;
+          const distance = (bigBurst ? 120 : 80) + Math.random() * (bigBurst ? 120 : 80);
+          const px = Math.cos(angle) * distance;
+          const py = Math.sin(angle) * distance + (bigBurst ? 50 : 30); // Gravity effect
+          
+          particle.style.setProperty('--px', px + 'px');
+          particle.style.setProperty('--py', py + 'px');
+          particle.style.setProperty('--particle-duration', (bigBurst ? 1.5 : 1) + Math.random() * (bigBurst ? 0.8 : 0.5) + 's');
+          particle.style.animationDelay = (Math.random() * 0.15) + 's';
+          
+          container.appendChild(particle);
+          requestAnimationFrame(() => particle.classList.add('active'));
+          
+          setTimeout(() => particle.remove(), bigBurst ? 2500 : 1800);
+        }
+        
+        // Secondary explosion ring for big bursts
+        if (bigBurst) {
+          setTimeout(() => {
+            for (let j = 0; j < 20; j++) {
+              const particle2 = document.createElement('div');
+              particle2.className = 'firework-particle';
+              particle2.style.left = explodeX + '%';
+              particle2.style.top = explodeY + '%';
+              const p2Color = colors[Math.floor(Math.random() * colors.length)];
+              particle2.style.background = p2Color;
+              particle2.style.boxShadow = '0 0 8px 3px ' + p2Color;
+              
+              const angle2 = (j / 20) * Math.PI * 2;
+              const dist2 = 60 + Math.random() * 60;
+              particle2.style.setProperty('--px', Math.cos(angle2) * dist2 + 'px');
+              particle2.style.setProperty('--py', Math.sin(angle2) * dist2 + 40 + 'px');
+              particle2.style.setProperty('--particle-duration', '1.2s');
+              
+              container.appendChild(particle2);
+              requestAnimationFrame(() => particle2.classList.add('active'));
+              setTimeout(() => particle2.remove(), 1500);
+            }
+          }, 150);
+        }
+        
+        setTimeout(() => firework.remove(), 100);
+      }, launchDuration);
+    }
+    
+    // Calculate reveal phases based on POSITIONS (ranks), not indices
+    // - Ranks > 40: reveal in groups of 20 (bottom-to-top)
+    // - Ranks 6-40: reveal in groups of 5 (bottom-to-top)
+    // - Ranks 1-5: individual reveal (all albums sharing that rank together)
+    // - Tied albums are NEVER split across bulk groups
+    function calculateRevealPhases(albums) {
+      const phases = [];
+      const totalAlbums = albums.length;
+      
+      if (totalAlbums === 0) return phases;
+      
+      const topRanks = [5, 4, 3, 2, 1]; // Positions to reveal individually
+      
+      // Helper function to create batches from items with a given batch size
+      function createBatches(items, batchSize) {
+        const batches = [];
+        let currentBatch = [];
+        
+        // Process from bottom (highest index) to top (lowest index)
+        for (let i = items.length - 1; i >= 0; i--) {
+          const item = items[i];
+          currentBatch.push(item.idx);
+          
+          // Check if we've reached batch size
+          if (currentBatch.length >= batchSize) {
+            // Before closing batch, check if next item has same rank (tie)
+            // If so, include it in this batch to avoid splitting ties
+            while (i > 0 && items[i - 1].rank === item.rank) {
+              i--;
+              currentBatch.push(items[i].idx);
+            }
+            batches.push([...currentBatch]);
+            currentBatch = [];
+          }
+        }
+        
+        // Don't forget remaining items
+        if (currentBatch.length > 0) {
+          batches.push(currentBatch);
+        }
+        
+        return batches;
+      }
+      
+      // Get items by rank category
+      const farBulkItems = albums
+        .map((a, idx) => ({ album: a, idx, rank: a.rank }))
+        .filter(item => item.album.rank > 40); // Groups of 20
+      
+      const nearBulkItems = albums
+        .map((a, idx) => ({ album: a, idx, rank: a.rank }))
+        .filter(item => item.album.rank > 5 && item.album.rank <= 40); // Groups of 5
+      
+      // Create batches for far bulk (ranks > 40) - groups of 20
+      const farBatches = createBatches(farBulkItems, 20);
+      
+      // Create batches for near bulk (ranks 6-40) - groups of 5
+      const nearBatches = createBatches(nearBulkItems, 5);
+      
+      // Add all bulk phases (far first since they're lower positions, then near)
+      const allBatches = [...farBatches, ...nearBatches];
+      allBatches.forEach((batchIndices, idx) => {
+        const label = idx === 0 ? 'Begin Reveal' : 'Continue...';
+        phases.push({ indices: batchIndices, label, isBulk: true });
+      });
+      
+      // Individual reveals for positions 5, 4, 3, 2, 1 (all albums sharing that rank)
+      for (const rank of topRanks) {
+        const albumsWithRank = albums
+          .map((a, idx) => ({ album: a, idx }))
+          .filter(item => item.album.rank === rank);
+        
+        if (albumsWithRank.length > 0) {
+          const indices = albumsWithRank.map(item => item.idx);
+          phases.push({ 
+            indices, 
+            label: 'Reveal #' + rank + (rank === 1 ? '!' : ''), 
+            isBulk: false,
+            rank 
+          });
+        }
+      }
+      
+      return phases;
+    }
+    
+    // Main dramatic reveal renderer
+    function renderDramaticReveal(data) {
+      const container = document.getElementById('aggregateListContent');
+      
+      if (!data.albums || data.albums.length === 0) {
+        container.innerHTML = '<div class="text-center py-12 text-gray-400">No albums in the aggregate list yet.</div>';
+        return;
+      }
+      
+      const albums = data.albums;
+      const phases = calculateRevealPhases(albums);
+      let currentPhase = 0;
+      
+      // Build all cards with overlays
+      const html = albums.map((album, index) => buildRevealCardHtml(album, index)).join('');
+      container.innerHTML = '<div class="space-y-4">' + html + '</div>';
+      
+      // Create floating reveal button
+      const buttonContainer = document.createElement('div');
+      buttonContainer.className = 'reveal-button-container';
+      buttonContainer.innerHTML = '<button class="reveal-button"><i class="fas fa-fire mr-2"></i><span>' + phases[0].label + '</span></button>';
+      document.body.appendChild(buttonContainer);
+      
+      const button = buttonContainer.querySelector('.reveal-button');
+      const buttonText = button.querySelector('span');
+      
+      // Scroll to bottom after a short delay - find last album by highest rank number
+      setTimeout(() => {
+        const maxRank = Math.max(...albums.map(a => a.rank));
+        const lastCards = container.querySelectorAll('[data-reveal-rank="' + maxRank + '"]');
+        if (lastCards.length > 0) {
+          lastCards[lastCards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 500);
+      
+      // Reveal function
+      function revealPhase() {
+        if (currentPhase >= phases.length) return;
+        
+        const phase = phases[currentPhase];
+        button.disabled = true;
+        
+        // Get overlays by index (more reliable than rank for ties)
+        const overlays = [];
+        for (const idx of phase.indices) {
+          const wrapper = container.querySelectorAll('.reveal-card-wrapper')[idx];
+          if (wrapper) {
+            const overlay = wrapper.querySelector('.burn-overlay');
+            const rank = parseInt(overlay.dataset.rank, 10);
+            overlays.push({ overlay, rank, idx });
+          }
+        }
+        
+        // Sort overlays to reveal from bottom to top (highest index first)
+        overlays.sort((a, b) => b.idx - a.idx);
+        
+        // Calculate intensity and animation duration based on rank
+        function getIntensity(rank) {
+          if (rank === 1) return 1;
+          if (rank === 2) return 2;
+          if (rank === 3) return 3;
+          if (rank === 4) return 4;
+          if (rank === 5) return 5;
+          return 6; // regular albums
+        }
+        
+        function getAnimationDuration(rank) {
+          if (rank === 1) return 2800;  // 800ms delay + 2s burnAwayDelayed
+          if (rank === 2) return 1300;  // matches glowBorderSilver (1.3s)
+          if (rank === 3) return 1100;  // matches glowBorderBronze (1.1s)
+          if (rank === 4) return 1100;  // matches glowBorderRank4 (1.1s)
+          if (rank === 5) return 1000;  // matches glowBorderRank5 (1s)
+          return 800;                   // matches burnAway (0.8s)
+        }
+        
+        // Animate overlays with stagger
+        let maxDuration = 0;
+        
+        overlays.forEach((item, idx) => {
+          const delay = idx * 150; // Stagger within group
+          const intensity = getIntensity(item.rank);
+          const animDuration = getAnimationDuration(item.rank);
+          
+          maxDuration = Math.max(maxDuration, delay + animDuration);
+          
+          setTimeout(() => {
+            // Scroll to keep visible first
+            const wrapper = item.overlay.closest('.reveal-card-wrapper');
+            if (wrapper) {
+              wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            
+            // Special handling for #1 - trigger celebration FIRST, then reveal
+            if (item.rank === 1) {
+              // Play victory fanfare!
+              playVictoryFanfare();
+              
+              // Start celebration immediately
+              triggerCelebration();
+              
+              // Spawn embers with max intensity
+              spawnEmbers(item.overlay, 1);
+              
+              // Delay the burn animation so effects play first
+              setTimeout(() => {
+                item.overlay.classList.add('gold');
+                item.overlay.classList.add('burning');
+              }, 800); // 800ms of pure celebration before reveal starts
+              
+            } else {
+              // Add intensity class for top 5
+              if (item.rank === 5) item.overlay.classList.add('rank-5');
+              if (item.rank === 4) item.overlay.classList.add('rank-4');
+              if (item.rank === 3) item.overlay.classList.add('bronze');
+              if (item.rank === 2) item.overlay.classList.add('silver');
+              
+              // Play sounds only for top 3 (excluding #1 which has its own fanfare)
+              if (item.rank === 3) {
+                playDrumRoll(3);
+                setTimeout(() => playCoinSound(3), 150);
+              } else if (item.rank === 2) {
+                playDrumRoll(2);
+                setTimeout(() => playCoinSound(2), 150);
+              }
+              
+              // Spawn embers with appropriate intensity
+              spawnEmbers(item.overlay, intensity);
+              
+              // Trigger burn animation
+              item.overlay.classList.add('burning');
+              
+              // Add screen effects for top 5 positions (building intensity)
+              if (item.rank <= 5 && item.rank >= 2) {
+                triggerPositionEffect(item.rank);
+              }
+            }
+          }, delay);
+        });
+        
+        // Calculate total phase duration
+        const phaseDuration = maxDuration + 50; // Minimal buffer
+        
+        setTimeout(() => {
+          currentPhase++;
+          
+          if (currentPhase < phases.length) {
+            // Update button for next phase
+            buttonText.textContent = phases[currentPhase].label;
+            button.disabled = false;
+          } else {
+            // All revealed! Remove button and mark as seen
+            buttonContainer.style.opacity = '0';
+            buttonContainer.style.transition = 'opacity 0.5s';
+            setTimeout(() => buttonContainer.remove(), 500);
+            
+            // Mark as seen
+            markRevealAsSeen();
+          }
+        }, phaseDuration);
+      }
+      
+      // Button click handler
+      button.addEventListener('click', revealPhase);
+    }
+    
+    // Mark reveal as seen via API
+    async function markRevealAsSeen() {
+      try {
+        await apiFetch('/api/aggregate-list/' + YEAR + '/mark-seen', { method: 'POST' });
+        console.log('Reveal marked as seen');
+      } catch (err) {
+        console.error('Failed to mark reveal as seen:', err);
+      }
+    }
+    
+    // Render pre-reveal status with position placeholders
+    function renderPendingReveal(status) {
+      const container = document.getElementById('aggregateListContent');
+      const totalAlbums = status.totalAlbums || 0;
+      const rankDistribution = status.rankDistribution || {};
+      
+      // Generate position placeholder cards based on actual rank structure
+      let placeholdersHtml = '';
+      if (totalAlbums > 0 && Object.keys(rankDistribution).length > 0) {
+        // Get sorted ranks (convert to numbers and sort)
+        const sortedRanks = Object.keys(rankDistribution)
+          .map(rank => parseInt(rank, 10))
+          .sort((a, b) => a - b);
+        
+        let cardIndex = 0;
+        sortedRanks.forEach(rank => {
+          const albumCount = rankDistribution[rank];
+          // Generate a placeholder card for each album at this rank
+          for (let j = 0; j < albumCount; j++) {
+            const positionClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
+            const delay = Math.min(cardIndex * 30, 300);
+            
+            placeholdersHtml += 
+              '<div class="album-card bg-gray-800/30 rounded-lg p-4 animate-fade-in" style="animation-delay: ' + delay + 'ms; opacity: 0;">' +
+                '<div class="flex items-center gap-4">' +
+                  '<div class="position-badge ' + positionClass + ' text-gray-200 shrink-0">' + rank + '</div>' +
+                  '<div class="w-16 h-16 md:w-20 md:h-20 rounded-sm bg-gray-700/50 flex items-center justify-center shrink-0">' +
+                    '<i class="fas fa-question text-gray-600 text-2xl"></i>' +
+                  '</div>' +
+                  '<div class="flex-1 min-w-0">' +
+                    '<div class="h-5 bg-gray-700/50 rounded-sm w-2/3 mb-2"></div>' +
+                    '<div class="h-4 bg-gray-700/30 rounded-sm w-1/2"></div>' +
+                  '</div>' +
+                  '<div class="shrink-0">' +
+                    '<i class="fas fa-lock text-gray-600"></i>' +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+            cardIndex++;
+          }
+        });
+      } else if (totalAlbums > 0) {
+        // Fallback: if rankDistribution is not available, use sequential generation
+        for (let i = 1; i <= totalAlbums; i++) {
+          const positionClass = i === 1 ? 'gold' : i === 2 ? 'silver' : i === 3 ? 'bronze' : '';
+          const delay = Math.min((i - 1) * 30, 300);
+          
+          placeholdersHtml += 
+            '<div class="album-card bg-gray-800/30 rounded-lg p-4 animate-fade-in" style="animation-delay: ' + delay + 'ms; opacity: 0;">' +
+              '<div class="flex items-center gap-4">' +
+                '<div class="position-badge ' + positionClass + ' text-gray-200 shrink-0">' + i + '</div>' +
+                '<div class="w-16 h-16 md:w-20 md:h-20 rounded-sm bg-gray-700/50 flex items-center justify-center shrink-0">' +
+                  '<i class="fas fa-question text-gray-600 text-2xl"></i>' +
+                '</div>' +
+                '<div class="flex-1 min-w-0">' +
+                  '<div class="h-5 bg-gray-700/50 rounded-sm w-2/3 mb-2"></div>' +
+                  '<div class="h-4 bg-gray-700/30 rounded-sm w-1/2"></div>' +
+                '</div>' +
+                '<div class="shrink-0">' +
+                  '<i class="fas fa-lock text-gray-600"></i>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+      } else {
+        placeholdersHtml = '<div class="text-center py-8 text-gray-500">No main lists submitted yet.</div>';
+      }
+      
+      // Confirmations section for bottom
+      const confirmationsHtml = status.confirmations.map(c => 
+        '<div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i><span>' + c.username + '</span><span class="text-gray-500 text-sm">' + new Date(c.confirmedAt).toLocaleString() + '</span></div>'
+      ).join('');
+      
+      const pendingCount = status.requiredConfirmations - status.confirmationCount;
+      const pendingHtml = pendingCount > 0 ? 
+        '<div class="flex items-center gap-2 text-gray-500"><i class="far fa-circle"></i><span>Awaiting ' + pendingCount + ' more confirmation' + (pendingCount !== 1 ? 's' : '') + '</span></div>' : '';
+      
+      container.innerHTML = 
+        '<div class="mb-6 text-center">' +
+          '<p class="text-gray-400 text-sm"><i class="fas fa-lock mr-2"></i>Awaiting reveal (' + status.confirmationCount + '/' + status.requiredConfirmations + ' confirmations)</p>' +
+        '</div>' +
+        '<div class="space-y-3">' + placeholdersHtml + '</div>' +
+        '<div class="mt-8 pt-6 border-t border-gray-700/50 text-center">' +
+          '<div class="inline-block text-left">' +
+            '<p class="text-sm text-gray-500 uppercase tracking-wide mb-2">Admin Confirmations</p>' +
+            '<div class="space-y-1">' + confirmationsHtml + pendingHtml + '</div>' +
+          '</div>' +
+        '</div>';
+    }
+    
+    // Main load function
+    async function loadAggregateList() {
+      try {
+        // First check status
+        const status = await apiFetch('/api/aggregate-list/' + YEAR + '/status');
+        
+        if (status.revealed) {
+          // Load full data
+          const data = await apiFetch('/api/aggregate-list/' + YEAR);
+          
+          // Check if user has seen the dramatic reveal
+          try {
+            const seenStatus = await apiFetch('/api/aggregate-list/' + YEAR + '/has-seen');
+            
+            if (seenStatus.hasSeen) {
+              // Already seen - normal render
+              renderAggregateList(data.data);
+            } else {
+              // First time - dramatic burning reveal!
+              renderDramaticReveal(data.data);
+            }
+          } catch (seenErr) {
+            // If has-seen check fails, fall back to normal render
+            console.warn('Could not check reveal status, using normal render:', seenErr);
+            renderAggregateList(data.data);
+          }
+        } else {
+          // Show pending state
+          renderPendingReveal(status);
+        }
+      } catch (err) {
+        document.getElementById('aggregateListContent').innerHTML = 
+          '<div class="text-center py-12"><i class="fas fa-exclamation-triangle text-4xl text-red-500 mb-4"></i><p class="text-gray-400">' + err.message + '</p></div>';
+      }
+    }
+    
+    // Initialize
+    loadAggregateList();
+  </script>
+</body>
+</html>
+`;
+}
+
+module.exports = {
+  createAggregateListTemplate,
+};
