@@ -8,6 +8,7 @@ import { showToast } from './utils.js';
 import { isAlbumMatchingPlayback } from './playback-utils.js';
 import { getDeviceIcon } from '../utils/device-icons.js';
 import { formatTime } from './time-utils.js';
+import { getTrackId, buildLastfmBody } from './spotify-lastfm-utils.js';
 
 // ============ MODULE STATE ============
 let currentPlayback = null;
@@ -138,16 +139,6 @@ const LASTFM_MIN_SCROBBLE_TIME = 4 * 60 * 1000; // 4 minutes in ms
 const LASTFM_SCROBBLE_PERCENT = 0.5; // 50%
 
 /**
- * Derive a stable identifier for a track (used for dedup and comparisons).
- * @param {Object} track - Spotify track object
- * @returns {string|null} Track identifier or null if track is invalid
- */
-function getTrackId(track) {
-  if (!track?.name || !track?.artists?.[0]?.name) return null;
-  return track.id || `${track.name}-${track.artists[0].name}`;
-}
-
-/**
  * Handle a Last.fm scrobble/now-playing failure by incrementing the
  * consecutive-failure counter and warning the user after the threshold.
  * @param {string} context - Human-readable context for the console.warn
@@ -191,20 +182,6 @@ async function lastfmApiCall(endpoint, body, trackId, onSuccess, logLabel) {
   } catch (err) {
     handleScrobbleFailure(logLabel, err);
   }
-}
-
-/**
- * Build the common Last.fm body fields from a Spotify track.
- * @param {Object} track - Spotify track object
- * @returns {Object} { artist, track, album, duration }
- */
-function buildLastfmBody(track) {
-  return {
-    artist: track.artists[0].name,
-    track: track.name,
-    album: track.album?.name || '',
-    duration: Math.floor((track.duration_ms || 0) / 1000),
-  };
 }
 
 /**

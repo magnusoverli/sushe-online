@@ -1,4 +1,8 @@
 import { createContextSubmenuController } from '../utils/context-submenu-controller.js';
+import {
+  formatInUserListsTooltip as formatInUserListsTooltipBase,
+  formatInUserListsAriaLabel,
+} from './recommendations-list-tooltips.js';
 
 /**
  * Recommendations Module
@@ -289,30 +293,8 @@ export function createRecommendations(deps = {}) {
     showReasoningTooltip(trigger, rec);
   }
 
-  function formatInUserListsTooltip(listNames) {
-    if (!Array.isArray(listNames) || listNames.length === 0) {
-      return '';
-    }
-
-    const header = listNames.length === 1 ? 'In your list:' : 'In your lists:';
-    const items = listNames
-      .map((name) => `&bull; ${escapeHtml(name)}`)
-      .join('<br>');
-
-    return `<span class="font-semibold text-gray-200">${header}</span><br>${items}`;
-  }
-
-  function formatInUserListsAriaLabel(listNames) {
-    if (!Array.isArray(listNames) || listNames.length === 0) {
-      return '';
-    }
-
-    const header = listNames.length === 1 ? 'In your list' : 'In your lists';
-    return `${header}: ${listNames.join(', ')}`;
-  }
-
   function showInUserListsTooltip(trigger, rec, listNames) {
-    const tooltipHtml = formatInUserListsTooltip(listNames);
+    const tooltipHtml = formatInUserListsTooltipBase(listNames, escapeHtml);
     if (!tooltipHtml) return;
 
     showRecommendationDetailTooltip(trigger, {
