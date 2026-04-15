@@ -38,7 +38,7 @@ describe('context-menus module', () => {
         playAlbum: mock.fn(),
         playAlbumSafe: mock.fn(),
         loadLists: mock.fn(),
-        getContextAlbumId: mock.fn(() => null),
+        getContextAlbum: mock.fn(() => ({ index: null, albumId: null })),
         setContextAlbum: mock.fn(),
         getContextList: mock.fn(() => null),
         setContextList: mock.fn(),

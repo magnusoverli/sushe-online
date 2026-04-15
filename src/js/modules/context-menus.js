@@ -39,7 +39,7 @@ import { getDeviceIcon } from '../utils/device-icons.js';
  * @param {Function} deps.playAlbum - Play album
  * @param {Function} deps.playAlbumSafe - Play album safely by ID
  * @param {Function} deps.loadLists - Reload lists
- * @param {Function} deps.getContextAlbumId - Get context menu album ID
+ * @param {Function} deps.getContextAlbum - Get context menu album state
  * @param {Function} deps.setContextAlbum - Set context menu album state
  * @param {Function} deps.getContextList - Get context menu list state
  * @param {Function} deps.setContextList - Set context menu list state
@@ -72,7 +72,7 @@ export function createContextMenus(deps = {}) {
     playAlbum: _playAlbum,
     playAlbumSafe: _playAlbumSafe,
     loadLists: _loadLists,
-    getContextAlbumId,
+    getContextAlbum = () => ({ index: null, albumId: null }),
     setContextAlbum,
     getContextList,
     setContextList,
@@ -85,6 +85,14 @@ export function createContextMenus(deps = {}) {
 
   // Track loading performance optimization
   let trackAbortController = null;
+
+  function getContextAlbumId() {
+    const context = getContextAlbum();
+    if (!context || typeof context !== 'object') {
+      return null;
+    }
+    return context.albumId || null;
+  }
 
   /**
    * Hide all context menus and perform module-specific cleanup.
