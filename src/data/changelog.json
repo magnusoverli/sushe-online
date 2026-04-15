@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-04-15",
+    "category": "fix",
+    "description": "Fixed list sync across multiple devices",
+    "hash": "5809c32fe9475d7810ee0f76d6841c174ccef13b",
+    "commitMessage": "Fix list sync across clients"
+  },
+  {
     "date": "2026-04-14",
     "category": "fix",
     "description": "Fixed Spotify page script errors",
