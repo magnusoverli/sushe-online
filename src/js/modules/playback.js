@@ -36,9 +36,6 @@ export function createPlayback(deps = {}) {
 
   function getContextAlbumSelection() {
     const context = getContextAlbum();
-    if (!context || typeof context !== 'object') {
-      return { index: null, albumId: null };
-    }
     return {
       index: context.index ?? null,
       albumId: context.albumId ?? null,
