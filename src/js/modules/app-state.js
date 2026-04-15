@@ -13,8 +13,34 @@
 /** Lists keyed by _id. Structure: { _id, name, year, isMain, count, groupId, sortOrder, _data, updatedAt, createdAt } */
 let lists = {};
 
+function normalizeAlbumIdentifiers(albums = []) {
+  if (!Array.isArray(albums)) {
+    return [];
+  }
+
+  let changed = false;
+  const normalized = albums.map((album) => {
+    if (
+      album &&
+      typeof album === 'object' &&
+      !album.album_id &&
+      album.albumId
+    ) {
+      changed = true;
+      return {
+        ...album,
+        album_id: album.albumId,
+      };
+    }
+
+    return album;
+  });
+
+  return changed ? normalized : albums;
+}
+
 function createDefaultListEntry(listId, albums = []) {
-  const data = Array.isArray(albums) ? albums : [];
+  const data = normalizeAlbumIdentifiers(albums);
 
   return {
     _id: listId,
@@ -33,9 +59,25 @@ function normalizeListsMap(newLists = {}) {
 
   Object.keys(newLists).forEach((listId) => {
     const entry = newLists[listId];
-    normalized[listId] = Array.isArray(entry)
-      ? createDefaultListEntry(listId, entry)
-      : entry;
+
+    if (Array.isArray(entry)) {
+      normalized[listId] = createDefaultListEntry(listId, entry);
+      return;
+    }
+
+    if (entry && typeof entry === 'object' && Array.isArray(entry._data)) {
+      const normalizedData = normalizeAlbumIdentifiers(entry._data);
+      normalized[listId] =
+        normalizedData === entry._data
+          ? entry
+          : {
+              ...entry,
+              _data: normalizedData,
+            };
+      return;
+    }
+
+    normalized[listId] = entry;
   });
 
   return normalized;
@@ -173,16 +215,18 @@ export function getListData(listId) {
 export function setListData(listId, albums, updateSnapshot = true) {
   if (!listId) return;
 
+  const normalizedAlbums = normalizeAlbumIdentifiers(albums || []);
+
   if (!lists[listId]) {
-    lists[listId] = createDefaultListEntry(listId, albums);
+    lists[listId] = createDefaultListEntry(listId, normalizedAlbums);
   } else {
-    lists[listId]._data = albums || [];
-    lists[listId].count = albums ? albums.length : 0;
+    lists[listId]._data = normalizedAlbums;
+    lists[listId].count = normalizedAlbums.length;
   }
 
   // Update snapshot for diff-based saves (when data is fetched from server)
   if (updateSnapshot && albums) {
-    const snapshot = createListSnapshot(albums);
+    const snapshot = createListSnapshot(normalizedAlbums);
     lastSavedSnapshots.set(listId, snapshot);
     saveSnapshotToStorage(listId, snapshot);
   }
@@ -614,7 +658,7 @@ export function getLastSavedSnapshots() {
  */
 export function createListSnapshot(albums) {
   if (!albums || !Array.isArray(albums)) return [];
-  return albums.map((a) => a.album_id || a.albumId || null).filter(Boolean);
+  return albums.map((a) => a.album_id || null).filter(Boolean);
 }
 
 /**

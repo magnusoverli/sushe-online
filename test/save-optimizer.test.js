@@ -113,11 +113,13 @@ describe('save-optimizer', async () => {
       assert.ok(result.updated.length > 0); // a3 and a1 moved
     });
 
-    it('handles albumId field (alternative naming)', () => {
-      const oldSnapshot = ['b1', 'b2'];
-      const newData = [{ albumId: 'b2' }, { albumId: 'b1' }];
+    it('ignores entries without canonical album_id', () => {
+      const oldSnapshot = ['b1'];
+      const newData = [{ albumId: 'b1' }, { album_id: 'b2' }];
       const result = computeListDiff(oldSnapshot, newData);
-      assert.strictEqual(result.updated.length, 2); // both swapped
+      assert.deepStrictEqual(result.removed, ['b1']);
+      assert.strictEqual(result.added.length, 1);
+      assert.strictEqual(result.added[0].album_id, 'b2');
     });
 
     it('returns null when too many changes exceed threshold', () => {

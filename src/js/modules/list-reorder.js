@@ -15,9 +15,7 @@ export function createListReorder(deps = {}) {
     }
 
     try {
-      const order = list.map(
-        (album) => album.album_id || album.albumId || null
-      );
+      const order = list.map((album) => album.album_id || null);
 
       await apiCall(`/api/lists/${encodeURIComponent(listName)}/reorder`, {
         method: 'POST',

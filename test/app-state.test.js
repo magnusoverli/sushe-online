@@ -67,6 +67,21 @@ describe('app-state', async () => {
       assert.strictEqual(window.lists, mod.getLists());
     });
 
+    it('setLists normalizes albumId aliases inside _data arrays', () => {
+      mod.setLists({
+        id1: {
+          _id: 'id1',
+          name: 'Test',
+          _data: [{ albumId: 'legacy-1' }],
+          count: 1,
+        },
+      });
+
+      const album = mod.getListData('id1')[0];
+      assert.strictEqual(album.album_id, 'legacy-1');
+      assert.strictEqual(album.albumId, 'legacy-1');
+    });
+
     it('getListData returns null for nonexistent list', () => {
       assert.strictEqual(mod.getListData('nonexistent'), null);
     });
@@ -133,6 +148,15 @@ describe('app-state', async () => {
       assert.strictEqual(entry._data, albums);
       assert.strictEqual(entry.count, 2);
       assert.strictEqual(entry._id, 'id1');
+    });
+
+    it('setListData normalizes albumId aliases to album_id', () => {
+      mod.setLists({ id1: { _id: 'id1', _data: [], count: 0 } });
+      mod.setListData('id1', [{ albumId: 'legacy-2' }], false);
+
+      const album = mod.getListData('id1')[0];
+      assert.strictEqual(album.album_id, 'legacy-2');
+      assert.strictEqual(album.albumId, 'legacy-2');
     });
 
     it('setListData does nothing when listId is falsy', () => {
@@ -567,10 +591,10 @@ describe('app-state', async () => {
       assert.deepStrictEqual(snapshot, ['a1', 'a2']);
     });
 
-    it('createListSnapshot handles albumId field', () => {
-      const albums = [{ albumId: 'b1' }, { albumId: 'b2' }];
+    it('createListSnapshot ignores entries without canonical album_id', () => {
+      const albums = [{ albumId: 'b1' }, { album_id: 'b2' }];
       const snapshot = mod.createListSnapshot(albums);
-      assert.deepStrictEqual(snapshot, ['b1', 'b2']);
+      assert.deepStrictEqual(snapshot, ['b2']);
     });
 
     it('createListSnapshot returns empty for null/invalid input', () => {
