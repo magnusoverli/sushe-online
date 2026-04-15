@@ -455,7 +455,7 @@ const getContextMenusModule = createLazyModule(() =>
     playAlbum,
     playAlbumSafe: (albumId) => window.playAlbumSafe(albumId),
     loadLists,
-    getContextAlbumId: () => getContextAlbumState().albumId,
+    getContextAlbum: () => getContextAlbumState(),
     setContextAlbum: (index, albumId) => {
       setContextAlbumState(index, albumId);
     },
