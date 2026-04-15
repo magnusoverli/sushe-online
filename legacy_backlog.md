@@ -204,7 +204,7 @@ High.
 - Major legacy bridge reduction.
 - Better testability for dependent modules.
 
-## PR 5: Remove `window.lists` Compat Bridge
+## PR 5: Remove `window.lists` Compat Bridge ✅ Completed (PR #345)
 
 ### Goal
 
