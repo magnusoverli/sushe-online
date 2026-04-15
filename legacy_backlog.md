@@ -161,7 +161,7 @@ Low to medium.
 - Simpler duplicate UI state.
 - Better alignment with recent cluster-merge work.
 
-## PR 4: Remove `window.currentList` Compat Bridge
+## PR 4: Remove `window.currentList` Compat Bridge ✅ Completed (PR #343)
 
 ### Goal
 
