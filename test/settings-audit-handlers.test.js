@@ -54,6 +54,8 @@ describe('settings audit handlers', () => {
         apiCalls.push(url);
         return {
           pairs: [],
+          clusters: [],
+          totalClusters: 0,
           totalAlbums: 10,
           excludedPairs: 2,
         };
@@ -90,23 +92,27 @@ describe('settings audit handlers', () => {
       }),
       apiCall: async () => ({
         pairs: [{ id: 'p1' }],
+        clusters: [{ clusterId: 'c1', members: [{}, {}] }],
+        totalClusters: 1,
         potentialDuplicates: 1,
         totalAlbums: 10,
         excludedPairs: 0,
       }),
       showToast: () => {},
-      openDuplicateReviewModal: async (pairs) => {
-        modalCalls.push(pairs);
+      openDuplicateReviewModal: async (scanResult) => {
+        modalCalls.push(scanResult);
         return { resolved: 1, remaining: 0 };
       },
     });
 
     await handleScanDuplicates();
 
-    assert.deepStrictEqual(modalCalls, [[{ id: 'p1' }]]);
+    assert.strictEqual(modalCalls.length, 1);
+    assert.strictEqual(modalCalls[0].potentialDuplicates, 1);
+    assert.strictEqual(modalCalls[0].totalClusters, 1);
     assert.match(
       statusDiv.innerHTML,
-      /Last scan: 1 found, 1 resolved, 0 remaining/
+      /Last scan: 1 pairs across 1 clusters, 1 resolved, 0 remaining/
     );
   });
 

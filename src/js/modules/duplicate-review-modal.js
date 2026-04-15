@@ -1,8 +1,9 @@
 /**
  * Duplicate Review Modal
  *
- * Full-featured modal for reviewing and resolving potential duplicate albums.
- * Shows side-by-side comparison with field diffs, cover images, and action buttons.
+ * Cluster-based admin modal for reviewing and resolving duplicate albums.
+ * Allows canonical selection, selective merge, dry-run preview, and marking
+ * variant pairs as distinct.
  */
 
 import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
@@ -12,39 +13,144 @@ import { markAlbumsDistinct } from '../utils/album-api.js';
 
 let modalElement = null;
 let modalController = null;
-let currentPairs = [];
-let currentIndex = 0;
+let currentClusters = [];
+let currentClusterIndex = 0;
 let onComplete = null;
 let resolvedCount = 0;
+let loading = false;
+
+function normalizeClusterMember(member) {
+  return {
+    album_id: member.album_id,
+    artist: member.artist || 'Unknown artist',
+    album: member.album || 'Unknown album',
+    release_date: member.release_date || null,
+    country: member.country || null,
+    genre_1: member.genre_1 || null,
+    genre_2: member.genre_2 || null,
+    trackCount: Number.isFinite(member.trackCount) ? member.trackCount : null,
+    hasCover: Boolean(member.hasCover),
+    listRefs: Number.isFinite(member.listRefs) ? member.listRefs : 0,
+    canonicalScore: Number.isFinite(member.canonicalScore)
+      ? member.canonicalScore
+      : 0,
+  };
+}
+
+function normalizeClusters(input) {
+  let sourceClusters = [];
+
+  if (Array.isArray(input)) {
+    if (input.length > 0 && Array.isArray(input[0].members)) {
+      sourceClusters = input;
+    } else if (input.length > 0 && input[0].album1 && input[0].album2) {
+      sourceClusters = input.map((pair, index) => {
+        return {
+          clusterId: `pair-${index}`,
+          suggestedCanonicalId: pair.album1.album_id,
+          members: [pair.album1, pair.album2],
+          maxConfidence: pair.confidence,
+          avgConfidence: pair.confidence,
+          pairs: [
+            {
+              album1Id: pair.album1.album_id,
+              album2Id: pair.album2.album_id,
+              confidence: pair.confidence,
+            },
+          ],
+        };
+      });
+    }
+  } else if (input && typeof input === 'object') {
+    if (Array.isArray(input.clusters) && input.clusters.length > 0) {
+      sourceClusters = input.clusters;
+    } else if (Array.isArray(input.pairs) && input.pairs.length > 0) {
+      sourceClusters = input.pairs.map((pair, index) => {
+        return {
+          clusterId: `pair-${index}`,
+          suggestedCanonicalId: pair.album1.album_id,
+          members: [pair.album1, pair.album2],
+          maxConfidence: pair.confidence,
+          avgConfidence: pair.confidence,
+          pairs: [
+            {
+              album1Id: pair.album1.album_id,
+              album2Id: pair.album2.album_id,
+              confidence: pair.confidence,
+            },
+          ],
+        };
+      });
+    }
+  }
+
+  return sourceClusters
+    .filter(
+      (cluster) => Array.isArray(cluster.members) && cluster.members.length > 1
+    )
+    .map((cluster, index) => {
+      const members = cluster.members
+        .map(normalizeClusterMember)
+        .sort((a, b) => (b.canonicalScore || 0) - (a.canonicalScore || 0));
+
+      const suggestedCanonicalId =
+        cluster.suggestedCanonicalId || members[0]?.album_id || null;
+      const selectedCanonicalId = suggestedCanonicalId;
+      const mergeTargets = new Set(
+        members
+          .map((member) => member.album_id)
+          .filter((albumId) => albumId !== selectedCanonicalId)
+      );
+
+      return {
+        clusterId: cluster.clusterId || `cluster-${index}`,
+        members,
+        memberCount: members.length,
+        pairs: Array.isArray(cluster.pairs) ? cluster.pairs : [],
+        maxConfidence: Number.isFinite(cluster.maxConfidence)
+          ? cluster.maxConfidence
+          : 0,
+        avgConfidence: Number.isFinite(cluster.avgConfidence)
+          ? cluster.avgConfidence
+          : 0,
+        selectedCanonicalId,
+        mergeTargets,
+      };
+    });
+}
 
 /**
- * Open the duplicate review modal with a list of potential duplicate pairs
+ * Open the duplicate review modal.
  *
- * @param {Array} pairs - Array of duplicate pairs from the API
- * @param {Function} onCompleteCallback - Called when all pairs are processed or modal is closed
+ * @param {Object|Array} scanData - scan response or legacy pair array
+ * @param {Function} onCompleteCallback - completion callback
  * @returns {Promise<{resolved: number, remaining: number}>}
  */
-export function openDuplicateReviewModal(pairs, onCompleteCallback = null) {
+export function openDuplicateReviewModal(scanData, onCompleteCallback = null) {
   return new Promise((resolve) => {
-    if (!pairs || pairs.length === 0) {
+    const clusters = normalizeClusters(scanData);
+    if (clusters.length === 0) {
       resolve({ resolved: 0, remaining: 0 });
       return;
     }
 
-    currentPairs = [...pairs];
-    currentIndex = 0;
+    currentClusters = clusters;
+    currentClusterIndex = 0;
     resolvedCount = 0;
+    loading = false;
+
     onComplete = () => {
       const result = {
         resolved: resolvedCount,
-        remaining: currentPairs.length - currentIndex,
+        remaining: currentClusters.length - currentClusterIndex,
       };
+
       if (onCompleteCallback) onCompleteCallback(result);
       resolve(result);
     };
 
     createModalDOM();
-    renderCurrentPair();
+    renderCurrentCluster();
     showModal();
   });
 }
@@ -56,41 +162,33 @@ function createModalDOM() {
 
   modalElement = document.createElement('div');
   modalElement.id = 'duplicateReviewModal';
-  // Use z-[10002] to ensure modal is above #modalPortal (z-10001) and similar-album-modal (z-10001)
   modalElement.className =
     'fixed inset-0 z-[10002] flex items-center justify-center p-4 safe-area-modal duplicate-review-modal hidden';
   modalElement.innerHTML = `
     <div class="settings-modal-backdrop"></div>
-    <div class="settings-modal-content duplicate-review-modal-content">
+    <div class="settings-modal-content duplicate-review-modal-content max-w-5xl w-full">
       <div class="settings-modal-header">
         <div class="flex items-center gap-2">
-          <h3 class="settings-modal-title">Review Duplicates</h3>
+          <h3 class="settings-modal-title">Review Duplicate Clusters</h3>
           <span id="duplicateProgress" class="px-2 py-0.5 bg-gray-700 text-gray-300 text-xs sm:text-sm rounded">
             1 / 1
           </span>
         </div>
-        <button class="settings-modal-close" id="duplicateModalClose">
+        <button class="settings-modal-close" id="duplicateModalClose" type="button">
           <i class="fas fa-times"></i>
         </button>
       </div>
-      <div class="settings-modal-body duplicate-review-modal-body" id="duplicateReviewContent">
-        <!-- Content rendered dynamically -->
-      </div>
+      <div class="settings-modal-body duplicate-review-modal-body" id="duplicateReviewContent"></div>
       <div class="settings-modal-footer duplicate-review-modal-footer">
-        <div class="flex gap-2">
-          <button id="keepLeftBtn" class="settings-button bg-green-700 hover:bg-green-600" type="button">
-            <i class="fas fa-check"></i><span class="hidden sm:inline ml-1">Keep</span> Left
+        <div class="flex gap-2 flex-wrap">
+          <button id="previewClusterBtn" class="settings-button" type="button">
+            <i class="fas fa-search mr-1"></i>Preview
           </button>
-          <button id="keepRightBtn" class="settings-button bg-green-700 hover:bg-green-600" type="button">
-            <i class="fas fa-check"></i><span class="hidden sm:inline ml-1">Keep</span> Right
+          <button id="mergeClusterBtn" class="settings-button bg-green-700 hover:bg-green-600" type="button">
+            <i class="fas fa-code-branch mr-1"></i>Merge Selected
           </button>
-        </div>
-        <div class="flex gap-2">
-          <button id="markDistinctBtn" class="settings-button bg-blue-700 hover:bg-blue-600" type="button">
-            <i class="fas fa-not-equal"></i><span class="hidden sm:inline ml-1">Different</span>
-          </button>
-          <button id="skipPairBtn" class="settings-button" type="button">
-            <i class="fas fa-forward"></i><span class="hidden sm:inline ml-1">Skip</span>
+          <button id="skipClusterBtn" class="settings-button" type="button">
+            <i class="fas fa-forward mr-1"></i>Skip Cluster
           </button>
         </div>
       </div>
@@ -106,35 +204,27 @@ function setupModalController() {
 
   modalController = createModal({
     element: modalElement,
-    backdrop: backdrop,
+    backdrop,
     closeButton: closeBtn,
-    closeOnEscape: false, // We handle keyboard shortcuts ourselves
+    closeOnEscape: false,
     onClose: () => {
       if (onComplete) onComplete();
     },
   });
 
-  // Keyboard shortcuts (including Escape) - managed via addListener for cleanup
   modalController.addListener(document, 'keydown', handleKeyboard);
-
-  // Button handlers
   modalController.addListener(
-    modalElement.querySelector('#keepLeftBtn'),
+    modalElement.querySelector('#previewClusterBtn'),
     'click',
-    () => handleMerge('left')
+    handlePreview
   );
   modalController.addListener(
-    modalElement.querySelector('#keepRightBtn'),
+    modalElement.querySelector('#mergeClusterBtn'),
     'click',
-    () => handleMerge('right')
+    handleMergeCluster
   );
   modalController.addListener(
-    modalElement.querySelector('#markDistinctBtn'),
-    'click',
-    handleMarkDistinct
-  );
-  modalController.addListener(
-    modalElement.querySelector('#skipPairBtn'),
+    modalElement.querySelector('#skipClusterBtn'),
     'click',
     handleSkip
   );
@@ -144,6 +234,7 @@ function showModal() {
   if (!modalController) {
     setupModalController();
   }
+
   modalController.open();
 }
 
@@ -151,248 +242,299 @@ function hideModal() {
   if (modalController) {
     modalController.close();
     modalController = null;
-  } else {
+  } else if (modalElement) {
     modalElement.classList.add('hidden');
     document.body.style.overflow = '';
   }
 }
 
-function handleClose() {
-  hideModal();
+function currentCluster() {
+  return currentClusters[currentClusterIndex] || null;
 }
 
-function handleKeyboard(e) {
-  if (!modalController || !modalController.isOpen()) return;
-
-  switch (e.key) {
-    case 'Escape':
-      handleClose();
-      break;
-    case '1':
-    case 'ArrowLeft':
-      if (!e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        handleMerge('left');
-      }
-      break;
-    case '2':
-    case 'ArrowRight':
-      if (!e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        handleMerge('right');
-      }
-      break;
-    case '3':
-    case 'd':
-      if (!e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        handleMarkDistinct();
-      }
-      break;
-    case 's':
-    case 'ArrowDown':
-      if (!e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        handleSkip();
-      }
-      break;
-  }
+function formatGenres(member) {
+  const genres = [member.genre_1, member.genre_2].filter((value) => {
+    return Boolean(value && String(value).trim());
+  });
+  return genres.length > 0 ? genres.join(', ') : 'None';
 }
 
-function renderCurrentPair() {
-  if (currentIndex >= currentPairs.length) {
+function renderCurrentCluster() {
+  if (currentClusterIndex >= currentClusters.length) {
     renderComplete();
     return;
   }
 
-  const pair = currentPairs[currentIndex];
-  const content = modalElement.querySelector('#duplicateReviewContent');
+  const cluster = currentCluster();
   const progress = modalElement.querySelector('#duplicateProgress');
+  const content = modalElement.querySelector('#duplicateReviewContent');
+  const placeholderSvg = getPlaceholderSvg(80);
 
-  progress.textContent = `${currentIndex + 1} / ${currentPairs.length}`;
-
-  const leftCoverUrl = pair.album1.hasCover
-    ? `/api/albums/${encodeURIComponent(pair.album1.album_id)}/cover`
-    : null;
-  const rightCoverUrl = pair.album2.hasCover
-    ? `/api/albums/${encodeURIComponent(pair.album2.album_id)}/cover`
-    : null;
-
-  const placeholderSvg = getPlaceholderSvg(200);
-
-  // Calculate field diffs
-  const diffs = calculateDiffs(pair.album1, pair.album2);
-
-  // Build list of differing fields (only shown if they differ)
-  const diffFields1 = [];
-  const diffFields2 = [];
-
-  // Show artist/album diffs if they differ (since names are always shown, highlight the difference)
-  if (diffs.artist) {
-    diffFields1.push(renderDiffField('Artist', pair.album1.artist));
-    diffFields2.push(renderDiffField('Artist', pair.album2.artist));
-  }
-  if (diffs.album) {
-    diffFields1.push(renderDiffField('Album', pair.album1.album));
-    diffFields2.push(renderDiffField('Album', pair.album2.album));
-  }
-  if (diffs.release_date) {
-    diffFields1.push(
-      renderDiffField('Release', pair.album1.release_date || 'Unknown')
-    );
-    diffFields2.push(
-      renderDiffField('Release', pair.album2.release_date || 'Unknown')
-    );
-  }
-  if (diffs.genres) {
-    diffFields1.push(
-      renderDiffField(
-        'Genre',
-        formatGenres(pair.album1.genre_1, pair.album1.genre_2)
-      )
-    );
-    diffFields2.push(
-      renderDiffField(
-        'Genre',
-        formatGenres(pair.album2.genre_1, pair.album2.genre_2)
-      )
-    );
-  }
-  if (diffs.trackCount) {
-    diffFields1.push(
-      renderDiffField(
-        'Tracks',
-        pair.album1.trackCount !== null
-          ? `${pair.album1.trackCount} tracks`
-          : 'Unknown'
-      )
-    );
-    diffFields2.push(
-      renderDiffField(
-        'Tracks',
-        pair.album2.trackCount !== null
-          ? `${pair.album2.trackCount} tracks`
-          : 'Unknown'
-      )
-    );
+  if (progress) {
+    progress.textContent = `${currentClusterIndex + 1} / ${currentClusters.length}`;
   }
 
-  const diffSection1 =
-    diffFields1.length > 0
-      ? `<div class="mt-2 pt-2 border-t border-gray-700 space-y-0.5">${diffFields1.join('')}</div>`
-      : '';
-  const diffSection2 =
-    diffFields2.length > 0
-      ? `<div class="mt-2 pt-2 border-t border-gray-700 space-y-0.5">${diffFields2.join('')}</div>`
-      : '';
+  const confidenceLabel =
+    cluster.maxConfidence > 0
+      ? `${cluster.maxConfidence}% top match`
+      : `${cluster.memberCount} variants`;
+
+  const canonicalOptions = cluster.members
+    .map((member) => {
+      const selected =
+        member.album_id === cluster.selectedCanonicalId ? 'selected' : '';
+      return `<option value="${escapeHtml(member.album_id)}" ${selected}>${escapeHtml(member.artist)} - ${escapeHtml(member.album)}</option>`;
+    })
+    .join('');
+
+  const variantRows = cluster.members
+    .map((member) => {
+      const isCanonical = member.album_id === cluster.selectedCanonicalId;
+      const isSelected = cluster.mergeTargets.has(member.album_id);
+      const coverUrl = member.hasCover
+        ? `/api/albums/${encodeURIComponent(member.album_id)}/cover`
+        : placeholderSvg;
+
+      return `
+        <div class="flex items-center gap-3 p-3 rounded border border-gray-700 bg-gray-800/40" data-variant-id="${escapeHtml(member.album_id)}">
+          <input
+            type="checkbox"
+            class="merge-target-checkbox"
+            data-album-id="${escapeHtml(member.album_id)}"
+            ${isCanonical ? 'disabled' : ''}
+            ${isSelected ? 'checked' : ''}
+          />
+          <img
+            src="${coverUrl}"
+            alt="${escapeHtml(member.album)}"
+            class="w-12 h-12 rounded object-cover bg-gray-900"
+            onerror="this.src='${placeholderSvg}'"
+          />
+          <div class="min-w-0 flex-1">
+            <div class="text-sm text-white truncate">${escapeHtml(member.album)}</div>
+            <div class="text-xs text-gray-400 truncate">${escapeHtml(member.artist)}</div>
+            <div class="text-xs text-gray-500 mt-1">
+              ${member.trackCount ? `${member.trackCount} tracks` : 'Tracks unknown'}
+              • ${member.release_date ? escapeHtml(member.release_date) : 'Date unknown'}
+              • ${escapeHtml(formatGenres(member))}
+              • ${member.listRefs || 0} list refs
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            ${isCanonical ? '<span class="text-xs px-2 py-1 bg-green-900/40 border border-green-700 text-green-300 rounded">Canonical</span>' : ''}
+            <button
+              class="settings-button mark-distinct-btn"
+              type="button"
+              data-album-id="${escapeHtml(member.album_id)}"
+              ${isCanonical ? 'disabled' : ''}
+            >
+              Distinct
+            </button>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
 
   content.innerHTML = `
-    <!-- Confidence Banner - compact on mobile -->
-    <div class="mb-3 p-2 sm:p-3 rounded-lg ${pair.confidence >= 90 ? 'bg-red-900/30 border border-red-700/50' : pair.confidence >= 75 ? 'bg-yellow-900/30 border border-yellow-700/50' : 'bg-blue-900/30 border border-blue-700/50'}">
-      <div class="flex items-center justify-between flex-wrap gap-1">
-        <span class="text-sm sm:text-base font-bold ${pair.confidence >= 90 ? 'text-red-400' : pair.confidence >= 75 ? 'text-yellow-400' : 'text-blue-400'}">
-          ${pair.confidence}% Match
-        </span>
-        <span class="text-xs ${diffs.hasDifferences ? 'text-yellow-400' : 'text-green-400'}">
-          ${diffs.hasDifferences ? `${diffs.differenceCount} diff` : 'Match'}
-        </span>
-      </div>
-    </div>
-
-    <!-- Side-by-side comparison - always 2 columns -->
-    <div class="duplicate-review-compare">
-      <!-- Left Album -->
-      <div class="duplicate-review-card bg-gray-800/50 rounded-lg p-2 sm:p-4 border-2 border-transparent hover:border-green-600/50 transition-colors">
-        <div class="text-center mb-2">
-          <span class="px-2 py-0.5 bg-gray-700 text-gray-300 text-xs rounded-full">Left</span>
-        </div>
-        <div class="duplicate-review-cover aspect-square mb-2 sm:mb-3 bg-gray-900 rounded overflow-hidden">
-          <img 
-            src="${leftCoverUrl || placeholderSvg}" 
-            alt="${escapeHtml(pair.album1.album)}"
-            class="w-full h-full object-cover"
-            onerror="this.src='${placeholderSvg}'"
-          />
-        </div>
-        <div class="text-center">
-          <div class="album-title text-white font-semibold text-sm sm:text-base truncate" title="${escapeHtml(pair.album1.album)}">${escapeHtml(pair.album1.album)}</div>
-          <div class="album-artist text-gray-400 text-xs sm:text-sm truncate" title="${escapeHtml(pair.album1.artist)}">${escapeHtml(pair.album1.artist)}</div>
-          ${diffSection1}
-        </div>
+    <div class="space-y-4">
+      <div class="p-3 rounded border border-gray-700 bg-gray-900/50">
+        <div class="text-sm text-gray-200">${cluster.memberCount} variants in this cluster</div>
+        <div class="text-xs text-gray-400 mt-1">${confidenceLabel}</div>
       </div>
 
-      <!-- Right Album -->
-      <div class="duplicate-review-card bg-gray-800/50 rounded-lg p-2 sm:p-4 border-2 border-transparent hover:border-green-600/50 transition-colors">
-        <div class="text-center mb-2">
-          <span class="px-2 py-0.5 bg-gray-700 text-gray-300 text-xs rounded-full">Right</span>
-        </div>
-        <div class="duplicate-review-cover aspect-square mb-2 sm:mb-3 bg-gray-900 rounded overflow-hidden">
-          <img 
-            src="${rightCoverUrl || placeholderSvg}" 
-            alt="${escapeHtml(pair.album2.album)}"
-            class="w-full h-full object-cover"
-            onerror="this.src='${placeholderSvg}'"
-          />
-        </div>
-        <div class="text-center">
-          <div class="album-title text-white font-semibold text-sm sm:text-base truncate" title="${escapeHtml(pair.album2.album)}">${escapeHtml(pair.album2.album)}</div>
-          <div class="album-artist text-gray-400 text-xs sm:text-sm truncate" title="${escapeHtml(pair.album2.artist)}">${escapeHtml(pair.album2.artist)}</div>
-          ${diffSection2}
-        </div>
+      <div>
+        <label for="canonicalAlbumSelect" class="settings-label">Canonical album to keep</label>
+        <select id="canonicalAlbumSelect" class="bg-gray-700 text-white text-sm rounded px-2 py-2 border border-gray-600 w-full">
+          ${canonicalOptions}
+        </select>
+      </div>
+
+      <div id="clusterPreviewPanel" class="hidden p-3 rounded border border-gray-700 bg-gray-900/50 text-sm text-gray-300"></div>
+
+      <div class="space-y-2">
+        ${variantRows}
       </div>
     </div>
   `;
 
-  // Store current pair data for actions
-  modalElement.dataset.leftId = pair.album1.album_id;
-  modalElement.dataset.rightId = pair.album2.album_id;
+  const canonicalSelect = content.querySelector('#canonicalAlbumSelect');
+  canonicalSelect.addEventListener('change', (event) => {
+    applyCanonicalSelection(event.target.value);
+  });
+
+  content.querySelectorAll('.merge-target-checkbox').forEach((checkbox) => {
+    checkbox.addEventListener('change', () => {
+      applyMergeSelection(checkbox.dataset.albumId, checkbox.checked);
+    });
+  });
+
+  content.querySelectorAll('.mark-distinct-btn').forEach((button) => {
+    button.addEventListener('click', () => {
+      handleMarkDistinct(button.dataset.albumId);
+    });
+  });
+
+  setButtonsLoading(loading);
 }
 
-function renderDiffField(label, value) {
-  return `
-    <div class="bg-yellow-900/20 border-l-2 border-yellow-500 pl-1.5 py-0.5 text-xs">
-      <span class="text-gray-500">${label}:</span>
-      <span class="text-yellow-300 block truncate" title="${escapeHtml(value)}">${escapeHtml(value)}</span>
-    </div>
+function applyCanonicalSelection(canonicalId) {
+  const cluster = currentCluster();
+  if (!cluster) return;
+
+  cluster.selectedCanonicalId = canonicalId;
+  cluster.mergeTargets.delete(canonicalId);
+
+  for (const member of cluster.members) {
+    if (
+      member.album_id !== canonicalId &&
+      !cluster.mergeTargets.has(member.album_id)
+    ) {
+      cluster.mergeTargets.add(member.album_id);
+    }
+  }
+
+  renderCurrentCluster();
+}
+
+function applyMergeSelection(albumId, isSelected) {
+  const cluster = currentCluster();
+  if (!cluster) return;
+  if (albumId === cluster.selectedCanonicalId) return;
+
+  if (isSelected) {
+    cluster.mergeTargets.add(albumId);
+  } else {
+    cluster.mergeTargets.delete(albumId);
+  }
+}
+
+function selectedPayload() {
+  const cluster = currentCluster();
+  if (!cluster) return null;
+
+  return {
+    canonicalAlbumId: cluster.selectedCanonicalId,
+    retireAlbumIds: [...cluster.mergeTargets],
+  };
+}
+
+function renderPreview(preview) {
+  const panel = modalElement.querySelector('#clusterPreviewPanel');
+  if (!panel) return;
+
+  panel.classList.remove('hidden');
+  panel.innerHTML = `
+    <div class="font-medium text-gray-100 mb-2">Dry-run impact</div>
+    <div>Lists affected: ${preview.impactedLists}</div>
+    <div>Users affected: ${preview.impactedUsers}</div>
+    <div>Same-list collisions: ${preview.collisionCount}</div>
+    <div class="mt-2">Metadata fields likely merged: ${
+      preview.metadataFieldsLikelyMerged?.length
+        ? preview.metadataFieldsLikelyMerged
+            .map((field) => escapeHtml(field))
+            .join(', ')
+        : 'none'
+    }</div>
+    ${
+      preview.missingRetireAlbumIds?.length
+        ? `<div class="mt-2 text-yellow-400">Already missing: ${preview.missingRetireAlbumIds.map((id) => escapeHtml(id)).join(', ')}</div>`
+        : ''
+    }
   `;
 }
 
-function calculateDiffs(album1, album2) {
-  // Normalize strings, treating null/undefined/empty as equivalent
-  const normalize = (s) => (s || '').toLowerCase().trim();
+async function handlePreview() {
+  const payload = selectedPayload();
+  if (!payload) return;
 
-  // Check if two values are meaningfully different (not just null vs empty)
-  const isDifferent = (a, b) => {
-    const normA = normalize(a);
-    const normB = normalize(b);
-    // Both empty = same, otherwise compare
-    if (!normA && !normB) return false;
-    return normA !== normB;
-  };
+  if (payload.retireAlbumIds.length === 0) {
+    showToast('No variants selected to merge', 'info');
+    return;
+  }
 
-  const diffs = {
-    artist: isDifferent(album1.artist, album2.artist),
-    album: isDifferent(album1.album, album2.album),
-    release_date: isDifferent(album1.release_date, album2.release_date),
-    genres:
-      isDifferent(album1.genre_1, album2.genre_1) ||
-      isDifferent(album1.genre_2, album2.genre_2),
-    trackCount:
-      album1.trackCount !== album2.trackCount &&
-      album1.trackCount !== null &&
-      album2.trackCount !== null,
-  };
+  setButtonsLoading(true);
 
-  diffs.hasDifferences = Object.values(diffs).some((v) => v === true);
-  diffs.differenceCount = Object.values(diffs).filter((v) => v === true).length;
-
-  return diffs;
+  try {
+    const preview = await apiCall('/admin/api/merge-cluster/dry-run', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    renderPreview(preview);
+  } catch (error) {
+    console.error('Error previewing cluster merge:', error);
+    showToast(`Preview failed: ${error.message}`, 'error');
+  } finally {
+    setButtonsLoading(false);
+  }
 }
 
-function formatGenres(g1, g2) {
-  if (!g1 && !g2) return 'None';
-  if (!g2) return g1;
-  return `${g1}, ${g2}`;
+async function handleMergeCluster() {
+  const payload = selectedPayload();
+  if (!payload) return;
+
+  if (payload.retireAlbumIds.length === 0) {
+    showToast('No variants selected to merge', 'info');
+    return;
+  }
+
+  setButtonsLoading(true);
+
+  try {
+    const result = await apiCall('/admin/api/merge-cluster', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    const fieldsSummary = Array.isArray(result.mergedFieldNames)
+      ? result.mergedFieldNames.length
+      : 0;
+
+    showToast(
+      `Merged ${result.mergedAlbums} album variants, updated ${result.listItemsUpdated} list references${fieldsSummary ? `, ${fieldsSummary} metadata fields` : ''}`,
+      'success'
+    );
+
+    resolvedCount++;
+    currentClusterIndex++;
+    renderCurrentCluster();
+  } catch (error) {
+    console.error('Error merging cluster:', error);
+    showToast(`Merge failed: ${error.message}`, 'error');
+  } finally {
+    setButtonsLoading(false);
+  }
+}
+
+async function handleMarkDistinct(albumId) {
+  const cluster = currentCluster();
+  if (!cluster) return;
+
+  const canonicalId = cluster.selectedCanonicalId;
+  if (!canonicalId || canonicalId === albumId) return;
+
+  setButtonsLoading(true);
+
+  try {
+    const result = await markAlbumsDistinct(canonicalId, albumId);
+    if (!result.ok) {
+      throw new Error(result.error || 'Failed to mark albums as distinct');
+    }
+
+    cluster.mergeTargets.delete(albumId);
+    showToast('Marked as different albums', 'success');
+    renderCurrentCluster();
+  } catch (error) {
+    console.error('Error marking albums as distinct:', error);
+    showToast(`Error: ${error.message}`, 'error');
+  } finally {
+    setButtonsLoading(false);
+  }
+}
+
+function handleSkip() {
+  currentClusterIndex++;
+  renderCurrentCluster();
 }
 
 function renderComplete() {
@@ -408,10 +550,10 @@ function renderComplete() {
         <i class="fas fa-check-circle text-5xl text-green-500 mb-4"></i>
         <h3 class="text-xl font-bold text-white mb-2">Review Complete</h3>
         <p class="text-gray-400 mb-4">
-          Processed ${resolvedCount} of ${currentPairs.length} potential duplicates
+          Resolved ${resolvedCount} of ${currentClusters.length} clusters
         </p>
         <p class="text-sm text-gray-500">
-          ${currentPairs.length - resolvedCount > 0 ? `${currentPairs.length - resolvedCount} pairs were skipped` : 'All pairs processed!'}
+          ${currentClusters.length - resolvedCount > 0 ? `${currentClusters.length - resolvedCount} clusters were skipped` : 'All clusters processed!'}
         </p>
       </div>
     `;
@@ -419,93 +561,56 @@ function renderComplete() {
 
   if (footer) {
     footer.innerHTML = `
-      <button id="closeCompleteBtn" class="settings-button bg-green-700 hover:bg-green-600 px-6">
+      <button id="closeCompleteBtn" class="settings-button bg-green-700 hover:bg-green-600 px-6" type="button">
         <i class="fas fa-check mr-2"></i>Done
       </button>
     `;
 
     const closeBtn = footer.querySelector('#closeCompleteBtn');
     if (closeBtn) {
-      closeBtn.addEventListener('click', handleClose);
+      closeBtn.addEventListener('click', hideModal);
     }
   }
 }
 
-async function handleMerge(direction) {
-  const keepId =
-    direction === 'left'
-      ? modalElement.dataset.leftId
-      : modalElement.dataset.rightId;
-  const deleteId =
-    direction === 'left'
-      ? modalElement.dataset.rightId
-      : modalElement.dataset.leftId;
+function setButtonsLoading(isLoading) {
+  loading = isLoading;
 
-  setButtonsLoading(true);
+  if (!modalElement) return;
 
-  try {
-    const data = await apiCall('/admin/api/merge-albums', {
-      method: 'POST',
-      body: JSON.stringify({ keepAlbumId: keepId, deleteAlbumId: deleteId }),
+  modalElement
+    .querySelectorAll(
+      '#previewClusterBtn, #mergeClusterBtn, #skipClusterBtn, .mark-distinct-btn, .merge-target-checkbox, #canonicalAlbumSelect'
+    )
+    .forEach((element) => {
+      element.disabled = isLoading;
     });
+}
 
-    const metadataMsg = data.metadataMerged ? ' (metadata merged)' : '';
-    showToast(
-      `Merged: ${data.listItemsUpdated} reference${data.listItemsUpdated !== 1 ? 's' : ''} updated${metadataMsg}`,
-      'success'
-    );
-    resolvedCount++;
-    currentIndex++;
-    renderCurrentPair();
-  } catch (err) {
-    console.error('Error merging albums:', err);
-    showToast('Error merging albums: ' + err.message, 'error');
-  } finally {
-    setButtonsLoading(false);
+function handleKeyboard(event) {
+  if (!modalController || !modalController.isOpen()) return;
+
+  if (event.key === 'Escape') {
+    hideModal();
+    return;
   }
-}
 
-async function handleMarkDistinct() {
-  const album1 = modalElement.dataset.leftId;
-  const album2 = modalElement.dataset.rightId;
-
-  setButtonsLoading(true);
-
-  try {
-    const result = await markAlbumsDistinct(album1, album2);
-    if (!result.ok) throw new Error(result.error);
-
-    showToast('Marked as different albums', 'success');
-    resolvedCount++;
-    currentIndex++;
-    renderCurrentPair();
-  } catch (err) {
-    console.error('Error marking as distinct:', err);
-    showToast('Error: ' + err.message, 'error');
-  } finally {
-    setButtonsLoading(false);
+  if (event.key === 's' || event.key === 'S') {
+    event.preventDefault();
+    handleSkip();
+    return;
   }
-}
 
-function handleSkip() {
-  currentIndex++;
-  renderCurrentPair();
-}
-
-function setButtonsLoading(loading) {
-  const buttons = modalElement.querySelectorAll(
-    '#keepLeftBtn, #keepRightBtn, #markDistinctBtn, #skipPairBtn'
-  );
-  buttons.forEach((btn) => {
-    btn.disabled = loading;
-  });
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    handleMergeCluster();
+  }
 }
 
 /**
- * Close the modal programmatically
+ * Close the modal programmatically.
  */
 export function closeDuplicateReviewModal() {
-  if (modalElement) {
-    handleClose();
-  }
+  if (!modalElement) return;
+  hideModal();
 }
