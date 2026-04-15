@@ -159,7 +159,7 @@ export function createAlbumDisplay(deps = {}) {
     const countryDisplay = country || 'Country';
     const countryClass = country ? 'text-gray-300' : 'text-gray-800 italic';
 
-    const genre1 = album.genre_1 || album.genre || '';
+    const genre1 = album.genre_1 || '';
     const genre1Display = genre1 || 'Genre 1';
     const genre1Class = genre1 ? 'text-gray-300' : 'text-gray-800 italic';
 
@@ -168,7 +168,7 @@ export function createAlbumDisplay(deps = {}) {
     const genre2Display = genre2 || 'Genre 2';
     const genre2Class = genre2 ? 'text-gray-300' : 'text-gray-800 italic';
 
-    let comment = album.comments || album.comment || '';
+    let comment = album.comments || '';
     if (comment === 'Comment') comment = '';
 
     let comment2 = album.comments_2 || '';
@@ -234,15 +234,10 @@ export function createAlbumDisplay(deps = {}) {
     }
 
     // Process primary and secondary track picks.
-    const primaryTrack =
-      album.primary_track ||
-      album.track_picks?.primary ||
-      album.track_pick ||
-      '';
+    const primaryTrack = album.primary_track || '';
     const primaryData = processTrackPick(primaryTrack, album.tracks);
 
-    const secondaryTrack =
-      album.secondary_track || album.track_picks?.secondary || '';
+    const secondaryTrack = album.secondary_track || '';
     const secondaryData = processTrackPick(secondaryTrack, album.tracks);
 
     // Album summary (from Claude AI)
@@ -372,19 +367,15 @@ export function createAlbumDisplay(deps = {}) {
     const artist = album.artist || 'Unknown Artist';
     const albumName = album.album || 'Unknown Album';
     const country = album.country || '';
-    const genre1 = album.genre_1 || album.genre || '';
+    const genre1 = album.genre_1 || '';
     let genre2 = album.genre_2 || '';
     if (genre2 === 'Genre 2' || genre2 === '-') genre2 = '';
-    let comment = album.comments || album.comment || '';
+    let comment = album.comments || '';
     if (comment === 'Comment') comment = '';
     let comment2 = album.comments_2 || '';
     if (comment2 === 'Comment 2') comment2 = '';
 
-    const primaryTrack =
-      album.primary_track ||
-      album.track_picks?.primary ||
-      album.track_pick ||
-      '';
+    const primaryTrack = album.primary_track || '';
 
     // Inline track display logic (avoids processTrackPick closure allocation)
     let primaryTrackDisplay = 'Select Track';
@@ -713,7 +704,7 @@ export function createAlbumDisplay(deps = {}) {
     // Attach link preview
     const albumsForPreview = getListData(currentList);
     const album = albumsForPreview && albumsForPreview[index];
-    const comment = album ? album.comments || album.comment || '' : '';
+    const comment = album ? album.comments || '' : '';
     if (commentCell) {
       attachLinkPreview(commentCell, comment);
     }
@@ -1101,7 +1092,7 @@ export function createAlbumDisplay(deps = {}) {
     // Attach link preview to content area
     const albumsForMobile = getListData(currentList);
     const album = albumsForMobile && albumsForMobile[index];
-    const comment = album ? album.comments || album.comment || '' : '';
+    const comment = album ? album.comments || '' : '';
     const contentDiv = card.querySelector('.flex-1.min-w-0');
     if (contentDiv) attachLinkPreview(contentDiv, comment);
 
@@ -1424,7 +1415,7 @@ export function createAlbumDisplay(deps = {}) {
         // Build new fingerprint inline and compare as string -- cheaper than
         // comparing 8+ object properties individually, and avoids allocating objects.
         const newAlbum = newAlbums[i];
-        const newFp = `${newAlbum._id || ''}|${newAlbum.artist || ''}|${newAlbum.album || ''}|${newAlbum.release_date || ''}|${newAlbum.country || ''}|${newAlbum.genre_1 || ''}|${newAlbum.genre_2 || ''}|${newAlbum.comments || ''}|${newAlbum.comments_2 || ''}|${newAlbum.track_pick || ''}`;
+        const newFp = `${newAlbum._id || ''}|${newAlbum.artist || ''}|${newAlbum.album || ''}|${newAlbum.release_date || ''}|${newAlbum.country || ''}|${newAlbum.genre_1 || ''}|${newAlbum.genre_2 || ''}|${newAlbum.comments || ''}|${newAlbum.comments_2 || ''}|${newAlbum.primary_track || ''}`;
         if (oldFingerprints[i] !== newFp) {
           fieldChanges++;
         }

@@ -157,7 +157,7 @@ export function createAlbumDisplayShared(deps = {}) {
     const fingerprint = albums
       .map(
         (album) =>
-          `${album._id || ''}|${album.primary_track || album.track_picks?.primary || album.track_pick || ''}|${album.secondary_track || album.track_picks?.secondary || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}`
+          `${album._id || ''}|${album.primary_track || ''}|${album.secondary_track || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}`
       )
       .join('::');
 
@@ -176,7 +176,7 @@ export function createAlbumDisplayShared(deps = {}) {
 
     return albums.map(
       (album) =>
-        `${album._id || ''}|${album.artist || ''}|${album.album || ''}|${album.release_date || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}|${album.primary_track || album.track_picks?.primary || album.track_pick || ''}|${album.secondary_track || album.track_picks?.secondary || ''}`
+        `${album._id || ''}|${album.artist || ''}|${album.album || ''}|${album.release_date || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}|${album.primary_track || ''}|${album.secondary_track || ''}`
     );
   }
 

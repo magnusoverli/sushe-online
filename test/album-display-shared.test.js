@@ -163,7 +163,7 @@ describe('album-display-shared module', () => {
         artist: 'A',
         album: 'B',
         release_date: '2024-01-01',
-        track_pick: 'Song',
+        primary_track: 'Song',
       },
     ];
 
@@ -171,7 +171,7 @@ describe('album-display-shared module', () => {
     const second = utils.generateAlbumFingerprint(albums);
     assert.strictEqual(first, second);
 
-    albums[0].track_pick = 'New';
+    albums[0].primary_track = 'New';
     const stale = utils.generateAlbumFingerprint(albums);
     assert.strictEqual(stale, first);
 

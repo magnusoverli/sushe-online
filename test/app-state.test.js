@@ -82,6 +82,37 @@ describe('app-state', async () => {
       assert.strictEqual(album.albumId, 'legacy-1');
     });
 
+    it('setLists normalizes legacy comment and track-pick aliases', () => {
+      mod.setLists({
+        id1: {
+          _id: 'id1',
+          name: 'Test',
+          _data: [{ comment: 'Legacy note', track_pick: '5' }],
+          count: 1,
+        },
+      });
+
+      const album = mod.getListData('id1')[0];
+      assert.strictEqual(album.comments, 'Legacy note');
+      assert.strictEqual(album.primary_track, '5');
+      assert.strictEqual(album.track_pick, '5');
+    });
+
+    it('setLists normalizes legacy genre alias to genre_1', () => {
+      mod.setLists({
+        id1: {
+          _id: 'id1',
+          name: 'Test',
+          _data: [{ genre: 'Post-rock' }],
+          count: 1,
+        },
+      });
+
+      const album = mod.getListData('id1')[0];
+      assert.strictEqual(album.genre_1, 'Post-rock');
+      assert.strictEqual(album.genre, 'Post-rock');
+    });
+
     it('getListData returns null for nonexistent list', () => {
       assert.strictEqual(mod.getListData('nonexistent'), null);
     });
@@ -157,6 +188,19 @@ describe('app-state', async () => {
       const album = mod.getListData('id1')[0];
       assert.strictEqual(album.album_id, 'legacy-2');
       assert.strictEqual(album.albumId, 'legacy-2');
+    });
+
+    it('setListData normalizes track_picks to canonical track fields', () => {
+      mod.setLists({ id1: { _id: 'id1', _data: [], count: 0 } });
+      mod.setListData(
+        'id1',
+        [{ track_picks: { primary: 'Track A', secondary: 'Track B' } }],
+        false
+      );
+
+      const album = mod.getListData('id1')[0];
+      assert.strictEqual(album.primary_track, 'Track A');
+      assert.strictEqual(album.secondary_track, 'Track B');
     });
 
     it('setListData does nothing when listId is falsy', () => {

@@ -3,14 +3,13 @@ import { showToast, apiCall, showConfirmation } from './utils.js';
 export async function updatePlaylist(listName, listData = []) {
   try {
     // Validate track selection before proceeding
-    // Check for new normalized fields (primary_track) or legacy field (track_pick)
     const totalAlbums = listData.length;
     const albumsWithTracks = listData.filter((album) => {
-      const primary = album.primary_track || album.track_pick;
+      const primary = album.primary_track;
       return primary && primary.trim() !== '';
     }).length;
     const albumsWithBothTracks = listData.filter((album) => {
-      const primary = album.primary_track || album.track_pick;
+      const primary = album.primary_track;
       const secondary = album.secondary_track;
       return (
         primary && primary.trim() !== '' && secondary && secondary.trim() !== ''

@@ -13,34 +13,62 @@
 /** Lists keyed by _id. Structure: { _id, name, year, isMain, count, groupId, sortOrder, _data, updatedAt, createdAt } */
 let lists = {};
 
-function normalizeAlbumIdentifiers(albums = []) {
+function normalizeAlbumRecord(album) {
+  if (!album || typeof album !== 'object') {
+    return { album, changed: false };
+  }
+
+  let changed = false;
+  const normalized = { ...album };
+
+  if (!normalized.album_id && normalized.albumId) {
+    normalized.album_id = normalized.albumId;
+    changed = true;
+  }
+
+  if (normalized.comments == null && normalized.comment != null) {
+    normalized.comments = normalized.comment;
+    changed = true;
+  }
+
+  if (!normalized.genre_1 && normalized.genre) {
+    normalized.genre_1 = normalized.genre;
+    changed = true;
+  }
+
+  const legacyPrimary =
+    normalized.track_picks?.primary || normalized.track_pick || null;
+  if (!normalized.primary_track && legacyPrimary) {
+    normalized.primary_track = legacyPrimary;
+    changed = true;
+  }
+
+  const legacySecondary = normalized.track_picks?.secondary || null;
+  if (!normalized.secondary_track && legacySecondary) {
+    normalized.secondary_track = legacySecondary;
+    changed = true;
+  }
+
+  return { album: changed ? normalized : album, changed };
+}
+
+function normalizeAlbumRecords(albums = []) {
   if (!Array.isArray(albums)) {
     return [];
   }
 
   let changed = false;
   const normalized = albums.map((album) => {
-    if (
-      album &&
-      typeof album === 'object' &&
-      !album.album_id &&
-      album.albumId
-    ) {
-      changed = true;
-      return {
-        ...album,
-        album_id: album.albumId,
-      };
-    }
-
-    return album;
+    const result = normalizeAlbumRecord(album);
+    changed = changed || result.changed;
+    return result.album;
   });
 
   return changed ? normalized : albums;
 }
 
 function createDefaultListEntry(listId, albums = []) {
-  const data = normalizeAlbumIdentifiers(albums);
+  const data = normalizeAlbumRecords(albums);
 
   return {
     _id: listId,
@@ -66,7 +94,7 @@ function normalizeListsMap(newLists = {}) {
     }
 
     if (entry && typeof entry === 'object' && Array.isArray(entry._data)) {
-      const normalizedData = normalizeAlbumIdentifiers(entry._data);
+      const normalizedData = normalizeAlbumRecords(entry._data);
       normalized[listId] =
         normalizedData === entry._data
           ? entry
@@ -215,7 +243,7 @@ export function getListData(listId) {
 export function setListData(listId, albums, updateSnapshot = true) {
   if (!listId) return;
 
-  const normalizedAlbums = normalizeAlbumIdentifiers(albums || []);
+  const normalizedAlbums = normalizeAlbumRecords(albums || []);
 
   if (!lists[listId]) {
     lists[listId] = createDefaultListEntry(listId, normalizedAlbums);
