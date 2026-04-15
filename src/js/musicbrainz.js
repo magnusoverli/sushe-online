@@ -14,7 +14,17 @@ import {
   getListData,
   setListData,
   getListMetadata,
+  isViewingRecommendations,
+  getCurrentRecommendationsYear,
 } from './modules/app-state.js';
+import {
+  apiCall,
+  saveList,
+  selectList,
+  fetchTracksForAlbum,
+  selectRecommendations,
+  showReasoningModal,
+} from './app.js';
 
 const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
 const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
@@ -29,7 +39,7 @@ const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
  */
 async function mergeMetadataToCanonical(album) {
   try {
-    await window.apiCall('/api/albums/merge-metadata', {
+    await apiCall('/api/albums/merge-metadata', {
       method: 'POST',
       body: JSON.stringify({
         album_id: album.album_id,
@@ -1524,7 +1534,7 @@ async function finishManualAdd(album) {
         `"${album.album}" is already in this list${label}`,
         usedExisting ? 'info' : 'error'
       );
-      if (usedExisting && currentListId) window.selectList(currentListId);
+      if (usedExisting && currentListId) selectList(currentListId);
       return;
     }
 
@@ -1538,13 +1548,13 @@ async function finishManualAdd(album) {
 
     if (!Array.isArray(resolved.tracks) || resolved.tracks.length === 0) {
       try {
-        await window.fetchTracksForAlbum(resolved);
+        await fetchTracksForAlbum(resolved);
       } catch (_err) {
         // Auto track fetch failed - not critical
       }
     }
 
-    await window.saveList(currentListId, currentListData);
+    await saveList(currentListId, currentListData);
 
     // Force refresh from server to get merged album data
     const listMetadata = getListMetadata(currentListId);
@@ -1552,7 +1562,7 @@ async function finishManualAdd(album) {
       listMetadata._data = null;
     }
 
-    window.selectList(currentListId);
+    selectList(currentListId);
     closeAddAlbumModal();
 
     const suffix = usedExisting ? ' (using existing album)' : ' to the list';
@@ -2097,7 +2107,7 @@ async function addAlbumToList(releaseGroup) {
 
 async function addAlbumToCurrentList(album) {
   // Check if we're viewing recommendations - route to recommendations flow
-  if (window.isViewingRecommendations && window.isViewingRecommendations()) {
+  if (isViewingRecommendations()) {
     await addAlbumToRecommendations(album);
     return;
   }
@@ -2123,7 +2133,7 @@ async function addAlbumToCurrentList(album) {
         `"${album.album}" is already in this list${label}`,
         usedExisting ? 'info' : 'error'
       );
-      if (usedExisting && currentListId) window.selectList(currentListId);
+      if (usedExisting && currentListId) selectList(currentListId);
       return;
     }
 
@@ -2136,13 +2146,13 @@ async function addAlbumToCurrentList(album) {
 
     if (!Array.isArray(resolved.tracks) || resolved.tracks.length === 0) {
       try {
-        await window.fetchTracksForAlbum(resolved);
+        await fetchTracksForAlbum(resolved);
       } catch (_err) {
         // Auto track fetch failed - not critical
       }
     }
 
-    await window.saveList(currentListId, currentListData);
+    await saveList(currentListId, currentListData);
 
     // Force refresh from server to get merged album data
     const listMetadata = getListMetadata(currentListId);
@@ -2150,7 +2160,7 @@ async function addAlbumToCurrentList(album) {
       listMetadata._data = null;
     }
 
-    window.selectList(currentListId);
+    selectList(currentListId);
     closeAddAlbumModal();
 
     showToast(`Added "${resolved.album}" by ${resolved.artist} to the list`);
@@ -2172,7 +2182,7 @@ async function addAlbumToCurrentList(album) {
  * @param {Object} album - Album object with artist, album, etc.
  */
 async function addAlbumToRecommendations(album) {
-  const year = window.getCurrentRecommendationsYear();
+  const year = getCurrentRecommendationsYear();
   if (!year) {
     showToast('No recommendations year selected', 'error');
     return;
@@ -2182,14 +2192,14 @@ async function addAlbumToRecommendations(album) {
   closeAddAlbumModal();
 
   // Show reasoning modal
-  const reasoning = await window.showReasoningModal(album, year);
+  const reasoning = await showReasoningModal(album, year);
   if (!reasoning) {
     // User cancelled
     return;
   }
 
   try {
-    await window.apiCall(`/api/recommendations/${year}`, {
+    await apiCall(`/api/recommendations/${year}`, {
       method: 'POST',
       body: JSON.stringify({ album, reasoning }),
     });
@@ -2197,8 +2207,8 @@ async function addAlbumToRecommendations(album) {
     showToast(`Recommended "${album.album}" by ${album.artist}`, 'success');
 
     // Refresh recommendations display
-    if (window.selectRecommendations) {
-      window.selectRecommendations(year);
+    if (typeof selectRecommendations === 'function') {
+      selectRecommendations(year);
     }
   } catch (error) {
     if (error.status === 409) {

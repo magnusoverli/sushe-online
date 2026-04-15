@@ -93,6 +93,8 @@ const pollingControllers = new Map(); // listId -> AbortController
  * @param {Function} deps.showMobileSummarySheet - Show mobile summary sheet
  * @param {Function} deps.playAlbumByMetadata - Play album by artist/album metadata
  * @param {Function} deps.playTrackSafe - Play track safely by album ID
+ * @param {Function} deps.playSpecificTrack - Play a specific track by index + identifier
+ * @param {Function} deps.isViewingRecommendations - Check if recommendations view is active
  * @param {Function} deps.reapplyNowPlayingBorder - Re-apply now playing border
  * @param {Function} deps.initializeUnifiedSorting - Initialize drag-drop sorting
  * @param {Function} deps.destroySorting - Destroy drag-drop sorting instance
@@ -119,6 +121,8 @@ export function createAlbumDisplay(deps = {}) {
     showMobileSummarySheet,
     playAlbumByMetadata,
     playTrackSafe,
+    playSpecificTrack,
+    isViewingRecommendations,
     reapplyNowPlayingBorder,
     initializeUnifiedSorting,
     destroySorting,
@@ -808,11 +812,13 @@ export function createAlbumDisplay(deps = {}) {
         const listMeta = getListMetadata(currentListId);
         const isYearBased =
           listMeta && listMeta.year !== null && listMeta.year !== undefined;
-        const isViewingRecommendations =
-          window.isViewingRecommendations && window.isViewingRecommendations();
+        const viewingRecommendations =
+          typeof isViewingRecommendations === 'function'
+            ? isViewingRecommendations()
+            : false;
 
         // Show recommend option only for year-based lists (not when viewing recommendations)
-        const showRecommend = isYearBased && !isViewingRecommendations;
+        const showRecommend = isYearBased && !viewingRecommendations;
         recommendOption.classList.toggle('hidden', !showRecommend);
       }
 
@@ -1230,9 +1236,9 @@ export function createAlbumDisplay(deps = {}) {
         e.stopPropagation();
         e.preventDefault();
         const trackIdentifier = trackPlayBtn.dataset.trackIdentifier;
-        if (trackIdentifier && window.playSpecificTrack) {
+        if (trackIdentifier && typeof playSpecificTrack === 'function') {
           // Play the specific track using its identifier
-          window.playSpecificTrack(index, trackIdentifier);
+          playSpecificTrack(index, trackIdentifier);
         } else {
           // Fallback to album's default track
           const albumsForTrackPlay = getListData(getCurrentList());

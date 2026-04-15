@@ -7,12 +7,15 @@
  * @module context-menus
  */
 
-import { createTransferHelpers } from './album-transfer.js';
 import {
   positionContextMenu,
   hideAllContextMenus as hideAllMenusBase,
 } from './context-menu.js';
 import { getDeviceIcon } from '../utils/device-icons.js';
+import {
+  buildListMenuConfig,
+  createListMenuActions,
+} from './list-menu-shared.js';
 
 /**
  * Factory function to create the context menus module with injected dependencies
@@ -22,31 +25,24 @@ import { getDeviceIcon } from '../utils/device-icons.js';
  * @param {Function} deps.getListMetadata - Get metadata for a list
  * @param {Function} deps.getCurrentList - Get current list name
  * @param {Function} deps.getLists - Get all lists
- * @param {Function} deps.saveList - Save list to server
  * @param {Function} deps.selectList - Select a list
  * @param {Function} deps.showToast - Show toast notification
  * @param {Function} deps.showConfirmation - Show confirmation dialog
  * @param {Function} deps.apiCall - Make API call
- * @param {Function} deps.findAlbumByIdentity - Find album by identity string
  * @param {Function} deps.downloadListAsJSON - Download list as JSON
  * @param {Function} deps.downloadListAsPDF - Download list as PDF
  * @param {Function} deps.downloadListAsCSV - Download list as CSV
  * @param {Function} deps.updatePlaylist - Update playlist on music service
  * @param {Function} deps.openRenameModal - Open rename modal
  * @param {Function} deps.updateListNav - Update list navigation
- * @param {Function} deps.updateListMetadata - Update list metadata
- * @param {Function} deps.showMobileEditForm - Show mobile edit form
- * @param {Function} deps.playAlbum - Play album
- * @param {Function} deps.playAlbumSafe - Play album safely by ID
- * @param {Function} deps.loadLists - Reload lists
- * @param {Function} deps.getContextAlbum - Get context menu album state
- * @param {Function} deps.setContextAlbum - Set context menu album state
  * @param {Function} deps.getContextList - Get context menu list state
  * @param {Function} deps.setContextList - Set context menu list state
  * @param {Function} deps.setCurrentList - Set current list (for delete)
  * @param {Function} deps.refreshMobileBarVisibility - Refresh mobile bar visibility
  * @param {Function} deps.getSortedGroups - Get groups sorted by sort_order
  * @param {Function} deps.refreshGroupsAndLists - Refresh groups and lists after changes
+ * @param {Function} deps.clearSnapshotFromStorage - Clear local list snapshot cache
+ * @param {Function} deps.getCurrentUser - Get authenticated frontend user
  * @returns {Object} Context menus module API
  */
 export function createContextMenus(deps = {}) {
@@ -55,25 +51,16 @@ export function createContextMenus(deps = {}) {
     getListMetadata,
     getCurrentList,
     getLists,
-    saveList,
     selectList,
     showToast,
     showConfirmation,
     apiCall,
-    findAlbumByIdentity,
     downloadListAsJSON,
     downloadListAsPDF,
     downloadListAsCSV,
     updatePlaylist,
     openRenameModal,
     updateListNav,
-    updateListMetadata: _updateListMetadata,
-    showMobileEditForm: _showMobileEditForm,
-    playAlbum: _playAlbum,
-    playAlbumSafe: _playAlbumSafe,
-    loadLists: _loadLists,
-    getContextAlbum = () => ({ index: null, albumId: null }),
-    setContextAlbum,
     getContextList,
     setContextList,
     setCurrentList,
@@ -81,28 +68,27 @@ export function createContextMenus(deps = {}) {
     getSortedGroups,
     refreshGroupsAndLists,
     toggleMainStatus,
+    clearSnapshotFromStorage,
+    getCurrentUser = () => window.currentUser || {},
   } = deps;
 
-  // Track loading performance optimization
-  let trackAbortController = null;
-
-  function getContextAlbumId() {
-    return getContextAlbum().albumId || null;
-  }
+  const listMenuActions = createListMenuActions({
+    getListData,
+    updatePlaylist,
+    downloadListAsJSON,
+    downloadListAsPDF,
+    downloadListAsCSV,
+    openRenameModal,
+    toggleMainStatus,
+    logger: console,
+  });
 
   /**
    * Hide all context menus and perform module-specific cleanup.
-   * Delegates to shared hideAllMenusBase() then clears local state.
+   * Delegates to shared hideAllMenusBase().
    */
   function hideAllContextMenus() {
     hideAllMenusBase();
-
-    // Module-specific cleanup: clear context state and cancel track fetches
-    setContextAlbum(null, null);
-    if (trackAbortController) {
-      trackAbortController.abort();
-      trackAbortController = null;
-    }
 
     // Only show FAB when a list is actually selected
     const currentList = getCurrentList();
@@ -120,210 +106,11 @@ export function createContextMenus(deps = {}) {
    * @returns {Object} Menu configuration
    */
   function getListMenuConfig(listName) {
-    const meta = getListMetadata(listName);
-    const hasSpotify = window.currentUser?.spotifyAuth;
-    const hasTidal = window.currentUser?.tidalAuth;
-    const musicService = window.currentUser?.musicService;
-
-    let musicServiceText = 'Send to Music Service';
-    if (musicService === 'spotify' && hasSpotify) {
-      musicServiceText = 'Send to Spotify';
-    } else if (musicService === 'tidal' && hasTidal) {
-      musicServiceText = 'Send to Tidal';
-    } else if (hasSpotify && !hasTidal) {
-      musicServiceText = 'Send to Spotify';
-    } else if (hasTidal && !hasSpotify) {
-      musicServiceText = 'Send to Tidal';
-    }
-
-    // Determine if list is in a collection (not a year-group)
-    // Lists in collections (or orphaned/uncategorized) can be moved to other collections
-    // Lists in year-groups cannot be moved via this menu (they're organized by year)
-    const groupId = meta?.groupId;
-    let isInCollection = false;
-    let isInYearGroup = false;
-
-    if (!groupId) {
-      // Orphaned/uncategorized lists can be moved
-      isInCollection = true;
-    } else if (getSortedGroups) {
-      // Check if the group is a collection (not a year-group)
-      const groups = getSortedGroups();
-      const group = groups.find((g) => g._id === groupId);
-      if (group) {
-        isInCollection = !group.isYearGroup;
-        isInYearGroup = group.isYearGroup;
-      }
-    }
-
-    // A list can have main status only if it's in a year-group or has a year directly
-    // Lists in collections cannot have main status
-    const hasYear = !!meta?.year || isInYearGroup;
-
-    return {
-      hasYear,
-      isMain: !!meta?.isMain,
-      mainToggleText: meta?.isMain ? 'Remove Main Status' : 'Set as Main',
-      mainIconClass: meta?.isMain ? 'fa-star' : 'fa-star',
-      musicServiceText,
-      hasSpotify,
-      hasTidal,
-      isInCollection,
-    };
-  }
-
-  /**
-   * Show move to list submenu for desktop
-   */
-  function showMoveToListSubmenu() {
-    const currentList = getCurrentList();
-    const lists = getLists();
-    const albumId = getContextAlbumId();
-
-    const submenu = document.getElementById('albumMoveSubmenu');
-    const moveOption = document.getElementById('moveAlbumOption');
-    const playSubmenu = document.getElementById('playAlbumSubmenu');
-    const playOption = document.getElementById('playAlbumOption');
-    const copySubmenu = document.getElementById('albumCopySubmenu');
-    const copyOption = document.getElementById('copyAlbumOption');
-
-    if (!submenu || !moveOption) return;
-
-    // Hide the other submenus first
-    if (playSubmenu) {
-      playSubmenu.classList.add('hidden');
-      playOption?.classList.remove('bg-gray-700', 'text-white');
-    }
-    if (copySubmenu) {
-      copySubmenu.classList.add('hidden');
-      copyOption?.classList.remove('bg-gray-700', 'text-white');
-    }
-
-    // Highlight the parent menu item
-    moveOption.classList.add('bg-gray-700', 'text-white');
-
-    // Get all list IDs except the current one
-    const listIds = Object.keys(lists).filter((id) => id !== currentList);
-
-    if (listIds.length === 0) {
-      submenu.innerHTML =
-        '<div class="px-4 py-2 text-sm text-gray-500">No other lists available</div>';
-    } else {
-      submenu.innerHTML = listIds
-        .map((listId) => {
-          const meta = getListMetadata(listId);
-          const listName = meta?.name || 'Unknown';
-          return `
-          <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listId}">
-            <span class="mr-2">•</span>${listName}
-          </button>
-        `;
-        })
-        .join('');
-
-      // Add click handlers to each list option
-      submenu.querySelectorAll('[data-target-list]').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const targetListId = btn.dataset.targetList;
-
-          // Hide both menus and remove highlight
-          document.getElementById('albumContextMenu')?.classList.add('hidden');
-          submenu.classList.add('hidden');
-          moveOption?.classList.remove('bg-gray-700', 'text-white');
-
-          // Show confirmation modal
-          showMoveConfirmation(albumId, targetListId);
-        });
-      });
-    }
-
-    // Position submenu next to the move option
-    const moveRect = moveOption.getBoundingClientRect();
-    const contextMenu = document.getElementById('albumContextMenu');
-    const menuRect = contextMenu.getBoundingClientRect();
-
-    submenu.style.left = `${menuRect.right}px`;
-    submenu.style.top = `${moveRect.top}px`;
-    submenu.classList.remove('hidden');
-  }
-
-  /**
-   * Show copy to list submenu for desktop
-   */
-  function showCopyToListSubmenu() {
-    const currentList = getCurrentList();
-    const lists = getLists();
-    const albumId = getContextAlbumId();
-
-    const submenu = document.getElementById('albumCopySubmenu');
-    const copyOption = document.getElementById('copyAlbumOption');
-    const playSubmenu = document.getElementById('playAlbumSubmenu');
-    const playOption = document.getElementById('playAlbumOption');
-    const moveSubmenu = document.getElementById('albumMoveSubmenu');
-    const moveOption = document.getElementById('moveAlbumOption');
-
-    if (!submenu || !copyOption) return;
-
-    // Hide other submenus first
-    if (playSubmenu) {
-      playSubmenu.classList.add('hidden');
-      playOption?.classList.remove('bg-gray-700', 'text-white');
-    }
-    if (moveSubmenu) {
-      moveSubmenu.classList.add('hidden');
-      moveOption?.classList.remove('bg-gray-700', 'text-white');
-    }
-
-    // Highlight the parent menu item
-    copyOption.classList.add('bg-gray-700', 'text-white');
-
-    // Get all list IDs except the current one
-    const listIds = Object.keys(lists).filter((id) => id !== currentList);
-
-    if (listIds.length === 0) {
-      submenu.innerHTML =
-        '<div class="px-4 py-2 text-sm text-gray-500">No other lists available</div>';
-    } else {
-      submenu.innerHTML = listIds
-        .map((listId) => {
-          const meta = getListMetadata(listId);
-          const listName = meta?.name || 'Unknown';
-          return `
-          <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listId}">
-            <span class="mr-2">&bull;</span>${listName}
-          </button>
-        `;
-        })
-        .join('');
-
-      // Add click handlers to each list option
-      submenu.querySelectorAll('[data-target-list]').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const targetListId = btn.dataset.targetList;
-
-          // Hide both menus and remove highlight
-          document.getElementById('albumContextMenu')?.classList.add('hidden');
-          submenu.classList.add('hidden');
-          copyOption?.classList.remove('bg-gray-700', 'text-white');
-
-          // Show confirmation modal
-          showCopyConfirmation(albumId, targetListId);
-        });
-      });
-    }
-
-    // Position submenu next to the copy option
-    const copyRect = copyOption.getBoundingClientRect();
-    const contextMenu = document.getElementById('albumContextMenu');
-    const menuRect = contextMenu.getBoundingClientRect();
-
-    submenu.style.left = `${menuRect.right}px`;
-    submenu.style.top = `${copyRect.top}px`;
-    submenu.classList.remove('hidden');
+    return buildListMenuConfig({
+      listMeta: getListMetadata(listName),
+      groups: getSortedGroups ? getSortedGroups() : [],
+      currentUser: getCurrentUser(),
+    });
   }
 
   /**
@@ -364,8 +151,7 @@ export function createContextMenus(deps = {}) {
         submenu.classList.add('hidden');
         downloadOption.classList.remove('bg-gray-700', 'text-white');
 
-        // Download the list
-        downloadListAsJSON(currentContextList);
+        listMenuActions.downloadList(currentContextList, 'json');
         setContextList(null);
       });
     }
@@ -382,8 +168,7 @@ export function createContextMenus(deps = {}) {
         submenu.classList.add('hidden');
         downloadOption.classList.remove('bg-gray-700', 'text-white');
 
-        // Download the list
-        downloadListAsPDF(currentContextList);
+        listMenuActions.downloadList(currentContextList, 'pdf');
         setContextList(null);
       });
     }
@@ -400,8 +185,7 @@ export function createContextMenus(deps = {}) {
         submenu.classList.add('hidden');
         downloadOption.classList.remove('bg-gray-700', 'text-white');
 
-        // Download the list
-        downloadListAsCSV(currentContextList);
+        listMenuActions.downloadList(currentContextList, 'csv');
         setContextList(null);
       });
     }
@@ -414,105 +198,6 @@ export function createContextMenus(deps = {}) {
     submenu.style.left = `${menuRect.right}px`;
     submenu.style.top = `${downloadRect.top}px`;
     submenu.classList.remove('hidden');
-  }
-
-  // Create transfer helpers (move/copy with confirmation dialogs)
-  const {
-    moveAlbumToList,
-    copyAlbumToList,
-    showMoveConfirmation,
-    showCopyConfirmation,
-  } = createTransferHelpers(
-    {
-      getCurrentList,
-      getLists,
-      getListData,
-      getListMetadata,
-      saveList,
-      selectList,
-      showToast,
-      apiCall,
-      findAlbumByIdentity,
-    },
-    {
-      showConfirmation,
-      showToast,
-      findAlbumByIdentity,
-      getCurrentList,
-      getListMetadata,
-    }
-  );
-
-  /**
-   * Hide submenus when mouse leaves the context menu area
-   */
-  function setupSubmenuHideOnLeave() {
-    const contextMenu = document.getElementById('albumContextMenu');
-    const moveSubmenu = document.getElementById('albumMoveSubmenu');
-    const copySubmenu = document.getElementById('albumCopySubmenu');
-    const playSubmenu = document.getElementById('playAlbumSubmenu');
-    const moveOption = document.getElementById('moveAlbumOption');
-    const copyOption = document.getElementById('copyAlbumOption');
-    const playOption = document.getElementById('playAlbumOption');
-
-    if (!contextMenu) return;
-
-    let submenuTimeout;
-
-    const hideSubmenus = () => {
-      submenuTimeout = setTimeout(() => {
-        if (moveSubmenu) {
-          moveSubmenu.classList.add('hidden');
-          moveOption?.classList.remove('bg-gray-700', 'text-white');
-        }
-        if (copySubmenu) {
-          copySubmenu.classList.add('hidden');
-          copyOption?.classList.remove('bg-gray-700', 'text-white');
-        }
-        if (playSubmenu) {
-          playSubmenu.classList.add('hidden');
-          playOption?.classList.remove('bg-gray-700', 'text-white');
-        }
-      }, 200);
-    };
-
-    const cancelHide = () => {
-      if (submenuTimeout) clearTimeout(submenuTimeout);
-    };
-
-    contextMenu.addEventListener('mouseleave', (e) => {
-      const toMoveSubmenu =
-        moveSubmenu &&
-        (e.relatedTarget === moveSubmenu ||
-          moveSubmenu.contains(e.relatedTarget));
-      const toCopySubmenu =
-        copySubmenu &&
-        (e.relatedTarget === copySubmenu ||
-          copySubmenu.contains(e.relatedTarget));
-      const toPlaySubmenu =
-        playSubmenu &&
-        (e.relatedTarget === playSubmenu ||
-          playSubmenu.contains(e.relatedTarget));
-
-      if (!toMoveSubmenu && !toCopySubmenu && !toPlaySubmenu) {
-        hideSubmenus();
-      }
-    });
-
-    if (moveSubmenu) {
-      moveSubmenu.addEventListener('mouseenter', cancelHide);
-      moveSubmenu.addEventListener('mouseleave', hideSubmenus);
-    }
-
-    if (copySubmenu) {
-      copySubmenu.addEventListener('mouseenter', cancelHide);
-      copySubmenu.addEventListener('mouseleave', hideSubmenus);
-    }
-
-    if (playSubmenu) {
-      playSubmenu.addEventListener('mouseenter', cancelHide);
-      playSubmenu.addEventListener('mouseleave', hideSubmenus);
-    }
   }
 
   /**
@@ -539,26 +224,6 @@ export function createContextMenus(deps = {}) {
     )
       return;
 
-    // Update the playlist option text based on user's music service
-    const updatePlaylistText = document.getElementById('updatePlaylistText');
-    if (updatePlaylistText) {
-      const musicService = window.currentUser?.musicService;
-      const hasSpotify = window.currentUser?.spotifyAuth;
-      const hasTidal = window.currentUser?.tidalAuth;
-
-      if (musicService === 'spotify' && hasSpotify) {
-        updatePlaylistText.textContent = 'Send to Spotify';
-      } else if (musicService === 'tidal' && hasTidal) {
-        updatePlaylistText.textContent = 'Send to Tidal';
-      } else if (hasSpotify && !hasTidal) {
-        updatePlaylistText.textContent = 'Send to Spotify';
-      } else if (hasTidal && !hasSpotify) {
-        updatePlaylistText.textContent = 'Send to Tidal';
-      } else {
-        updatePlaylistText.textContent = 'Send to Music Service';
-      }
-    }
-
     // Handle download option click - show submenu
     downloadOption.onclick = (e) => {
       e.preventDefault();
@@ -573,7 +238,7 @@ export function createContextMenus(deps = {}) {
 
       if (!currentContextList) return;
 
-      openRenameModal(currentContextList);
+      listMenuActions.renameList(currentContextList);
     };
 
     // Handle toggle main option click
@@ -583,7 +248,7 @@ export function createContextMenus(deps = {}) {
       setContextList(null);
 
       if (currentContextList) {
-        toggleMainStatus(currentContextList);
+        listMenuActions.toggleMainForList(currentContextList);
       }
     };
 
@@ -594,13 +259,7 @@ export function createContextMenus(deps = {}) {
 
       if (!currentContextList) return;
 
-      try {
-        // Pass both list name and list data for track validation
-        const listData = getListData(currentContextList) || [];
-        await updatePlaylist(currentContextList, listData);
-      } catch (err) {
-        console.error('Update playlist failed', err);
-      }
+      await listMenuActions.sendToMusicService(currentContextList);
 
       setContextList(null);
     };
@@ -637,8 +296,8 @@ export function createContextMenus(deps = {}) {
           delete lists[currentContextList];
 
           // Clean up snapshot from localStorage and memory
-          if (window.clearSnapshotFromStorage) {
-            window.clearSnapshotFromStorage(currentContextList);
+          if (typeof clearSnapshotFromStorage === 'function') {
+            clearSnapshotFromStorage(currentContextList);
           }
 
           if (currentList === currentContextList) {
@@ -935,13 +594,6 @@ export function createContextMenus(deps = {}) {
     hideAllContextMenus,
     getDeviceIcon,
     getListMenuConfig,
-    showMoveToListSubmenu,
-    showCopyToListSubmenu,
-    showMoveConfirmation,
-    showCopyConfirmation,
-    moveAlbumToList,
-    copyAlbumToList,
-    setupSubmenuHideOnLeave,
     showDownloadListSubmenu,
     initializeContextMenu,
   };

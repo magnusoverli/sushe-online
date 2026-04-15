@@ -40,6 +40,7 @@ import { getCurrentListId } from './app-state.js';
  * @param {Function} deps.showToast - Toast notification function
  * @param {Function} deps.showConfirmation - Modal confirmation function
  * @param {Function} deps.apiCall - API call function
+ * @param {Function} deps.refreshLockedYearStatus - Refresh lock UI for one year
  */
 export function createSettingsDrawer(deps = {}) {
   const showToast = deps.showToast || (() => {});
@@ -47,6 +48,7 @@ export function createSettingsDrawer(deps = {}) {
     deps.showConfirmation || (() => Promise.resolve(false));
   const apiCall =
     deps.apiCall || (() => Promise.reject(new Error('apiCall not provided')));
+  const refreshLockedYearStatus = deps.refreshLockedYearStatus;
 
   let currentCategory = 'account';
   const categoryData = {};
@@ -257,6 +259,7 @@ export function createSettingsDrawer(deps = {}) {
     handleShowContributorManager,
     handleShowRecommenderManager,
     createSettingsModalBase,
+    refreshLockedYearStatus,
   });
 
   const { attachAdminHandlers } = createSettingsAdminHandlers({

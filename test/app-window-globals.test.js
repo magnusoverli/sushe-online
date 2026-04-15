@@ -9,72 +9,34 @@ describe('app-window-globals module', () => {
     registerAppWindowGlobals = module.registerAppWindowGlobals;
   });
 
-  it('registers legacy window bindings and playback wrapper', () => {
+  it('registers only legacy shell window bindings', () => {
     const win = {};
-    const playbackCalls = [];
-    const refreshLockedYearStatus = async () => {};
+    const selectList = () => {};
+    const updateListNav = () => {};
+    const collapseGroupsForActiveList = () => {};
+    const displayAlbums = () => {};
 
     registerAppWindowGlobals({
       win,
-      apiCall: () => {},
-      showToast: () => {},
-      showReasoningModal: () => {},
-      getListData: () => {},
-      setListData: () => {},
-      getListMetadata: () => {},
-      updateListMetadata: () => {},
-      isListDataLoaded: () => {},
-      saveList: () => {},
-      loadLists: () => {},
-      selectList: () => {},
-      updateListNav: () => {},
-      collapseGroupsForActiveList: () => {},
-      updatePlaylist: () => {},
-      toggleMainStatus: () => {},
-      displayAlbums: () => {},
-      getGroup: () => {},
-      updateGroupsFromServer: () => {},
-      getCurrentListName: () => {},
-      findListByName: () => {},
-      isViewingRecommendations: () => false,
-      getCurrentRecommendationsYear: () => null,
-      selectRecommendations: () => {},
-      clearSnapshotFromStorage: () => {},
-      showMobileAlbumMenu: () => {},
-      showMobileMoveToListSheet: () => {},
-      showMobileListMenu: () => {},
-      showMobileCategoryMenu: () => {},
-      showMobileEditForm: () => {},
-      showMobileEditFormSafe: () => {},
-      showMobileSummarySheet: () => {},
-      openRenameCategoryModal: () => {},
-      playAlbum: () => {},
-      playTrack: () => {},
-      getPlaybackModule: () => ({
-        playTrackSafe(albumId) {
-          playbackCalls.push(albumId);
-          return `played:${albumId}`;
-        },
-      }),
-      playSpecificTrack: () => {},
-      playAlbumSafe: () => {},
-      removeAlbumSafe: () => {},
-      fetchTracksForAlbum: () => {},
-      getTrackName: () => {},
-      getTrackLength: () => {},
-      formatTrackTime: () => {},
-      refreshLockedYearStatus,
+      selectList,
+      updateListNav,
+      collapseGroupsForActiveList,
+      displayAlbums,
     });
 
-    assert.strictEqual(typeof win.apiCall, 'function');
-    assert.strictEqual(typeof win.selectList, 'function');
-    assert.strictEqual(typeof win.updateListNav, 'function');
-    assert.strictEqual(typeof win.playTrackSafe, 'function');
-    assert.strictEqual(win.refreshLockedYearStatus, refreshLockedYearStatus);
+    assert.strictEqual(win.selectList, selectList);
+    assert.strictEqual(win.updateListNav, updateListNav);
+    assert.strictEqual(
+      win.collapseGroupsForActiveList,
+      collapseGroupsForActiveList
+    );
+    assert.strictEqual(win.displayAlbums, displayAlbums);
 
-    const playResult = win.playTrackSafe('album-1');
-    assert.strictEqual(playResult, 'played:album-1');
-    assert.deepStrictEqual(playbackCalls, ['album-1']);
+    assert.strictEqual(win.apiCall, undefined);
+    assert.strictEqual(win.saveList, undefined);
+    assert.strictEqual(win.playTrackSafe, undefined);
+    assert.strictEqual(win.showMobileListMenu, undefined);
+    assert.strictEqual(win.selectRecommendations, undefined);
   });
 
   it('no-ops safely when window object is unavailable', () => {

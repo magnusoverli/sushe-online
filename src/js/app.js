@@ -68,7 +68,6 @@ import {
   getListMetadata,
   updateListMetadata,
   findListByName,
-  getCurrentListName,
   isListDataLoaded,
   getGroups,
   getGroup,
@@ -252,7 +251,7 @@ function getTrackName(track) {
 function getTrackLength(track) {
   return getTrackSelectionModule().getTrackLength(track);
 }
-function fetchTracksForAlbum(album, signal) {
+export function fetchTracksForAlbum(album, signal) {
   return getTrackSelectionModule().fetchTracksForAlbum(album, signal);
 }
 function showTrackSelectionMenu(album, albumIndex, x, y) {
@@ -314,9 +313,6 @@ const getPlaybackModule = createLazyModule(() =>
 // Wrapper functions for playback module
 function playAlbum(index) {
   return getPlaybackModule().playAlbum(index);
-}
-function playTrack(index) {
-  return getPlaybackModule().playTrack(index);
 }
 function playSpecificTrack(index, trackName) {
   return getPlaybackModule().playSpecificTrack(index, trackName);
@@ -390,12 +386,13 @@ const getAlbumDisplayModule = createLazyModule(() =>
       getLinkPreviewModule().attachLinkPreview(...args),
     showTrackSelectionMenu,
     showMobileEditForm,
-    showMobileAlbumMenu: (el) => window.showMobileAlbumMenu(el),
-    showMobileSummarySheet: (summary, albumName, artist) =>
-      window.showMobileSummarySheet(summary, albumName, artist),
+    showMobileAlbumMenu,
+    showMobileSummarySheet,
     playAlbumByMetadata: (artist, album, options) =>
       getPlaybackModule().playAlbumByMetadata(artist, album, options),
-    playTrackSafe: (albumId) => window.playTrackSafe(albumId),
+    playTrackSafe: (albumId) => getPlaybackModule().playTrackSafe(albumId),
+    playSpecificTrack,
+    isViewingRecommendations,
     getTrackName,
     getTrackLength,
     formatTrackTime,
@@ -438,12 +435,10 @@ const getContextMenusModule = createLazyModule(() =>
     getListMetadata,
     getCurrentList: () => getCurrentListId(),
     getLists,
-    saveList,
     selectList,
     showToast,
     showConfirmation,
     apiCall,
-    findAlbumByIdentity,
     downloadListAsJSON,
     downloadListAsPDF,
     downloadListAsCSV,
@@ -451,14 +446,7 @@ const getContextMenusModule = createLazyModule(() =>
     openRenameModal,
     updateListNav,
     updateListMetadata,
-    showMobileEditForm,
-    playAlbum,
-    playAlbumSafe: (albumId) => window.playAlbumSafe(albumId),
-    loadLists,
-    getContextAlbum: () => getContextAlbumState(),
-    setContextAlbum: (index, albumId) => {
-      setContextAlbumState(index, albumId);
-    },
+    clearSnapshotFromStorage,
     getContextList: () => getContextListState(),
     setContextList: (listId) => {
       setContextListState(listId);
@@ -471,6 +459,7 @@ const getContextMenusModule = createLazyModule(() =>
         window.refreshMobileBarVisibility();
       }
     },
+    getCurrentUser: () => window.currentUser || {},
     toggleMainStatus,
     getSortedGroups,
     refreshGroupsAndLists,
@@ -478,10 +467,6 @@ const getContextMenusModule = createLazyModule(() =>
 );
 
 // Wrapper functions for context menus module
-function getListMenuConfig(listName) {
-  return getContextMenusModule().getListMenuConfig(listName);
-}
-
 function getDeviceIcon(type) {
   return getContextMenusModule().getDeviceIcon(type);
 }
@@ -521,7 +506,6 @@ const getMobileUIModule = createLazyModule(() =>
     updatePlaylist,
     toggleMainStatus,
     getDeviceIcon,
-    getListMenuConfig,
     getAvailableCountries,
     getAvailableGenres,
     setCurrentContextAlbum: (idx) => {
@@ -543,16 +527,14 @@ const getMobileUIModule = createLazyModule(() =>
     isViewingRecommendations,
     recommendAlbum: (...args) =>
       getRecommendationsModule().recommendAlbum(...args),
+    openRenameCategoryModal,
+    getCurrentUser: () => window.currentUser || {},
   })
 );
 
 // Wrapper functions for mobile UI module
 function showMobileAlbumMenu(indexOrElement) {
   return getMobileUIModule().showMobileAlbumMenu(indexOrElement);
-}
-
-function showMobileMoveToListSheet(index, albumId) {
-  return getMobileUIModule().showMobileMoveToListSheet(index, albumId);
 }
 
 function showMobileListMenu(listName) {
@@ -581,10 +563,6 @@ function showMobileEditFormSafe(albumId) {
 
 function playAlbumSafe(albumId) {
   return getMobileUIModule().playAlbumSafe(albumId);
-}
-
-function removeAlbumSafe(albumId) {
-  return getMobileUIModule().removeAlbumSafe(albumId);
 }
 
 function findAlbumByIdentity(albumId) {
@@ -651,7 +629,6 @@ const getListNavModule = createLazyModule(() =>
     getSortedGroups,
     getCurrentList: () => getCurrentListId(),
     selectList,
-    getListMenuConfig,
     hideAllContextMenus,
     positionContextMenu,
     toggleMobileLists,
@@ -665,6 +642,11 @@ const getListNavModule = createLazyModule(() =>
     showToast,
     refreshGroupsAndLists,
     yearHasRecommendations,
+    getCurrentUser: () => window.currentUser || {},
+    showMobileListMenu,
+    showMobileCategoryMenu,
+    selectRecommendations,
+    getCurrentRecommendationsYear,
   })
 );
 
@@ -1350,7 +1332,7 @@ async function importList(name, albums, metadata = null) {
 // @param {string} listId - List ID
 // @param {Array} data - Album array
 // @param {number|null} year - Optional year for the list (required for new lists)
-async function saveList(listId, data, year = undefined) {
+export async function saveList(listId, data, year = undefined) {
   try {
     const cleanedData = data.map((album) => {
       const cleaned = { ...album };
@@ -1455,14 +1437,13 @@ const getListSelectionModule = createLazyModule(() =>
   })
 );
 
-async function selectList(listId) {
+export async function selectList(listId) {
   return getListSelectionModule().selectList(listId);
 }
 
 // ============ RECOMMENDATIONS MODULE BRIDGE ============
-// Thin wrapper for backward compatibility (called via window.selectRecommendations)
 
-function selectRecommendations(year) {
+export function selectRecommendations(year) {
   // Clear any stale lock indicator from a previously viewed locked main list
   clearYearLockUI();
   return getRecommendationsModule().selectRecommendations(year);
@@ -1482,49 +1463,10 @@ const { refreshLockedYearStatus } = createYearLockStatusRefresh({
 const debouncedSaveList = createDebouncedSave({ saveList, showToast });
 
 registerAppWindowGlobals({
-  apiCall,
-  showToast,
-  showReasoningModal,
-  getListData,
-  setListData,
-  getListMetadata,
-  updateListMetadata,
-  isListDataLoaded,
-  saveList,
-  loadLists,
   selectList,
   updateListNav,
   collapseGroupsForActiveList,
-  updatePlaylist,
-  toggleMainStatus,
   displayAlbums,
-  getGroup,
-  updateGroupsFromServer,
-  getCurrentListName,
-  findListByName,
-  isViewingRecommendations,
-  getCurrentRecommendationsYear,
-  selectRecommendations,
-  clearSnapshotFromStorage,
-  showMobileAlbumMenu,
-  showMobileMoveToListSheet,
-  showMobileListMenu,
-  showMobileCategoryMenu,
-  showMobileEditForm,
-  showMobileEditFormSafe,
-  showMobileSummarySheet,
-  openRenameCategoryModal,
-  playAlbum,
-  playTrack,
-  getPlaybackModule,
-  playSpecificTrack,
-  playAlbumSafe,
-  removeAlbumSafe,
-  fetchTracksForAlbum,
-  getTrackName,
-  getTrackLength,
-  formatTrackTime,
-  refreshLockedYearStatus,
 });
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1551,7 +1493,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const settingsDrawer = createSettingsDrawer({
       showToast,
       showConfirmation,
-      apiCall: window.apiCall,
+      apiCall,
+      refreshLockedYearStatus,
     });
 
     settingsDrawer.initialize();
@@ -1620,7 +1563,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Check if user needs to complete list setup (year + main list designation)
       // Delay slightly to let the main UI render first
       setTimeout(() => {
-        checkListSetupStatus().catch((err) => {
+        checkListSetupStatus({ refreshLists: loadLists }).catch((err) => {
           console.warn('Failed to check list setup status:', err);
         });
       }, 1000);

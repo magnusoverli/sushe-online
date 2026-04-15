@@ -9,11 +9,15 @@ import { escapeHtml } from './html-utils.js';
 // State for the wizard
 let setupData = null;
 const pendingUpdates = new Map();
+let refreshLists = null;
 
 /**
  * Check if user needs to complete list setup and show wizard if needed
  */
-export async function checkListSetupStatus() {
+export async function checkListSetupStatus(options = {}) {
+  refreshLists =
+    typeof options.refreshLists === 'function' ? options.refreshLists : null;
+
   try {
     const status = await apiCall('/api/lists/setup-status');
 
@@ -315,8 +319,8 @@ async function handleSave() {
     hideWizard();
 
     // Refresh the lists in the sidebar
-    if (typeof window.loadLists === 'function') {
-      window.loadLists();
+    if (typeof refreshLists === 'function') {
+      refreshLists();
     }
   } catch (err) {
     console.error('Failed to save list updates:', err);
