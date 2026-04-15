@@ -15,6 +15,10 @@ import { fetchSpotifyDevices } from '../utils/playback-service.js';
 import { createMobileAlbumActions } from './mobile-ui/album-actions.js';
 import { createTrackPickService } from './track-pick-service.js';
 import { createAlbumIdentityFinder } from './mobile-ui/album-identity.js';
+import {
+  buildListMenuConfig,
+  createListMenuActions,
+} from './list-menu-shared.js';
 
 /**
  * Factory function to create the mobile UI module with injected dependencies
@@ -42,7 +46,6 @@ import { createAlbumIdentityFinder } from './mobile-ui/album-identity.js';
  * @param {Function} deps.updatePlaylist - Update playlist on music service
  * @param {Function} deps.toggleMainStatus - Toggle main status
  * @param {Function} deps.getDeviceIcon - Get icon for device type
- * @param {Function} deps.getListMenuConfig - Get list menu configuration
  * @param {Function} deps.getAvailableCountries - Get available countries list
  * @param {Function} deps.getAvailableGenres - Get available genres list
  * @param {Function} deps.setCurrentContextAlbum - Set current context album index
@@ -53,6 +56,8 @@ import { createAlbumIdentityFinder } from './mobile-ui/album-identity.js';
  * @param {Function} deps.refreshGroupsAndLists - Refresh groups and lists after changes
  * @param {Function} deps.isViewingRecommendations - Check if currently viewing recommendations
  * @param {Function} deps.recommendAlbum - Shared recommendation flow (reasoning modal + API)
+ * @param {Function} deps.openRenameCategoryModal - Open category rename modal
+ * @param {Function} deps.getCurrentUser - Get authenticated frontend user
  * @returns {Object} Mobile UI module API
  */
 export function createMobileUI(deps = {}) {
@@ -82,7 +87,6 @@ export function createMobileUI(deps = {}) {
     updatePlaylist,
     toggleMainStatus,
     getDeviceIcon,
-    getListMenuConfig,
     getAvailableCountries,
     getAvailableGenres,
     setCurrentContextAlbum,
@@ -93,11 +97,23 @@ export function createMobileUI(deps = {}) {
     refreshGroupsAndLists,
     isViewingRecommendations,
     recommendAlbum,
+    openRenameCategoryModal,
+    getCurrentUser = () => window.currentUser || {},
   } = deps;
   const trackPickService = createTrackPickService({ apiCall });
   const findAlbumByIdentity = createAlbumIdentityFinder({
     getCurrentList,
     getListData,
+  });
+  const listMenuActions = createListMenuActions({
+    getListData,
+    updatePlaylist,
+    downloadListAsJSON,
+    downloadListAsPDF,
+    downloadListAsCSV,
+    openRenameModal,
+    toggleMainStatus,
+    logger: console,
   });
 
   // Create transfer helpers (move/copy with confirmation dialogs)
@@ -161,7 +177,11 @@ export function createMobileUI(deps = {}) {
     const lists = getLists();
     const listMeta = getListMetadata(listId);
     const listName = listMeta?.name || listId;
-    const menuConfig = getListMenuConfig(listId);
+    const menuConfig = buildListMenuConfig({
+      listMeta,
+      groups: getSortedGroups ? getSortedGroups() : [],
+      currentUser: getCurrentUser(),
+    });
 
     const { sheet: actionSheet, close } = createActionSheet({
       contentHtml: `
@@ -302,28 +322,28 @@ export function createMobileUI(deps = {}) {
       e.preventDefault();
       e.stopPropagation();
       close();
-      downloadListAsJSON(listId);
+      listMenuActions.downloadList(listId, 'json');
     });
 
     downloadPdfBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       close();
-      downloadListAsPDF(listId);
+      listMenuActions.downloadList(listId, 'pdf');
     });
 
     downloadCsvBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       close();
-      downloadListAsCSV(listId);
+      listMenuActions.downloadList(listId, 'csv');
     });
 
     editBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       close();
-      openRenameModal(listId);
+      listMenuActions.renameList(listId);
     });
 
     if (toggleMainBtn) {
@@ -331,7 +351,7 @@ export function createMobileUI(deps = {}) {
         e.preventDefault();
         e.stopPropagation();
         close();
-        toggleMainStatus(listId);
+        listMenuActions.toggleMainForList(listId);
       });
     }
 
@@ -339,12 +359,7 @@ export function createMobileUI(deps = {}) {
       e.preventDefault();
       e.stopPropagation();
       close();
-      try {
-        const listData = getListData(listId) || [];
-        await updatePlaylist(listId, listData);
-      } catch (err) {
-        console.error('Update playlist failed', err);
-      }
+      await listMenuActions.sendToMusicService(listId);
     });
 
     // Handle move to collection button
@@ -571,18 +586,15 @@ export function createMobileUI(deps = {}) {
 
         // Year groups can't be renamed (shouldn't reach here due to UI)
         if (isYearGroup) {
-          if (window.showToast) {
-            window.showToast(
-              'Year groups cannot be renamed. The name matches the year.',
-              'info'
-            );
-          }
+          showToast(
+            'Year groups cannot be renamed. The name matches the year.',
+            'info'
+          );
           return;
         }
 
-        // Use the global function from app.js
-        if (window.openRenameCategoryModal) {
-          window.openRenameCategoryModal(groupId, groupName);
+        if (typeof openRenameCategoryModal === 'function') {
+          openRenameCategoryModal(groupId, groupName);
         }
       });
     }

@@ -7,6 +7,8 @@
  * @module list-nav
  */
 
+import { buildListMenuConfig } from './list-menu-shared.js';
+
 /**
  * Factory function to create the list navigation module with injected dependencies
  *
@@ -17,7 +19,6 @@
  * @param {Function} deps.getSortedGroups - Get groups sorted by sort_order
  * @param {Function} deps.getCurrentList - Get current list name
  * @param {Function} deps.selectList - Select a list
- * @param {Function} deps.getListMenuConfig - Get list menu configuration
  * @param {Function} deps.hideAllContextMenus - Hide all context menus
  * @param {Function} deps.positionContextMenu - Position a context menu
  * @param {Function} deps.toggleMobileLists - Toggle mobile list panel
@@ -27,6 +28,11 @@
  * @param {Function} deps.showToast - Show toast notifications
  * @param {Function} deps.refreshGroupsAndLists - Refresh groups and lists from server
  * @param {Function} deps.yearHasRecommendations - Check if a year has recommendations
+ * @param {Function} deps.getCurrentUser - Get authenticated frontend user
+ * @param {Function} deps.showMobileListMenu - Show mobile list menu action sheet
+ * @param {Function} deps.showMobileCategoryMenu - Show mobile category menu action sheet
+ * @param {Function} deps.selectRecommendations - Select recommendations for a year
+ * @param {Function} deps.getCurrentRecommendationsYear - Get active recommendations year
  * @returns {Object} List navigation module API
  */
 export function createListNav(deps = {}) {
@@ -37,7 +43,6 @@ export function createListNav(deps = {}) {
     getSortedGroups,
     getCurrentList,
     selectList,
-    getListMenuConfig,
     hideAllContextMenus,
     positionContextMenu,
     toggleMobileLists,
@@ -47,6 +52,11 @@ export function createListNav(deps = {}) {
     showToast,
     refreshGroupsAndLists,
     yearHasRecommendations,
+    getCurrentUser = () => window.currentUser || {},
+    showMobileListMenu,
+    showMobileCategoryMenu,
+    selectRecommendations,
+    getCurrentRecommendationsYear,
   } = deps;
 
   // Track sortable instances for cleanup
@@ -403,8 +413,11 @@ export function createListNav(deps = {}) {
       const contextMenu = document.getElementById('contextMenu');
       if (!contextMenu) return;
 
-      // Get shared menu configuration
-      const menuConfig = getListMenuConfig(listId);
+      const menuConfig = buildListMenuConfig({
+        listMeta: getListMetadata(listId),
+        groups: getSortedGroups ? getSortedGroups() : [],
+        currentUser: getCurrentUser(),
+      });
 
       // Update the playlist option text based on user's music service
       const updatePlaylistText = document.getElementById('updatePlaylistText');
@@ -472,8 +485,8 @@ export function createListNav(deps = {}) {
     menuButton.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      if (window.showMobileListMenu) {
-        window.showMobileListMenu(listId);
+      if (typeof showMobileListMenu === 'function') {
+        showMobileListMenu(listId);
       }
     });
   }
@@ -585,7 +598,10 @@ export function createListNav(deps = {}) {
    */
   function createRecommendationsButton(year, isMobile) {
     // Check if recommendations is currently active for this year
-    const currentRecommendationsYear = window.currentRecommendationsYear;
+    const currentRecommendationsYear =
+      typeof getCurrentRecommendationsYear === 'function'
+        ? getCurrentRecommendationsYear()
+        : null;
     const isActive = currentRecommendationsYear === year;
 
     const li = document.createElement('li');
@@ -598,8 +614,8 @@ export function createListNav(deps = {}) {
 
     // Click handler for selecting recommendations
     button.onclick = () => {
-      if (window.selectRecommendations) {
-        window.selectRecommendations(year);
+      if (typeof selectRecommendations === 'function') {
+        selectRecommendations(year);
       }
       if (isMobile && toggleMobileLists) {
         toggleMobileLists();
@@ -697,8 +713,8 @@ export function createListNav(deps = {}) {
     menuButton.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      if (window.showMobileCategoryMenu) {
-        window.showMobileCategoryMenu(groupId, groupName, isYearGroup);
+      if (typeof showMobileCategoryMenu === 'function') {
+        showMobileCategoryMenu(groupId, groupName, isYearGroup);
       }
     });
   }
