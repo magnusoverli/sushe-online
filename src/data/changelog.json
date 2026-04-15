@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-04-15",
+    "category": "ui",
+    "description": "Removed notification when selecting tracks in details editor",
+    "hash": "3308a75352ed070eebe32b0732a74a8a5ed7d948",
+    "commitMessage": "Remove notification when selecting track in details editor"
+  },
+  {
+    "date": "2026-04-15",
     "category": "fix",
     "description": "Fixed list sync across multiple devices",
     "hash": "5809c32fe9475d7810ee0f76d6841c174ccef13b",
