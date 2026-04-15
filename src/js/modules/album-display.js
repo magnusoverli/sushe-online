@@ -805,7 +805,7 @@ export function createAlbumDisplay(deps = {}) {
       const recommendOption = document.getElementById('recommendAlbumOption');
       if (recommendOption) {
         const currentListId = getCurrentList();
-        const listMeta = window.lists && window.lists[currentListId];
+        const listMeta = getListMetadata(currentListId);
         const isYearBased =
           listMeta && listMeta.year !== null && listMeta.year !== undefined;
         const isViewingRecommendations =

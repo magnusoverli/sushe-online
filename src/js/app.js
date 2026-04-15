@@ -636,8 +636,6 @@ async function refreshGroupsAndLists() {
         };
       }
     });
-    window.lists = currentLists;
-
     // Re-render the sidebar navigation
     updateListNav();
   } catch (err) {
@@ -1261,8 +1259,6 @@ async function importList(name, albums, metadata = null) {
       updatedAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
     };
-    window.lists = getLists();
-
     // Build a map from album_id to list_item_id for track picks
     const albumToListItemMap = new Map();
     for (const item of savedList) {

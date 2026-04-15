@@ -60,11 +60,10 @@ describe('app-state', async () => {
       assert.deepStrictEqual(mod.getLists(), newLists);
     });
 
-    it('setLists syncs to window.lists', () => {
+    it('setLists does not expose window.lists compatibility bridge', () => {
       const newLists = { id1: { _id: 'id1', name: 'Test' } };
       mod.setLists(newLists);
-      assert.deepStrictEqual(window.lists, newLists);
-      assert.strictEqual(window.lists, mod.getLists());
+      assert.strictEqual(window.lists, undefined);
     });
 
     it('setLists preserves canonical album fields inside _data arrays', () => {

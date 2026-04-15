@@ -125,7 +125,6 @@ export function getLists() {
  */
 export function setLists(newLists) {
   lists = normalizeListsMap(newLists);
-  window.lists = lists;
 }
 
 /**
