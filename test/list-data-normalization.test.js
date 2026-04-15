@@ -62,7 +62,7 @@ describe('list-data-normalization module', () => {
     assert.strictEqual(entry._data[0].genre_1, 'Jazz');
   });
 
-  it('normalizes mixed list map entries', () => {
+  it('normalizes canonical list map entries and skips legacy array entries', () => {
     const input = {
       'list-1': [{ albumId: 'a1' }],
       'list-2': {
@@ -73,8 +73,7 @@ describe('list-data-normalization module', () => {
 
     const normalized = normalizeListsMap(input);
 
-    assert.strictEqual(Array.isArray(normalized['list-1']._data), true);
-    assert.strictEqual(normalized['list-1']._data[0].album_id, 'a1');
+    assert.strictEqual(normalized['list-1'], undefined);
     assert.strictEqual(normalized['list-2']._data[0].album_id, 'a2');
     assert.strictEqual(normalized['list-2']._data[0].comments, 'hello');
   });
