@@ -166,4 +166,49 @@ describe('realtime-sync module', () => {
       [albums, { forceFullRebuild: true }],
     ]);
   });
+
+  it('ignores list:created events without canonical listId', async () => {
+    const fakeSocket = createFakeSocket();
+    const navCalls = [];
+    const toasts = [];
+
+    const sync = createRealtimeSync({
+      ioFactory: () => fakeSocket,
+      refreshListNav: () => navCalls.push('called'),
+      showToast: (...args) => toasts.push(args),
+      logger: { warn: () => {} },
+    });
+
+    sync.connect();
+    await fakeSocket.trigger('list:created', {
+      listName: 'Missing ID',
+    });
+
+    assert.deepStrictEqual(navCalls, []);
+    assert.deepStrictEqual(toasts, []);
+  });
+
+  it('registers list listeners once across reconnect events', async () => {
+    const fakeSocket = createFakeSocket();
+    const refreshCalls = [];
+
+    const sync = createRealtimeSync({
+      ioFactory: () => fakeSocket,
+      getCurrentList: () => 'list-1',
+      refreshListData: async (listId) => {
+        refreshCalls.push(listId);
+      },
+      logger: { debug: () => {}, warn: () => {}, error: () => {} },
+      debug: true,
+    });
+
+    sync.connect();
+    await fakeSocket.trigger('connect');
+    await fakeSocket.trigger('list:updated', {
+      listId: 'list-1',
+      updatedAt: new Date().toISOString(),
+    });
+
+    assert.deepStrictEqual(refreshCalls, ['list-1']);
+  });
 });

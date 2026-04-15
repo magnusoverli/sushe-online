@@ -32,6 +32,11 @@ import {
   PLACEHOLDER_GIF,
 } from './album-display-shared.js';
 import { detectUpdateType } from './album-display/incremental-update-detector.js';
+import {
+  createAlbumDataProcessor,
+  formatPlaycount,
+} from './album-display/album-data.js';
+import { createPlaycountSync } from './album-display/playcount-sync.js';
 
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
@@ -62,14 +67,6 @@ const {
   invalidateFingerprint,
   extractMutableFingerprints,
 } = albumDisplayShared;
-
-// Last.fm playcount cache: { listItemId: { playcount, status } | null }
-// status can be: 'success', 'not_found', 'error', or null (not yet fetched)
-let playcountCache = {};
-let playcountFetchInProgress = false;
-
-// AbortControllers for active polling sessions (one per list)
-const pollingControllers = new Map(); // listId -> AbortController
 
 /**
  * Factory function to create the album display module with injected dependencies
@@ -132,220 +129,19 @@ export function createAlbumDisplay(deps = {}) {
     formatTrackTime,
   } = deps;
 
-  /**
-   * Process album data into display-ready format
-   * @param {Object} album - Raw album data
-   * @param {number} index - Album index in list
-   * @returns {Object} Processed album data for rendering
-   */
-  function processAlbumData(album, index) {
-    const currentList = getCurrentList();
-    const albumId = album.album_id || '';
-    const albumName = album.album || 'Unknown Album';
-    const artist = album.artist || 'Unknown Artist';
-    const rawReleaseDate = album.release_date || '';
-    const releaseDate = formatReleaseDate(rawReleaseDate);
+  const playcountSync = createPlaycountSync({
+    apiCall,
+    formatPlaycount,
+  });
 
-    // Check for year mismatch with current list
-    const listMeta = getListMetadata(currentList);
-    const listYear = listMeta?.year || null;
-
-    // Position/rank only exists for main lists - it has semantic meaning (contributes to aggregate)
-    // For non-main lists, position is just array order with no ranking significance
-    const isMain = listMeta?.isMain || false;
-    const position = isMain ? index + 1 : null;
-    const yearMismatch = isYearMismatch(rawReleaseDate, listYear);
-    const releaseYear = extractYearFromDate(rawReleaseDate);
-    const yearMismatchTooltip = yearMismatch
-      ? `Release year (${releaseYear}) doesn't match list year (${listYear})`
-      : '';
-
-    const country = album.country || '';
-    const countryDisplay = country || 'Country';
-    const countryClass = country ? 'text-gray-300' : 'text-gray-800 italic';
-
-    const genre1 = album.genre_1 || '';
-    const genre1Display = genre1 || 'Genre 1';
-    const genre1Class = genre1 ? 'text-gray-300' : 'text-gray-800 italic';
-
-    let genre2 = album.genre_2 || '';
-    if (genre2 === 'Genre 2' || genre2 === '-') genre2 = '';
-    const genre2Display = genre2 || 'Genre 2';
-    const genre2Class = genre2 ? 'text-gray-300' : 'text-gray-800 italic';
-
-    let comment = album.comments || '';
-    if (comment === 'Comment') comment = '';
-
-    let comment2 = album.comments_2 || '';
-    if (comment2 === 'Comment 2') comment2 = '';
-
-    // Support both URL-based images and stored base64 data.
-    const coverImageUrl = album.cover_image_url || '';
-    const coverImage = album.cover_image || '';
-    const imageFormat = album.cover_image_format || 'PNG';
-
-    // Helper to process a single track pick
-    function processTrackPick(trackIdentifier, tracks) {
-      if (!trackIdentifier) {
-        return { display: '', class: 'text-gray-800 italic', duration: '' };
-      }
-
-      if (tracks && Array.isArray(tracks)) {
-        const trackMatch = tracks.find(
-          (t) => getTrackName(t) === trackIdentifier
-        );
-        if (trackMatch) {
-          const trackName = getTrackName(trackMatch);
-          const match = trackName.match(/^(\d+)[.\s-]?\s*(.*)$/);
-          let display;
-          if (match) {
-            const trackNum = match[1];
-            const displayName = match[2] || '';
-            display = displayName
-              ? `${trackNum}. ${displayName}`
-              : `Track ${trackNum}`;
-          } else {
-            display = trackName;
-          }
-          const length = getTrackLength(trackMatch);
-          const duration = formatTrackTime(length);
-          return { display, class: 'text-gray-300', duration };
-        } else if (trackIdentifier.match(/^\d+$/)) {
-          return {
-            display: `Track ${trackIdentifier}`,
-            class: 'text-gray-300',
-            duration: '',
-          };
-        } else {
-          return {
-            display: trackIdentifier,
-            class: 'text-gray-300',
-            duration: '',
-          };
-        }
-      } else if (trackIdentifier.match(/^\d+$/)) {
-        return {
-          display: `Track ${trackIdentifier}`,
-          class: 'text-gray-300',
-          duration: '',
-        };
-      } else {
-        return {
-          display: trackIdentifier,
-          class: 'text-gray-300',
-          duration: '',
-        };
-      }
-    }
-
-    // Process primary and secondary track picks.
-    const primaryTrack = album.primary_track || '';
-    const primaryData = processTrackPick(primaryTrack, album.tracks);
-
-    const secondaryTrack = album.secondary_track || '';
-    const secondaryData = processTrackPick(secondaryTrack, album.tracks);
-
-    // Album summary (from Claude AI)
-    const summary = album.summary || '';
-    const summarySource = album.summary_source || album.summarySource || '';
-
-    // Recommendation cross-reference (from backend)
-    const recommendedBy = album.recommended_by || null;
-    const recommendedAt = album.recommended_at || null;
-
-    // Get playcount from cache (keyed by list item _id)
-    // Cache now stores { playcount, status } objects or null
-    const itemId = album._id || '';
-    const cachedData = playcountCache[itemId];
-    const playcount = cachedData?.playcount ?? null;
-    const playcountStatus = cachedData?.status ?? null;
-    const playcountDisplay = formatPlaycountDisplay(playcount, playcountStatus);
-
-    return {
-      position,
-      albumId,
-      albumName,
-      artist,
-      releaseDate,
-      yearMismatch,
-      yearMismatchTooltip,
-      country,
-      countryDisplay,
-      countryClass,
-      genre1,
-      genre1Display,
-      genre1Class,
-      genre2,
-      genre2Display,
-      genre2Class,
-      comment,
-      comment2,
-      coverImageUrl,
-      coverImage,
-      imageFormat,
-      primaryTrack,
-      primaryTrackDisplay: primaryData.display,
-      primaryTrackClass: primaryData.display
-        ? primaryData.class
-        : 'text-gray-800 italic',
-      primaryTrackDuration: primaryData.duration,
-      secondaryTrack,
-      secondaryTrackDisplay: secondaryData.display,
-      secondaryTrackClass: secondaryData.display
-        ? secondaryData.class
-        : 'text-gray-800 italic',
-      secondaryTrackDuration: secondaryData.duration,
-      hasSecondaryTrack: !!secondaryTrack,
-      itemId,
-      playcount,
-      playcountStatus,
-      playcountDisplay,
-      summary,
-      summarySource,
-      recommendedBy,
-      recommendedAt,
-    };
-  }
-
-  /**
-   * Format playcount number for display
-   * @param {number|null|undefined} count - Raw playcount
-   * @returns {string} Formatted playcount or empty string
-   */
-  function formatPlaycount(count) {
-    if (count === null || count === undefined) return '';
-    if (count === 0) return '0';
-    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
-    if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
-    return count.toString();
-  }
-
-  /**
-   * Format playcount display based on status
-   * @param {number|null} playcount - Raw playcount
-   * @param {string|null} status - 'success', 'not_found', 'error', or null
-   * @returns {Object} { html, isNotFound } for rendering
-   */
-  function formatPlaycountDisplay(playcount, status) {
-    // Not yet fetched - return empty (will be hidden)
-    if (status === null || status === undefined) {
-      return { html: '', isNotFound: false, isEmpty: true };
-    }
-
-    // Album not found on Last.fm - show red X
-    if (status === 'not_found') {
-      return { html: '', isNotFound: true, isEmpty: false };
-    }
-
-    // Error state - treat like not yet fetched (will retry)
-    if (status === 'error') {
-      return { html: '', isNotFound: false, isEmpty: true };
-    }
-
-    // Success - show formatted playcount
-    const formatted = formatPlaycount(playcount);
-    return { html: formatted, isNotFound: false, isEmpty: !formatted };
-  }
+  const { processAlbumData } = createAlbumDataProcessor({
+    getCurrentList,
+    getListMetadata,
+    getTrackName,
+    getTrackLength,
+    formatTrackTime,
+    getPlaycountCacheEntry: playcountSync.getPlaycountCacheEntry,
+  });
 
   /**
    * Extract only the fields needed for DOM field updates (updateAlbumFields).
@@ -2577,271 +2373,6 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
-   * Clear the playcount cache
-   * Used when switching lists or users
-   */
-  function clearPlaycountCache() {
-    // Cancel all active polling sessions
-    pollingControllers.forEach((controller) => {
-      controller.abort();
-    });
-    pollingControllers.clear();
-
-    playcountCache = {};
-  }
-
-  /**
-   * Cancel active polling for a specific list
-   * @param {string} listId - List ID to cancel polling for
-   */
-  function cancelPollingForList(listId) {
-    const controller = pollingControllers.get(listId);
-    if (controller) {
-      controller.abort();
-      pollingControllers.delete(listId);
-    }
-  }
-
-  /**
-   * Fetch and display playcounts for a list from Last.fm
-   * @param {string} listId - List ID to fetch playcounts for
-   * @param {boolean} forceRefresh - Force refresh stale data
-   */
-  async function fetchAndDisplayPlaycounts(listId, forceRefresh = false) {
-    if (!listId || playcountFetchInProgress) return;
-
-    playcountFetchInProgress = true;
-
-    try {
-      const response = await apiCall(
-        `/api/lastfm/list-playcounts/${listId}${forceRefresh ? '?refresh=true' : ''}`
-      );
-
-      if (response.error) {
-        // User might not have Last.fm connected - that's OK
-        if (response.error !== 'Last.fm not connected') {
-          console.warn('Failed to fetch playcounts:', response.error);
-        }
-        return;
-      }
-
-      const { playcounts, refreshing } = response;
-
-      // Update cache
-      Object.assign(playcountCache, playcounts);
-
-      // Update DOM elements
-      updatePlaycountElements(playcounts);
-
-      // If background refresh is happening, poll for updates until complete
-      if (refreshing > 0) {
-        pollForRefreshedPlaycounts(listId, refreshing);
-      }
-    } catch (err) {
-      // Silently fail - playcounts are not critical
-      console.warn('Playcount fetch error:', err);
-    } finally {
-      playcountFetchInProgress = false;
-    }
-  }
-
-  /**
-   * Update playcount elements in the DOM
-   * @param {Object} playcounts - Map of itemId to { playcount, status } or null
-   */
-  function updatePlaycountElements(playcounts) {
-    for (const [itemId, data] of Object.entries(playcounts)) {
-      // Skip if no data yet
-      if (data === null || data === undefined) continue;
-
-      const { playcount, status } = data;
-
-      // Update desktop elements
-      const desktopEl = document.querySelector(`[data-playcount="${itemId}"]`);
-      if (desktopEl) {
-        if (status === 'not_found') {
-          // Album not found - show red X
-          desktopEl.innerHTML = `<i class="fas fa-times text-[10px]"></i>`;
-          desktopEl.title = 'Album not found on Last.fm';
-          desktopEl.className = 'text-xs text-red-500 shrink-0';
-          desktopEl.dataset.status = 'not_found';
-          desktopEl.classList.remove('hidden');
-        } else if (status === 'success') {
-          // Success - show playcount
-          const display = formatPlaycount(playcount);
-          desktopEl.innerHTML = `<i class="fas fa-headphones text-[10px] mr-1"></i>${display}`;
-          desktopEl.title = `${playcount} plays on Last.fm`;
-          desktopEl.className = 'text-xs text-gray-500 shrink-0';
-          desktopEl.dataset.status = 'success';
-          desktopEl.classList.remove('hidden');
-        }
-        // For 'error' status, keep hidden (will retry later)
-      }
-
-      // Update mobile elements
-      const mobileEl = document.querySelector(
-        `[data-playcount-mobile="${itemId}"]`
-      );
-      if (mobileEl) {
-        if (status === 'not_found') {
-          // Album not found - show red X
-          mobileEl.innerHTML = `<i class="fas fa-times text-[10px]"></i>`;
-          mobileEl.title = 'Album not found on Last.fm';
-          mobileEl.className = 'text-red-500 ml-4';
-          mobileEl.dataset.status = 'not_found';
-          mobileEl.classList.remove('hidden');
-        } else if (status === 'success') {
-          // Success - show playcount
-          const display = formatPlaycount(playcount);
-          mobileEl.innerHTML = `<i class="fas fa-headphones text-[10px]"></i> ${display}`;
-          mobileEl.className = 'text-gray-600 ml-4';
-          mobileEl.dataset.status = 'success';
-          mobileEl.classList.remove('hidden');
-        }
-        // For 'error' status, keep hidden (will retry later)
-      }
-    }
-  }
-
-  /**
-   * Poll for refreshed playcounts until all data is loaded
-   * @param {string} listId - List ID
-   * @param {number} expectedCount - Number of albums being refreshed
-   */
-  async function pollForRefreshedPlaycounts(listId, expectedCount) {
-    // Cancel any existing polling for this list before starting new session
-    cancelPollingForList(listId);
-
-    // Create new AbortController for this polling session
-    const controller = new AbortController();
-    pollingControllers.set(listId, controller);
-    const { signal } = controller;
-
-    // Calculate expected time: ~5 albums per batch, ~1.1s per batch
-    // With variant detection, each album may take longer (multiple API calls)
-    const estimatedBatches = Math.ceil(expectedCount / 3);
-    const estimatedTimeMs = estimatedBatches * 1500 + 3000; // Add buffer for variant lookups
-
-    // Poll interval and max attempts
-    const POLL_INTERVAL = 3000; // Poll every 3 seconds
-    const MAX_POLLS = Math.max(
-      5,
-      Math.ceil(estimatedTimeMs / POLL_INTERVAL) + 2
-    );
-
-    // Minimum polls to ensure we catch background refresh updates
-    // Even if no nulls, we should poll at least a few times for stale data updates
-    const MIN_POLLS = 3;
-
-    let pollCount = 0;
-    let previousPlaycounts = { ...playcountCache };
-
-    const poll = async () => {
-      // Check if polling was cancelled
-      if (signal.aborted) {
-        return;
-      }
-
-      pollCount++;
-
-      try {
-        const response = await apiCall(
-          `/api/lastfm/list-playcounts/${listId}`,
-          {
-            signal,
-          }
-        );
-
-        if (response.playcounts) {
-          // Check if any values changed since last poll
-          // Compare by playcount and status since values are now objects
-          let changedCount = 0;
-          for (const [itemId, data] of Object.entries(response.playcounts)) {
-            const prev = previousPlaycounts[itemId];
-            const hasChanged =
-              (data === null) !== (prev === null) ||
-              (data &&
-                prev &&
-                (data.playcount !== prev.playcount ||
-                  data.status !== prev.status));
-            if (hasChanged) {
-              changedCount++;
-            }
-          }
-
-          // Update cache and DOM
-          Object.assign(playcountCache, response.playcounts);
-          updatePlaycountElements(response.playcounts);
-          previousPlaycounts = JSON.parse(JSON.stringify(response.playcounts));
-
-          // Count how many are still null/missing (not yet fetched or error)
-          const missingCount = Object.values(response.playcounts).filter(
-            (v) => v === null || (v && v.status === 'error')
-          ).length;
-
-          // Log progress
-          if (changedCount > 0) {
-            console.log(
-              `Playcounts updated: ${changedCount} changed, ${missingCount} missing`
-            );
-          }
-
-          // Stop conditions:
-          // 1. All loaded (no nulls) AND no changes AND polled at least MIN_POLLS times
-          // 2. Reached MAX_POLLS
-          if (
-            missingCount === 0 &&
-            changedCount === 0 &&
-            pollCount >= MIN_POLLS
-          ) {
-            console.log('All playcounts loaded');
-            pollingControllers.delete(listId); // Clean up on success
-            return;
-          }
-
-          // Continue polling if under max
-          if (pollCount < MAX_POLLS) {
-            // If values are still changing or nulls remain, poll at normal rate
-            // Otherwise slow down
-            const interval =
-              changedCount > 0 || missingCount > 0
-                ? POLL_INTERVAL
-                : POLL_INTERVAL * 1.5;
-            setTimeout(poll, interval);
-          } else {
-            // Max polls reached, clean up
-            pollingControllers.delete(listId);
-          }
-        }
-      } catch (err) {
-        // Polling was cancelled - exit cleanly
-        if (err.name === 'AbortError') {
-          console.log(`Playcount polling cancelled for list ${listId}`);
-          return;
-        }
-
-        // List was deleted (404) - stop polling
-        if (err.message?.includes('List not found')) {
-          console.log(
-            `List ${listId} no longer exists, stopping playcount poll`
-          );
-          pollingControllers.delete(listId); // Clean up controller reference
-          return;
-        }
-
-        console.warn('Playcount poll failed:', err);
-        // Retry if under max and not aborted
-        if (pollCount < MAX_POLLS && !signal.aborted) {
-          setTimeout(poll, POLL_INTERVAL);
-        }
-      }
-    };
-
-    // Start polling after initial delay
-    setTimeout(poll, POLL_INTERVAL);
-  }
-
-  /**
    * Update summary for a single album without full refresh
    * @param {string} albumId - Album ID to update
    * @param {Object} summaryData - Summary data from API
@@ -2952,11 +2483,11 @@ export function createAlbumDisplay(deps = {}) {
   // Return public API
   return {
     displayAlbums,
-    fetchAndDisplayPlaycounts,
+    fetchAndDisplayPlaycounts: playcountSync.fetchAndDisplayPlaycounts,
     updatePositionNumbers,
     clearLastRenderedCache,
-    clearPlaycountCache,
-    cancelPollingForList,
+    clearPlaycountCache: playcountSync.clearPlaycountCache,
+    cancelPollingForList: playcountSync.cancelPollingForList,
     updateAlbumSummaryInPlace,
     invalidateFingerprint,
     // Granular DOM updates

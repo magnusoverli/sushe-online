@@ -16,6 +16,7 @@ import {
   getListMetadata,
   isViewingRecommendations,
   getCurrentRecommendationsYear,
+  getAvailableCountries,
 } from './modules/app-state.js';
 import {
   apiCall,
@@ -607,8 +608,8 @@ async function loadAlbumCover(
 
     if (coverUrl && imgElement && imgElement.parentElement) {
       // Store the cover URL for later use
-      if (window.currentReleaseGroups && window.currentReleaseGroups[index]) {
-        window.currentReleaseGroups[index].coverArt = coverUrl;
+      if (currentReleaseGroups[index]) {
+        currentReleaseGroups[index].coverArt = coverUrl;
       }
       // Remove loading state and set the verified image
       imgElement.parentElement.classList.remove('animate-pulse');
@@ -631,6 +632,7 @@ let currentArtist = null;
 let modal = null;
 let modalElements = {};
 let currentLoadingController = null;
+let currentReleaseGroups = [];
 
 // =============================================================================
 // ALBUM PROVIDER SYSTEM
@@ -966,8 +968,7 @@ async function displayDirectAlbumResults(releaseGroups) {
     modalElements.backToArtists.style.display = 'none';
   }
 
-  // Store releaseGroups globally
-  window.currentReleaseGroups = releaseGroups;
+  currentReleaseGroups = releaseGroups;
 
   modalElements.albumList.className = 'space-y-3';
 
@@ -1266,13 +1267,13 @@ window.openAddAlbumModal = function () {
     'openAddAlbumModal called, currentList:',
     currentListId,
     'recommendations year:',
-    window.currentRecommendationsYear,
+    getCurrentRecommendationsYear(),
     'modal:',
     modal
   );
 
   // Allow opening if we have a list OR if we're viewing recommendations
-  if (!currentListId && !window.currentRecommendationsYear) {
+  if (!currentListId && !getCurrentRecommendationsYear()) {
     console.log('No list or recommendations selected, showing toast');
     showToast('Please select a list first', 'error');
     return;
@@ -1365,9 +1366,9 @@ function populateCountryDropdown() {
     select.remove(1);
   }
 
-  // Add countries from the global availableCountries array
-  if (window.availableCountries && Array.isArray(window.availableCountries)) {
-    window.availableCountries.forEach((country) => {
+  const availableCountries = getAvailableCountries();
+  if (Array.isArray(availableCountries)) {
+    availableCountries.forEach((country) => {
       const option = document.createElement('option');
       option.value = country;
       option.textContent = country;
@@ -1435,7 +1436,7 @@ async function handleManualSubmit(e) {
   const album = {
     artist: artist,
     album: albumTitle,
-    album_id: 'manual-' + window.crypto.randomUUID(), // Generate a unique ID for manual entries
+    album_id: 'manual-' + globalThis.crypto.randomUUID(), // Generate a unique ID for manual entries
     release_date: formData.get('release_date') || '',
     country: formData.get('country') || '',
     genre_1: '',
@@ -1926,8 +1927,7 @@ function displayAlbumResultsWithProvider(albums, providerName) {
     _artistName: album.artistName,
   }));
 
-  // Store globally for addAlbumToList
-  window.currentReleaseGroups = normalizedAlbums;
+  currentReleaseGroups = normalizedAlbums;
 
   modalElements.albumList.className = 'space-y-3';
 
@@ -1952,8 +1952,7 @@ function displayAlbumResultsWithProvider(albums, providerName) {
     const coverHtml = hasCover
       ? `<img src="${album.coverArt}" 
              alt="${album.title.replace(/"/g, '&quot;')}"
-             class="w-20 h-20 object-cover rounded-lg"
-             onerror="this.onerror=null; this.parentElement.classList.add('animate-pulse'); window.loadAlbumCoverFallback && window.loadAlbumCoverFallback(this, '${currentArtist.name.replace(/'/g, "\\'")}', '${album.title.replace(/'/g, "\\'")}', '${album.id}', ${index})">`
+             class="w-20 h-20 object-cover rounded-lg">`
       : `<img data-artist="${currentArtist.name.replace(/"/g, '&quot;')}"
              data-album="${album.title.replace(/"/g, '&quot;')}"
              data-release-group-id="${album.id}"
@@ -1997,6 +1996,21 @@ function displayAlbumResultsWithProvider(albums, providerName) {
 
     modalElements.albumList.appendChild(albumEl);
 
+    const renderedImg = albumEl.querySelector('.album-cover-container img');
+    if (hasCover && renderedImg) {
+      renderedImg.onerror = () => {
+        renderedImg.onerror = null;
+        renderedImg.parentElement.classList.add('animate-pulse');
+        loadAlbumCover(
+          renderedImg,
+          currentArtist.name,
+          album.title,
+          album.id,
+          index
+        );
+      };
+    }
+
     // If no cover from provider, use cover art provider system
     if (!hasCover) {
       const img = albumEl.querySelector('img');
@@ -2010,17 +2024,6 @@ function displayAlbumResultsWithProvider(albums, providerName) {
     `📊 [ALBUMS] Displayed ${albums.length} albums from ${providerName}`
   );
 }
-
-// Fallback cover loader for when provider cover fails
-window.loadAlbumCoverFallback = function (
-  imgElement,
-  artistName,
-  albumTitle,
-  albumId,
-  index
-) {
-  loadAlbumCover(imgElement, artistName, albumTitle, albumId, index);
-};
 
 async function addAlbumToList(releaseGroup) {
   // Show initial loading message
@@ -2060,7 +2063,7 @@ async function addAlbumToList(releaseGroup) {
     for (const el of albumElements) {
       if (
         parseInt(el.dataset.albumIndex) ===
-        window.currentReleaseGroups.indexOf(releaseGroup)
+        currentReleaseGroups.indexOf(releaseGroup)
       ) {
         const imgEl = el.querySelector('.album-cover-container img');
         if (imgEl && imgEl.src && !imgEl.src.includes('data:image/svg')) {
