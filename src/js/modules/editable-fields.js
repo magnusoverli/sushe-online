@@ -219,7 +219,7 @@ export function createEditableFields(deps = {}) {
 
       // Get album_id for canonical update
       const album = albumsToUpdate[albumIndex];
-      const albumId = album.album_id || album.albumId;
+      const albumId = album.album_id;
 
       if (!albumId) {
         showToast('Cannot update - album not linked', 'error');
@@ -412,7 +412,7 @@ export function createEditableFields(deps = {}) {
 
       // Get album_id for canonical update
       const album = albumsToUpdate[albumIndex];
-      const albumId = album.album_id || album.albumId;
+      const albumId = album.album_id;
 
       if (!albumId) {
         showToast('Cannot update - album not linked', 'error');
@@ -737,7 +737,7 @@ export function createEditableFields(deps = {}) {
       const album = albumsToUpdate[albumIndex];
 
       // Get canonical album identifier
-      const identifier = album.album_id || album.albumId;
+      const identifier = album.album_id;
 
       if (!identifier) {
         showToast('Cannot update - album not identified', 'error');
@@ -873,7 +873,7 @@ export function createEditableFields(deps = {}) {
       const album = albumsToUpdate[albumIndex];
 
       // Get canonical album identifier
-      const identifier = album.album_id || album.albumId;
+      const identifier = album.album_id;
 
       if (!identifier) {
         showToast('Cannot update - album not identified', 'error');

@@ -50,7 +50,7 @@ describe('list-reorder module', () => {
 
     await saveReorder('My List/2024', [
       { album_id: 'mbid-1' },
-      { albumId: 'spotify-2' },
+      { album_id: 'spotify-2' },
       { album_id: 'mbid-3' },
       { name: 'No ID' },
     ]);

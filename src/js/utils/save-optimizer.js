@@ -16,7 +16,7 @@ import { createListSnapshot } from '../modules/app-state.js';
  *  - Too many changes (falls back to full save)
  *
  * @param {Array<string>} oldSnapshot - Previous album_id array
- * @param {Array<Object>} newData - New album array with album_id or albumId fields
+ * @param {Array<Object>} newData - New album array with canonical album_id fields
  * @returns {Object|null} Diff object { added, removed, updated, totalChanges }, or null
  */
 export function computeListDiff(oldSnapshot, newData) {
@@ -34,14 +34,14 @@ export function computeListDiff(oldSnapshot, newData) {
 
   // Find added albums (in new but not in old)
   const added = newData.filter((album) => {
-    const id = album.album_id || album.albumId;
+    const id = album.album_id;
     return id && !oldSet.has(id);
   });
 
   // Find position changes for existing albums
   const updated = [];
   newData.forEach((album, newIndex) => {
-    const id = album.album_id || album.albumId;
+    const id = album.album_id;
     if (id && oldSet.has(id)) {
       const oldIndex = oldSnapshot.indexOf(id);
       if (oldIndex !== newIndex) {
@@ -65,9 +65,7 @@ export function computeListDiff(oldSnapshot, newData) {
 
   // Prepare added items with position
   const addedWithPosition = added.map((album) => {
-    const newIndex = newData.findIndex(
-      (a) => (a.album_id || a.albumId) === (album.album_id || album.albumId)
-    );
+    const newIndex = newData.findIndex((a) => a.album_id === album.album_id);
     return {
       ...album,
       position: newIndex + 1,
