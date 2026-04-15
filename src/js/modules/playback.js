@@ -27,13 +27,23 @@ export function createPlayback(deps = {}) {
   const {
     getListData,
     getCurrentListId,
-    getContextAlbum,
-    getContextAlbumId,
+    getContextAlbum = () => ({ index: null, albumId: null }),
     findAlbumByIdentity,
     playAlbumSafe,
     showServicePicker,
     getDeviceIcon,
   } = deps;
+
+  function getContextAlbumSelection() {
+    const context = getContextAlbum();
+    if (!context || typeof context !== 'object') {
+      return { index: null, albumId: null };
+    }
+    return {
+      index: context.index ?? null,
+      albumId: context.albumId ?? null,
+    };
+  }
 
   // ========================================================
   // Play Album Submenu (Spotify Connect devices)
@@ -262,19 +272,20 @@ export function createPlayback(deps = {}) {
    * Trigger the existing play album flow (open in app) using context menu state
    */
   function triggerPlayAlbum() {
-    if (getContextAlbum() === null) return;
+    const context = getContextAlbumSelection();
+    if (context.index === null) return;
 
     const albumsForPlay = getListData(getCurrentListId());
     const result = verifyAlbumAtIndex(
       albumsForPlay,
-      getContextAlbum(),
-      getContextAlbumId(),
+      context.index,
+      context.albumId,
       findAlbumByIdentity
     );
     if (result) {
       playAlbum(result.index);
-    } else if (getContextAlbumId()) {
-      playAlbumSafe(getContextAlbumId());
+    } else if (context.albumId) {
+      playAlbumSafe(context.albumId);
     } else {
       showToast('Album not found - it may have been moved or removed', 'error');
     }
@@ -284,7 +295,8 @@ export function createPlayback(deps = {}) {
    * Play album on a specific Spotify Connect device
    */
   async function playAlbumOnSpotifyDevice(deviceId) {
-    if (getContextAlbum() === null && !getContextAlbumId()) {
+    const context = getContextAlbumSelection();
+    if (context.index === null && !context.albumId) {
       showToast('No album selected', 'error');
       return;
     }
@@ -293,8 +305,8 @@ export function createPlayback(deps = {}) {
     const albumsForPlay = getListData(getCurrentListId());
     const verified = verifyAlbumAtIndex(
       albumsForPlay,
-      getContextAlbum(),
-      getContextAlbumId(),
+      context.index,
+      context.albumId,
       findAlbumByIdentity
     );
 

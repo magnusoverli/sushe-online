@@ -123,18 +123,6 @@ setAvailableGenres(parseStaticList(genresText));
 setAvailableCountries(parseStaticList(countriesText));
 initWindowGlobals();
 
-function getContextAlbumIndex() {
-  return getContextAlbumState().index;
-}
-
-function getContextAlbumIdentity() {
-  return getContextAlbumState().albumId;
-}
-
-function setContextAlbumIndex(index) {
-  setContextAlbumState(index, getContextAlbumIdentity());
-}
-
 function setPendingImportData(data) {
   const pending = getPendingImportState();
   setPendingImportState(data, pending.filename);
@@ -316,8 +304,7 @@ const getPlaybackModule = createLazyModule(() =>
   createPlayback({
     getListData,
     getCurrentListId,
-    getContextAlbum: () => getContextAlbumIndex(),
-    getContextAlbumId: () => getContextAlbumIdentity(),
+    getContextAlbum: () => getContextAlbumState(),
     findAlbumByIdentity,
     playAlbumSafe,
     showServicePicker,
@@ -352,8 +339,7 @@ const getAlbumContextMenuModule = createLazyModule(() =>
     getLists,
     getCurrentListId,
     getCurrentRecommendationsYear,
-    getContextAlbum: () => getContextAlbumIndex(),
-    getContextAlbumId: () => getContextAlbumIdentity(),
+    getContextAlbum: () => getContextAlbumState(),
     setContextAlbum: (index, albumId) => {
       setContextAlbumState(index, albumId);
     },
@@ -469,7 +455,7 @@ const getContextMenusModule = createLazyModule(() =>
     playAlbum,
     playAlbumSafe: (albumId) => window.playAlbumSafe(albumId),
     loadLists,
-    getContextAlbumId: () => getContextAlbumIdentity(),
+    getContextAlbumId: () => getContextAlbumState().albumId,
     setContextAlbum: (index, albumId) => {
       setContextAlbumState(index, albumId);
     },
@@ -539,7 +525,7 @@ const getMobileUIModule = createLazyModule(() =>
     getAvailableCountries,
     getAvailableGenres,
     setCurrentContextAlbum: (idx) => {
-      setContextAlbumIndex(idx);
+      setContextAlbumState(idx, getContextAlbumState().albumId);
     },
     refreshMobileBarVisibility: () => {
       if (window.refreshMobileBarVisibility) {
