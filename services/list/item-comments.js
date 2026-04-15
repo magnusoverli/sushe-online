@@ -48,17 +48,10 @@ function createItemComments(deps = {}) {
     const now = new Date();
 
     await withTransaction(pool, async (client) => {
-      let updateResult = await client.query(
+      const updateResult = await client.query(
         `UPDATE list_items SET ${field} = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4 RETURNING _id`,
         [trimmedComment, now, list._id, identifier]
       );
-
-      if (updateResult.rowCount === 0) {
-        updateResult = await client.query(
-          `UPDATE list_items SET ${field} = $1, updated_at = $2 WHERE _id = $3 AND list_id = $4 RETURNING _id`,
-          [trimmedComment, now, identifier, list._id]
-        );
-      }
 
       if (updateResult.rowCount === 0) {
         throw new TransactionAbort(404, {

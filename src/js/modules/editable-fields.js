@@ -736,8 +736,8 @@ export function createEditableFields(deps = {}) {
       const newComment = textarea.value.trim();
       const album = albumsToUpdate[albumIndex];
 
-      // Get identifier (prefer album_id, fallback to _id for legacy albums)
-      const identifier = album.album_id || album.albumId || album._id;
+      // Get canonical album identifier
+      const identifier = album.album_id || album.albumId;
 
       if (!identifier) {
         showToast('Cannot update - album not identified', 'error');
@@ -872,8 +872,8 @@ export function createEditableFields(deps = {}) {
       const newComment = textarea.value.trim();
       const album = albumsToUpdate[albumIndex];
 
-      // Get identifier (prefer album_id, fallback to _id for legacy albums)
-      const identifier = album.album_id || album.albumId || album._id;
+      // Get canonical album identifier
+      const identifier = album.album_id || album.albumId;
 
       if (!identifier) {
         showToast('Cannot update - album not identified', 'error');

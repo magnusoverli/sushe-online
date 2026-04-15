@@ -161,6 +161,58 @@ describe('list-service reorderItems', () => {
     assert.deepStrictEqual(updateParams[1], ['item2', 'item1']);
     assert.deepStrictEqual(updateParams[2], [1, 2]);
   });
+
+  it('should reject non-string entries in order payload', async () => {
+    const client = {
+      query: mock.fn(async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (
+          sql.includes(
+            'SELECT _id, album_id FROM list_items WHERE list_id = $1'
+          )
+        ) {
+          return {
+            rows: [
+              { _id: 'item1', album_id: 'album1' },
+              { _id: 'item2', album_id: 'album2' },
+            ],
+          };
+        }
+
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+      release: mock.fn(),
+    };
+
+    const pool = {
+      query: mock.fn(async (sql) => {
+        if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
+          return {
+            rows: [createOwnedListRow()],
+          };
+        }
+
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(async () => client),
+    };
+
+    const service = createListService(createServiceDeps(pool));
+
+    await assert.rejects(
+      () =>
+        service.reorderItems('list1', 'user1', [{ _id: 'item1' }, 'album2']),
+      (err) => {
+        assert.ok(err instanceof TransactionAbort);
+        assert.strictEqual(err.statusCode, 400);
+        assert.match(err.body.error, /invalid entries/i);
+        return true;
+      }
+    );
+  });
 });
 
 describe('list-service item comments', () => {
@@ -203,7 +255,7 @@ describe('list-service item comments', () => {
     assert.strictEqual(client.query.mock.calls.length, 3);
   });
 
-  it('should fallback to item id for comment 2 updates', async () => {
+  it('should reject comment 2 updates with non-album identifiers', async () => {
     const updateQueries = [];
 
     const client = {
@@ -214,10 +266,7 @@ describe('list-service item comments', () => {
 
         if (sql.includes('UPDATE list_items SET comments_2 = $1')) {
           updateQueries.push(sql);
-          if (updateQueries.length === 1) {
-            return { rows: [], rowCount: 0 };
-          }
-          return { rows: [{ _id: 'item1' }], rowCount: 1 };
+          return { rows: [], rowCount: 0 };
         }
 
         throw new Error(`Unexpected query: ${sql}`);
@@ -239,14 +288,22 @@ describe('list-service item comments', () => {
     };
 
     const service = createListService(createServiceDeps(pool));
-    await service.updateItemComment2('list1', 'user1', 'item1', 'Second note');
+    await assert.rejects(
+      () =>
+        service.updateItemComment2('list1', 'user1', 'item1', 'Second note'),
+      (err) => {
+        assert.ok(err instanceof TransactionAbort);
+        assert.strictEqual(err.statusCode, 404);
+        assert.strictEqual(err.body.error, 'Album not found in list');
+        return true;
+      }
+    );
 
-    assert.strictEqual(updateQueries.length, 2);
+    assert.strictEqual(updateQueries.length, 1);
     assert.ok(
       updateQueries[0].includes('WHERE list_id = $3 AND album_id = $4')
     );
-    assert.ok(updateQueries[1].includes('WHERE _id = $3 AND list_id = $4'));
-    assert.strictEqual(client.query.mock.calls.length, 4);
+    assert.strictEqual(client.query.mock.calls.length, 3);
   });
 });
 

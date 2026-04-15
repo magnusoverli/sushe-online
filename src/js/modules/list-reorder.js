@@ -1,7 +1,7 @@
 /**
  * List reorder persistence flow.
  *
- * Persists drag/drop ordering with stable item identity fallback.
+ * Persists drag/drop ordering using canonical album identity.
  */
 
 export function createListReorder(deps = {}) {
@@ -15,12 +15,9 @@ export function createListReorder(deps = {}) {
     }
 
     try {
-      const order = list.map((album) => {
-        const id = album.album_id || album.albumId;
-        if (id) return id;
-        if (album._id) return { _id: album._id };
-        return null;
-      });
+      const order = list.map(
+        (album) => album.album_id || album.albumId || null
+      );
 
       await apiCall(`/api/lists/${encodeURIComponent(listName)}/reorder`, {
         method: 'POST',
