@@ -216,16 +216,16 @@ export function createPlayback(deps = {}) {
       ...menuOptions,
       onOpenApp: () =>
         playAlbumByMetadata(album.artist, album.album, {
-          albumId: album.albumId,
-          releaseDate: album.releaseDate,
+          albumId: album.album_id,
+          releaseDate: album.release_date,
         }),
       onSpotifyDevice: (deviceId) =>
         playOnSpotifyDevice(
           {
             artist: album.artist,
             album: album.album,
-            album_id: album.albumId,
-            release_date: album.releaseDate,
+            album_id: album.album_id,
+            release_date: album.release_date,
           },
           deviceId,
           showToast
