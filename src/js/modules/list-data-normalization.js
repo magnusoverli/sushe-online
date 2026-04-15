@@ -73,12 +73,11 @@ export function normalizeListsMap(newLists = {}) {
   Object.keys(newLists).forEach((listId) => {
     const entry = newLists[listId];
 
-    if (Array.isArray(entry)) {
-      normalized[listId] = createDefaultListEntry(listId, entry);
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
       return;
     }
 
-    if (entry && typeof entry === 'object' && Array.isArray(entry._data)) {
+    if (Array.isArray(entry._data)) {
       const normalizedData = normalizeAlbumRecords(entry._data);
       normalized[listId] =
         normalizedData === entry._data
