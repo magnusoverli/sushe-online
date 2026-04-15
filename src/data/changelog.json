@@ -1,6 +1,20 @@
 [
   {
     "date": "2026-04-15",
+    "category": "fix",
+    "description": "Better album review merging",
+    "hash": "996c9e749bded61b9d49115275f2f34694697ec5",
+    "commitMessage": "Better album review merging"
+  },
+  {
+    "date": "2026-04-15",
+    "category": "ui",
+    "description": "Unified track pick updates across mobile and desktop",
+    "hash": "d3525a6aff1d7f46ff34386f7cf1ce2d4bcb5392",
+    "commitMessage": "Unify mobile and desktop track-pick update flow\n\nExtract shared track-pick API action logic into a reusable service and route both mobile editor and desktop quick-pick interactions through it, with focused unit coverage to prevent behavior drift."
+  },
+  {
+    "date": "2026-04-15",
     "category": "ui",
     "description": "Removed notification when selecting tracks in details editor",
     "hash": "3308a75352ed070eebe32b0732a74a8a5ed7d948",
