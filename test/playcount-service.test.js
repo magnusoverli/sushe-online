@@ -12,7 +12,7 @@ const { createPlaycountService } = require('../services/playcount-service');
 
 // Helper to create a mock album object
 function createAlbum(id, artist = 'Artist', album = 'Album') {
-  return { itemId: id, artist, album, albumId: `album-${id}` };
+  return { itemId: id, artist, album, album_id: `album-${id}` };
 }
 
 describe('playcount-service', () => {

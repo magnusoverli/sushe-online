@@ -86,7 +86,7 @@ function matchAndFindStale(listItems, statsMap, normalizeAlbumKey) {
         itemId: item._id,
         artist: item.artist,
         album: item.album,
-        albumId: item.album_id,
+        album_id: item.album_id,
       });
     }
   }
@@ -137,7 +137,7 @@ function createPlaycountService(deps = {}) {
    * Refresh playcounts for albums in background
    * @param {string} userId - User ID
    * @param {string} lastfmUsername - User's Last.fm username
-   * @param {Array} albums - Array of album objects with itemId, artist, album, albumId
+   * @param {Array} albums - Array of album objects with itemId, artist, album, album_id
    * @param {Object} pool - Database connection pool
    * @param {Object} logger - Logger instance
    * @returns {Promise<Object>} - Map of itemId -> { playcount, status }

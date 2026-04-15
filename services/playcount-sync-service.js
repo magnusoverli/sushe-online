@@ -118,7 +118,7 @@ async function upsertPlaycount(pool, userId, album, playcount, status) {
   const canonicalArtist = normalizeForLastfm(album.artist).toLowerCase().trim();
   const canonicalAlbum = normalizeForLastfm(album.album).toLowerCase().trim();
   const normalizedKey = normalizeAlbumKey(canonicalArtist, canonicalAlbum);
-  const albumId = album.album_id || album.albumId || null;
+  const albumId = album.album_id || null;
 
   await pool.query(
     `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
@@ -145,7 +145,7 @@ async function upsertPlaycount(pool, userId, album, playcount, status) {
 
 async function getLastfmArtistCandidates(pool, log, album) {
   const canonicalArtist = album?.artist;
-  const albumId = album?.album_id || album?.albumId || null;
+  const albumId = album?.album_id || null;
 
   if (!canonicalArtist) {
     return [];
@@ -204,7 +204,7 @@ async function getLastfmArtistCandidates(pool, log, album) {
  */
 async function refreshAlbumPlaycount(pool, log, userId, lastfmUsername, album) {
   try {
-    const albumId = album.album_id || album.albumId || null;
+    const albumId = album.album_id || null;
     const artistCandidates = await getLastfmArtistCandidates(pool, log, album);
 
     let info = null;
