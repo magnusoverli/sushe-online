@@ -24,12 +24,6 @@ describe('resolveTrackPicks', () => {
     assert.strictEqual(result.secondaryTrack, 'Track B');
   });
 
-  it('should resolve legacy trackPick field', () => {
-    const result = resolveTrackPicks({ trackPick: 'Legacy Track' });
-    assert.strictEqual(result.primaryTrack, 'Legacy Track');
-    assert.strictEqual(result.secondaryTrack, null);
-  });
-
   it('should resolve legacy track_pick field', () => {
     const result = resolveTrackPicks({ track_pick: 'Legacy Track' });
     assert.strictEqual(result.primaryTrack, 'Legacy Track');
@@ -39,8 +33,7 @@ describe('resolveTrackPicks', () => {
   it('should prefer primaryTrack over legacy fields', () => {
     const result = resolveTrackPicks({
       primaryTrack: 'Primary',
-      trackPick: 'Legacy',
-      track_pick: 'Legacy2',
+      track_pick: 'Legacy',
     });
     assert.strictEqual(result.primaryTrack, 'Primary');
   });

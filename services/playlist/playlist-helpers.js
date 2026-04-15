@@ -8,18 +8,14 @@
 /**
  * Resolve primary and secondary track picks from an item.
  * Handles both normalized field names (primaryTrack/secondaryTrack)
- * and legacy field names (primary_track/secondary_track, trackPick/track_pick).
+ * and legacy field names (primary_track/secondary_track, track_pick).
  *
  * @param {Object} item - Album/list item
  * @returns {{ primaryTrack: string|null, secondaryTrack: string|null }}
  */
 function resolveTrackPicks(item) {
   const primaryTrack =
-    item.primaryTrack ||
-    item.primary_track ||
-    item.trackPick ||
-    item.track_pick ||
-    null;
+    item.primaryTrack || item.primary_track || item.track_pick || null;
   const secondaryTrack = item.secondaryTrack || item.secondary_track || null;
   return { primaryTrack, secondaryTrack };
 }
