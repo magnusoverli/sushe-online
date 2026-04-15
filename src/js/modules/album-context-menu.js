@@ -29,8 +29,7 @@ export function createAlbumContextMenu(deps = {}) {
     getLists,
     getCurrentListId,
     getCurrentRecommendationsYear,
-    getContextAlbum,
-    getContextAlbumId,
+    getContextAlbum = () => ({ index: null, albumId: null }),
     setContextAlbum,
     getTrackAbortController,
     setTrackAbortController,
@@ -102,6 +101,17 @@ export function createAlbumContextMenu(deps = {}) {
 
   function clearContextAlbumSelection() {
     setContextAlbum(null, null);
+  }
+
+  function getContextAlbumSelection() {
+    const context = getContextAlbum();
+    if (!context || typeof context !== 'object') {
+      return { index: null, albumId: null };
+    }
+    return {
+      index: context.index ?? null,
+      albumId: context.albumId ?? null,
+    };
   }
 
   function initializeAlbumSubmenuController() {
@@ -192,21 +202,22 @@ export function createAlbumContextMenu(deps = {}) {
     // Handle edit option click
     editOption.onclick = () => {
       contextMenu.classList.add('hidden');
+      const context = getContextAlbumSelection();
 
-      if (getContextAlbum() === null) return;
+      if (context.index === null) return;
 
       // Verify the album is still at the expected index, fallback to identity search
       const albumsForEdit = getListData(getCurrentListId());
       const result = verifyAlbumAtIndex(
         albumsForEdit,
-        getContextAlbum(),
-        getContextAlbumId(),
+        context.index,
+        context.albumId,
         findAlbumByIdentity
       );
       if (result) {
         showMobileEditForm(result.index);
-      } else if (getContextAlbumId()) {
-        showMobileEditFormSafe(getContextAlbumId());
+      } else if (context.albumId) {
+        showMobileEditFormSafe(context.albumId);
       } else {
         showToast(
           'Album not found - it may have been moved or removed',
@@ -218,14 +229,15 @@ export function createAlbumContextMenu(deps = {}) {
     // Handle remove option click
     removeOption.onclick = async () => {
       contextMenu.classList.add('hidden');
-      if (getContextAlbum() === null) return;
+      const context = getContextAlbumSelection();
+      if (context.index === null) return;
 
       // Verify the album is still at the expected index, fallback to identity search
       const albumsForRemove = getListData(getCurrentListId());
       const verified = verifyAlbumAtIndex(
         albumsForRemove,
-        getContextAlbum(),
-        getContextAlbumId(),
+        context.index,
+        context.albumId,
         findAlbumByIdentity
       );
       if (!verified) {
@@ -282,10 +294,11 @@ export function createAlbumContextMenu(deps = {}) {
 
         // Get the album from the currently selected context
         const albumsData = getListData(getCurrentListId());
+        const context = getContextAlbumSelection();
         const verified = verifyAlbumAtIndex(
           albumsData,
-          getContextAlbum(),
-          getContextAlbumId(),
+          context.index,
+          context.albumId,
           findAlbumByIdentity
         );
         const album = verified?.album;
@@ -321,10 +334,11 @@ export function createAlbumContextMenu(deps = {}) {
 
         // Get the artist name from the currently selected album
         const albumsData = getListData(getCurrentListId());
+        const context = getContextAlbumSelection();
         const verified = verifyAlbumAtIndex(
           albumsData,
-          getContextAlbum(),
-          getContextAlbumId(),
+          context.index,
+          context.albumId,
           findAlbumByIdentity
         );
         const album = verified?.album;
@@ -354,10 +368,11 @@ export function createAlbumContextMenu(deps = {}) {
 
         // Get the album from the currently selected context
         const albumsData = getListData(getCurrentListId());
+        const context = getContextAlbumSelection();
         const verified = verifyAlbumAtIndex(
           albumsData,
-          getContextAlbum(),
-          getContextAlbumId(),
+          context.index,
+          context.albumId,
           findAlbumByIdentity
         );
         const album = verified?.album;
@@ -718,7 +733,7 @@ export function createAlbumContextMenu(deps = {}) {
 
         // Show confirmation modal
         getMobileUIModule().showMoveConfirmation(
-          getContextAlbumId(),
+          getContextAlbumSelection().albumId,
           targetList
         );
       });
@@ -816,7 +831,7 @@ export function createAlbumContextMenu(deps = {}) {
 
           // Show copy confirmation modal
           getMobileUIModule().showCopyConfirmation(
-            getContextAlbumId(),
+            getContextAlbumSelection().albumId,
             targetList
           );
         });
