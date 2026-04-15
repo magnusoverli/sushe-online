@@ -60,7 +60,6 @@ describe('album context menu submenu controller wiring', async () => {
       getContextAlbum: () => null,
       getContextAlbumId: () => null,
       setContextAlbum: () => {},
-      setContextAlbumId: () => {},
       getTrackAbortController: () => null,
       setTrackAbortController: () => {},
       findAlbumByIdentity: () => null,
@@ -77,7 +76,6 @@ describe('album context menu submenu controller wiring', async () => {
         showMoveConfirmation: () => {},
         showCopyConfirmation: () => {},
       }),
-      getListMetadata: () => ({}),
       createContextSubmenuController,
     });
 
@@ -107,7 +105,6 @@ describe('album context menu submenu controller wiring', async () => {
 
     const hideAll = mock.fn();
     const setContextAlbum = mock.fn();
-    const setContextAlbumId = mock.fn();
     const setTrackAbortController = mock.fn();
     const abort = mock.fn();
 
@@ -119,7 +116,6 @@ describe('album context menu submenu controller wiring', async () => {
       getContextAlbum: () => null,
       getContextAlbumId: () => null,
       setContextAlbum,
-      setContextAlbumId,
       getTrackAbortController: () => ({ abort }),
       setTrackAbortController,
       findAlbumByIdentity: () => null,
@@ -136,7 +132,6 @@ describe('album context menu submenu controller wiring', async () => {
         showMoveConfirmation: () => {},
         showCopyConfirmation: () => {},
       }),
-      getListMetadata: () => ({}),
       createContextSubmenuController: () => ({
         initialize: () => {},
         hideAll,
@@ -149,7 +144,10 @@ describe('album context menu submenu controller wiring', async () => {
 
     assert.strictEqual(hideAll.mock.calls.length, 1);
     assert.strictEqual(setContextAlbum.mock.calls.length, 1);
-    assert.strictEqual(setContextAlbumId.mock.calls.length, 1);
+    assert.deepStrictEqual(setContextAlbum.mock.calls[0].arguments, [
+      null,
+      null,
+    ]);
     assert.strictEqual(abort.mock.calls.length, 1);
     assert.strictEqual(setTrackAbortController.mock.calls.length, 1);
   });

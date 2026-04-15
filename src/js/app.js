@@ -135,10 +135,6 @@ function setContextAlbumIndex(index) {
   setContextAlbumState(index, getContextAlbumIdentity());
 }
 
-function setContextAlbumIdentity(albumId) {
-  setContextAlbumState(getContextAlbumIndex(), albumId);
-}
-
 function setPendingImportData(data) {
   const pending = getPendingImportState();
   setPendingImportState(data, pending.filename);
@@ -358,11 +354,8 @@ const getAlbumContextMenuModule = createLazyModule(() =>
     getCurrentRecommendationsYear,
     getContextAlbum: () => getContextAlbumIndex(),
     getContextAlbumId: () => getContextAlbumIdentity(),
-    setContextAlbum: (val) => {
-      setContextAlbumIndex(val);
-    },
-    setContextAlbumId: (val) => {
-      setContextAlbumIdentity(val);
+    setContextAlbum: (index, albumId) => {
+      setContextAlbumState(index, albumId);
     },
     getTrackAbortController: () => getTrackAbortControllerState(),
     setTrackAbortController: (val) => {
@@ -379,7 +372,6 @@ const getAlbumContextMenuModule = createLazyModule(() =>
     loadLists,
     getRecommendationsModule: () => getRecommendationsModule(),
     getMobileUIModule: () => getMobileUIModule(),
-    getListMetadata,
     createContextSubmenuController,
   })
 );
