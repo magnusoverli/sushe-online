@@ -71,7 +71,7 @@ Medium.
 - One entire legacy list shape removed.
 - Less hidden branching in state ingestion.
 
-## PR 2: Retire Remaining Album Field Aliases
+## PR 2: Retire Remaining Album Field Aliases ✅ Completed (PR #339)
 
 ### Goal
 
