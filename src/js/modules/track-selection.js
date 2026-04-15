@@ -165,60 +165,50 @@ export function createTrackSelection(deps = {}) {
       cellHtml = primaryHtml + secondaryHtml;
     }
 
+    let trackCell = null;
+
     if (isMobile) {
       const cards = document.querySelectorAll('.album-card');
       const card = cards[albumIndex];
       if (!card) return;
 
-      const trackCell = card.querySelector('[data-field="track_pick"]');
-      if (trackCell) {
-        trackCell.innerHTML = cellHtml;
-        trackCell.onclick = async (e) => {
-          e.stopPropagation();
-          const listData = getListData(getCurrentListId());
-          if (!listData) return;
-          const album = listData[albumIndex];
-          if (!album) return;
-          if (!album.tracks) {
-            try {
-              await fetchTracksForAlbum(album);
-            } catch (_err) {
-              showToast('Could not load tracks', 'error');
-              return;
-            }
-          }
-          const rect = trackCell.getBoundingClientRect();
-          showTrackSelectionMenu(album, albumIndex, rect.left, rect.bottom);
-        };
+      trackCell = card
+        .querySelector('[data-field="track-mobile-text"]')
+        ?.closest('div[data-track-play-btn]');
+      const secondaryRow = card
+        .querySelector('[data-field="secondary-track-mobile-text"]')
+        ?.closest('div[data-track-play-btn]');
+      if (secondaryRow && secondaryRow !== trackCell) {
+        secondaryRow.remove();
       }
     } else {
       const rows = document.querySelectorAll('.album-row');
       const row = rows[albumIndex];
       if (!row) return;
-
-      const trackCell = row.querySelector('.track-cell');
-      if (trackCell) {
-        trackCell.innerHTML = cellHtml;
-        trackCell.style.cursor = 'pointer';
-        trackCell.onclick = async (e) => {
-          e.stopPropagation();
-          const listData = getListData(getCurrentListId());
-          if (!listData) return;
-          const album = listData[albumIndex];
-          if (!album) return;
-          if (!album.tracks) {
-            try {
-              await fetchTracksForAlbum(album);
-            } catch (_err) {
-              showToast('Could not load tracks', 'error');
-              return;
-            }
-          }
-          const rect = trackCell.getBoundingClientRect();
-          showTrackSelectionMenu(album, albumIndex, rect.left, rect.bottom);
-        };
-      }
+      trackCell = row.querySelector('.track-cell');
     }
+
+    if (!trackCell) return;
+
+    trackCell.innerHTML = cellHtml;
+    trackCell.style.cursor = 'pointer';
+    trackCell.onclick = async (e) => {
+      e.stopPropagation();
+      const listData = getListData(getCurrentListId());
+      if (!listData) return;
+      const album = listData[albumIndex];
+      if (!album) return;
+      if (!album.tracks) {
+        try {
+          await fetchTracksForAlbum(album);
+        } catch (_err) {
+          showToast('Could not load tracks', 'error');
+          return;
+        }
+      }
+      const rect = trackCell.getBoundingClientRect();
+      showTrackSelectionMenu(album, albumIndex, rect.left, rect.bottom);
+    };
   }
 
   // ============ TRACK SELECTION MENU ============
