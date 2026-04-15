@@ -53,7 +53,6 @@ describe('settings audit handlers', () => {
       apiCall: async (url) => {
         apiCalls.push(url);
         return {
-          pairs: [],
           clusters: [],
           totalClusters: 0,
           totalAlbums: 10,
@@ -91,7 +90,6 @@ describe('settings audit handlers', () => {
         duplicateThreshold: threshold,
       }),
       apiCall: async () => ({
-        pairs: [{ id: 'p1' }],
         clusters: [{ clusterId: 'c1', members: [{}, {}] }],
         totalClusters: 1,
         potentialDuplicates: 1,
@@ -110,10 +108,51 @@ describe('settings audit handlers', () => {
     assert.strictEqual(modalCalls.length, 1);
     assert.strictEqual(modalCalls[0].potentialDuplicates, 1);
     assert.strictEqual(modalCalls[0].totalClusters, 1);
+    assert.deepStrictEqual(modalCalls[0].clusters, [
+      { clusterId: 'c1', members: [{}, {}] },
+    ]);
     assert.match(
       statusDiv.innerHTML,
       /Last scan: 1 pairs across 1 clusters, 1 resolved, 0 remaining/
     );
+  });
+
+  it('rejects legacy duplicate scan payloads without clusters', async () => {
+    const scanBtn = createElement();
+    const statusDiv = createElement();
+    const threshold = createElement({ value: '0.15' });
+    const toasts = [];
+    let modalCallCount = 0;
+
+    const { handleScanDuplicates } = createSettingsAuditHandlers({
+      doc: createDocument({
+        scanDuplicatesBtn: scanBtn,
+        duplicateScanStatus: statusDiv,
+        duplicateThreshold: threshold,
+      }),
+      apiCall: async () => ({
+        pairs: [{ id: 'legacy-pair' }],
+        potentialDuplicates: 1,
+        totalAlbums: 10,
+        excludedPairs: 0,
+      }),
+      showToast: (...args) => toasts.push(args),
+      openDuplicateReviewModal: async () => {
+        modalCallCount++;
+        return { resolved: 0, remaining: 0 };
+      },
+    });
+
+    await handleScanDuplicates();
+
+    assert.strictEqual(modalCallCount, 0);
+    assert.match(statusDiv.innerHTML, /Error:/);
+    assert.deepStrictEqual(toasts[0], [
+      'Error scanning for duplicates',
+      'error',
+    ]);
+    assert.strictEqual(scanBtn.disabled, false);
+    assert.strictEqual(scanBtn.textContent, 'Scan & Review');
   });
 
   it('runs manual album audit and opens modal when review data exists', async () => {

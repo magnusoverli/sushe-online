@@ -37,52 +37,10 @@ function normalizeClusterMember(member) {
   };
 }
 
-function normalizeClusters(input) {
-  let sourceClusters = [];
-
-  if (Array.isArray(input)) {
-    if (input.length > 0 && Array.isArray(input[0].members)) {
-      sourceClusters = input;
-    } else if (input.length > 0 && input[0].album1 && input[0].album2) {
-      sourceClusters = input.map((pair, index) => {
-        return {
-          clusterId: `pair-${index}`,
-          suggestedCanonicalId: pair.album1.album_id,
-          members: [pair.album1, pair.album2],
-          maxConfidence: pair.confidence,
-          avgConfidence: pair.confidence,
-          pairs: [
-            {
-              album1Id: pair.album1.album_id,
-              album2Id: pair.album2.album_id,
-              confidence: pair.confidence,
-            },
-          ],
-        };
-      });
-    }
-  } else if (input && typeof input === 'object') {
-    if (Array.isArray(input.clusters) && input.clusters.length > 0) {
-      sourceClusters = input.clusters;
-    } else if (Array.isArray(input.pairs) && input.pairs.length > 0) {
-      sourceClusters = input.pairs.map((pair, index) => {
-        return {
-          clusterId: `pair-${index}`,
-          suggestedCanonicalId: pair.album1.album_id,
-          members: [pair.album1, pair.album2],
-          maxConfidence: pair.confidence,
-          avgConfidence: pair.confidence,
-          pairs: [
-            {
-              album1Id: pair.album1.album_id,
-              album2Id: pair.album2.album_id,
-              confidence: pair.confidence,
-            },
-          ],
-        };
-      });
-    }
-  }
+function normalizeClusters(scanData) {
+  const sourceClusters = Array.isArray(scanData?.clusters)
+    ? scanData.clusters
+    : [];
 
   return sourceClusters
     .filter(
@@ -122,7 +80,7 @@ function normalizeClusters(input) {
 /**
  * Open the duplicate review modal.
  *
- * @param {Object|Array} scanData - scan response or legacy pair array
+ * @param {Object} scanData - duplicate scan response with `clusters`
  * @param {Function} onCompleteCallback - completion callback
  * @returns {Promise<{resolved: number, remaining: number}>}
  */
