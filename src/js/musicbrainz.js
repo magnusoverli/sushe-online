@@ -9,6 +9,12 @@ import {
   hasNonLatinCharacters,
   formatArtistDisplayName,
 } from './modules/musicbrainz-artist-name.js';
+import {
+  getCurrentListId,
+  getListData,
+  setListData,
+  getListMetadata,
+} from './modules/app-state.js';
 
 const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
 const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
@@ -1244,9 +1250,11 @@ function clearSearchResults() {
 
 // Unified open modal function
 window.openAddAlbumModal = function () {
+  const currentListId = getCurrentListId();
+
   console.log(
     'openAddAlbumModal called, currentList:',
-    window.currentList,
+    currentListId,
     'recommendations year:',
     window.currentRecommendationsYear,
     'modal:',
@@ -1254,7 +1262,7 @@ window.openAddAlbumModal = function () {
   );
 
   // Allow opening if we have a list OR if we're viewing recommendations
-  if (!window.currentList && !window.currentRecommendationsYear) {
+  if (!currentListId && !window.currentRecommendationsYear) {
     console.log('No list or recommendations selected, showing toast');
     showToast('Please select a list first', 'error');
     return;
@@ -1495,8 +1503,10 @@ async function handleManualSubmit(e) {
 }
 
 async function finishManualAdd(album) {
+  const currentListId = getCurrentListId();
+
   try {
-    const currentListData = window.getListData(window.currentList);
+    const currentListData = getListData(currentListId);
     if (!currentListData) {
       showToast('No list selected', 'error');
       return;
@@ -1514,13 +1524,17 @@ async function finishManualAdd(album) {
         `"${album.album}" is already in this list${label}`,
         usedExisting ? 'info' : 'error'
       );
-      if (usedExisting) window.selectList(window.currentList);
+      if (usedExisting && currentListId) window.selectList(currentListId);
       return;
     }
 
     // Add to current list
     currentListData.push(resolved);
-    window.setListData(window.currentList, currentListData);
+    if (!currentListId) {
+      showToast('No list selected', 'error');
+      return;
+    }
+    setListData(currentListId, currentListData);
 
     if (!Array.isArray(resolved.tracks) || resolved.tracks.length === 0) {
       try {
@@ -1530,15 +1544,15 @@ async function finishManualAdd(album) {
       }
     }
 
-    await window.saveList(window.currentList, currentListData);
+    await window.saveList(currentListId, currentListData);
 
     // Force refresh from server to get merged album data
-    const listMetadata = window.lists[window.currentList];
+    const listMetadata = getListMetadata(currentListId);
     if (listMetadata) {
       listMetadata._data = null;
     }
 
-    window.selectList(window.currentList);
+    window.selectList(currentListId);
     closeAddAlbumModal();
 
     const suffix = usedExisting ? ' (using existing album)' : ' to the list';
@@ -1546,10 +1560,12 @@ async function finishManualAdd(album) {
   } catch (_error) {
     showToast('Error adding album to list', 'error');
 
-    const currentListData = window.getListData(window.currentList);
+    const currentListData = getListData(currentListId);
     if (currentListData) {
       currentListData.pop();
-      window.setListData(window.currentList, currentListData);
+      if (currentListId) {
+        setListData(currentListId, currentListData);
+      }
     }
   }
 }
@@ -2086,8 +2102,10 @@ async function addAlbumToCurrentList(album) {
     return;
   }
 
+  const currentListId = getCurrentListId();
+
   try {
-    const currentListData = window.getListData(window.currentList);
+    const currentListData = getListData(currentListId);
     if (!currentListData) {
       showToast('No list selected', 'error');
       return;
@@ -2105,12 +2123,16 @@ async function addAlbumToCurrentList(album) {
         `"${album.album}" is already in this list${label}`,
         usedExisting ? 'info' : 'error'
       );
-      if (usedExisting) window.selectList(window.currentList);
+      if (usedExisting && currentListId) window.selectList(currentListId);
       return;
     }
 
     currentListData.push(resolved);
-    window.setListData(window.currentList, currentListData);
+    if (!currentListId) {
+      showToast('No list selected', 'error');
+      return;
+    }
+    setListData(currentListId, currentListData);
 
     if (!Array.isArray(resolved.tracks) || resolved.tracks.length === 0) {
       try {
@@ -2120,25 +2142,27 @@ async function addAlbumToCurrentList(album) {
       }
     }
 
-    await window.saveList(window.currentList, currentListData);
+    await window.saveList(currentListId, currentListData);
 
     // Force refresh from server to get merged album data
-    const listMetadata = window.lists[window.currentList];
+    const listMetadata = getListMetadata(currentListId);
     if (listMetadata) {
       listMetadata._data = null;
     }
 
-    window.selectList(window.currentList);
+    window.selectList(currentListId);
     closeAddAlbumModal();
 
     showToast(`Added "${resolved.album}" by ${resolved.artist} to the list`);
   } catch (_error) {
     showToast('Error adding album to list', 'error');
 
-    const currentListData = window.getListData(window.currentList);
+    const currentListData = getListData(currentListId);
     if (currentListData) {
       currentListData.pop();
-      window.setListData(window.currentList, currentListData);
+      if (currentListId) {
+        setListData(currentListId, currentListData);
+      }
     }
   }
 }
