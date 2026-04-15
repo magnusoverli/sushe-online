@@ -79,6 +79,17 @@ import {
   isViewingRecommendations,
   getCurrentRecommendationsYear,
   setCurrentRecommendationsYear,
+  getContextAlbum as getContextAlbumState,
+  setContextAlbum as setContextAlbumState,
+  setContextList as setContextListState,
+  getContextState as getContextStateFromStore,
+  setContextState as setContextStateInStore,
+  getContextGroup as getContextGroupState,
+  setContextGroup as setContextGroupState,
+  getPendingImport as getPendingImportState,
+  setPendingImport as setPendingImportState,
+  getTrackAbortController as getTrackAbortControllerState,
+  setTrackAbortController as setTrackAbortControllerState,
   getMusicServicesModule,
   setMusicServicesModule,
   getImportExportModule,
@@ -113,17 +124,35 @@ setAvailableGenres(parseStaticList(genresText));
 setAvailableCountries(parseStaticList(countriesText));
 initWindowGlobals();
 
+function getContextAlbumIndex() {
+  return getContextAlbumState().index;
+}
+
+function getContextAlbumIdentity() {
+  return getContextAlbumState().albumId;
+}
+
+function setContextAlbumIndex(index) {
+  setContextAlbumState(index, getContextAlbumIdentity());
+}
+
+function setContextAlbumIdentity(albumId) {
+  setContextAlbumState(getContextAlbumIndex(), albumId);
+}
+
+function setPendingImportData(data) {
+  const pending = getPendingImportState();
+  setPendingImportState(data, pending.filename);
+}
+
+function setPendingImportFilenameValue(filename) {
+  const pending = getPendingImportState();
+  setPendingImportState(pending.data, filename);
+}
+
 // ============ LOCAL STATE ============
 // State variables scoped to app.js — passed to extracted modules via DI getters/setters.
 // The canonical shared state (lists, groups, currentListId, etc.) lives in app-state.js.
-
-let currentContextAlbum = null;
-let currentContextAlbumId = null;
-let currentContextList = null;
-let currentContextGroup = null;
-let pendingImportData = null;
-let pendingImportFilename = null;
-let trackAbortController = null;
 
 const {
   updateMobileHeader,
@@ -151,12 +180,8 @@ const { registerDiscoveryAddAlbumHandler, initializeFileImportHandlers } =
     selectList,
     importList,
     updateListNav,
-    setPendingImport: (value) => {
-      pendingImportData = value;
-    },
-    setPendingImportFilename: (value) => {
-      pendingImportFilename = value;
-    },
+    setPendingImport: setPendingImportData,
+    setPendingImportFilename: setPendingImportFilenameValue,
     logger: console,
   });
 
@@ -274,9 +299,9 @@ const getListCrudModule = createLazyModule(() =>
     getCurrentListId,
     updateListNav,
     selectList,
-    getCurrentContextGroup: () => currentContextGroup,
+    getCurrentContextGroup: () => getContextGroupState(),
     setCurrentContextGroup: (val) => {
-      currentContextGroup = val;
+      setContextGroupState(val);
     },
   })
 );
@@ -296,8 +321,8 @@ const getPlaybackModule = createLazyModule(() =>
   createPlayback({
     getListData,
     getCurrentListId,
-    getContextAlbum: () => currentContextAlbum,
-    getContextAlbumId: () => currentContextAlbumId,
+    getContextAlbum: () => getContextAlbumIndex(),
+    getContextAlbumId: () => getContextAlbumIdentity(),
     findAlbumByIdentity,
     playAlbumSafe,
     showServicePicker,
@@ -332,17 +357,17 @@ const getAlbumContextMenuModule = createLazyModule(() =>
     getLists,
     getCurrentListId,
     getCurrentRecommendationsYear,
-    getContextAlbum: () => currentContextAlbum,
-    getContextAlbumId: () => currentContextAlbumId,
+    getContextAlbum: () => getContextAlbumIndex(),
+    getContextAlbumId: () => getContextAlbumIdentity(),
     setContextAlbum: (val) => {
-      currentContextAlbum = val;
+      setContextAlbumIndex(val);
     },
     setContextAlbumId: (val) => {
-      currentContextAlbumId = val;
+      setContextAlbumIdentity(val);
     },
-    getTrackAbortController: () => trackAbortController,
+    getTrackAbortController: () => getTrackAbortControllerState(),
     setTrackAbortController: (val) => {
-      trackAbortController = val;
+      setTrackAbortControllerState(val);
     },
     findAlbumByIdentity,
     showMobileEditForm,
@@ -401,8 +426,7 @@ const getAlbumDisplayModule = createLazyModule(() =>
     initializeUnifiedSorting,
     destroySorting,
     setContextAlbum: (index, albumId) => {
-      currentContextAlbum = index;
-      currentContextAlbumId = albumId;
+      setContextAlbumState(index, albumId);
     },
   })
 );
@@ -454,15 +478,9 @@ const getContextMenusModule = createLazyModule(() =>
     playAlbum,
     playAlbumSafe: (albumId) => window.playAlbumSafe(albumId),
     loadLists,
-    getContextState: () => ({
-      album: currentContextAlbum,
-      albumId: currentContextAlbumId,
-      list: currentContextList,
-    }),
+    getContextState: () => getContextStateFromStore(),
     setContextState: (state) => {
-      if ('album' in state) currentContextAlbum = state.album;
-      if ('albumId' in state) currentContextAlbumId = state.albumId;
-      if ('list' in state) currentContextList = state.list;
+      setContextStateInStore(state);
     },
     setCurrentList: (listName) => {
       setCurrentListId(listName);
@@ -526,7 +544,7 @@ const getMobileUIModule = createLazyModule(() =>
     getAvailableCountries,
     getAvailableGenres,
     setCurrentContextAlbum: (idx) => {
-      currentContextAlbum = idx;
+      setContextAlbumIndex(idx);
     },
     refreshMobileBarVisibility: () => {
       if (window.refreshMobileBarVisibility) {
@@ -659,10 +677,10 @@ const getListNavModule = createLazyModule(() =>
     positionContextMenu,
     toggleMobileLists,
     setCurrentContextList: (listName) => {
-      currentContextList = listName;
+      setContextListState(listName);
     },
     setCurrentContextGroup: (group) => {
-      currentContextGroup = group;
+      setContextGroupState(group);
     },
     apiCall,
     showToast,
@@ -766,13 +784,9 @@ const getImportConflictModule = createLazyModule(() =>
     importList,
     selectList,
     updateListNav,
-    getPendingImport: () => ({
-      data: pendingImportData,
-      filename: pendingImportFilename,
-    }),
+    getPendingImport: () => getPendingImportState(),
     setPendingImport: (data, filename) => {
-      pendingImportData = data;
-      pendingImportFilename = filename;
+      setPendingImportState(data, filename);
     },
   })
 );
