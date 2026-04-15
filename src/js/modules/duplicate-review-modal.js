@@ -279,14 +279,6 @@ function renderCurrentCluster() {
       ? `${cluster.maxConfidence}% top match`
       : `${cluster.memberCount} variants`;
 
-  const canonicalOptions = cluster.members
-    .map((member) => {
-      const selected =
-        member.album_id === cluster.selectedCanonicalId ? 'selected' : '';
-      return `<option value="${escapeHtml(member.album_id)}" ${selected}>${escapeHtml(member.artist)} - ${escapeHtml(member.album)}</option>`;
-    })
-    .join('');
-
   const variantRows = cluster.members
     .map((member) => {
       const isCanonical = member.album_id === cluster.selectedCanonicalId;
@@ -295,8 +287,22 @@ function renderCurrentCluster() {
         ? `/api/albums/${encodeURIComponent(member.album_id)}/cover`
         : placeholderSvg;
 
+      const rowClasses = isCanonical
+        ? 'border-green-600 bg-green-900/15'
+        : 'border-gray-700 bg-gray-800/40 hover:border-gray-500 hover:bg-gray-800/60';
+
       return `
-        <div class="flex items-center gap-3 p-3 rounded border border-gray-700 bg-gray-800/40" data-variant-id="${escapeHtml(member.album_id)}">
+        <div
+          class="duplicate-variant-row flex items-center gap-3 p-3 rounded border transition-colors cursor-pointer ${rowClasses}"
+          data-variant-id="${escapeHtml(member.album_id)}"
+          data-variant-row
+          tabindex="0"
+          role="button"
+          aria-label="Set ${escapeHtml(member.artist)} - ${escapeHtml(member.album)} as canonical"
+        >
+          <div class="shrink-0" aria-hidden="true">
+            <span class="w-4 h-4 rounded-full border ${isCanonical ? 'border-green-400 bg-green-500 block' : 'border-gray-500 bg-transparent block'}"></span>
+          </div>
           <input
             type="checkbox"
             class="merge-target-checkbox"
@@ -321,7 +327,6 @@ function renderCurrentCluster() {
             </div>
           </div>
           <div class="flex items-center gap-2 shrink-0">
-            ${isCanonical ? '<span class="text-xs px-2 py-1 bg-green-900/40 border border-green-700 text-green-300 rounded">Canonical</span>' : ''}
             <button
               class="settings-button mark-distinct-btn"
               type="button"
@@ -341,13 +346,7 @@ function renderCurrentCluster() {
       <div class="p-3 rounded border border-gray-700 bg-gray-900/50">
         <div class="text-sm text-gray-200">${cluster.memberCount} variants in this cluster</div>
         <div class="text-xs text-gray-400 mt-1">${confidenceLabel}</div>
-      </div>
-
-      <div>
-        <label for="canonicalAlbumSelect" class="settings-label">Canonical album to keep</label>
-        <select id="canonicalAlbumSelect" class="bg-gray-700 text-white text-sm rounded px-2 py-2 border border-gray-600 w-full">
-          ${canonicalOptions}
-        </select>
+        <div class="text-xs text-gray-500 mt-2">Click any album row to set it as canonical.</div>
       </div>
 
       <div id="clusterPreviewPanel" class="hidden p-3 rounded border border-gray-700 bg-gray-900/50 text-sm text-gray-300"></div>
@@ -358,9 +357,20 @@ function renderCurrentCluster() {
     </div>
   `;
 
-  const canonicalSelect = content.querySelector('#canonicalAlbumSelect');
-  canonicalSelect.addEventListener('change', (event) => {
-    applyCanonicalSelection(event.target.value);
+  content.querySelectorAll('[data-variant-row]').forEach((row) => {
+    row.addEventListener('click', (event) => {
+      const interactiveTarget = event.target.closest(
+        '.merge-target-checkbox, .mark-distinct-btn'
+      );
+      if (interactiveTarget) return;
+      applyCanonicalSelection(row.dataset.variantId);
+    });
+
+    row.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      applyCanonicalSelection(row.dataset.variantId);
+    });
   });
 
   content.querySelectorAll('.merge-target-checkbox').forEach((checkbox) => {
@@ -522,7 +532,24 @@ async function handleMarkDistinct(albumId) {
     }
 
     cluster.mergeTargets.delete(albumId);
-    showToast('Marked as different albums', 'success');
+
+    cluster.members = cluster.members.filter(
+      (member) => member.album_id !== albumId
+    );
+    cluster.pairs = cluster.pairs.filter((pair) => {
+      return pair.album1Id !== albumId && pair.album2Id !== albumId;
+    });
+    cluster.memberCount = cluster.members.length;
+
+    if (cluster.memberCount < 2) {
+      showToast('Marked as different albums. Cluster completed.', 'success');
+      resolvedCount++;
+      currentClusterIndex++;
+      renderCurrentCluster();
+      return;
+    }
+
+    showToast('Marked as different albums and removed from review', 'success');
     renderCurrentCluster();
   } catch (error) {
     console.error('Error marking albums as distinct:', error);
@@ -580,11 +607,20 @@ function setButtonsLoading(isLoading) {
 
   modalElement
     .querySelectorAll(
-      '#previewClusterBtn, #mergeClusterBtn, #skipClusterBtn, .mark-distinct-btn, .merge-target-checkbox, #canonicalAlbumSelect'
+      '#previewClusterBtn, #mergeClusterBtn, #skipClusterBtn, .mark-distinct-btn, .merge-target-checkbox'
     )
     .forEach((element) => {
       element.disabled = isLoading;
     });
+
+  modalElement.querySelectorAll('[data-variant-row]').forEach((row) => {
+    row.setAttribute('aria-disabled', isLoading ? 'true' : 'false');
+    if (isLoading) {
+      row.classList.add('pointer-events-none', 'opacity-70');
+    } else {
+      row.classList.remove('pointer-events-none', 'opacity-70');
+    }
+  });
 }
 
 function handleKeyboard(event) {

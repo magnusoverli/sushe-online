@@ -61,6 +61,35 @@ function createAlbumService(deps = {}) {
     return fields;
   }
 
+  async function resolveAuditUserId(userId) {
+    if (userId === null || userId === undefined) {
+      return null;
+    }
+
+    if (typeof userId === 'number' && Number.isSafeInteger(userId)) {
+      return userId;
+    }
+
+    const normalizedUserId = String(userId).trim();
+    if (!normalizedUserId) {
+      return null;
+    }
+
+    if (/^\d+$/.test(normalizedUserId)) {
+      const parsed = Number.parseInt(normalizedUserId, 10);
+      if (Number.isSafeInteger(parsed)) {
+        return parsed;
+      }
+    }
+
+    const lookupResult = await pool.query(
+      'SELECT id FROM users WHERE _id = $1 LIMIT 1',
+      [normalizedUserId]
+    );
+
+    return lookupResult.rows[0]?.id || null;
+  }
+
   /**
    * Get album cover image data.
    * If cover is missing, triggers an async background fetch.
@@ -385,17 +414,20 @@ function createAlbumService(deps = {}) {
     const [id1, id2] =
       albumId1 < albumId2 ? [albumId1, albumId2] : [albumId2, albumId1];
 
+    const createdBy = await resolveAuditUserId(userId);
+
     await pool.query(
       `INSERT INTO album_distinct_pairs (album_id_1, album_id_2, created_by)
        VALUES ($1, $2, $3)
        ON CONFLICT (album_id_1, album_id_2) DO NOTHING`,
-      [id1, id2, userId || null]
+      [id1, id2, createdBy]
     );
 
     logger.info('Albums marked as distinct', {
       album_id_1: id1,
       album_id_2: id2,
       userId,
+      createdBy,
     });
   }
 
