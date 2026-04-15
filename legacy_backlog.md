@@ -122,7 +122,7 @@ Medium to high.
 - Canonical album DTO boundary.
 - Smaller normalization layer.
 
-## PR 3: Tighten Duplicate Review Contract To Cluster-Only
+## PR 3: Tighten Duplicate Review Contract To Cluster-Only ✅ Completed (PR #341)
 
 ### Goal
 
