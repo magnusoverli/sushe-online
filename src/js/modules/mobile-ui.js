@@ -13,6 +13,7 @@ import { createActionSheet } from './ui-factories.js';
 import { createTransferHelpers } from './album-transfer.js';
 import { fetchSpotifyDevices } from '../utils/playback-service.js';
 import { createMobileAlbumActions } from './mobile-ui/album-actions.js';
+import { createTrackPickService } from './track-pick-service.js';
 
 /**
  * Factory function to create the mobile UI module with injected dependencies
@@ -92,6 +93,7 @@ export function createMobileUI(deps = {}) {
     isViewingRecommendations,
     recommendAlbum,
   } = deps;
+  const trackPickService = createTrackPickService({ apiCall });
 
   /**
    * Find album by identity string instead of index
@@ -1325,8 +1327,6 @@ export function createMobileUI(deps = {}) {
 
           const trackName = item.dataset.track;
           const listItemId = trackPickContainer.dataset.listItemId;
-          const isPrimary = item.dataset.isPrimary === 'true';
-          const isSecondary = item.dataset.isSecondary === 'true';
 
           if (!listItemId) {
             showToast('Cannot save - missing list item ID', 'error');
@@ -1334,37 +1334,16 @@ export function createMobileUI(deps = {}) {
           }
 
           try {
-            if (isPrimary) {
-              // Deselect primary
-              const result = await apiCall(`/api/track-picks/${listItemId}`, {
-                method: 'DELETE',
-                body: JSON.stringify({ trackIdentifier: trackName }),
-              });
-              currentPrimaryTrack = result.primary_track || '';
-              currentSecondaryTrack = result.secondary_track || '';
-            } else if (isSecondary) {
-              // Promote to primary
-              const result = await apiCall(`/api/track-picks/${listItemId}`, {
-                method: 'POST',
-                body: JSON.stringify({
-                  trackIdentifier: trackName,
-                  priority: 1,
-                }),
-              });
-              currentPrimaryTrack = result.primary_track || '';
-              currentSecondaryTrack = result.secondary_track || '';
-            } else {
-              // New selection as secondary
-              const result = await apiCall(`/api/track-picks/${listItemId}`, {
-                method: 'POST',
-                body: JSON.stringify({
-                  trackIdentifier: trackName,
-                  priority: 2,
-                }),
-              });
-              currentPrimaryTrack = result.primary_track || '';
-              currentSecondaryTrack = result.secondary_track || '';
-            }
+            const result = await trackPickService.updateTrackPick(
+              listItemId,
+              trackName,
+              {
+                primaryTrack: currentPrimaryTrack,
+                secondaryTrack: currentSecondaryTrack,
+              }
+            );
+            currentPrimaryTrack = result.primaryTrack;
+            currentSecondaryTrack = result.secondaryTrack;
 
             // Update UI immediately
             updateTrackPickUI();

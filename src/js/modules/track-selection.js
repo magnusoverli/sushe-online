@@ -7,6 +7,8 @@
  * @param {Object} deps - External dependencies
  * @returns {Object} Public API
  */
+import { createTrackPickService } from './track-pick-service.js';
+
 export function createTrackSelection(deps = {}) {
   const {
     apiCall,
@@ -16,6 +18,7 @@ export function createTrackSelection(deps = {}) {
     formatTrackTime,
     saveList: _saveList,
   } = deps;
+  const trackPickService = createTrackPickService({ apiCall });
 
   // ============ PURE HELPERS ============
 
@@ -275,14 +278,11 @@ export function createTrackSelection(deps = {}) {
         const currentAlbum = listData[albumIndex];
         if (!currentAlbum?._id) return;
 
-        await apiCall(`/api/track-picks/${currentAlbum._id}`, {
-          method: 'DELETE',
-        });
-
-        currentAlbum.primary_track = null;
-        currentAlbum.secondary_track = null;
-        selectedPrimary = null;
-        selectedSecondary = null;
+        const result = await trackPickService.clearTrackPicks(currentAlbum._id);
+        selectedPrimary = result.primaryTrack || null;
+        selectedSecondary = result.secondaryTrack || null;
+        currentAlbum.primary_track = selectedPrimary;
+        currentAlbum.secondary_track = selectedSecondary;
         updateMenuUI();
         updateTrackCellDisplayDual(
           albumIndex,
@@ -326,55 +326,33 @@ export function createTrackSelection(deps = {}) {
         const currentAlbum = listData[albumIndex];
         if (!currentAlbum?._id) return;
 
-        // Determine the API action BEFORE updating local state
-        // The backend handles swap logic internally, so send one call per click
-        let apiAction;
-        if (trackName === selectedPrimary) {
-          // Clicking primary = deselect it
-          apiAction = {
-            method: 'DELETE',
-            body: JSON.stringify({ trackIdentifier: trackName }),
-          };
-        } else if (trackName === selectedSecondary) {
-          // Clicking secondary = promote to primary
-          apiAction = {
-            method: 'POST',
-            body: JSON.stringify({ trackIdentifier: trackName, priority: 1 }),
-          };
-        } else {
-          // New track = add as secondary (backend handles demotion)
-          apiAction = {
-            method: 'POST',
-            body: JSON.stringify({ trackIdentifier: trackName, priority: 2 }),
-          };
-        }
-
         // Persist via API - backend is the source of truth
         try {
-          const result = await apiCall(
-            `/api/track-picks/${currentAlbum._id}`,
-            apiAction
+          const result = await trackPickService.updateTrackPick(
+            currentAlbum._id,
+            trackName,
+            {
+              primaryTrack: selectedPrimary,
+              secondaryTrack: selectedSecondary,
+            }
           );
 
-          if (result) {
-            // Sync local state with backend response (authoritative)
-            selectedPrimary = result.primary_track || null;
-            selectedSecondary = result.secondary_track || null;
+          selectedPrimary = result.primaryTrack || null;
+          selectedSecondary = result.secondaryTrack || null;
 
-            // Update album data
-            currentAlbum.primary_track = selectedPrimary;
-            currentAlbum.secondary_track = selectedSecondary;
+          // Update album data
+          currentAlbum.primary_track = selectedPrimary;
+          currentAlbum.secondary_track = selectedSecondary;
 
-            updateMenuUI();
-            updateTrackCellDisplayDual(
-              albumIndex,
-              {
-                primary: selectedPrimary,
-                secondary: selectedSecondary,
-              },
-              album.tracks
-            );
-          }
+          updateMenuUI();
+          updateTrackCellDisplayDual(
+            albumIndex,
+            {
+              primary: selectedPrimary,
+              secondary: selectedSecondary,
+            },
+            album.tracks
+          );
         } catch (err) {
           console.error('Error saving track picks:', err);
           showToast('Error saving track pick', 'error');
