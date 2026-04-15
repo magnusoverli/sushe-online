@@ -175,17 +175,18 @@ export function createRealtimeSync(deps = {}) {
   /**
    * Handle list reordered event
    * @param {Object} data - Event payload
-   * @param {string} data.listName - Name of the reordered list
+   * @param {string} data.listId - ID of the reordered list
    * @param {Array<string>} data.order - New order of album IDs
    */
   async function handleListReordered(data) {
     console.log('[RealtimeSync] List reordered:', data);
 
     const currentList = getCurrentList();
-    if (data.listName === currentList) {
+    const targetListId = data.listId || data.listName;
+    if (targetListId === currentList) {
       // Refresh the current list to get new order
       try {
-        await refreshListData(data.listName);
+        await refreshListData(targetListId);
         // Optionally show notification (can be commented out if too noisy)
         // showToast('List order updated', 'info');
       } catch (error) {
