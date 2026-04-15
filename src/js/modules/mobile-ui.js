@@ -1047,7 +1047,7 @@ export function createMobileUI(deps = {}) {
           <!-- Genre 1 - Searchable Select -->
           <div class="w-full">
             <label class="block text-gray-400 text-sm mb-2">Primary Genre</label>
-            <div id="editGenre1Container" class="searchable-genre-select" data-value="${album.genre_1 || album.genre || ''}" data-placeholder="Select a genre..."></div>
+            <div id="editGenre1Container" class="searchable-genre-select" data-value="${album.genre_1 || ''}" data-placeholder="Select a genre..."></div>
           </div>
           
           <!-- Genre 2 - Searchable Select -->
@@ -1064,7 +1064,7 @@ export function createMobileUI(deps = {}) {
               rows="3"
               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200 resize-none"
               placeholder="Add your notes..."
-            >${album.comments || album.comment || ''}</textarea>
+            >${album.comments || ''}</textarea>
           </div>
 
           <!-- Comments 2 -->
@@ -1094,17 +1094,9 @@ export function createMobileUI(deps = {}) {
                   .map((t) => {
                     const trackName = getTrackName(t);
                     const trackLength = formatTrackTime(getTrackLength(t));
-                    const isPrimary =
-                      trackName ===
-                      (album.primary_track ||
-                        album.track_picks?.primary ||
-                        album.track_pick ||
-                        '');
+                    const isPrimary = trackName === (album.primary_track || '');
                     const isSecondary =
-                      trackName ===
-                      (album.secondary_track ||
-                        album.track_picks?.secondary ||
-                        '');
+                      trackName === (album.secondary_track || '');
                     const indicator = isPrimary
                       ? '<span class="text-yellow-400 mr-1">★</span>'
                       : isSecondary
@@ -1132,7 +1124,7 @@ export function createMobileUI(deps = {}) {
               </ul>
             `
                 : `
-              <input type="number" id="editTrackPickNumber" value="${album.primary_track || album.track_picks?.primary || album.track_pick || ''}"
+              <input type="number" id="editTrackPickNumber" value="${album.primary_track || ''}"
                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
                      placeholder="Enter track number (primary)">
             `
@@ -1259,7 +1251,7 @@ export function createMobileUI(deps = {}) {
     initSearchableGenreSelect(
       'editGenre1Container',
       availableGenres,
-      album.genre_1 || album.genre || '',
+      album.genre_1 || '',
       'Select a genre...'
     );
     initSearchableGenreSelect(
@@ -1274,13 +1266,8 @@ export function createMobileUI(deps = {}) {
     const trackPickContainer = document.getElementById('trackPickContainer');
 
     // Track current selections (will be synced with server)
-    let currentPrimaryTrack =
-      album.primary_track ||
-      album.track_picks?.primary ||
-      album.track_pick ||
-      '';
-    let currentSecondaryTrack =
-      album.secondary_track || album.track_picks?.secondary || '';
+    let currentPrimaryTrack = album.primary_track || '';
+    let currentSecondaryTrack = album.secondary_track || '';
 
     function updateTrackPickUI() {
       if (!trackPickContainer) return;
@@ -1388,11 +1375,6 @@ export function createMobileUI(deps = {}) {
             // Update local album data for save
             album.primary_track = currentPrimaryTrack;
             album.secondary_track = currentSecondaryTrack;
-            album.track_pick = currentPrimaryTrack;
-            album.track_picks = {
-              primary: currentPrimaryTrack || null,
-              secondary: currentSecondaryTrack || null,
-            };
           } catch (err) {
             console.error('Track pick error:', err);
             showToast('Error updating track selection', 'error');
@@ -1489,6 +1471,13 @@ export function createMobileUI(deps = {}) {
           ? originalReleaseDate
           : formatDateForStorage(newDateValue);
 
+      const primaryTrackForSave =
+        currentPrimaryTrack ||
+        (() => {
+          const numInput = document.getElementById('editTrackPickNumber');
+          return numInput ? numInput.value.trim() : '';
+        })();
+
       const updatedAlbum = {
         ...album,
         artist: document.getElementById('editArtist').value.trim(),
@@ -1496,26 +1485,11 @@ export function createMobileUI(deps = {}) {
         release_date: finalReleaseDate,
         country: document.getElementById('editCountry').value,
         genre_1: document.getElementById('editGenre1').value,
-        genre: document.getElementById('editGenre1').value,
         genre_2: document.getElementById('editGenre2').value,
         tracks: Array.isArray(album.tracks) ? album.tracks : undefined,
-        // Track picks are now managed via API and stored in track_picks table
-        // Keep the current values which were updated by the track pick handlers
-        primary_track: currentPrimaryTrack,
+        primary_track: primaryTrackForSave,
         secondary_track: currentSecondaryTrack,
-        track_picks: {
-          primary: currentPrimaryTrack || null,
-          secondary: currentSecondaryTrack || null,
-        },
-        track_pick:
-          currentPrimaryTrack ||
-          (() => {
-            // Fallback for albums without album_id (can't use API)
-            const numInput = document.getElementById('editTrackPickNumber');
-            return numInput ? numInput.value.trim() : '';
-          })(),
         comments: document.getElementById('editComments').value.trim(),
-        comment: document.getElementById('editComments').value.trim(),
         comments_2: document.getElementById('editComments2').value.trim(),
       };
 

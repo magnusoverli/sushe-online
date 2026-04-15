@@ -249,10 +249,8 @@ export function createTrackSelection(deps = {}) {
     });
 
     // Get current picks
-    const currentPrimary =
-      album.primary_track || album.track_picks?.primary || album.track_pick;
-    const currentSecondary =
-      album.secondary_track || album.track_picks?.secondary || null;
+    const currentPrimary = album.primary_track;
+    const currentSecondary = album.secondary_track || null;
     const currentPrimaryName = getTrackName(currentPrimary);
     const currentSecondaryName = getTrackName(currentSecondary);
 
@@ -291,16 +289,14 @@ export function createTrackSelection(deps = {}) {
           method: 'DELETE',
         });
 
-        currentAlbum.track_pick = null;
         currentAlbum.primary_track = null;
         currentAlbum.secondary_track = null;
-        currentAlbum.track_picks = { primary: null, secondary: null };
         selectedPrimary = null;
         selectedSecondary = null;
         updateMenuUI();
         updateTrackCellDisplayDual(
           albumIndex,
-          currentAlbum.track_picks,
+          { primary: null, secondary: null },
           album.tracks
         );
       } catch (err) {
@@ -375,27 +371,19 @@ export function createTrackSelection(deps = {}) {
             selectedPrimary = result.primary_track || null;
             selectedSecondary = result.secondary_track || null;
 
-            const newPicks = {
-              primary: selectedPrimary
-                ? sortedTracks.find(
-                    (t) => getTrackName(t) === selectedPrimary
-                  ) || selectedPrimary
-                : null,
-              secondary: selectedSecondary
-                ? sortedTracks.find(
-                    (t) => getTrackName(t) === selectedSecondary
-                  ) || selectedSecondary
-                : null,
-            };
-
             // Update album data
             currentAlbum.primary_track = selectedPrimary;
             currentAlbum.secondary_track = selectedSecondary;
-            currentAlbum.track_pick = selectedPrimary;
-            currentAlbum.track_picks = newPicks;
 
             updateMenuUI();
-            updateTrackCellDisplayDual(albumIndex, newPicks, album.tracks);
+            updateTrackCellDisplayDual(
+              albumIndex,
+              {
+                primary: selectedPrimary,
+                secondary: selectedSecondary,
+              },
+              album.tracks
+            );
           }
         } catch (err) {
           console.error('Error saving track picks:', err);

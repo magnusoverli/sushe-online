@@ -202,7 +202,7 @@ describe('album-display module', () => {
         genre_1: 'Rock',
         genre_2: 'Alternative',
         comments: 'Great album',
-        track_pick: '1. First Track',
+        primary_track: '1. First Track',
         tracks: ['1. First Track', '2. Second Track'],
       };
 
@@ -290,7 +290,7 @@ describe('album-display module', () => {
 
       // Test with full track info
       let album = {
-        track_pick: '3. Favorite Song',
+        primary_track: '3. Favorite Song',
         tracks: ['1. First', '2. Second', '3. Favorite Song'],
       };
       let data = module.processAlbumData(album, 0);
@@ -299,7 +299,7 @@ describe('album-display module', () => {
 
       // Test with just track number
       album = {
-        track_pick: '5',
+        primary_track: '5',
         tracks: [],
       };
       data = module.processAlbumData(album, 0);

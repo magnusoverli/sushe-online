@@ -710,10 +710,7 @@ export function createEditableFields(deps = {}) {
     const albumsForComment = getListData(currentList);
     if (!albumsForComment || !albumsForComment[albumIndex]) return;
 
-    const currentComment =
-      albumsForComment[albumIndex].comments ||
-      albumsForComment[albumIndex].comment ||
-      '';
+    const currentComment = albumsForComment[albumIndex].comments || '';
 
     // Create textarea
     const textarea = document.createElement('textarea');
@@ -756,7 +753,6 @@ export function createEditableFields(deps = {}) {
 
         // Update local state
         albumsToUpdate[albumIndex].comments = newComment;
-        albumsToUpdate[albumIndex].comment = newComment;
 
         // Update display without re-rendering everything
         let displayComment = newComment;

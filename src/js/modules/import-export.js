@@ -328,7 +328,7 @@ export async function downloadListAsCSV(listId) {
         album.country || '',
         album.genre_1 || '',
         album.genre_2 || '',
-        album.primary_track || album.track_pick || '',
+        album.primary_track || '',
         album.secondary_track || '',
         album.comments || '',
         album.comments_2 || '',
