@@ -34,7 +34,12 @@ export function createSettingsAuditHandlers(deps = {}) {
         throw new Error(response.error);
       }
 
-      if (response.pairs.length === 0) {
+      const hasClusters =
+        Array.isArray(response.clusters) && response.clusters.length > 0;
+      const hasPairs =
+        Array.isArray(response.pairs) && response.pairs.length > 0;
+
+      if (!hasClusters && !hasPairs) {
         statusDiv.innerHTML = `
           <span class="text-green-400">
             <i class="fas fa-check-circle mr-2"></i>
@@ -43,17 +48,23 @@ export function createSettingsAuditHandlers(deps = {}) {
         `;
         showToast('No potential duplicates found', 'success');
       } else {
+        const clusterCount = Number.isFinite(response.totalClusters)
+          ? response.totalClusters
+          : hasClusters
+            ? response.clusters.length
+            : 0;
+
         statusDiv.innerHTML = `
           <span class="text-yellow-400">
-            Found ${response.potentialDuplicates} potential duplicates. Opening review...
+            Found ${response.potentialDuplicates} potential duplicate pairs across ${clusterCount} clusters. Opening review...
           </span>
         `;
 
-        const result = await openDuplicateReviewModal(response.pairs);
+        const result = await openDuplicateReviewModal(response);
 
         statusDiv.innerHTML = `
           <span class="text-gray-400">
-            Last scan: ${response.potentialDuplicates} found, ${result.resolved} resolved, ${result.remaining} remaining
+            Last scan: ${response.potentialDuplicates} pairs across ${clusterCount} clusters, ${result.resolved} resolved, ${result.remaining} remaining
           </span>
         `;
       }
