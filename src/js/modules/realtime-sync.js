@@ -28,12 +28,34 @@ export function createRealtimeSync(deps = {}) {
     updateAlbumSummaryInPlace = async () => {},
     displayAlbums = () => {},
     ioFactory = io,
+    logger = console,
+    debug = false,
   } = deps;
 
   let socket = null;
   let isConnected = false;
   let reconnectAttempts = 0;
   const MAX_RECONNECT_ATTEMPTS = 10;
+
+  function logDebug(message, meta) {
+    if (!debug || typeof logger.debug !== 'function') return;
+    if (meta !== undefined) {
+      logger.debug(message, meta);
+    } else {
+      logger.debug(message);
+    }
+  }
+
+  function registerSocketEventHandlers() {
+    if (!socket) return;
+    socket.on('list:updated', handleListUpdated);
+    socket.on('list:reordered', handleListReordered);
+    socket.on('list:created', handleListCreated);
+    socket.on('list:deleted', handleListDeleted);
+    socket.on('list:renamed', handleListRenamed);
+    socket.on('list:main-changed', handleListMainChanged);
+    socket.on('album:summary-updated', handleAlbumSummaryUpdated);
+  }
 
   /**
    * Connect to the WebSocket server
@@ -62,19 +84,10 @@ export function createRealtimeSync(deps = {}) {
     socket.on('connect', () => {
       isConnected = true;
       reconnectAttempts = 0;
-      console.log('[RealtimeSync] Connected to server', {
+      logDebug('[RealtimeSync] Connected to server', {
         socketId: socket.id,
         transport: socket.io.engine.transport.name,
       });
-
-      // Re-register event listeners on reconnect (Socket.io should preserve them, but be explicit)
-      socket.on('list:updated', handleListUpdated);
-      socket.on('list:reordered', handleListReordered);
-      socket.on('list:created', handleListCreated);
-      socket.on('list:deleted', handleListDeleted);
-      socket.on('list:renamed', handleListRenamed);
-      socket.on('list:main-changed', handleListMainChanged);
-      socket.on('album:summary-updated', handleAlbumSummaryUpdated);
 
       // Subscribe to current list if one is selected
       const currentList = getCurrentList();
@@ -85,7 +98,7 @@ export function createRealtimeSync(deps = {}) {
 
     socket.on('disconnect', (reason) => {
       isConnected = false;
-      console.log('[RealtimeSync] Disconnected:', reason);
+      logDebug('[RealtimeSync] Disconnected', { reason });
 
       if (reason === 'io server disconnect') {
         // Server disconnected us, try to reconnect
@@ -95,21 +108,21 @@ export function createRealtimeSync(deps = {}) {
 
     socket.on('connect_error', (error) => {
       reconnectAttempts++;
-      console.warn('[RealtimeSync] Connection error:', error.message);
+      if (typeof logger.warn === 'function') {
+        logger.warn('[RealtimeSync] Connection error', {
+          error: error.message,
+          reconnectAttempts,
+        });
+      }
 
       if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-        console.error('[RealtimeSync] Max reconnect attempts reached');
+        if (typeof logger.error === 'function') {
+          logger.error('[RealtimeSync] Max reconnect attempts reached');
+        }
       }
     });
 
-    // List update events
-    socket.on('list:updated', handleListUpdated);
-    socket.on('list:reordered', handleListReordered);
-    socket.on('list:created', handleListCreated);
-    socket.on('list:deleted', handleListDeleted);
-    socket.on('list:renamed', handleListRenamed);
-    socket.on('list:main-changed', handleListMainChanged);
-    socket.on('album:summary-updated', handleAlbumSummaryUpdated);
+    registerSocketEventHandlers();
   }
 
   /**
@@ -120,7 +133,7 @@ export function createRealtimeSync(deps = {}) {
       socket.disconnect();
       socket = null;
       isConnected = false;
-      console.log('[RealtimeSync] Disconnected');
+      logDebug('[RealtimeSync] Disconnected');
     }
   }
 
@@ -131,7 +144,7 @@ export function createRealtimeSync(deps = {}) {
   function subscribeToList(listId) {
     if (socket && isConnected) {
       socket.emit('subscribe:list', listId);
-      console.log('[RealtimeSync] Subscribed to list:', listId);
+      logDebug('[RealtimeSync] Subscribed to list', { listId });
     }
   }
 
@@ -142,16 +155,18 @@ export function createRealtimeSync(deps = {}) {
   function unsubscribeFromList(listId) {
     if (socket && isConnected) {
       socket.emit('unsubscribe:list', listId);
-      console.log('[RealtimeSync] Unsubscribed from list:', listId);
+      logDebug('[RealtimeSync] Unsubscribed from list', { listId });
     }
   }
 
   function getEventListId(data, eventName) {
     if (typeof data?.listId !== 'string' || data.listId.length === 0) {
-      console.warn('[RealtimeSync] Ignoring event without listId', {
-        eventName,
-        data,
-      });
+      if (typeof logger.warn === 'function') {
+        logger.warn('[RealtimeSync] Ignoring event without listId', {
+          eventName,
+          data,
+        });
+      }
       return null;
     }
     return data.listId;
@@ -164,7 +179,7 @@ export function createRealtimeSync(deps = {}) {
    * @param {string} data.updatedAt - Timestamp of the update
    */
   async function handleListUpdated(data) {
-    console.log('[RealtimeSync] List updated:', data);
+    logDebug('[RealtimeSync] List updated', data);
 
     const listId = getEventListId(data, 'list:updated');
     if (!listId) return;
@@ -179,7 +194,12 @@ export function createRealtimeSync(deps = {}) {
           showToast('List updated from another device', 'info');
         }
       } catch (error) {
-        console.error('[RealtimeSync] Failed to refresh list:', error);
+        if (typeof logger.error === 'function') {
+          logger.error('[RealtimeSync] Failed to refresh list', {
+            listId,
+            error,
+          });
+        }
       }
     } else {
       // For non-current lists, always refresh sidebar
@@ -194,7 +214,7 @@ export function createRealtimeSync(deps = {}) {
    * @param {Array<string>} data.order - New order of album IDs
    */
   async function handleListReordered(data) {
-    console.log('[RealtimeSync] List reordered:', data);
+    logDebug('[RealtimeSync] List reordered', data);
 
     const listId = getEventListId(data, 'list:reordered');
     if (!listId) return;
@@ -207,10 +227,12 @@ export function createRealtimeSync(deps = {}) {
         // Optionally show notification (can be commented out if too noisy)
         // showToast('List order updated', 'info');
       } catch (error) {
-        console.error(
-          '[RealtimeSync] Failed to refresh reordered list:',
-          error
-        );
+        if (typeof logger.error === 'function') {
+          logger.error('[RealtimeSync] Failed to refresh reordered list', {
+            listId,
+            error,
+          });
+        }
       }
     }
     // No need to refresh sidebar for reorders (list metadata unchanged)
@@ -223,7 +245,10 @@ export function createRealtimeSync(deps = {}) {
    * @param {number} data.year - Year of the new list
    */
   function handleListCreated(data) {
-    console.log('[RealtimeSync] List created:', data);
+    logDebug('[RealtimeSync] List created', data);
+
+    const listId = getEventListId(data, 'list:created');
+    if (!listId) return;
 
     // Refresh sidebar to show the new list
     refreshListNav();
@@ -236,7 +261,7 @@ export function createRealtimeSync(deps = {}) {
    * @param {string} data.listId - ID of the deleted list
    */
   function handleListDeleted(data) {
-    console.log('[RealtimeSync] List deleted:', data);
+    logDebug('[RealtimeSync] List deleted', data);
 
     const listId = getEventListId(data, 'list:deleted');
     if (!listId) return;
@@ -259,7 +284,7 @@ export function createRealtimeSync(deps = {}) {
    * @param {string} data.newName - New name of the list
    */
   function handleListRenamed(data) {
-    console.log('[RealtimeSync] List renamed:', data);
+    logDebug('[RealtimeSync] List renamed', data);
 
     const listId = getEventListId(data, 'list:renamed');
     if (!listId) return;
@@ -280,7 +305,7 @@ export function createRealtimeSync(deps = {}) {
    * @param {boolean} data.isMain - Whether the list is now the main list
    */
   function handleListMainChanged(data) {
-    console.log('[RealtimeSync] List main status changed:', data);
+    logDebug('[RealtimeSync] List main status changed', data);
 
     const listId = getEventListId(data, 'list:main-changed');
     if (!listId) return;
@@ -306,11 +331,11 @@ export function createRealtimeSync(deps = {}) {
    * @param {string} data.albumId - Album ID that was updated
    */
   async function handleAlbumSummaryUpdated(data) {
-    console.log('[RealtimeSync] Album summary updated:', data);
+    logDebug('[RealtimeSync] Album summary updated', data);
 
     const currentList = getCurrentList();
     if (!currentList) {
-      console.log('[RealtimeSync] No current list, skipping summary update');
+      logDebug('[RealtimeSync] No current list, skipping summary update');
       return;
     }
 
@@ -328,17 +353,22 @@ export function createRealtimeSync(deps = {}) {
 
         // Update in-place without full refresh
         await updateAlbumSummaryInPlace(data.albumId, summaryData);
-        console.log('[RealtimeSync] Summary updated incrementally', {
+        logDebug('[RealtimeSync] Summary updated incrementally', {
           albumId: data.albumId,
           hasSummary: !!summaryData.summary,
           source: summaryData.summarySource || 'unknown',
         });
         return;
       } catch (err) {
-        console.warn(
-          '[RealtimeSync] Incremental update failed, falling back to full refresh',
-          err
-        );
+        if (typeof logger.warn === 'function') {
+          logger.warn(
+            '[RealtimeSync] Incremental update failed, falling back to full refresh',
+            {
+              albumId: data.albumId,
+              error: err,
+            }
+          );
+        }
         // Fall back to full refresh on error
       }
     }
@@ -348,19 +378,25 @@ export function createRealtimeSync(deps = {}) {
     // - The album was just added and local state is stale
     // - The album check fails due to timing issues
     // - The list data hasn't been synced yet
-    console.log('[RealtimeSync] Refreshing list to show summary badge', {
+    logDebug('[RealtimeSync] Refreshing list to show summary badge', {
       currentList,
       albumId: data.albumId,
     });
 
     try {
       await refreshListDataSilent(currentList);
-      console.log('[RealtimeSync] List refreshed after summary update');
+      logDebug('[RealtimeSync] List refreshed after summary update');
     } catch (error) {
-      console.error(
-        '[RealtimeSync] Failed to refresh list after summary update:',
-        error
-      );
+      if (typeof logger.error === 'function') {
+        logger.error(
+          '[RealtimeSync] Failed to refresh list after summary update',
+          {
+            currentList,
+            albumId: data.albumId,
+            error,
+          }
+        );
+      }
     }
   }
 
