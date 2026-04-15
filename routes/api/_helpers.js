@@ -55,6 +55,13 @@ function createHelpers(deps) {
     }
   }
 
+  function stripLegacyCoverFields(album) {
+    const cleaned = { ...album };
+    delete cleaned.cover_image;
+    delete cleaned.cover_image_format;
+    return cleaned;
+  }
+
   /**
    * Upsert an album record with canonical deduplication.
    *
@@ -67,11 +74,8 @@ function createHelpers(deps) {
    * @returns {Promise<string>} - The canonical album_id to use
    */
   async function upsertAlbumRecord(album, timestamp, client = null) {
-    // Remove cover_image for backward compatibility (extension may still send it)
-    // Cover images are now fetched asynchronously in the background
-    const albumDataWithoutCover = { ...album };
-    delete albumDataWithoutCover.cover_image;
-    delete albumDataWithoutCover.cover_image_format;
+    // Ignore legacy inline cover payloads; covers are fetched asynchronously.
+    const albumDataWithoutCover = stripLegacyCoverFields(album);
 
     const result = await albumCanonical.upsertCanonical(
       albumDataWithoutCover,
@@ -131,13 +135,7 @@ function createHelpers(deps) {
   async function batchUpsertAlbumRecords(albums, timestamp, client = null) {
     if (!albums || albums.length === 0) return new Map();
 
-    // Remove cover_image from all albums (backward compatibility)
-    const albumsWithoutCovers = albums.map((album) => {
-      const cleaned = { ...album };
-      delete cleaned.cover_image;
-      delete cleaned.cover_image_format;
-      return cleaned;
-    });
+    const albumsWithoutCovers = albums.map(stripLegacyCoverFields);
 
     const results = await albumCanonical.batchUpsertCanonical(
       albumsWithoutCovers,

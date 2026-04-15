@@ -32,7 +32,6 @@ export function createAlbumContextMenu(deps = {}) {
     getContextAlbum,
     getContextAlbumId,
     setContextAlbum,
-    setContextAlbumId,
     getTrackAbortController,
     setTrackAbortController,
     findAlbumByIdentity,
@@ -47,7 +46,6 @@ export function createAlbumContextMenu(deps = {}) {
     loadLists,
     getRecommendationsModule,
     getMobileUIModule,
-    getListMetadata: _getListMetadata,
     createContextSubmenuController:
       makeContextSubmenuController = createContextSubmenuController,
   } = deps;
@@ -100,6 +98,10 @@ export function createAlbumContextMenu(deps = {}) {
     hideAlbumPlaySubmenu();
     hideMoveSubmenus();
     hideCopySubmenu();
+  }
+
+  function clearContextAlbumSelection() {
+    setContextAlbum(null, null);
   }
 
   function initializeAlbumSubmenuController() {
@@ -156,8 +158,7 @@ export function createAlbumContextMenu(deps = {}) {
     }
 
     // Module-specific cleanup: clear context album and cancel track fetches
-    setContextAlbum(null);
-    setContextAlbumId(null);
+    clearContextAlbumSelection();
 
     const trackAbortController = getTrackAbortController();
     if (trackAbortController) {
@@ -268,8 +269,7 @@ export function createAlbumContextMenu(deps = {}) {
             selectList(getCurrentListId());
           }
 
-          setContextAlbum(null);
-          setContextAlbumId(null);
+          clearContextAlbumSelection();
         }
       );
     };
@@ -292,8 +292,7 @@ export function createAlbumContextMenu(deps = {}) {
 
         if (!album || !album.artist || !album.album) {
           showToast('Could not find album data', 'error');
-          setContextAlbum(null);
-          setContextAlbumId(null);
+          clearContextAlbumSelection();
           return;
         }
 
@@ -303,15 +302,13 @@ export function createAlbumContextMenu(deps = {}) {
 
         if (!year) {
           showToast('Cannot recommend from a list without a year', 'error');
-          setContextAlbum(null);
-          setContextAlbumId(null);
+          clearContextAlbumSelection();
           return;
         }
 
         await getRecommendationsModule().recommendAlbum(album, year);
 
-        setContextAlbum(null);
-        setContextAlbumId(null);
+        clearContextAlbumSelection();
       };
     }
 
@@ -344,8 +341,7 @@ export function createAlbumContextMenu(deps = {}) {
           showToast('Could not find album artist', 'error');
         }
 
-        setContextAlbum(null);
-        setContextAlbumId(null);
+        clearContextAlbumSelection();
       };
     }
 
@@ -368,16 +364,14 @@ export function createAlbumContextMenu(deps = {}) {
 
         if (!album || !album.artist || !album.album) {
           showToast('Could not find album data', 'error');
-          setContextAlbum(null);
-          setContextAlbumId(null);
+          clearContextAlbumSelection();
           return;
         }
 
         // Show release selection modal
         showReleaseSelectionModal(album);
 
-        setContextAlbum(null);
-        setContextAlbumId(null);
+        clearContextAlbumSelection();
       };
     }
   }

@@ -21,7 +21,7 @@ export function createRealtimeSync(deps = {}) {
     getCurrentList = () => null,
     getListData = () => null,
     refreshListData = async () => {},
-    refreshListDataSilent = async () => {},
+    refreshListDataSilent = refreshListData,
     refreshListNav = () => {},
     showToast = () => {},
     apiCall = async () => {},
@@ -329,14 +329,8 @@ export function createRealtimeSync(deps = {}) {
     });
 
     try {
-      // Use silent refresh if available, otherwise use regular refresh
-      if (refreshListDataSilent) {
-        await refreshListDataSilent(currentList);
-        console.log('[RealtimeSync] List refreshed silently');
-      } else {
-        await refreshListData(currentList);
-        console.log('[RealtimeSync] List refreshed (regular)');
-      }
+      await refreshListDataSilent(currentList);
+      console.log('[RealtimeSync] List refreshed after summary update');
     } catch (error) {
       console.error(
         '[RealtimeSync] Failed to refresh list after summary update:',
