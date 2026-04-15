@@ -1342,7 +1342,6 @@ export function createMobileUI(deps = {}) {
               });
               currentPrimaryTrack = result.primary_track || '';
               currentSecondaryTrack = result.secondary_track || '';
-              showToast('Primary track removed');
             } else if (isSecondary) {
               // Promote to primary
               const result = await apiCall(`/api/track-picks/${listItemId}`, {
@@ -1354,7 +1353,6 @@ export function createMobileUI(deps = {}) {
               });
               currentPrimaryTrack = result.primary_track || '';
               currentSecondaryTrack = result.secondary_track || '';
-              showToast(`★ Primary: ${trackName.substring(0, 30)}...`);
             } else {
               // New selection as secondary
               const result = await apiCall(`/api/track-picks/${listItemId}`, {
@@ -1366,7 +1364,6 @@ export function createMobileUI(deps = {}) {
               });
               currentPrimaryTrack = result.primary_track || '';
               currentSecondaryTrack = result.secondary_track || '';
-              showToast(`☆ Secondary: ${trackName.substring(0, 30)}...`);
             }
 
             // Update UI immediately
