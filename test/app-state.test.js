@@ -727,17 +727,10 @@ describe('app-state', async () => {
   // ============ WINDOW GLOBALS ============
 
   describe('initWindowGlobals', () => {
-    it('creates window.currentList as alias for currentListId', () => {
+    it('does not expose legacy window.currentList alias', () => {
       mod.initWindowGlobals();
       mod.setCurrentListId('test-id');
-      assert.strictEqual(window.currentList, 'test-id');
-    });
-
-    it('window.currentList setter updates currentListId', () => {
-      mod.initWindowGlobals();
-      window.currentList = 'from-window';
-      assert.strictEqual(mod.getCurrentListId(), 'from-window');
-      mod.setCurrentListId(''); // cleanup
+      assert.strictEqual(window.currentList, undefined);
     });
 
     it('window.currentListId getter reflects state', () => {

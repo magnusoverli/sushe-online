@@ -9,6 +9,7 @@ import { isAlbumMatchingPlayback } from './playback-utils.js';
 import { getDeviceIcon } from '../utils/device-icons.js';
 import { formatTime } from './time-utils.js';
 import { getTrackId, buildLastfmBody } from './spotify-lastfm-utils.js';
+import { getCurrentListId, getListData } from './app-state.js';
 
 // ============ MODULE STATE ============
 let currentPlayback = null;
@@ -65,14 +66,8 @@ function isCurrentTrackInCurrentList(playbackState) {
   }
 
   // No current list = not in list
-  const currentList = window.currentList;
+  const currentList = getCurrentListId();
   if (!currentList) {
-    return false;
-  }
-
-  // Get list data
-  const getListData = window.getListData;
-  if (!getListData) {
     return false;
   }
 

@@ -650,15 +650,6 @@ export function setAvailableCountries(countries) {
 // These are set up once by initWindowGlobals() called from app.js.
 
 export function initWindowGlobals() {
-  // Keep currentList as alias for modules still reading window.currentList.
-  Object.defineProperty(window, 'currentList', {
-    get: () => currentListId,
-    set: (val) => {
-      currentListId = val;
-    },
-    configurable: true,
-  });
-
   Object.defineProperty(window, 'currentListId', {
     get: () => currentListId,
     set: (val) => {

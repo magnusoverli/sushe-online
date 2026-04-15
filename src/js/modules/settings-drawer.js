@@ -32,6 +32,7 @@ import { createSettingsRecommenderManagerActions } from './settings-drawer/handl
 import { createSettingsCoreHandlers } from './settings-drawer/handlers/core-handlers.js';
 import { createSettingsAuditHandlers } from './settings-drawer/handlers/audit-handlers.js';
 import { createSettingsAdminHandlers } from './settings-drawer/handlers/admin-handlers.js';
+import { getCurrentListId } from './app-state.js';
 
 /**
  * Create settings drawer utilities with injected dependencies
@@ -339,7 +340,7 @@ export function createSettingsDrawer(deps = {}) {
     // Restore FAB and mobile now-playing bar visibility
     const fab = document.getElementById('addAlbumFAB');
     const nowPlaying = document.getElementById('mobileNowPlaying');
-    const currentList = window.currentList || null;
+    const currentList = getCurrentListId();
 
     if (fab) {
       // Only show FAB if there's a current list (matches mobile menu pattern)
