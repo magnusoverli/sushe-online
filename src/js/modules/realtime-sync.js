@@ -10,7 +10,7 @@ import { io } from 'socket.io-client';
  * @param {Object} deps - Dependencies
  * @param {Function} deps.getListData - Get data for a list
  * @param {Function} deps.setListData - Set data for a list
- * @param {Function} deps.getCurrentList - Get the currently selected list name
+ * @param {Function} deps.getCurrentList - Get the currently selected list ID
  * @param {Function} deps.refreshListData - Refresh list data from server
  * @param {Function} deps.refreshListNav - Refresh the sidebar list navigation
  * @param {Function} deps.showToast - Show toast notification
@@ -27,6 +27,7 @@ export function createRealtimeSync(deps = {}) {
     apiCall = async () => {},
     updateAlbumSummaryInPlace = async () => {},
     displayAlbums = () => {},
+    ioFactory = io,
   } = deps;
 
   let socket = null;
@@ -43,7 +44,7 @@ export function createRealtimeSync(deps = {}) {
     }
 
     // Connect to the same origin (works for both dev and production)
-    socket = io({
+    socket = ioFactory({
       // Use the same path as the HTTP server
       path: '/socket.io',
       // Reconnection settings
@@ -125,40 +126,54 @@ export function createRealtimeSync(deps = {}) {
 
   /**
    * Subscribe to updates for a specific list
-   * @param {string} listName - Name of the list to subscribe to
+   * @param {string} listId - ID of the list to subscribe to
    */
-  function subscribeToList(listName) {
+  function subscribeToList(listId) {
     if (socket && isConnected) {
-      socket.emit('subscribe:list', listName);
-      console.log('[RealtimeSync] Subscribed to list:', listName);
+      socket.emit('subscribe:list', listId);
+      console.log('[RealtimeSync] Subscribed to list:', listId);
     }
   }
 
   /**
    * Unsubscribe from updates for a specific list
-   * @param {string} listName - Name of the list to unsubscribe from
+   * @param {string} listId - ID of the list to unsubscribe from
    */
-  function unsubscribeFromList(listName) {
+  function unsubscribeFromList(listId) {
     if (socket && isConnected) {
-      socket.emit('unsubscribe:list', listName);
-      console.log('[RealtimeSync] Unsubscribed from list:', listName);
+      socket.emit('unsubscribe:list', listId);
+      console.log('[RealtimeSync] Unsubscribed from list:', listId);
     }
+  }
+
+  function getEventListId(data, eventName) {
+    if (typeof data?.listId !== 'string' || data.listId.length === 0) {
+      console.warn('[RealtimeSync] Ignoring event without listId', {
+        eventName,
+        data,
+      });
+      return null;
+    }
+    return data.listId;
   }
 
   /**
    * Handle list updated event
    * @param {Object} data - Event payload
-   * @param {string} data.listName - Name of the updated list
+   * @param {string} data.listId - ID of the updated list
    * @param {string} data.updatedAt - Timestamp of the update
    */
   async function handleListUpdated(data) {
     console.log('[RealtimeSync] List updated:', data);
 
+    const listId = getEventListId(data, 'list:updated');
+    if (!listId) return;
+
     const currentList = getCurrentList();
-    if (data.listName === currentList) {
+    if (listId === currentList) {
       // Refresh the current list data
       try {
-        const result = await refreshListData(data.listName);
+        const result = await refreshListData(listId);
         // Only show notification if this wasn't our own save
         if (!result?.wasLocalSave) {
           showToast('List updated from another device', 'info');
@@ -181,12 +196,14 @@ export function createRealtimeSync(deps = {}) {
   async function handleListReordered(data) {
     console.log('[RealtimeSync] List reordered:', data);
 
+    const listId = getEventListId(data, 'list:reordered');
+    if (!listId) return;
+
     const currentList = getCurrentList();
-    const targetListId = data.listId || data.listName;
-    if (targetListId === currentList) {
+    if (listId === currentList) {
       // Refresh the current list to get new order
       try {
-        await refreshListData(targetListId);
+        await refreshListData(listId);
         // Optionally show notification (can be commented out if too noisy)
         // showToast('List order updated', 'info');
       } catch (error) {
@@ -216,18 +233,18 @@ export function createRealtimeSync(deps = {}) {
   /**
    * Handle list deleted event
    * @param {Object} data - Event payload
-   * @param {string} data.listName - Name of the deleted list
+   * @param {string} data.listId - ID of the deleted list
    */
   function handleListDeleted(data) {
     console.log('[RealtimeSync] List deleted:', data);
 
+    const listId = getEventListId(data, 'list:deleted');
+    if (!listId) return;
+
     const currentList = getCurrentList();
-    if (data.listName === currentList) {
+    if (listId === currentList) {
       // Current list was deleted, show notification
-      showToast(
-        `List "${data.listName}" was deleted on another device`,
-        'warning'
-      );
+      showToast('Current list was deleted on another device', 'warning');
     }
 
     // Refresh sidebar to remove the deleted list
@@ -237,14 +254,18 @@ export function createRealtimeSync(deps = {}) {
   /**
    * Handle list renamed event
    * @param {Object} data - Event payload
+   * @param {string} data.listId - ID of the renamed list
    * @param {string} data.oldName - Previous name of the list
    * @param {string} data.newName - New name of the list
    */
   function handleListRenamed(data) {
     console.log('[RealtimeSync] List renamed:', data);
 
+    const listId = getEventListId(data, 'list:renamed');
+    if (!listId) return;
+
     const currentList = getCurrentList();
-    if (data.oldName === currentList) {
+    if (listId === currentList) {
       showToast(`List renamed to "${data.newName}" on another device`, 'info');
     }
 
@@ -255,11 +276,14 @@ export function createRealtimeSync(deps = {}) {
   /**
    * Handle list main status changed event
    * @param {Object} data - Event payload
-   * @param {string} data.listName - Name of the list
+   * @param {string} data.listId - ID of the list
    * @param {boolean} data.isMain - Whether the list is now the main list
    */
   function handleListMainChanged(data) {
     console.log('[RealtimeSync] List main status changed:', data);
+
+    const listId = getEventListId(data, 'list:main-changed');
+    if (!listId) return;
 
     // Refresh sidebar to update the main indicator
     refreshListNav();
@@ -267,7 +291,7 @@ export function createRealtimeSync(deps = {}) {
     // If this is the currently displayed list, re-render to show/hide position numbers
     // Position numbers only appear on main lists (they have semantic meaning for rankings)
     const currentList = getCurrentList();
-    if (data.listName === currentList) {
+    if (listId === currentList) {
       const albums = getListData(currentList);
       if (albums) {
         // Force full rebuild to add/remove position elements

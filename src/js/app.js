@@ -809,33 +809,29 @@ function getRealtimeSyncModule() {
       apiCall,
       updateAlbumSummaryInPlace: (albumId, summaryData) =>
         getAlbumDisplayModule().updateAlbumSummaryInPlace(albumId, summaryData),
-      refreshListData: async (listName) => {
+      refreshListData: async (listId) => {
         // Check if this was our own save - skip refresh and notification
-        if (wasRecentLocalSave(listName)) {
+        if (wasRecentLocalSave(listId)) {
           console.log(
             '[RealtimeSync] Skipping refresh for local save:',
-            listName
+            listId
           );
           return { wasLocalSave: true };
         }
 
         // Fetch fresh data and update the display
-        const data = await apiCall(
-          `/api/lists/${encodeURIComponent(listName)}`
-        );
-        setListData(listName, data);
-        if (getCurrentListId() === listName) {
+        const data = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
+        setListData(listId, data);
+        if (getCurrentListId() === listId) {
           displayAlbums(data, { forceFullRebuild: true });
         }
         return { wasLocalSave: false };
       },
-      refreshListDataSilent: async (listName) => {
+      refreshListDataSilent: async (listId) => {
         // Silent refresh without notifications (for summary updates)
-        const data = await apiCall(
-          `/api/lists/${encodeURIComponent(listName)}`
-        );
-        setListData(listName, data);
-        if (getCurrentListId() === listName) {
+        const data = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
+        setListData(listId, data);
+        if (getCurrentListId() === listId) {
           displayAlbums(data, { forceFullRebuild: true });
         }
       },

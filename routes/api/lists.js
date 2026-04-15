@@ -203,7 +203,12 @@ module.exports = (app, deps) => {
       // Broadcast rename event if name changed
       const broadcast = req.app.locals.broadcast;
       if (broadcast && newName && newName.trim() !== result.list.name) {
-        broadcast.listRenamed(req.user._id, result.list.name, newName.trim());
+        broadcast.listRenamed(
+          req.user._id,
+          id,
+          result.list.name,
+          newName.trim()
+        );
       }
 
       res.json({ success: true });

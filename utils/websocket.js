@@ -193,23 +193,41 @@ function createWebSocketService(deps = {}) {
       });
 
       // Handle client subscribing to a specific list
-      socket.on('subscribe:list', (listName) => {
-        const listRoom = `list:${userId}:${listName}`;
+      socket.on('subscribe:list', (listId) => {
+        if (typeof listId !== 'string' || listId.length === 0) {
+          logger.warn('Client subscribe:list payload missing listId', {
+            socketId: socket.id,
+            userId,
+            listId,
+          });
+          return;
+        }
+
+        const listRoom = `list:${userId}:${listId}`;
         socket.join(listRoom);
         logger.debug('Client subscribed to list', {
           socketId: socket.id,
-          listName,
+          listId,
           listRoom,
         });
       });
 
       // Handle client unsubscribing from a list
-      socket.on('unsubscribe:list', (listName) => {
-        const listRoom = `list:${userId}:${listName}`;
+      socket.on('unsubscribe:list', (listId) => {
+        if (typeof listId !== 'string' || listId.length === 0) {
+          logger.warn('Client unsubscribe:list payload missing listId', {
+            socketId: socket.id,
+            userId,
+            listId,
+          });
+          return;
+        }
+
+        const listRoom = `list:${userId}:${listId}`;
         socket.leave(listRoom);
         logger.debug('Client unsubscribed from list', {
           socketId: socket.id,
-          listName,
+          listId,
         });
       });
 
