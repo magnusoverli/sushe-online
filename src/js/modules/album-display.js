@@ -31,6 +31,7 @@ import {
   createAlbumDisplayShared,
   PLACEHOLDER_GIF,
 } from './album-display-shared.js';
+import { detectUpdateType } from './album-display/incremental-update-detector.js';
 
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
@@ -1265,179 +1266,6 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
-   * Get album ID for comparison
-   * @param {Object} album - Album object
-   * @returns {string} Album identifier
-   */
-  function getAlbumId(album) {
-    return (
-      album._id ||
-      `${album.artist}::${album.album}::${album.release_date || ''}`
-    );
-  }
-
-  /**
-   * Extract album ID from a mutable fingerprint string.
-   * Fingerprint format: "_id|artist|album|release_date|..."
-   * @param {string} fp - Fingerprint string
-   * @returns {string} Album identifier
-   */
-  function getAlbumIdFromFingerprint(fp) {
-    const pipeIdx = fp.indexOf('|');
-    const id = pipeIdx >= 0 ? fp.substring(0, pipeIdx) : fp;
-    if (id) return id;
-    // Fallback: extract artist::album::release_date for composite ID
-    const parts = fp.split('|');
-    return `${parts[1] || ''}::${parts[2] || ''}::${parts[3] || ''}`;
-  }
-
-  /**
-   * Find single addition in list
-   * @param {Array<string>} oldFingerprints - Previous fingerprint strings
-   * @param {Array} newAlbums - New album array
-   * @returns {Object|null} { album, index } or null
-   */
-  function findSingleAddition(oldFingerprints, newAlbums) {
-    if (newAlbums.length !== oldFingerprints.length + 1) return null;
-
-    const oldIds = new Set(oldFingerprints.map(getAlbumIdFromFingerprint));
-
-    for (let i = 0; i < newAlbums.length; i++) {
-      const newId = getAlbumId(newAlbums[i]);
-      if (!oldIds.has(newId)) {
-        // Found the added album - verify rest of list matches
-        const beforeMatch = newAlbums
-          .slice(0, i)
-          .every(
-            (a, idx) =>
-              getAlbumId(a) === getAlbumIdFromFingerprint(oldFingerprints[idx])
-          );
-        const afterMatch = newAlbums
-          .slice(i + 1)
-          .every(
-            (a, idx) =>
-              getAlbumId(a) ===
-              getAlbumIdFromFingerprint(oldFingerprints[i + idx])
-          );
-
-        if (beforeMatch && afterMatch) {
-          return { album: newAlbums[i], index: i };
-        }
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Find single removal in list
-   * @param {Array<string>} oldFingerprints - Previous fingerprint strings
-   * @param {Array} newAlbums - New album array
-   * @returns {number} Index of removed item or -1
-   */
-  function findSingleRemoval(oldFingerprints, newAlbums) {
-    if (newAlbums.length !== oldFingerprints.length - 1) return -1;
-
-    const newIds = new Set(newAlbums.map(getAlbumId));
-
-    for (let i = 0; i < oldFingerprints.length; i++) {
-      const oldId = getAlbumIdFromFingerprint(oldFingerprints[i]);
-      if (!newIds.has(oldId)) {
-        // Found the removed album - verify rest of list matches
-        const beforeMatch = newAlbums
-          .slice(0, i)
-          .every(
-            (a, idx) =>
-              getAlbumId(a) === getAlbumIdFromFingerprint(oldFingerprints[idx])
-          );
-        const afterMatch = newAlbums
-          .slice(i)
-          .every(
-            (a, idx) =>
-              getAlbumId(a) ===
-              getAlbumIdFromFingerprint(oldFingerprints[i + 1 + idx])
-          );
-
-        if (beforeMatch && afterMatch) {
-          return i;
-        }
-      }
-    }
-    return -1;
-  }
-
-  /**
-   * Detect what type of update is needed.
-   * Compares fingerprint strings instead of objects to reduce allocations.
-   * @param {Array<string>|null} oldFingerprints - Previous fingerprint strings (from extractMutableFingerprints)
-   * @param {Array} newAlbums - New album array
-   * @returns {string|Object} Update type string or object with details for add/remove
-   */
-  function detectUpdateType(oldFingerprints, newAlbums) {
-    if (!ENABLE_INCREMENTAL_UPDATES || !oldFingerprints) {
-      return 'FULL_REBUILD';
-    }
-
-    // Check for single addition
-    if (newAlbums.length === oldFingerprints.length + 1) {
-      const addition = findSingleAddition(oldFingerprints, newAlbums);
-      if (addition) {
-        return {
-          type: 'SINGLE_ADD',
-          album: addition.album,
-          index: addition.index,
-        };
-      }
-    }
-
-    // Check for single removal
-    if (newAlbums.length === oldFingerprints.length - 1) {
-      const removalIndex = findSingleRemoval(oldFingerprints, newAlbums);
-      if (removalIndex !== -1) {
-        return { type: 'SINGLE_REMOVE', index: removalIndex };
-      }
-    }
-
-    // Length must match for other incremental updates
-    if (oldFingerprints.length !== newAlbums.length) {
-      return 'FULL_REBUILD';
-    }
-
-    let positionChanges = 0;
-    let fieldChanges = 0;
-
-    for (let i = 0; i < newAlbums.length; i++) {
-      const oldId = getAlbumIdFromFingerprint(oldFingerprints[i]);
-      const newId = getAlbumId(newAlbums[i]);
-
-      if (oldId !== newId) {
-        positionChanges++;
-      } else {
-        // Build new fingerprint inline and compare as string -- cheaper than
-        // comparing 8+ object properties individually, and avoids allocating objects.
-        const newAlbum = newAlbums[i];
-        const newFp = `${newAlbum._id || ''}|${newAlbum.artist || ''}|${newAlbum.album || ''}|${newAlbum.release_date || ''}|${newAlbum.country || ''}|${newAlbum.genre_1 || ''}|${newAlbum.genre_2 || ''}|${newAlbum.comments || ''}|${newAlbum.comments_2 || ''}|${newAlbum.primary_track || ''}`;
-        if (oldFingerprints[i] !== newFp) {
-          fieldChanges++;
-        }
-      }
-    }
-
-    // Note: cover_image changes now always trigger full rebuild via fingerprint mismatch
-    // since we don't track cover_image in mutable state (too expensive)
-    if (positionChanges === 0 && fieldChanges > 0 && fieldChanges <= 10) {
-      return 'FIELD_UPDATE';
-    }
-    if (fieldChanges === 0 && positionChanges > 0) {
-      return 'POSITION_UPDATE';
-    }
-    if (positionChanges + fieldChanges <= 15) {
-      return 'HYBRID_UPDATE';
-    }
-
-    return 'FULL_REBUILD';
-  }
-
-  /**
    * Insert a single album at a specific index without full rebuild
    * @param {Array} albums - Full album array (for data)
    * @param {number} index - Index to insert at
@@ -2433,7 +2261,9 @@ export function createAlbumDisplay(deps = {}) {
         return; // No changes detected
       }
 
-      const updateType = detectUpdateType(lastRenderedMutableState, albums);
+      const updateType = detectUpdateType(lastRenderedMutableState, albums, {
+        incrementalEnabled: ENABLE_INCREMENTAL_UPDATES,
+      });
 
       // Handle single album addition
       if (

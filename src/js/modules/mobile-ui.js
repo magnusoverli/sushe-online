@@ -14,6 +14,7 @@ import { createTransferHelpers } from './album-transfer.js';
 import { fetchSpotifyDevices } from '../utils/playback-service.js';
 import { createMobileAlbumActions } from './mobile-ui/album-actions.js';
 import { createTrackPickService } from './track-pick-service.js';
+import { createAlbumIdentityFinder } from './mobile-ui/album-identity.js';
 
 /**
  * Factory function to create the mobile UI module with injected dependencies
@@ -94,28 +95,10 @@ export function createMobileUI(deps = {}) {
     recommendAlbum,
   } = deps;
   const trackPickService = createTrackPickService({ apiCall });
-
-  /**
-   * Find album by identity string instead of index
-   * Prevents stale index issues when list order changes
-   * @param {string} albumId - Album identity string (artist::album::release_date)
-   * @returns {Object|null} { album, index } or null if not found
-   */
-  function findAlbumByIdentity(albumId) {
-    const currentList = getCurrentList();
-    const albums = getListData(currentList);
-    if (!currentList || !albums) return null;
-
-    for (let i = 0; i < albums.length; i++) {
-      const album = albums[i];
-      const currentId =
-        `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
-      if (currentId === albumId) {
-        return { album, index: i };
-      }
-    }
-    return null;
-  }
+  const findAlbumByIdentity = createAlbumIdentityFinder({
+    getCurrentList,
+    getListData,
+  });
 
   // Create transfer helpers (move/copy with confirmation dialogs)
   const {

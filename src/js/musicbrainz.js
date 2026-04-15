@@ -5,6 +5,10 @@ import {
   stringSimilarity,
   normalizeForExternalApi,
 } from './modules/normalization.js';
+import {
+  hasNonLatinCharacters,
+  formatArtistDisplayName,
+} from './modules/musicbrainz-artist-name.js';
 
 const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
 const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
@@ -2183,127 +2187,6 @@ async function addAlbumToRecommendations(album) {
     }
     console.error('Error adding recommendation:', error);
     showToast('Error adding recommendation', 'error');
-  }
-}
-
-function hasNonLatinCharacters(str) {
-  if (!str) return false;
-  // Check if more than 50% of alphabetic characters are non-Latin
-  const alphaChars = str.match(/\p{L}/gu) || [];
-  const nonLatinChars = str.match(/[^\u0020-\u024F\u1E00-\u1EFF]/gu) || [];
-  return (
-    alphaChars.length > 0 && nonLatinChars.length / alphaChars.length > 0.5
-  );
-}
-
-// Helper to extract Latin name from various sources
-function extractLatinName(artist) {
-  let latinName = null;
-
-  // Strategy 1: Check if sort-name is different and contains Latin characters
-  if (artist['sort-name'] && artist['sort-name'] !== artist.name) {
-    if (!hasNonLatinCharacters(artist['sort-name'])) {
-      // sort-name might be "Lastname, Firstname" format, so clean it up
-      const sortName = artist['sort-name'];
-      if (sortName.includes(',')) {
-        // Reverse "Lastname, Firstname" to "Firstname Lastname"
-        const parts = sortName.split(',').map((p) => p.trim());
-        if (parts.length === 2) {
-          latinName = `${parts[1]} ${parts[0]}`;
-        } else {
-          latinName = sortName;
-        }
-      } else {
-        latinName = sortName;
-      }
-    }
-  }
-
-  // Strategy 2: Check name for parentheses pattern (e.g., "מזמור (Mizmor)")
-  if (!latinName && artist.name) {
-    const nameParenMatch = artist.name.match(/\(([^)]+)\)/);
-    if (nameParenMatch) {
-      const extracted = nameParenMatch[1].trim();
-      if (!hasNonLatinCharacters(extracted)) {
-        latinName = extracted;
-      }
-    }
-  }
-
-  // Strategy 3: Check disambiguation for Latin version
-  if (!latinName && artist.disambiguation) {
-    // Sometimes the entire disambiguation is the Latin name
-    if (!hasNonLatinCharacters(artist.disambiguation)) {
-      // But only if it looks like a name, not a description
-      const looksLikeName =
-        !artist.disambiguation.includes(' ') ||
-        artist.disambiguation.split(' ').length <= 3;
-      if (
-        looksLikeName &&
-        !artist.disambiguation.toLowerCase().includes('group') &&
-        !artist.disambiguation.toLowerCase().includes('band')
-      ) {
-        latinName = artist.disambiguation;
-      }
-    }
-  }
-
-  // Strategy 4: Check aliases if available
-  if (!latinName && artist.aliases && Array.isArray(artist.aliases)) {
-    for (const alias of artist.aliases) {
-      if (alias.name && !hasNonLatinCharacters(alias.name)) {
-        // Prefer primary aliases or those marked as artist name
-        if (alias.primary || alias.type === 'Artist name') {
-          latinName = alias.name;
-          break;
-        }
-      }
-    }
-    // If no primary alias found, use any Latin alias
-    if (!latinName) {
-      const latinAlias = artist.aliases.find(
-        (a) => a.name && !hasNonLatinCharacters(a.name)
-      );
-      if (latinAlias) {
-        latinName = latinAlias.name;
-      }
-    }
-  }
-
-  return latinName;
-}
-
-// Helper to format artist display name
-function formatArtistDisplayName(artist) {
-  const hasNonLatin = hasNonLatinCharacters(artist.name);
-
-  if (!hasNonLatin) {
-    // Name is already in Latin script
-    return {
-      primary: artist.name,
-      secondary: artist.disambiguation || null,
-      original: artist.name,
-    };
-  }
-
-  // Try to extract Latin version using multiple strategies
-  const latinName = extractLatinName(artist);
-
-  if (latinName) {
-    // Show Latin name as primary, original as secondary
-    return {
-      primary: latinName,
-      secondary: artist.name,
-      original: artist.name,
-    };
-  } else {
-    // No Latin version found, show as-is with warning
-    return {
-      primary: artist.name,
-      secondary: 'Non-Latin script',
-      original: artist.name,
-      warning: true,
-    };
   }
 }
 
