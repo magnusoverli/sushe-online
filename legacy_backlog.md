@@ -32,7 +32,7 @@ Continue the current refactor direction by removing legacy code, shrinking compa
 - Structured backend logging instead of ad hoc `console.*`.
 - Canonical DTOs at boundaries instead of broad normalization deep in feature code.
 
-## PR 1: Freeze Canonical Frontend List Shape
+## PR 1: Freeze Canonical Frontend List Shape ✅ Completed (PR #337)
 
 ### Goal
 
