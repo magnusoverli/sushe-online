@@ -81,9 +81,8 @@ import {
   setCurrentRecommendationsYear,
   getContextAlbum as getContextAlbumState,
   setContextAlbum as setContextAlbumState,
+  getContextList as getContextListState,
   setContextList as setContextListState,
-  getContextState as getContextStateFromStore,
-  setContextState as setContextStateInStore,
   getContextGroup as getContextGroupState,
   setContextGroup as setContextGroupState,
   getPendingImport as getPendingImportState,
@@ -478,9 +477,13 @@ const getContextMenusModule = createLazyModule(() =>
     playAlbum,
     playAlbumSafe: (albumId) => window.playAlbumSafe(albumId),
     loadLists,
-    getContextState: () => getContextStateFromStore(),
-    setContextState: (state) => {
-      setContextStateInStore(state);
+    getContextAlbumId: () => getContextAlbumIdentity(),
+    setContextAlbum: (index, albumId) => {
+      setContextAlbumState(index, albumId);
+    },
+    getContextList: () => getContextListState(),
+    setContextList: (listId) => {
+      setContextListState(listId);
     },
     setCurrentList: (listName) => {
       setCurrentListId(listName);
