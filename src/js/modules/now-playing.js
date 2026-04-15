@@ -8,10 +8,8 @@
  * @module now-playing
  */
 
-import {
-  normalizeForMatch,
-  isAlbumMatchingPlayback,
-} from './playback-utils.js';
+import { isAlbumMatchingPlayback } from './playback-utils.js';
+import { normalizeForMatch } from './normalization.js';
 
 /**
  * Factory function to create the now-playing module with injected dependencies

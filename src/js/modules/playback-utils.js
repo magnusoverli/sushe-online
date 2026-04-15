@@ -6,12 +6,6 @@
 // Import normalizeForMatch from centralized normalization module
 import { normalizeForMatch } from './normalization.js';
 
-// Re-export for backward compatibility
-export { normalizeForMatch };
-
-// Re-export getDeviceIcon from standalone util (no @utils alias dependency)
-export { getDeviceIcon } from '../utils/device-icons.js';
-
 /**
  * Check if a list album matches the currently playing Spotify track
  * @param {Object} listAlbum - Album from the list with .album and .artist properties
