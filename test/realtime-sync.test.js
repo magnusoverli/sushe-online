@@ -118,6 +118,28 @@ describe('realtime-sync module', () => {
     assert.deepStrictEqual(refreshCalls, []);
   });
 
+  it('refreshes current list on list:reordered when listId matches', async () => {
+    const fakeSocket = createFakeSocket();
+    const refreshCalls = [];
+
+    const sync = createRealtimeSync({
+      ioFactory: () => fakeSocket,
+      getCurrentList: () => 'list-1',
+      refreshListData: async (listId) => {
+        refreshCalls.push(listId);
+      },
+    });
+
+    sync.connect();
+    await fakeSocket.trigger('list:reordered', {
+      listId: 'list-1',
+      order: ['a', 'b'],
+      reorderedAt: new Date().toISOString(),
+    });
+
+    assert.deepStrictEqual(refreshCalls, ['list-1']);
+  });
+
   it('rebuilds current list display on list:main-changed using listId', async () => {
     const fakeSocket = createFakeSocket();
     const displayCalls = [];
