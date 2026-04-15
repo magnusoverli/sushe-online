@@ -87,11 +87,7 @@ export function createContextMenus(deps = {}) {
   let trackAbortController = null;
 
   function getContextAlbumId() {
-    const context = getContextAlbum();
-    if (!context || typeof context !== 'object') {
-      return null;
-    }
-    return context.albumId || null;
+    return getContextAlbum().albumId || null;
   }
 
   /**
