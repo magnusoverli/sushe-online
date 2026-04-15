@@ -31,9 +31,7 @@ async function reorderItems(ctx, listId, userId, order) {
     }
 
     const itemIdsByAlbumId = new Map();
-    const validItemIds = new Set();
     for (const item of listItems) {
-      validItemIds.add(item._id);
       if (item.album_id) {
         itemIdsByAlbumId.set(item.album_id, item._id);
       }
@@ -49,16 +47,6 @@ async function reorderItems(ctx, listId, userId, order) {
           });
         }
         orderedItemIds.push(resolvedItemId);
-        continue;
-      }
-
-      if (entry && typeof entry === 'object' && entry._id) {
-        if (!validItemIds.has(entry._id)) {
-          throw new ctx.TransactionAbort(400, {
-            error: `Item '${entry._id}' is not in this list`,
-          });
-        }
-        orderedItemIds.push(entry._id);
         continue;
       }
 

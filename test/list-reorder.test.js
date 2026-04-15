@@ -34,7 +34,7 @@ describe('list-reorder module', () => {
     ]);
   });
 
-  it('maps ids with fallback and posts reorder payload', async () => {
+  it('maps canonical ids and posts reorder payload', async () => {
     const apiCalls = [];
     const logs = [];
 
@@ -51,7 +51,7 @@ describe('list-reorder module', () => {
     await saveReorder('My List/2024', [
       { album_id: 'mbid-1' },
       { albumId: 'spotify-2' },
-      { _id: 'legacy-3' },
+      { album_id: 'mbid-3' },
       { name: 'No ID' },
     ]);
 
@@ -60,7 +60,7 @@ describe('list-reorder module', () => {
       {
         method: 'POST',
         body: JSON.stringify({
-          order: ['mbid-1', 'spotify-2', { _id: 'legacy-3' }, null],
+          order: ['mbid-1', 'spotify-2', 'mbid-3', null],
         }),
       },
     ]);
