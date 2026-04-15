@@ -408,8 +408,8 @@ export function createRecommendations(deps = {}) {
               {
                 artist: rec.artist,
                 album: rec.album,
-                albumId: rec.album_id,
-                releaseDate: rec.release_date,
+                album_id: rec.album_id,
+                release_date: rec.release_date,
               },
               {
                 playOptionId: 'playRecommendationOption',
