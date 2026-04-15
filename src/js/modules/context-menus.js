@@ -39,8 +39,10 @@ import { getDeviceIcon } from '../utils/device-icons.js';
  * @param {Function} deps.playAlbum - Play album
  * @param {Function} deps.playAlbumSafe - Play album safely by ID
  * @param {Function} deps.loadLists - Reload lists
- * @param {Function} deps.getContextState - Get context menu state
- * @param {Function} deps.setContextState - Set context menu state
+ * @param {Function} deps.getContextAlbumId - Get context menu album ID
+ * @param {Function} deps.setContextAlbum - Set context menu album state
+ * @param {Function} deps.getContextList - Get context menu list state
+ * @param {Function} deps.setContextList - Set context menu list state
  * @param {Function} deps.setCurrentList - Set current list (for delete)
  * @param {Function} deps.refreshMobileBarVisibility - Refresh mobile bar visibility
  * @param {Function} deps.getSortedGroups - Get groups sorted by sort_order
@@ -70,8 +72,10 @@ export function createContextMenus(deps = {}) {
     playAlbum: _playAlbum,
     playAlbumSafe: _playAlbumSafe,
     loadLists: _loadLists,
-    getContextState,
-    setContextState,
+    getContextAlbumId,
+    setContextAlbum,
+    getContextList,
+    setContextList,
     setCurrentList,
     refreshMobileBarVisibility,
     getSortedGroups,
@@ -90,7 +94,7 @@ export function createContextMenus(deps = {}) {
     hideAllMenusBase();
 
     // Module-specific cleanup: clear context state and cancel track fetches
-    setContextState({ album: null, albumId: null });
+    setContextAlbum(null, null);
     if (trackAbortController) {
       trackAbortController.abort();
       trackAbortController = null;
@@ -170,7 +174,7 @@ export function createContextMenus(deps = {}) {
   function showMoveToListSubmenu() {
     const currentList = getCurrentList();
     const lists = getLists();
-    const { albumId } = getContextState();
+    const albumId = getContextAlbumId();
 
     const submenu = document.getElementById('albumMoveSubmenu');
     const moveOption = document.getElementById('moveAlbumOption');
@@ -247,7 +251,7 @@ export function createContextMenus(deps = {}) {
   function showCopyToListSubmenu() {
     const currentList = getCurrentList();
     const lists = getLists();
-    const { albumId } = getContextState();
+    const albumId = getContextAlbumId();
 
     const submenu = document.getElementById('albumCopySubmenu');
     const copyOption = document.getElementById('copyAlbumOption');
@@ -322,7 +326,7 @@ export function createContextMenus(deps = {}) {
    * Show download list submenu for desktop
    */
   function showDownloadListSubmenu() {
-    const { list: currentContextList } = getContextState();
+    const currentContextList = getContextList();
     const submenu = document.getElementById('downloadListSubmenu');
     const downloadOption = document.getElementById('downloadListOption');
 
@@ -358,7 +362,7 @@ export function createContextMenus(deps = {}) {
 
         // Download the list
         downloadListAsJSON(currentContextList);
-        setContextState({ list: null });
+        setContextList(null);
       });
     }
 
@@ -376,7 +380,7 @@ export function createContextMenus(deps = {}) {
 
         // Download the list
         downloadListAsPDF(currentContextList);
-        setContextState({ list: null });
+        setContextList(null);
       });
     }
 
@@ -394,7 +398,7 @@ export function createContextMenus(deps = {}) {
 
         // Download the list
         downloadListAsCSV(currentContextList);
-        setContextState({ list: null });
+        setContextList(null);
       });
     }
 
@@ -560,7 +564,7 @@ export function createContextMenus(deps = {}) {
 
     // Handle rename option click
     renameOption.onclick = () => {
-      const { list: currentContextList } = getContextState();
+      const currentContextList = getContextList();
       contextMenu.classList.add('hidden');
 
       if (!currentContextList) return;
@@ -570,9 +574,9 @@ export function createContextMenus(deps = {}) {
 
     // Handle toggle main option click
     toggleMainOption.onclick = () => {
-      const { list: currentContextList } = getContextState();
+      const currentContextList = getContextList();
       contextMenu.classList.add('hidden');
-      setContextState({ list: null });
+      setContextList(null);
 
       if (currentContextList) {
         toggleMainStatus(currentContextList);
@@ -581,7 +585,7 @@ export function createContextMenus(deps = {}) {
 
     // Handle update playlist option click
     updatePlaylistOption.onclick = async () => {
-      const { list: currentContextList } = getContextState();
+      const currentContextList = getContextList();
       contextMenu.classList.add('hidden');
 
       if (!currentContextList) return;
@@ -594,12 +598,12 @@ export function createContextMenus(deps = {}) {
         console.error('Update playlist failed', err);
       }
 
-      setContextState({ list: null });
+      setContextList(null);
     };
 
     // Handle delete option click
     deleteOption.onclick = async () => {
-      const { list: currentContextList } = getContextState();
+      const currentContextList = getContextList();
       const currentList = getCurrentList();
       contextMenu.classList.add('hidden');
 
@@ -674,7 +678,7 @@ export function createContextMenus(deps = {}) {
         }
       }
 
-      setContextState({ list: null });
+      setContextList(null);
     };
 
     // Get submenu elements
@@ -730,7 +734,7 @@ export function createContextMenus(deps = {}) {
         cancelHideMoveListSubmenu();
         // Also hide download submenu when entering move option
         hideDownloadSubmenu();
-        const { list: currentContextList } = getContextState();
+        const currentContextList = getContextList();
         if (currentContextList) {
           showMoveListSubmenu();
         }
@@ -759,7 +763,7 @@ export function createContextMenus(deps = {}) {
         cancelHideDownloadSubmenu();
         // Also hide move list submenu when entering download option
         hideMoveListSubmenu();
-        const { list: currentContextList } = getContextState();
+        const currentContextList = getContextList();
         if (currentContextList) {
           showDownloadListSubmenu();
         }
@@ -807,7 +811,7 @@ export function createContextMenus(deps = {}) {
   function showMoveListSubmenu() {
     const moveListOption = document.getElementById('moveListOption');
     const moveListSubmenu = document.getElementById('moveListSubmenu');
-    const { list: currentContextList } = getContextState();
+    const currentContextList = getContextList();
 
     if (!moveListSubmenu || !moveListOption || !currentContextList) return;
 
@@ -918,7 +922,7 @@ export function createContextMenus(deps = {}) {
       showToast('Failed to move list', 'error');
     }
 
-    setContextState({ list: null });
+    setContextList(null);
   }
 
   // Return public API

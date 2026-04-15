@@ -455,28 +455,6 @@ export function setContextList(listId) {
 }
 
 /**
- * Get full context state (for DI compat)
- * @returns {{ album: number|null, albumId: string|null, list: string|null }}
- */
-export function getContextState() {
-  return {
-    album: currentContextAlbum,
-    albumId: currentContextAlbumId,
-    list: currentContextList,
-  };
-}
-
-/**
- * Set context state from object (for DI compat)
- * @param {Object} state
- */
-export function setContextState(state) {
-  if ('album' in state) currentContextAlbum = state.album;
-  if ('albumId' in state) currentContextAlbumId = state.albumId;
-  if ('list' in state) currentContextList = state.list;
-}
-
-/**
  * Get context group
  * @returns {Object|null}
  */

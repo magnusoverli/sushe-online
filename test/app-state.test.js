@@ -427,23 +427,12 @@ describe('app-state', async () => {
       assert.strictEqual(mod.getContextList(), null);
     });
 
-    it('getContextState returns combined context', () => {
-      mod.setContextAlbum(3, 'album-abc');
-      mod.setContextList('list-1');
-      const state = mod.getContextState();
-      assert.strictEqual(state.album, 3);
-      assert.strictEqual(state.albumId, 'album-abc');
-      assert.strictEqual(state.list, 'list-1');
-    });
-
-    it('setContextState applies partial updates', () => {
+    it('setContextAlbum replaces both index and album ID together', () => {
       mod.setContextAlbum(1, 'old');
-      mod.setContextList('old-list');
-      mod.setContextState({ album: 10, albumId: 'new' });
-      const state = mod.getContextState();
-      assert.strictEqual(state.album, 10);
+      mod.setContextAlbum(10, 'new');
+      const state = mod.getContextAlbum();
+      assert.strictEqual(state.index, 10);
       assert.strictEqual(state.albumId, 'new');
-      assert.strictEqual(state.list, 'old-list'); // unchanged
     });
 
     it('getContextGroup / setContextGroup', () => {

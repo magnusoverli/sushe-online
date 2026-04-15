@@ -38,8 +38,10 @@ describe('context-menus module', () => {
         playAlbum: mock.fn(),
         playAlbumSafe: mock.fn(),
         loadLists: mock.fn(),
-        getContextState: mock.fn(() => ({})),
-        setContextState: mock.fn(),
+        getContextAlbumId: mock.fn(() => null),
+        setContextAlbum: mock.fn(),
+        getContextList: mock.fn(() => null),
+        setContextList: mock.fn(),
         toggleMainStatus: mock.fn(),
       };
 
