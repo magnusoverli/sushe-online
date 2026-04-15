@@ -113,11 +113,11 @@ async function ensureTables(pool) {
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ
   )`);
-  // Handle legacy column from early migrations
-  const legacyCheck = await pool.query(
+  // Handle historical column name from early schemas
+  const albumIdCompatCheck = await pool.query(
     `SELECT 1 FROM information_schema.columns WHERE table_name='albums' AND column_name='_id'`
   );
-  if (legacyCheck.rowCount) {
+  if (albumIdCompatCheck.rowCount) {
     const albumIdExists = await pool.query(
       `SELECT 1 FROM information_schema.columns WHERE table_name='albums' AND column_name='album_id'`
     );
@@ -321,19 +321,6 @@ if (process.env.DATABASE_URL) {
       });
     }
   }
-  async function migrateLists() {
-    // Legacy migration function - no longer needed.
-    // This used to migrate data from lists.data JSONB column to list_items table.
-    // Album metadata columns have been removed from list_items (migration 042).
-    // This function is kept as a no-op for backward compatibility.
-  }
-
-  async function migrateAlbums() {
-    // Legacy migration function - no longer needed.
-    // Album metadata columns have been removed from list_items (migration 042).
-    // All album data now lives exclusively in the albums table.
-    // This function is kept as a no-op for backward compatibility.
-  }
 
   async function ensureAdminUser() {
     try {
@@ -392,16 +379,8 @@ if (process.env.DATABASE_URL) {
       return migrationManager;
     })
     .then(() => {
-      logger.info('Creating tables (legacy)...');
+      logger.info('Ensuring base tables...');
       return ensureTables(pool);
-    })
-    .then(() => {
-      logger.info('Migrating lists...');
-      return migrateLists();
-    })
-    .then(() => {
-      logger.info('Migrating albums...');
-      return migrateAlbums();
     })
     .then(() => {
       logger.info('Migrating users...');
