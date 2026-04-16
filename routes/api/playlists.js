@@ -143,16 +143,12 @@ module.exports = (app, deps) => {
           userId: req.user._id,
           itemCount: items.length,
           pickedTrackCount: items.filter(
-            (item) => item.primaryTrack || item.secondaryTrack || item.trackPick
+            (item) => item.primaryTrack || item.secondaryTrack
           ).length,
         });
 
         // Pre-flight validation
-        const validation = await playlistService.validatePlaylistData(
-          items,
-          targetService,
-          auth
-        );
+        const validation = await playlistService.validatePlaylistData(items);
 
         if (action === 'validate') {
           return res.json(validation);
@@ -164,8 +160,7 @@ module.exports = (app, deps) => {
           items,
           targetService,
           auth,
-          req.user,
-          validation
+          req.user
         );
 
         res.json(result);

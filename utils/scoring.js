@@ -63,17 +63,7 @@ function getPositionPoints(position, defaultValue = 0) {
   return POSITION_POINTS[position] ?? defaultValue;
 }
 
-/**
- * Get points for a position (legacy alias with default of 1 for export compatibility)
- * @param {number} position - The position (1-based)
- * @returns {number} - Points for the position (minimum 1)
- */
-function getPointsForPosition(position) {
-  return POSITION_POINTS[position] || 1;
-}
-
 module.exports = {
   POSITION_POINTS,
   getPositionPoints,
-  getPointsForPosition,
 };
