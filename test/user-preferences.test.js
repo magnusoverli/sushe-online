@@ -1,16 +1,17 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
+const { createUserPreferences } = require('../utils/user-preferences.js');
+const { POSITION_POINTS, getPositionPoints } = require('../utils/scoring.js');
 const {
-  createUserPreferences,
-  POSITION_POINTS,
-  getPositionPoints,
   normalizeArtistName,
   normalizeAlbumName,
   normalizeGenre,
   artistNamesMatch,
+} = require('../utils/normalization.js');
+const {
   filterGenreTags,
   GENRE_MAPPINGS,
-} = require('../utils/user-preferences.js');
+} = require('../utils/affinity-calculator.js');
 const { createMockLogger, createMockPool } = require('./helpers');
 
 // =============================================================================
@@ -46,14 +47,14 @@ describe('getPositionPoints', () => {
     assert.strictEqual(getPositionPoints(15), 26);
   });
 
-  it('should return 1 for positions beyond 40', () => {
-    assert.strictEqual(getPositionPoints(41), 1);
-    assert.strictEqual(getPositionPoints(100), 1);
+  it('should return 0 for positions beyond 40', () => {
+    assert.strictEqual(getPositionPoints(41), 0);
+    assert.strictEqual(getPositionPoints(100), 0);
   });
 
-  it('should return 1 for invalid positions', () => {
-    assert.strictEqual(getPositionPoints(0), 1);
-    assert.strictEqual(getPositionPoints(-1), 1);
+  it('should return 0 for invalid positions', () => {
+    assert.strictEqual(getPositionPoints(0), 0);
+    assert.strictEqual(getPositionPoints(-1), 0);
   });
 });
 

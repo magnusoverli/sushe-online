@@ -45,11 +45,9 @@ function createPlaylistService(deps) {
   /**
    * Pre-flight validation for playlist creation
    * @param {Array} items - List items with track picks
-   * @param {string} _service - Target service (unused but kept for signature compatibility)
-   * @param {Object} _auth - Auth object (unused but kept for signature compatibility)
    * @returns {Promise<Object>} - Validation result
    */
-  async function validatePlaylistData(items, _service, _auth) {
+  async function validatePlaylistData(items) {
     const validation = {
       totalAlbums: items.length,
       albumsWithTracks: 0,
@@ -105,7 +103,6 @@ function createPlaylistService(deps) {
    * @param {string} service - 'spotify' or 'tidal'
    * @param {Object} auth - Authentication object
    * @param {Object} user - User object
-   * @param {Object} _validation - Validation result (unused)
    * @returns {Promise<Object>} - Result object with tracks, errors, etc.
    */
   async function createOrUpdatePlaylist(
@@ -113,8 +110,7 @@ function createPlaylistService(deps) {
     items,
     service,
     auth,
-    user,
-    _validation
+    user
   ) {
     const result = {
       service,

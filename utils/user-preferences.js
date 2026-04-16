@@ -1,39 +1,15 @@
 // utils/user-preferences.js
-// User music preferences — DB-dependent factory + backward-compatible exports
+// User music preferences — DB-dependent factory and runtime helpers
 //
 // Pure affinity calculation logic lives in ./affinity-calculator.js
 // This file handles: aggregateFromLists (DB), savePreferences (DB),
-// getPreferences (DB), checkRefreshNeeded (DB), and re-exports pure functions.
+// getPreferences (DB), and checkRefreshNeeded (DB).
 
 const logger = require('./logger');
-const {
-  POSITION_POINTS,
-  getPointsForPosition: getPositionPoints,
-} = require('./scoring');
-
-// Import shared normalization functions (re-exported for backward compatibility)
-const {
-  normalizeArtistName,
-  normalizeAlbumName,
-  normalizeGenre,
-  artistNamesMatch,
-  findArtistInMap,
-} = require('./normalization');
+const { getPositionPoints } = require('./scoring');
 
 // Import pure affinity functions from dedicated module
 const {
-  GENRE_MAPPINGS,
-  filterGenreTags,
-  normalizeActiveWeights,
-  addInternalArtists,
-  addSpotifyArtists,
-  addLastfmArtists,
-  buildLastfmArtistTagsMap,
-  addInternalGenres,
-  addSpotifyGenres,
-  addLastfmGenres,
-  buildCountryScores,
-  convertScoresToArrays,
   buildSavePreferencesParams,
   calculateAffinity,
 } = require('./affinity-calculator');
@@ -323,28 +299,6 @@ module.exports = {
   createUserPreferences,
   // Pool setter for app initialization
   setPool,
-  // Position points constant
-  POSITION_POINTS,
-  getPositionPoints,
-  // Artist/genre normalization utilities (re-exported from normalization.js)
-  normalizeArtistName,
-  normalizeAlbumName,
-  normalizeGenre,
-  artistNamesMatch,
-  findArtistInMap,
-  // Pure affinity functions (re-exported from affinity-calculator.js)
-  filterGenreTags,
-  GENRE_MAPPINGS,
-  normalizeActiveWeights,
-  addInternalArtists,
-  addSpotifyArtists,
-  addLastfmArtists,
-  buildLastfmArtistTagsMap,
-  addInternalGenres,
-  addSpotifyGenres,
-  addLastfmGenres,
-  buildCountryScores,
-  convertScoresToArrays,
   // Lazy default instance methods
   aggregateFromLists: (...args) =>
     getDefaultInstance().aggregateFromLists(...args),

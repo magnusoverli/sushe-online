@@ -56,7 +56,9 @@ const {
 const {
   createServiceAuthMiddleware,
 } = require('../../middleware/service-auth');
-const { getPointsForPosition } = require('../../utils/scoring');
+const {
+  getPositionPoints: getPointsForPosition,
+} = require('../../utils/scoring');
 
 // Import helpers
 const { createHelpers } = require('./_helpers');
