@@ -2,6 +2,13 @@
   {
     "date": "2026-04-16",
     "category": "perf",
+    "description": "Faster admin settings loading",
+    "hash": "a90c4e0184b8de039de6c9bade1ef34dff857c41",
+    "commitMessage": "Speed up admin settings category loading\n\nRender admin sections progressively, parallelize admin bootstrap calls, and lazy-load per-year aggregate stats on expand so the drawer opens quickly without blocking on heavy admin data fetches."
+  },
+  {
+    "date": "2026-04-16",
+    "category": "perf",
     "description": "Album summary stats now update automatically in real-time",
     "hash": "3bf78ad1faf2f6448f1befd398e59fbb8ae4b9b7",
     "commitMessage": "Refresh album summary stats during active polling\n\nUpdate the admin summary polling loop to refresh stats periodically while batch fetches are running so the dashboard metrics stay current, and cover the behavior with a focused handler test."
