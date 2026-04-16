@@ -16,6 +16,8 @@ export function createSettingsAlbumSummaryActions(deps = {}) {
     getAlbumSummaryPollInterval,
     setAlbumSummaryPollInterval,
   } = deps;
+  const STATS_REFRESH_INTERVAL = 10;
+  let statusPollCount = 0;
 
   async function loadAlbumSummaryStats() {
     const statsEl = doc.getElementById('albumSummaryStats');
@@ -87,6 +89,7 @@ export function createSettingsAlbumSummaryActions(deps = {}) {
       progressText.textContent = `Processing: ${status.processed || 0}/${status.total || 0} (${status.found || 0} found, ${status.notFound || 0} not found, ${status.errors || 0} errors)`;
 
       if (!getAlbumSummaryPollInterval()) {
+        statusPollCount = 0;
         setAlbumSummaryPollInterval(
           setIntervalFn(pollAlbumSummaryStatus, 2000)
         );
@@ -101,6 +104,8 @@ export function createSettingsAlbumSummaryActions(deps = {}) {
         clearIntervalFn(getAlbumSummaryPollInterval());
         setAlbumSummaryPollInterval(null);
       }
+
+      statusPollCount = 0;
     }
   }
 
@@ -109,7 +114,13 @@ export function createSettingsAlbumSummaryActions(deps = {}) {
       const response = await apiCall('/api/admin/album-summaries/status');
       updateAlbumSummaryUI(response.status);
 
-      if (!response.status?.running) {
+      if (response.status?.running) {
+        statusPollCount++;
+        if (statusPollCount % STATS_REFRESH_INTERVAL === 0) {
+          await loadAlbumSummaryStats();
+        }
+      } else {
+        statusPollCount = 0;
         try {
           await loadAlbumSummaryStats();
         } catch (statsError) {
