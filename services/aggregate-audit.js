@@ -20,6 +20,7 @@ const {
 const {
   createManualReconciliationService,
 } = require('./aggregate-audit/manual-reconciliation');
+const { createDuplicateService } = require('./duplicate-service');
 
 function createAggregateAudit(deps = {}) {
   const log = deps.logger || logger;
@@ -37,12 +38,16 @@ function createAggregateAudit(deps = {}) {
     withTransaction,
   });
 
+  const duplicateService =
+    deps.duplicateService || createDuplicateService({ pool, logger: log });
+
   const manualReconciliation = createManualReconciliationService({
     pool,
     log,
     normalizeAlbumKey,
     findPotentialDuplicates,
     withTransaction,
+    duplicateService,
   });
 
   return {

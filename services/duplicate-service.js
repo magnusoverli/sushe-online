@@ -22,6 +22,18 @@ const DEFAULT_PAIR_LIMIT = 100;
 const DEFAULT_CLUSTER_PAGE = 1;
 const DEFAULT_CLUSTER_PAGE_SIZE = 25;
 const MAX_CLUSTER_PAGE_SIZE = 100;
+const DEPENDENT_MERGE_TABLES = [
+  'recommendations',
+  'album_service_mappings',
+  'artist_service_aliases',
+  'user_album_stats',
+  'album_distinct_pairs',
+];
+
+function toRowCount(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 function clampNumber(value, min, max, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -537,6 +549,230 @@ function createDuplicateService(deps = {}) {
     return nextAlbum;
   }
 
+  async function getExistingDependentMergeTables(client) {
+    const result = await client.query(
+      `SELECT tablename
+       FROM pg_tables
+       WHERE schemaname = 'public'
+         AND tablename = ANY($1::text[])`,
+      [DEPENDENT_MERGE_TABLES]
+    );
+
+    return new Set(result.rows.map((row) => row.tablename));
+  }
+
+  async function acquireMergeLocks(client, albumIds) {
+    const lockIds = [...new Set(albumIds.map(normalizeText).filter(Boolean))]
+      .sort()
+      .slice(0, 1000);
+
+    for (const albumId of lockIds) {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+        albumId,
+      ]);
+    }
+
+    if (lockIds.length > 0) {
+      await client.query(
+        `SELECT album_id
+         FROM albums
+         WHERE album_id = ANY($1::text[])
+         ORDER BY album_id
+         FOR UPDATE`,
+        [lockIds]
+      );
+    }
+  }
+
+  function emptyDependentRemapStats() {
+    return {
+      recommendationsUpdated: 0,
+      recommendationsConflictsRemoved: 0,
+      albumMappingsUpdated: 0,
+      albumMappingsConflictsRemoved: 0,
+      artistAliasSourcesUpdated: 0,
+      userAlbumStatsUpdated: 0,
+      distinctPairsRemapped: 0,
+      distinctPairsRemoved: 0,
+    };
+  }
+
+  function sumDependentRemapStats(target, source) {
+    for (const [key, value] of Object.entries(source)) {
+      target[key] = (target[key] || 0) + toRowCount(value);
+    }
+  }
+
+  async function remapRecommendations(client, keepAlbumId, deleteAlbumId) {
+    const conflictDeleteResult = await client.query(
+      `DELETE FROM recommendations retiring
+       USING recommendations canonical
+       WHERE retiring.album_id = $2
+         AND canonical.album_id = $1
+         AND canonical.year = retiring.year`,
+      [keepAlbumId, deleteAlbumId]
+    );
+
+    const updateResult = await client.query(
+      `UPDATE recommendations
+       SET album_id = $1
+       WHERE album_id = $2`,
+      [keepAlbumId, deleteAlbumId]
+    );
+
+    return {
+      recommendationsUpdated: updateResult.rowCount,
+      recommendationsConflictsRemoved: conflictDeleteResult.rowCount,
+    };
+  }
+
+  async function remapAlbumServiceMappings(client, keepAlbumId, deleteAlbumId) {
+    const conflictDeleteResult = await client.query(
+      `DELETE FROM album_service_mappings retiring
+       USING album_service_mappings canonical
+       WHERE retiring.album_id = $2
+         AND canonical.album_id = $1
+         AND canonical.service = retiring.service`,
+      [keepAlbumId, deleteAlbumId]
+    );
+
+    const updateResult = await client.query(
+      `UPDATE album_service_mappings
+       SET album_id = $1,
+           updated_at = NOW()
+       WHERE album_id = $2`,
+      [keepAlbumId, deleteAlbumId]
+    );
+
+    return {
+      albumMappingsUpdated: updateResult.rowCount,
+      albumMappingsConflictsRemoved: conflictDeleteResult.rowCount,
+    };
+  }
+
+  async function remapArtistAliasSources(client, keepAlbumId, deleteAlbumId) {
+    const updateResult = await client.query(
+      `UPDATE artist_service_aliases
+       SET source_album_id = $1,
+           updated_at = NOW()
+       WHERE source_album_id = $2`,
+      [keepAlbumId, deleteAlbumId]
+    );
+
+    return {
+      artistAliasSourcesUpdated: updateResult.rowCount,
+    };
+  }
+
+  async function remapUserAlbumStats(client, keepAlbumId, deleteAlbumId) {
+    const updateResult = await client.query(
+      `UPDATE user_album_stats
+       SET album_id = $1,
+           updated_at = NOW()
+       WHERE album_id = $2`,
+      [keepAlbumId, deleteAlbumId]
+    );
+
+    return {
+      userAlbumStatsUpdated: updateResult.rowCount,
+    };
+  }
+
+  async function remapDistinctPairs(client, keepAlbumId, deleteAlbumId) {
+    const insertResult = await client.query(
+      `WITH affected AS (
+         SELECT
+           CASE WHEN album_id_1 = $2 THEN $1 ELSE album_id_1 END AS id_1,
+           CASE WHEN album_id_2 = $2 THEN $1 ELSE album_id_2 END AS id_2,
+           created_by,
+           created_at
+         FROM album_distinct_pairs
+         WHERE album_id_1 = $2 OR album_id_2 = $2
+       ),
+       normalized AS (
+         SELECT
+           LEAST(id_1, id_2) AS album_id_1,
+           GREATEST(id_1, id_2) AS album_id_2,
+           created_by,
+           created_at
+         FROM affected
+         WHERE id_1 <> id_2
+       ),
+       inserted AS (
+         INSERT INTO album_distinct_pairs (
+           album_id_1,
+           album_id_2,
+           created_by,
+           created_at
+         )
+         SELECT album_id_1, album_id_2, created_by, created_at
+         FROM normalized
+         ON CONFLICT (album_id_1, album_id_2) DO NOTHING
+         RETURNING id
+       )
+       SELECT COUNT(*)::int AS inserted_count
+       FROM inserted`,
+      [keepAlbumId, deleteAlbumId]
+    );
+
+    const deleteResult = await client.query(
+      `DELETE FROM album_distinct_pairs
+       WHERE album_id_1 = $1 OR album_id_2 = $1`,
+      [deleteAlbumId]
+    );
+
+    return {
+      distinctPairsRemapped: toRowCount(insertResult.rows[0]?.inserted_count),
+      distinctPairsRemoved: deleteResult.rowCount,
+    };
+  }
+
+  async function remapDependentReferences(
+    client,
+    existingTables,
+    keepAlbumId,
+    deleteAlbumId
+  ) {
+    const stats = emptyDependentRemapStats();
+
+    if (existingTables.has('recommendations')) {
+      sumDependentRemapStats(
+        stats,
+        await remapRecommendations(client, keepAlbumId, deleteAlbumId)
+      );
+    }
+
+    if (existingTables.has('album_service_mappings')) {
+      sumDependentRemapStats(
+        stats,
+        await remapAlbumServiceMappings(client, keepAlbumId, deleteAlbumId)
+      );
+    }
+
+    if (existingTables.has('artist_service_aliases')) {
+      sumDependentRemapStats(
+        stats,
+        await remapArtistAliasSources(client, keepAlbumId, deleteAlbumId)
+      );
+    }
+
+    if (existingTables.has('user_album_stats')) {
+      sumDependentRemapStats(
+        stats,
+        await remapUserAlbumStats(client, keepAlbumId, deleteAlbumId)
+      );
+    }
+
+    if (existingTables.has('album_distinct_pairs')) {
+      sumDependentRemapStats(
+        stats,
+        await remapDistinctPairs(client, keepAlbumId, deleteAlbumId)
+      );
+    }
+
+    return stats;
+  }
+
   async function resolveListItemCollisions(client, keepAlbumId, deleteAlbumId) {
     const rowsResult = await client.query(
       `SELECT _id, list_id, album_id, position, comments, comments_2,
@@ -626,8 +862,14 @@ function createDuplicateService(deps = {}) {
   async function mergeAlbumsWithinTransaction(
     client,
     keepAlbumId,
-    deleteAlbumId
+    deleteAlbumId,
+    options = {}
   ) {
+    const mergeMetadata = options.mergeMetadata !== false;
+
+    await acquireMergeLocks(client, [keepAlbumId, deleteAlbumId]);
+    const existingTables = await getExistingDependentMergeTables(client);
+
     const albumsResult = await client.query(
       `SELECT album_id, artist, album, release_date, country,
               genre_1, genre_2, tracks, cover_image, cover_image_format,
@@ -647,8 +889,9 @@ function createDuplicateService(deps = {}) {
 
     let metadataMerged = false;
     let mergedFieldNames = [];
+    const dependentRemaps = emptyDependentRemapStats();
 
-    if (deleteAlbum) {
+    if (deleteAlbum && mergeMetadata) {
       const { fieldsToMerge, fieldNames, values } = buildMergeFields(
         keepAlbum,
         deleteAlbum
@@ -671,6 +914,18 @@ function createDuplicateService(deps = {}) {
       deleteAlbumId
     );
 
+    if (deleteAlbum) {
+      sumDependentRemapStats(
+        dependentRemaps,
+        await remapDependentReferences(
+          client,
+          existingTables,
+          keepAlbumId,
+          deleteAlbumId
+        )
+      );
+    }
+
     const updateResult = await client.query(
       `UPDATE list_items SET album_id = $1, updated_at = NOW() WHERE album_id = $2`,
       [keepAlbumId, deleteAlbumId]
@@ -678,11 +933,6 @@ function createDuplicateService(deps = {}) {
 
     const deleteResult = await client.query(
       `DELETE FROM albums WHERE album_id = $1`,
-      [deleteAlbumId]
-    );
-
-    await client.query(
-      `DELETE FROM album_distinct_pairs WHERE album_id_1 = $1 OR album_id_2 = $1`,
       [deleteAlbumId]
     );
 
@@ -697,6 +947,7 @@ function createDuplicateService(deps = {}) {
       mergedFieldCount: mergedFieldNames.length,
       collisionsResolved: collisionStats.collisionsResolved,
       collisionRowsDeleted: collisionStats.rowsDeleted,
+      dependentRemaps,
     });
 
     return {
@@ -706,6 +957,7 @@ function createDuplicateService(deps = {}) {
       mergedFieldNames,
       collisionsResolved: collisionStats.collisionsResolved,
       collisionRowsDeleted: collisionStats.rowsDeleted,
+      dependentRemaps,
     };
   }
 
@@ -733,6 +985,116 @@ function createDuplicateService(deps = {}) {
     }
 
     return cleaned;
+  }
+
+  function emptyDependentImpactPreview() {
+    return {
+      recommendationsRowsToUpdate: 0,
+      recommendationsConflictsToDrop: 0,
+      albumMappingRowsToUpdate: 0,
+      albumMappingConflictsToDrop: 0,
+      artistAliasSourcesToUpdate: 0,
+      userAlbumStatsRowsToUpdate: 0,
+      distinctPairsRowsToRewrite: 0,
+    };
+  }
+
+  async function previewDependentReferenceImpacts(
+    queryable,
+    existingTables,
+    canonicalAlbumId,
+    retireAlbumIds
+  ) {
+    const impacts = emptyDependentImpactPreview();
+
+    if (existingTables.has('recommendations')) {
+      const updateCountResult = await queryable.query(
+        `SELECT COUNT(*)::int AS count
+         FROM recommendations
+         WHERE album_id = ANY($1::text[])`,
+        [retireAlbumIds]
+      );
+      impacts.recommendationsRowsToUpdate = toRowCount(
+        updateCountResult.rows[0]?.count
+      );
+
+      const conflictCountResult = await queryable.query(
+        `SELECT COUNT(*)::int AS count
+         FROM recommendations retiring
+         JOIN recommendations canonical
+           ON canonical.year = retiring.year
+          AND canonical.album_id = $1
+         WHERE retiring.album_id = ANY($2::text[])`,
+        [canonicalAlbumId, retireAlbumIds]
+      );
+      impacts.recommendationsConflictsToDrop = toRowCount(
+        conflictCountResult.rows[0]?.count
+      );
+    }
+
+    if (existingTables.has('album_service_mappings')) {
+      const updateCountResult = await queryable.query(
+        `SELECT COUNT(*)::int AS count
+         FROM album_service_mappings
+         WHERE album_id = ANY($1::text[])`,
+        [retireAlbumIds]
+      );
+      impacts.albumMappingRowsToUpdate = toRowCount(
+        updateCountResult.rows[0]?.count
+      );
+
+      const conflictCountResult = await queryable.query(
+        `SELECT COUNT(*)::int AS count
+         FROM album_service_mappings retiring
+         JOIN album_service_mappings canonical
+           ON canonical.service = retiring.service
+          AND canonical.album_id = $1
+         WHERE retiring.album_id = ANY($2::text[])`,
+        [canonicalAlbumId, retireAlbumIds]
+      );
+      impacts.albumMappingConflictsToDrop = toRowCount(
+        conflictCountResult.rows[0]?.count
+      );
+    }
+
+    if (existingTables.has('artist_service_aliases')) {
+      const countResult = await queryable.query(
+        `SELECT COUNT(*)::int AS count
+         FROM artist_service_aliases
+         WHERE source_album_id = ANY($1::text[])`,
+        [retireAlbumIds]
+      );
+      impacts.artistAliasSourcesToUpdate = toRowCount(
+        countResult.rows[0]?.count
+      );
+    }
+
+    if (existingTables.has('user_album_stats')) {
+      const countResult = await queryable.query(
+        `SELECT COUNT(*)::int AS count
+         FROM user_album_stats
+         WHERE album_id = ANY($1::text[])`,
+        [retireAlbumIds]
+      );
+      impacts.userAlbumStatsRowsToUpdate = toRowCount(
+        countResult.rows[0]?.count
+      );
+    }
+
+    if (existingTables.has('album_distinct_pairs')) {
+      const countResult = await queryable.query(
+        `SELECT COUNT(*)::int AS count
+         FROM album_distinct_pairs
+         WHERE album_id_1 = ANY($1::text[])
+            OR album_id_2 = ANY($1::text[])`,
+        [retireAlbumIds]
+      );
+      impacts.distinctPairsRowsToRewrite = toRowCount(
+        countResult.rows[0]?.count
+      );
+    }
+
+    return impacts;
   }
 
   /**
@@ -915,7 +1277,7 @@ function createDuplicateService(deps = {}) {
    * @returns {Promise<Object>} merge result
    * @throws {TransactionAbort} on validation failure
    */
-  async function mergeAlbums(keepAlbumId, deleteAlbumId) {
+  async function mergeAlbums(keepAlbumId, deleteAlbumId, options = {}) {
     if (!keepAlbumId || !deleteAlbumId) {
       throw new TransactionAbort(400, {
         error: 'keepAlbumId and deleteAlbumId are required',
@@ -929,7 +1291,12 @@ function createDuplicateService(deps = {}) {
     }
 
     return withTransaction(pool, async (client) => {
-      return mergeAlbumsWithinTransaction(client, keepAlbumId, deleteAlbumId);
+      return mergeAlbumsWithinTransaction(
+        client,
+        keepAlbumId,
+        deleteAlbumId,
+        options
+      );
     });
   }
 
@@ -948,8 +1315,12 @@ function createDuplicateService(deps = {}) {
       });
     }
 
-    const retireIds = normalizeRetireAlbumIds(canonicalId, retireAlbumIds);
+    const retireIds = normalizeRetireAlbumIds(
+      canonicalId,
+      retireAlbumIds
+    ).sort();
     const allIds = [canonicalId, ...retireIds];
+    const existingTables = await getExistingDependentMergeTables(pool);
 
     const albumsResult = await pool.query(
       `SELECT album_id, artist, album, release_date, country,
@@ -1036,6 +1407,13 @@ function createDuplicateService(deps = {}) {
       );
     }
 
+    const dependentImpacts = await previewDependentReferenceImpacts(
+      pool,
+      existingTables,
+      canonicalId,
+      existingRetireIds
+    );
+
     return {
       canonicalAlbumId: canonicalId,
       retireAlbumIds: existingRetireIds,
@@ -1045,6 +1423,7 @@ function createDuplicateService(deps = {}) {
       collisionCount: collisions.length,
       collisions: collisions.slice(0, 100),
       metadataFieldsLikelyMerged: [...mergedFieldNames].sort(),
+      dependentImpacts,
     };
   }
 
@@ -1063,7 +1442,10 @@ function createDuplicateService(deps = {}) {
       });
     }
 
-    const retireIds = normalizeRetireAlbumIds(canonicalId, retireAlbumIds);
+    const retireIds = normalizeRetireAlbumIds(
+      canonicalId,
+      retireAlbumIds
+    ).sort();
 
     return withTransaction(pool, async (client) => {
       const aggregate = {
@@ -1077,6 +1459,7 @@ function createDuplicateService(deps = {}) {
         mergedFieldNames: new Set(),
         collisionsResolved: 0,
         collisionRowsDeleted: 0,
+        dependentRemaps: emptyDependentRemapStats(),
         results: [],
       };
 
@@ -1084,7 +1467,8 @@ function createDuplicateService(deps = {}) {
         const result = await mergeAlbumsWithinTransaction(
           client,
           canonicalId,
-          retireId
+          retireId,
+          { mergeMetadata: true }
         );
 
         aggregate.results.push({ retireAlbumId: retireId, ...result });
@@ -1092,6 +1476,10 @@ function createDuplicateService(deps = {}) {
         aggregate.albumsDeleted += result.albumsDeleted;
         aggregate.collisionsResolved += result.collisionsResolved;
         aggregate.collisionRowsDeleted += result.collisionRowsDeleted;
+        sumDependentRemapStats(
+          aggregate.dependentRemaps,
+          result.dependentRemaps || emptyDependentRemapStats()
+        );
 
         if (result.albumsDeleted > 0) {
           aggregate.mergedAlbums++;
@@ -1119,6 +1507,7 @@ function createDuplicateService(deps = {}) {
         mergedFieldNames: [...aggregate.mergedFieldNames].sort(),
         collisionsResolved: aggregate.collisionsResolved,
         collisionRowsDeleted: aggregate.collisionRowsDeleted,
+        dependentRemaps: aggregate.dependentRemaps,
         results: aggregate.results,
       };
     });

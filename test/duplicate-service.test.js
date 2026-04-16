@@ -365,4 +365,255 @@ describe('duplicate-service', () => {
     assert.ok(updates.length >= 1);
     assert.ok(deletions.length >= 1);
   });
+
+  it('mergeAlbums should remap dependent references safely', async () => {
+    const client = {
+      query: async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('pg_advisory_xact_lock')) {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('FROM pg_tables')) {
+          return {
+            rows: [
+              { tablename: 'recommendations' },
+              { tablename: 'album_service_mappings' },
+              { tablename: 'artist_service_aliases' },
+              { tablename: 'user_album_stats' },
+              { tablename: 'album_distinct_pairs' },
+            ],
+            rowCount: 5,
+          };
+        }
+
+        if (sql.includes('ORDER BY album_id') && sql.includes('FOR UPDATE')) {
+          return { rows: [{ album_id: 'del1' }, { album_id: 'keep1' }] };
+        }
+
+        if (sql.includes('FROM albums WHERE album_id = $1 OR album_id = $2')) {
+          return {
+            rows: [
+              {
+                album_id: 'keep1',
+                artist: 'Artist',
+                album: 'Canonical Album',
+                release_date: '2020-01-01',
+                country: 'US',
+                genre_1: 'Rock',
+                genre_2: null,
+                tracks: null,
+                cover_image: null,
+                cover_image_format: null,
+                summary: null,
+                summary_source: null,
+                summary_fetched_at: null,
+              },
+              {
+                album_id: 'del1',
+                artist: 'Artist',
+                album: 'Album',
+                release_date: '2020-01-01',
+                country: 'US',
+                genre_1: 'Rock',
+                genre_2: null,
+                tracks: null,
+                cover_image: null,
+                cover_image_format: null,
+                summary: null,
+                summary_source: null,
+                summary_fetched_at: null,
+              },
+            ],
+            rowCount: 2,
+          };
+        }
+
+        if (
+          sql.includes('FROM list_items') &&
+          sql.includes('ORDER BY list_id')
+        ) {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('DELETE FROM recommendations retiring')) {
+          return { rows: [], rowCount: 1 };
+        }
+
+        if (sql.includes('UPDATE recommendations')) {
+          return { rows: [], rowCount: 2 };
+        }
+
+        if (sql.includes('DELETE FROM album_service_mappings retiring')) {
+          return { rows: [], rowCount: 1 };
+        }
+
+        if (sql.includes('UPDATE album_service_mappings')) {
+          return { rows: [], rowCount: 3 };
+        }
+
+        if (sql.includes('UPDATE artist_service_aliases')) {
+          return { rows: [], rowCount: 4 };
+        }
+
+        if (sql.includes('UPDATE user_album_stats')) {
+          return { rows: [], rowCount: 5 };
+        }
+
+        if (sql.includes('WITH affected AS')) {
+          return { rows: [{ inserted_count: 2 }], rowCount: 1 };
+        }
+
+        if (
+          sql.includes('DELETE FROM album_distinct_pairs') &&
+          sql.includes('album_id_1 = $1 OR album_id_2 = $1')
+        ) {
+          return { rows: [], rowCount: 2 };
+        }
+
+        if (
+          sql.includes(
+            'UPDATE list_items SET album_id = $1, updated_at = NOW() WHERE album_id = $2'
+          )
+        ) {
+          return { rows: [], rowCount: 6 };
+        }
+
+        if (sql.includes('DELETE FROM albums WHERE album_id = $1')) {
+          return { rows: [], rowCount: 1 };
+        }
+
+        return { rows: [], rowCount: 0 };
+      },
+      release: mock.fn(),
+    };
+
+    const pool = {
+      connect: mock.fn(async () => client),
+      query: mock.fn(async () => ({ rows: [], rowCount: 0 })),
+    };
+
+    const service = createDuplicateService({
+      pool,
+      logger: createMockLogger(),
+    });
+
+    const result = await service.mergeAlbums('keep1', 'del1');
+
+    assert.strictEqual(result.dependentRemaps.recommendationsUpdated, 2);
+    assert.strictEqual(
+      result.dependentRemaps.recommendationsConflictsRemoved,
+      1
+    );
+    assert.strictEqual(result.dependentRemaps.albumMappingsUpdated, 3);
+    assert.strictEqual(result.dependentRemaps.albumMappingsConflictsRemoved, 1);
+    assert.strictEqual(result.dependentRemaps.artistAliasSourcesUpdated, 4);
+    assert.strictEqual(result.dependentRemaps.userAlbumStatsUpdated, 5);
+    assert.strictEqual(result.dependentRemaps.distinctPairsRemapped, 2);
+    assert.strictEqual(result.dependentRemaps.distinctPairsRemoved, 2);
+  });
+
+  it('mergeAlbums should allow metadata merge to be skipped', async () => {
+    const callLog = [];
+
+    const client = {
+      query: async (sql) => {
+        callLog.push(sql);
+
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('pg_advisory_xact_lock')) {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('FROM pg_tables')) {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('ORDER BY album_id') && sql.includes('FOR UPDATE')) {
+          return { rows: [] };
+        }
+
+        if (sql.includes('FROM albums WHERE album_id = $1 OR album_id = $2')) {
+          return {
+            rows: [
+              {
+                album_id: 'keep1',
+                artist: 'Artist',
+                album: 'Album',
+                release_date: null,
+                country: null,
+                genre_1: null,
+                genre_2: null,
+                tracks: null,
+                cover_image: null,
+                cover_image_format: null,
+                summary: null,
+                summary_source: null,
+                summary_fetched_at: null,
+              },
+              {
+                album_id: 'del1',
+                artist: 'Artist (Deluxe Edition)',
+                album: 'Album (Deluxe Edition)',
+                release_date: '2024-01-01',
+                country: 'US',
+                genre_1: 'Rock',
+                genre_2: 'Alt',
+                tracks: null,
+                cover_image: null,
+                cover_image_format: null,
+                summary: 'Long summary',
+                summary_source: 'test',
+                summary_fetched_at: null,
+              },
+            ],
+          };
+        }
+
+        if (
+          sql.includes('FROM list_items') &&
+          sql.includes('ORDER BY list_id')
+        ) {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('UPDATE list_items SET album_id')) {
+          return { rows: [], rowCount: 1 };
+        }
+
+        if (sql.includes('DELETE FROM albums WHERE album_id = $1')) {
+          return { rows: [], rowCount: 1 };
+        }
+
+        return { rows: [], rowCount: 0 };
+      },
+      release: mock.fn(),
+    };
+
+    const pool = {
+      connect: mock.fn(async () => client),
+      query: mock.fn(async () => ({ rows: [], rowCount: 0 })),
+    };
+
+    const service = createDuplicateService({
+      pool,
+      logger: createMockLogger(),
+    });
+
+    const result = await service.mergeAlbums('keep1', 'del1', {
+      mergeMetadata: false,
+    });
+
+    assert.strictEqual(result.metadataMerged, false);
+    const hasMetadataUpdate = callLog.some((sql) =>
+      sql.includes('UPDATE albums SET')
+    );
+    assert.strictEqual(hasMetadataUpdate, false);
+  });
 });
