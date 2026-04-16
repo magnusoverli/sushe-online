@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-04-16",
+    "category": "ui",
+    "description": "Smooth admin settings loading transitions",
+    "hash": "c6a49e1c4b93d1c067b8a4b727a46d522abdf4bc",
+    "commitMessage": "Smooth admin settings loading transitions\n\nAvoid redundant admin re-renders from partial updates and skip animation restarts during progressive loading to remove flicker. Replace short-lived spinner icons with stable loading copy to reduce visual churn while admin data hydrates."
+  },
+  {
+    "date": "2026-04-16",
     "category": "perf",
     "description": "Faster admin settings loading",
     "hash": "a90c4e0184b8de039de6c9bade1ef34dff857c41",
