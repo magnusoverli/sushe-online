@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-04-16",
+    "category": "perf",
+    "description": "Album summary stats now update automatically in real-time",
+    "hash": "3bf78ad1faf2f6448f1befd398e59fbb8ae4b9b7",
+    "commitMessage": "Refresh album summary stats during active polling\n\nUpdate the admin summary polling loop to refresh stats periodically while batch fetches are running so the dashboard metrics stay current, and cover the behavior with a focused handler test."
+  },
+  {
     "date": "2026-04-15",
     "category": "fix",
     "description": "Fixed app functionality issues after recent updates",
