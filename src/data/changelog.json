@@ -2,6 +2,13 @@
   {
     "date": "2026-04-15",
     "category": "fix",
+    "description": "Fixed app functionality issues after recent updates",
+    "hash": "cf27d6119deb3f60866d9b1ec53d49d14d2462c2",
+    "commitMessage": "Fix structure baseline regression after PR348 merge\n\nSplit newly extracted list operation and mobile menu modules into smaller focused files so the maintainability guardrail remains green without relaxing thresholds."
+  },
+  {
+    "date": "2026-04-15",
+    "category": "fix",
     "description": "Better album review merging",
     "hash": "996c9e749bded61b9d49115275f2f34694697ec5",
     "commitMessage": "Better album review merging"
