@@ -81,7 +81,9 @@ describe('settings data loaders', () => {
   });
 
   it('loads admin aggregate list status including recommendation lock', async () => {
+    const calls = [];
     const apiCall = mock.fn(async (path) => {
+      calls.push(path);
       if (path === '/api/admin/events?limit=50') {
         return { events: [{ _id: 'evt1' }] };
       }
@@ -119,5 +121,6 @@ describe('settings data loaders', () => {
     assert.strictEqual(result.aggregateLists.length, 1);
     assert.strictEqual(result.aggregateLists[0].year, 2024);
     assert.strictEqual(result.aggregateLists[0].recStatus.locked, true);
+    assert.strictEqual(calls.includes('/api/aggregate-list/2024/stats'), false);
   });
 });

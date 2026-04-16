@@ -7,6 +7,58 @@
 export function createSettingsDataLoaders(deps = {}) {
   const apiCall =
     deps.apiCall || (() => Promise.reject(new Error('apiCall not provided')));
+  const ADMIN_YEAR_LOAD_CONCURRENCY = 4;
+
+  async function mapWithConcurrency(items, concurrency, mapper) {
+    if (!Array.isArray(items) || items.length === 0) {
+      return [];
+    }
+
+    const limit = Math.max(1, concurrency);
+    const results = new Array(items.length);
+    let cursor = 0;
+
+    async function worker() {
+      while (cursor < items.length) {
+        const index = cursor;
+        cursor += 1;
+        results[index] = await mapper(items[index], index);
+      }
+    }
+
+    const workerCount = Math.min(limit, items.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+    return results;
+  }
+
+  function createEmptyAdminData() {
+    return {
+      hasData: true,
+      events: {
+        pending: [],
+        counts: {
+          total: 0,
+          byType: {},
+          byPriority: {},
+        },
+      },
+      telegram: { configured: false },
+      telegramRecs: {
+        configured: false,
+        recommendationsEnabled: false,
+      },
+      stats: null,
+      users: [],
+      aggregateLists: [],
+      loading: {
+        events: true,
+        telegram: true,
+        users: true,
+        aggregateLists: true,
+      },
+    };
+  }
 
   async function getRecommendationLockStatus(year) {
     try {
@@ -211,146 +263,217 @@ export function createSettingsDataLoaders(deps = {}) {
     }
   }
 
-  async function loadAdminData() {
+  async function loadAdminData(options = {}) {
+    const onPartialUpdate =
+      typeof options.onPartialUpdate === 'function'
+        ? options.onPartialUpdate
+        : null;
+
+    const publishPartial = (partial) => {
+      if (onPartialUpdate) {
+        onPartialUpdate(partial);
+      }
+    };
+
     try {
-      const eventsResponse = await apiCall('/api/admin/events?limit=50');
-      const eventsCountsResponse = await apiCall('/api/admin/events/counts');
+      const emptyAdminData = createEmptyAdminData();
 
-      let telegramStatus = null;
-      try {
-        telegramStatus = await apiCall('/api/admin/telegram/status');
-      } catch (e) {
-        console.warn('Could not load Telegram status:', e);
-      }
+      const [
+        eventsResponseResult,
+        eventsCountsResponseResult,
+        telegramStatusResult,
+        telegramRecsStatusResult,
+        statsResult,
+        aggregateYearsResult,
+      ] = await Promise.allSettled([
+        apiCall('/api/admin/events?limit=50'),
+        apiCall('/api/admin/events/counts'),
+        apiCall('/api/admin/telegram/status'),
+        apiCall('/api/admin/telegram/recommendations/status'),
+        apiCall('/api/admin/stats'),
+        apiCall('/api/aggregate-list-years/with-main-lists'),
+      ]);
 
-      let telegramRecsStatus = null;
-      try {
-        telegramRecsStatus = await apiCall(
-          '/api/admin/telegram/recommendations/status'
+      if (eventsResponseResult.status === 'rejected') {
+        console.warn(
+          'Could not load admin events:',
+          eventsResponseResult.reason
         );
-      } catch (e) {
-        console.warn('Could not load Telegram recommendations status:', e);
       }
 
-      let stats = null;
-      try {
-        stats = await apiCall('/api/admin/stats');
-      } catch (e) {
-        console.warn('Could not load admin stats:', e);
-      }
-
-      let users = [];
-      try {
-        if (stats && stats.users) {
-          users = stats.users;
-        }
-      } catch (e) {
-        console.warn('Could not load users:', e);
-      }
-
-      let aggregateLists = [];
-      try {
-        const aggregateResponse = await apiCall(
-          '/api/aggregate-list-years/with-main-lists'
+      if (eventsCountsResponseResult.status === 'rejected') {
+        console.warn(
+          'Could not load admin event counts:',
+          eventsCountsResponseResult.reason
         );
-        if (
-          aggregateResponse &&
-          aggregateResponse.years &&
-          aggregateResponse.years.length > 0
-        ) {
-          aggregateLists = await Promise.all(
-            aggregateResponse.years.map(async (year) => {
-              try {
-                let status = {
-                  exists: false,
-                  revealed: false,
-                  confirmations: [],
-                  confirmationCount: 0,
-                  requiredConfirmations: 2,
-                };
-                try {
-                  const statusResponse = await apiCall(
-                    `/api/aggregate-list/${year}/status`
-                  );
-                  status = statusResponse || status;
-                } catch (e) {
-                  console.warn(`Could not load status for year ${year}:`, e);
-                }
-
-                let yearStats = null;
-                try {
-                  const statsResponse = await apiCall(
-                    `/api/aggregate-list/${year}/stats`
-                  );
-                  if (statsResponse && statsResponse.stats) {
-                    yearStats = statsResponse.stats;
-                  }
-                } catch (e) {
-                  console.warn(`Could not load stats for year ${year}:`, e);
-                }
-
-                let recStatus = { locked: false };
-                try {
-                  recStatus = await getRecommendationLockStatus(year);
-                } catch (e) {
-                  console.warn(
-                    `Could not load recommendation status for year ${year}:`,
-                    e
-                  );
-                }
-
-                return {
-                  year,
-                  status,
-                  stats: yearStats,
-                  recStatus,
-                };
-              } catch (e) {
-                console.warn(
-                  `Error loading aggregate list for year ${year}:`,
-                  e
-                );
-                return {
-                  year,
-                  status: {
-                    exists: false,
-                    revealed: false,
-                    confirmations: [],
-                    confirmationCount: 0,
-                    requiredConfirmations: 2,
-                  },
-                  stats: null,
-                };
-              }
-            })
-          );
-        }
-      } catch (e) {
-        console.warn('Could not load aggregate lists:', e);
       }
 
-      return {
+      if (telegramStatusResult.status === 'rejected') {
+        console.warn(
+          'Could not load Telegram status:',
+          telegramStatusResult.reason
+        );
+      }
+
+      if (telegramRecsStatusResult.status === 'rejected') {
+        console.warn(
+          'Could not load Telegram recommendations status:',
+          telegramRecsStatusResult.reason
+        );
+      }
+
+      if (statsResult.status === 'rejected') {
+        console.warn('Could not load admin stats:', statsResult.reason);
+      }
+
+      if (aggregateYearsResult.status === 'rejected') {
+        console.warn(
+          'Could not load aggregate list years:',
+          aggregateYearsResult.reason
+        );
+      }
+
+      const topLevelData = {
         hasData: true,
         events: {
-          pending: eventsResponse.events || [],
-          counts: eventsCountsResponse || {
-            total: 0,
-            byType: {},
-            byPriority: {},
-          },
+          pending:
+            eventsResponseResult.status === 'fulfilled'
+              ? eventsResponseResult.value?.events || []
+              : [],
+          counts:
+            eventsCountsResponseResult.status === 'fulfilled'
+              ? eventsCountsResponseResult.value || emptyAdminData.events.counts
+              : emptyAdminData.events.counts,
         },
-        telegram: telegramStatus || { configured: false },
-        telegramRecs: telegramRecsStatus || {
-          configured: false,
-          recommendationsEnabled: false,
+        telegram:
+          telegramStatusResult.status === 'fulfilled'
+            ? telegramStatusResult.value || emptyAdminData.telegram
+            : emptyAdminData.telegram,
+        telegramRecs:
+          telegramRecsStatusResult.status === 'fulfilled'
+            ? telegramRecsStatusResult.value || emptyAdminData.telegramRecs
+            : emptyAdminData.telegramRecs,
+        stats: statsResult.status === 'fulfilled' ? statsResult.value : null,
+        users:
+          statsResult.status === 'fulfilled' &&
+          Array.isArray(statsResult.value?.users)
+            ? statsResult.value.users
+            : [],
+        loading: {
+          events: false,
+          telegram: false,
+          users: false,
+          aggregateLists: true,
         },
-        stats: stats || null,
-        users,
-        aggregateLists,
       };
+
+      publishPartial(topLevelData);
+
+      const years =
+        aggregateYearsResult.status === 'fulfilled' &&
+        Array.isArray(aggregateYearsResult.value?.years)
+          ? aggregateYearsResult.value.years
+          : [];
+
+      const aggregateLists = await mapWithConcurrency(
+        years,
+        ADMIN_YEAR_LOAD_CONCURRENCY,
+        async (year) => {
+          try {
+            const [statusResult, recStatusResult] = await Promise.allSettled([
+              apiCall(`/api/aggregate-list/${year}/status`),
+              getRecommendationLockStatus(year),
+            ]);
+
+            if (statusResult.status === 'rejected') {
+              console.warn(
+                `Could not load aggregate status for year ${year}:`,
+                statusResult.reason
+              );
+            }
+
+            if (recStatusResult.status === 'rejected') {
+              console.warn(
+                `Could not load recommendation status for year ${year}:`,
+                recStatusResult.reason
+              );
+            }
+
+            return {
+              year,
+              status:
+                statusResult.status === 'fulfilled'
+                  ? statusResult.value || {
+                      exists: false,
+                      revealed: false,
+                      confirmations: [],
+                      confirmationCount: 0,
+                      requiredConfirmations: 2,
+                    }
+                  : {
+                      exists: false,
+                      revealed: false,
+                      confirmations: [],
+                      confirmationCount: 0,
+                      requiredConfirmations: 2,
+                    },
+              stats: null,
+              statsState: 'idle',
+              recStatus:
+                recStatusResult.status === 'fulfilled'
+                  ? recStatusResult.value || { locked: false }
+                  : { locked: false },
+            };
+          } catch (error) {
+            console.warn(
+              `Error loading aggregate list for year ${year}:`,
+              error
+            );
+            return {
+              year,
+              status: {
+                exists: false,
+                revealed: false,
+                confirmations: [],
+                confirmationCount: 0,
+                requiredConfirmations: 2,
+              },
+              stats: null,
+              statsState: 'error',
+              recStatus: { locked: false },
+            };
+          }
+        }
+      );
+
+      const finalData = {
+        ...topLevelData,
+        aggregateLists,
+        loading: {
+          ...topLevelData.loading,
+          aggregateLists: false,
+        },
+      };
+
+      publishPartial({
+        aggregateLists: finalData.aggregateLists,
+        loading: finalData.loading,
+      });
+
+      return finalData;
     } catch (error) {
       console.error('Error loading admin data:', error);
       return { hasData: false };
+    }
+  }
+
+  async function loadAdminAggregateYearStats(year) {
+    try {
+      const response = await apiCall(`/api/aggregate-list/${year}/stats`);
+      return response?.stats || null;
+    } catch (error) {
+      console.warn(`Could not load aggregate stats for year ${year}:`, error);
+      return null;
     }
   }
 
@@ -361,5 +484,7 @@ export function createSettingsDataLoaders(deps = {}) {
     loadPreferencesData,
     loadStatsData,
     loadAdminData,
+    loadAdminAggregateYearStats,
+    createEmptyAdminData,
   };
 }

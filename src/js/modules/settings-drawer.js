@@ -62,7 +62,28 @@ export function createSettingsDrawer(deps = {}) {
     loadPreferencesData,
     loadStatsData,
     loadAdminData,
+    loadAdminAggregateYearStats,
+    createEmptyAdminData,
   } = createSettingsDataLoaders({ apiCall });
+
+  function mergeAdminDataState(existing, partial) {
+    const safeExisting = existing || createEmptyAdminData();
+    const safePartial = partial || {};
+
+    return {
+      ...safeExisting,
+      ...safePartial,
+      events: safePartial.events || safeExisting.events,
+      telegram: safePartial.telegram || safeExisting.telegram,
+      telegramRecs: safePartial.telegramRecs || safeExisting.telegramRecs,
+      users: safePartial.users || safeExisting.users,
+      aggregateLists: safePartial.aggregateLists || safeExisting.aggregateLists,
+      loading: {
+        ...(safeExisting.loading || {}),
+        ...(safePartial.loading || {}),
+      },
+    };
+  }
 
   const {
     renderAccountCategory,
@@ -273,6 +294,8 @@ export function createSettingsDrawer(deps = {}) {
       albumSummaryPollInterval = value;
     },
     loadAlbumImageStats,
+    loadAggregateYearStats: loadAdminAggregateYearStats,
+    categoryData,
     handleAdminEventAction,
     handleConfigureTelegram,
     handleDisconnectTelegram,
@@ -391,7 +414,13 @@ export function createSettingsDrawer(deps = {}) {
 
     // Load category data if not cached
     if (!categoryData[categoryId]) {
-      await loadCategoryData(categoryId);
+      if (categoryId === 'admin') {
+        categoryData.admin = createEmptyAdminData();
+        renderCategoryContent(categoryId);
+        void loadCategoryData(categoryId);
+      } else {
+        await loadCategoryData(categoryId);
+      }
     } else {
       renderCategoryContent(categoryId);
     }
@@ -405,8 +434,9 @@ export function createSettingsDrawer(deps = {}) {
     const contentEl = document.getElementById('settingsCategoryContent');
     if (!contentEl) return;
 
-    // Show loading state
-    contentEl.innerHTML = `
+    if (categoryId !== 'admin') {
+      // Show loading state
+      contentEl.innerHTML = `
       <div class="flex items-center justify-center py-12">
         <div class="text-center">
           <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mb-2"></i>
@@ -414,6 +444,10 @@ export function createSettingsDrawer(deps = {}) {
         </div>
       </div>
     `;
+    } else if (!categoryData.admin) {
+      categoryData.admin = createEmptyAdminData();
+      renderCategoryContent('admin');
+    }
 
     try {
       let data = {};
@@ -435,15 +469,32 @@ export function createSettingsDrawer(deps = {}) {
           data = await loadStatsData();
           break;
         case 'admin':
-          data = await loadAdminData();
+          data = await loadAdminData({
+            onPartialUpdate: (partialData) => {
+              categoryData.admin = mergeAdminDataState(
+                categoryData.admin,
+                partialData
+              );
+              if (currentCategory === 'admin') {
+                renderCategoryContent('admin');
+              }
+            },
+          });
           break;
         default:
           console.error('Unknown category:', categoryId);
           return;
       }
 
-      categoryData[categoryId] = data;
-      renderCategoryContent(categoryId);
+      if (categoryId === 'admin') {
+        categoryData.admin = mergeAdminDataState(categoryData.admin, data);
+      } else {
+        categoryData[categoryId] = data;
+      }
+
+      if (currentCategory === categoryId) {
+        renderCategoryContent(categoryId);
+      }
     } catch (error) {
       console.error('Error loading category data:', error);
       contentEl.innerHTML = `

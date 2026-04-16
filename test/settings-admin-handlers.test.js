@@ -3,12 +3,27 @@ const assert = require('node:assert');
 
 function createElement(overrides = {}) {
   const listeners = {};
+  const classSet = new Set();
+
+  const classList = {
+    add(...values) {
+      values.forEach((value) => classSet.add(value));
+    },
+    remove(...values) {
+      values.forEach((value) => classSet.delete(value));
+    },
+    contains(value) {
+      return classSet.has(value);
+    },
+  };
+
   return {
     dataset: {},
     disabled: false,
     textContent: '',
     innerHTML: '',
     style: {},
+    classList,
     listeners,
     addEventListener(event, handler) {
       listeners[event] = handler;
@@ -87,6 +102,8 @@ function buildDeps(overrides = {}) {
     handleStopRefetchImages: async () => {},
     handleScanDuplicates: async () => {},
     handleAuditManualAlbums: async () => {},
+    loadAggregateYearStats: async () => null,
+    categoryData: { admin: { aggregateLists: [] } },
     setIntervalFn: (fn, delay) => {
       calls.intervals.push({ fn, delay });
       return 42;
@@ -211,5 +228,82 @@ describe('settings admin handlers', () => {
     assert.strictEqual(regenBtn.disabled, false);
     assert.strictEqual(fetchBtn.disabled, false);
     assert.strictEqual(regenBtn.textContent, 'Regenerate All');
+  });
+
+  it('lazily loads aggregate year stats when expanding a year panel', async () => {
+    const chevron = createElement();
+    const attributes = { 'aria-expanded': 'false' };
+    const yearBtn = createElement({
+      dataset: { year: '2024' },
+      querySelector: () => chevron,
+      getAttribute(name) {
+        return attributes[name];
+      },
+      setAttribute(name, value) {
+        attributes[name] = value;
+      },
+    });
+
+    const yearContent = createElement({
+      style: {},
+      scrollHeight: 180,
+      classList: {
+        _set: new Set(['hidden']),
+        add(value) {
+          this._set.add(value);
+        },
+        remove(value) {
+          this._set.delete(value);
+        },
+        contains(value) {
+          return this._set.has(value);
+        },
+      },
+    });
+
+    const yearStats = createElement();
+    const doc = createDocument({
+      ids: {
+        'aggregate-year-content-2024': yearContent,
+        'aggregate-year-stats-2024': yearStats,
+      },
+      selectors: {
+        '.aggregate-year-toggle': [yearBtn],
+      },
+    });
+
+    const aggregateLists = [
+      {
+        year: 2024,
+        status: { revealed: false },
+        stats: null,
+        statsState: 'idle',
+      },
+    ];
+    const callsToLoadStats = [];
+
+    const { deps } = buildDeps({
+      doc,
+      categoryData: { admin: { aggregateLists } },
+      loadAggregateYearStats: async (year) => {
+        callsToLoadStats.push(year);
+        return {
+          participantCount: 3,
+          totalAlbums: 17,
+          albumsWith3PlusVoters: 2,
+          albumsWith2Voters: 4,
+        };
+      },
+    });
+
+    const { attachAdminHandlers } = createSettingsAdminHandlers(deps);
+    attachAdminHandlers();
+
+    await yearBtn.listeners.click({ stopPropagation() {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepStrictEqual(callsToLoadStats, [2024]);
+    assert.match(yearStats.innerHTML, /Contributors/);
+    assert.strictEqual(aggregateLists[0].stats.totalAlbums, 17);
   });
 });

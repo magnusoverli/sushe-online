@@ -37,6 +37,12 @@ export function createSettingsAdminRenderer() {
     };
     const users = data.users || [];
     const aggregateLists = data.aggregateLists || [];
+    const loading = data.loading || {
+      events: false,
+      telegram: false,
+      users: false,
+      aggregateLists: false,
+    };
 
     const formatRelativeTime = (dateString) => {
       if (!dateString) return 'Unknown';
@@ -75,8 +81,20 @@ export function createSettingsAdminRenderer() {
       <div class="space-y-6">
         <!-- Aggregate List Management -->
         ${
-          aggregateLists.length > 0
+          loading.aggregateLists
             ? `
+        <div class="settings-group">
+          <h3 class="settings-group-title">
+            <i class="fas fa-trophy mr-2 text-yellow-500"></i>
+            Aggregate Lists
+          </h3>
+          <div class="settings-group-content">
+            <div class="text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Loading aggregate list status...</div>
+          </div>
+        </div>
+        `
+            : aggregateLists.length > 0
+              ? `
         <div class="settings-group">
           <h3 class="settings-group-title">
             <i class="fas fa-trophy mr-2 text-yellow-500"></i>
@@ -124,27 +142,40 @@ export function createSettingsAdminRenderer() {
                   }
 
                   let statsHtml = '';
-                  if (stats && !isRevealed) {
-                    statsHtml = `
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
-                      <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-                        <div class="font-bold text-white text-lg">${stats.participantCount || 0}</div>
-                        <div class="text-xs text-gray-400 uppercase">Contributors</div>
-                      </div>
-                      <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-                        <div class="font-bold text-white text-lg">${stats.totalAlbums || 0}</div>
-                        <div class="text-xs text-gray-400 uppercase">Albums</div>
-                      </div>
-                      <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-                        <div class="font-bold text-white text-lg">${stats.albumsWith3PlusVoters || 0}</div>
-                        <div class="text-xs text-gray-400 uppercase">3+ Votes</div>
-                      </div>
-                      <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-                        <div class="font-bold text-white text-lg">${stats.albumsWith2Voters || 0}</div>
-                        <div class="text-xs text-gray-400 uppercase">2 Votes</div>
-                      </div>
-                    </div>
-                  `;
+                  if (!isRevealed) {
+                    let statsBody =
+                      '<div class="mt-3 text-xs text-gray-500">Expand to load stats.</div>';
+
+                    if (item.statsState === 'loading') {
+                      statsBody =
+                        '<div class="mt-3 text-xs text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Loading stats...</div>';
+                    } else if (item.statsState === 'error') {
+                      statsBody =
+                        '<div class="mt-3 text-xs text-red-400">Failed to load stats. Collapse and expand to retry.</div>';
+                    } else if (stats) {
+                      statsBody = `
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+                          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                            <div class="font-bold text-white text-lg">${stats.participantCount || 0}</div>
+                            <div class="text-xs text-gray-400 uppercase">Contributors</div>
+                          </div>
+                          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                            <div class="font-bold text-white text-lg">${stats.totalAlbums || 0}</div>
+                            <div class="text-xs text-gray-400 uppercase">Albums</div>
+                          </div>
+                          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                            <div class="font-bold text-white text-lg">${stats.albumsWith3PlusVoters || 0}</div>
+                            <div class="text-xs text-gray-400 uppercase">3+ Votes</div>
+                          </div>
+                          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                            <div class="font-bold text-white text-lg">${stats.albumsWith2Voters || 0}</div>
+                            <div class="text-xs text-gray-400 uppercase">2 Votes</div>
+                          </div>
+                        </div>
+                      `;
+                    }
+
+                    statsHtml = `<div id="aggregate-year-stats-${year}">${statsBody}</div>`;
                   }
 
                   let actionsHtml = '';
@@ -258,7 +289,7 @@ export function createSettingsAdminRenderer() {
           </div>
         </div>
         `
-            : `
+              : `
         <div class="settings-group">
           <h3 class="settings-group-title">
             <i class="fas fa-trophy mr-2 text-yellow-500"></i>
@@ -377,8 +408,17 @@ export function createSettingsAdminRenderer() {
 
         <!-- User Management -->
         ${
-          users.length > 0
+          loading.users
             ? `
+        <div class="settings-group">
+          <h3 class="settings-group-title">User Management</h3>
+          <div class="settings-group-content">
+            <div class="text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Loading users...</div>
+          </div>
+        </div>
+        `
+            : users.length > 0
+              ? `
         <div class="settings-group">
           <h3 class="settings-group-title">User Management</h3>
           <div class="settings-group-content">
@@ -425,7 +465,7 @@ export function createSettingsAdminRenderer() {
           </div>
         </div>
         `
-            : ''
+              : ''
         }
 
         <!-- Admin Events Dashboard -->
@@ -433,14 +473,18 @@ export function createSettingsAdminRenderer() {
           <h3 class="settings-group-title">Pending Events</h3>
           <div class="settings-group-content">
             ${
-              events.pending.length === 0
+              loading.events
                 ? `
+              <div class="text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Loading pending events...</div>
+            `
+                : events.pending.length === 0
+                  ? `
               <div class="text-center py-8">
                 <i class="fas fa-check-circle text-3xl text-gray-600 mb-2"></i>
                 <p class="text-gray-400">No pending events</p>
               </div>
             `
-                : `
+                  : `
               <div class="space-y-3">
                 ${events.pending
                   .map(
@@ -493,6 +537,10 @@ export function createSettingsAdminRenderer() {
         <div class="settings-group">
           <h3 class="settings-group-title">Telegram Notifications</h3>
           <div class="settings-group-content">
+            ${
+              loading.telegram
+                ? '<div class="text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Loading Telegram status...</div>'
+                : `
             <div class="settings-row">
               <div class="settings-row-label">
                 <label class="settings-label">Status</label>
@@ -539,6 +587,8 @@ export function createSettingsAdminRenderer() {
             </div>
             `
                 : ''
+            }
+            `
             }
           </div>
         </div>
