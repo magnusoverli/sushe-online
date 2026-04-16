@@ -287,7 +287,7 @@ async function mergeManualAlbum(
   canonicalAlbumId,
   options = {}
 ) {
-  const { pool, log, withTransaction } = ctx;
+  const { pool, log, duplicateService } = ctx;
   const { syncMetadata = true, adminUserId = null } = options;
 
   log.info(`Merging manual album ${manualAlbumId} into ${canonicalAlbumId}`);
@@ -300,6 +300,9 @@ async function mergeManualAlbum(
   }
   if (manualAlbumId === canonicalAlbumId) {
     throw new Error('Cannot merge album into itself');
+  }
+  if (!duplicateService || typeof duplicateService.mergeAlbums !== 'function') {
+    throw new Error('duplicateService.mergeAlbums is required');
   }
 
   const canonicalResult = await pool.query(
@@ -331,24 +334,18 @@ async function mergeManualAlbum(
   const affectedLists = affectedResult.rows;
   const affectedYears = [...new Set(affectedLists.map((list) => list.year))];
 
-  let updatedCount = 0;
+  const mergeResult = await duplicateService.mergeAlbums(
+    canonicalAlbumId,
+    manualAlbumId,
+    {
+      mergeMetadata: syncMetadata,
+    }
+  );
 
-  await withTransaction(pool, async (client) => {
-    const updateResult = await client.query(
-      `
-      UPDATE list_items
-      SET album_id = $1, updated_at = NOW()
-      WHERE album_id = $2
-    `,
-      [canonicalAlbumId, manualAlbumId]
-    );
-    updatedCount = updateResult.rowCount;
+  const updatedCount = mergeResult.listItemsUpdated || 0;
 
-    await client.query(`DELETE FROM albums WHERE album_id = $1`, [
-      manualAlbumId,
-    ]);
-
-    await client.query(
+  try {
+    await pool.query(
       `
       INSERT INTO admin_events (event_type, event_data, created_by)
       VALUES ($1, $2, $3)
@@ -364,11 +361,18 @@ async function mergeManualAlbum(
           updatedListItems: updatedCount,
           affectedLists: affectedLists.map((list) => list.list_name),
           affectedYears,
+          mergeResult,
         }),
         adminUserId,
       ]
     );
-  });
+  } catch (error) {
+    log.warn('Manual merge completed but admin event insert failed', {
+      error: error.message,
+      manualAlbumId,
+      canonicalAlbumId,
+    });
+  }
 
   log.info(
     `Merged manual album: ${updatedCount} list_items updated, ` +
@@ -393,6 +397,7 @@ async function mergeManualAlbum(
           album: canonicalAlbum.album,
         }
       : null,
+    mergeResult,
   };
 }
 
@@ -477,7 +482,7 @@ function createManualReconciliationService(deps = {}) {
     log: deps.log,
     normalizeAlbumKey: deps.normalizeAlbumKey,
     findPotentialDuplicates: deps.findPotentialDuplicates,
-    withTransaction: deps.withTransaction,
+    duplicateService: deps.duplicateService,
   };
 
   return {
