@@ -185,13 +185,13 @@ test('startBatchFetch should throw if already running', async () => {
   let pageCalls = 0;
   const mockPool = {
     query: async (query) => {
-      if (query.includes('COUNT(DISTINCT a.album_id)')) {
+      if (query.includes('SELECT COUNT(*) AS total')) {
         return {
           rows: [{ total: '1' }],
         };
       }
-      // Return albums for the paged query (now uses JOIN with list_items)
-      if (query.includes('SELECT DISTINCT a.album_id')) {
+      // Return albums for the paged query
+      if (query.includes('SELECT a.album_id, a.artist, a.album')) {
         return {
           rows:
             pageCalls++ === 0
