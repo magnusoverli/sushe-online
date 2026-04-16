@@ -89,7 +89,7 @@ export function createSettingsAdminRenderer() {
             Aggregate Lists
           </h3>
           <div class="settings-group-content">
-            <div class="text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Loading aggregate list status...</div>
+            <div class="text-gray-400 text-sm">Loading aggregate list status...</div>
           </div>
         </div>
         `
@@ -307,7 +307,7 @@ export function createSettingsAdminRenderer() {
           <h3 class="settings-group-title">Album Summaries</h3>
           <div class="settings-group-content">
             <div id="albumSummaryStats" class="mb-4">
-              <div class="text-gray-400 text-sm">Loading stats...</div>
+              <div class="text-gray-500 text-sm">Fetching latest summary stats...</div>
             </div>
             <div class="settings-row">
               <div class="settings-row-label">
@@ -334,7 +334,7 @@ export function createSettingsAdminRenderer() {
           <h3 class="settings-group-title">Album Images</h3>
           <div class="settings-group-content">
             <div id="albumImageStats" class="mb-4">
-              <div class="text-gray-400 text-sm">Loading stats...</div>
+              <div class="text-gray-500 text-sm">Fetching latest image stats...</div>
             </div>
             <div class="settings-row">
               <div class="settings-row-label">
@@ -413,7 +413,7 @@ export function createSettingsAdminRenderer() {
         <div class="settings-group">
           <h3 class="settings-group-title">User Management</h3>
           <div class="settings-group-content">
-            <div class="text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Loading users...</div>
+            <div class="text-gray-400 text-sm">Loading users...</div>
           </div>
         </div>
         `
@@ -475,7 +475,7 @@ export function createSettingsAdminRenderer() {
             ${
               loading.events
                 ? `
-              <div class="text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Loading pending events...</div>
+              <div class="text-gray-400 text-sm">Loading pending events...</div>
             `
                 : events.pending.length === 0
                   ? `
@@ -539,7 +539,7 @@ export function createSettingsAdminRenderer() {
           <div class="settings-group-content">
             ${
               loading.telegram
-                ? '<div class="text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Loading Telegram status...</div>'
+                ? '<div class="text-gray-400 text-sm">Loading Telegram status...</div>'
                 : `
             <div class="settings-row">
               <div class="settings-row-label">

@@ -434,6 +434,8 @@ export function createSettingsDrawer(deps = {}) {
     const contentEl = document.getElementById('settingsCategoryContent');
     if (!contentEl) return;
 
+    let adminRenderedFromPartial = false;
+
     if (categoryId !== 'admin') {
       // Show loading state
       contentEl.innerHTML = `
@@ -475,8 +477,16 @@ export function createSettingsDrawer(deps = {}) {
                 categoryData.admin,
                 partialData
               );
-              if (currentCategory === 'admin') {
-                renderCategoryContent('admin');
+
+              const hasAggregateListsPayload =
+                Object.prototype.hasOwnProperty.call(
+                  partialData || {},
+                  'aggregateLists'
+                );
+
+              if (currentCategory === 'admin' && hasAggregateListsPayload) {
+                adminRenderedFromPartial = true;
+                renderCategoryContent('admin', { skipAnimation: true });
               }
             },
           });
@@ -493,7 +503,11 @@ export function createSettingsDrawer(deps = {}) {
       }
 
       if (currentCategory === categoryId) {
-        renderCategoryContent(categoryId);
+        if (!(categoryId === 'admin' && adminRenderedFromPartial)) {
+          renderCategoryContent(categoryId, {
+            skipAnimation: categoryId === 'admin',
+          });
+        }
       }
     } catch (error) {
       console.error('Error loading category data:', error);
@@ -512,15 +526,18 @@ export function createSettingsDrawer(deps = {}) {
    * Render category content
    * @param {string} categoryId - Category ID
    */
-  function renderCategoryContent(categoryId) {
+  function renderCategoryContent(categoryId, options = {}) {
+    const skipAnimation = options.skipAnimation === true;
     const contentEl = document.getElementById('settingsCategoryContent');
     if (!contentEl) return;
 
-    // Re-trigger fade-in animation by removing and adding animation
-    contentEl.style.animation = 'none';
-    // Force reflow to ensure animation restart
-    void contentEl.offsetHeight;
-    contentEl.style.animation = '';
+    if (!skipAnimation) {
+      // Re-trigger fade-in animation by removing and adding animation
+      contentEl.style.animation = 'none';
+      // Force reflow to ensure animation restart
+      void contentEl.offsetHeight;
+      contentEl.style.animation = '';
+    }
 
     const data = categoryData[categoryId] || {};
 
