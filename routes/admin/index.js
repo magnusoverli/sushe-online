@@ -28,6 +28,7 @@ const registerDuplicateRoutes = require('./duplicates');
 const registerAuditRoutes = require('./audit');
 const registerImageRoutes = require('./images');
 const registerReidentifyRoutes = require('./reidentify');
+const registerBootstrapRoutes = require('./bootstrap');
 
 module.exports = (app, deps) => {
   // Register standalone modules (no interdependencies)
@@ -45,4 +46,7 @@ module.exports = (app, deps) => {
 
   // Register telegram with the adminEventService for notifications
   registerTelegramRoutes(app, deps, adminEventService);
+
+  // Register unified bootstrap endpoint after admin services are initialized
+  registerBootstrapRoutes(app, deps);
 };

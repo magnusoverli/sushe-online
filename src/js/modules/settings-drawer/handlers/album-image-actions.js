@@ -10,11 +10,59 @@ export function createSettingsAlbumImageActions(deps = {}) {
   const setIntervalFn = deps.setIntervalFn || setInterval;
   const clearIntervalFn = deps.clearIntervalFn || clearInterval;
 
-  const { apiCall, showToast, showConfirmation } = deps;
+  const { apiCall, showToast, showConfirmation, categoryData } = deps;
 
   let imageRefetchPollInterval = null;
   let imageRefetchPollCount = 0;
   const STATS_REFRESH_INTERVAL = 10;
+
+  function renderImageStats(stats) {
+    return `
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+          <div class="font-bold text-white text-lg">${stats.totalAlbums || 0}</div>
+          <div class="text-xs text-gray-400 uppercase">Total Albums</div>
+        </div>
+        <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+          <div class="font-bold text-green-400 text-lg">${stats.withImage || 0}</div>
+          <div class="text-xs text-gray-400 uppercase">With Image</div>
+        </div>
+        <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+          <div class="font-bold text-yellow-400 text-lg">${stats.withoutImage || 0}</div>
+          <div class="text-xs text-gray-400 uppercase">Without Image</div>
+        </div>
+      </div>
+      <div class="text-xs text-gray-500 mt-2">
+        Avg size: ${stats.avgSizeKb || 0} KB | Min: ${stats.minSizeKb || 0} KB | Max: ${stats.maxSizeKb || 0} KB
+      </div>
+    `;
+  }
+
+  function applyImageStatsPayload(payload = {}) {
+    const statsEl = doc.getElementById('albumImageStats');
+    if (!statsEl) return;
+
+    const stats = payload.stats;
+    const isRunning = payload.isRunning;
+    const progress = payload.progress || null;
+
+    if (!stats) {
+      statsEl.innerHTML =
+        '<div class="text-gray-400 text-sm">No stats available</div>';
+      return;
+    }
+
+    statsEl.innerHTML = renderImageStats(stats);
+    updateImageRefetchUI(isRunning, progress);
+
+    if (categoryData?.admin) {
+      categoryData.admin.imageStats = {
+        stats,
+        isRunning,
+        progress,
+      };
+    }
+  }
 
   async function loadAlbumImageStats() {
     const statsEl = doc.getElementById('albumImageStats');
@@ -24,41 +72,19 @@ export function createSettingsAlbumImageActions(deps = {}) {
       const response = await apiCall('/api/admin/images/stats');
       const { stats, isRunning } = response;
 
-      if (!stats) {
-        statsEl.innerHTML =
-          '<div class="text-gray-400 text-sm">No stats available</div>';
-        return;
-      }
-
-      statsEl.innerHTML = `
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-white text-lg">${stats.totalAlbums || 0}</div>
-            <div class="text-xs text-gray-400 uppercase">Total Albums</div>
-          </div>
-          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-green-400 text-lg">${stats.withImage || 0}</div>
-            <div class="text-xs text-gray-400 uppercase">With Image</div>
-          </div>
-          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-yellow-400 text-lg">${stats.withoutImage || 0}</div>
-            <div class="text-xs text-gray-400 uppercase">Without Image</div>
-          </div>
-        </div>
-        <div class="text-xs text-gray-500 mt-2">
-          Avg size: ${stats.avgSizeKb || 0} KB | Min: ${stats.minSizeKb || 0} KB | Max: ${stats.maxSizeKb || 0} KB
-        </div>
-      `;
-
       if (isRunning) {
         try {
           const progressResponse = await apiCall('/api/admin/images/progress');
-          updateImageRefetchUI(isRunning, progressResponse.progress);
+          applyImageStatsPayload({
+            stats,
+            isRunning,
+            progress: progressResponse.progress,
+          });
         } catch {
-          updateImageRefetchUI(isRunning, null);
+          applyImageStatsPayload({ stats, isRunning, progress: null });
         }
       } else {
-        updateImageRefetchUI(isRunning);
+        applyImageStatsPayload({ stats, isRunning, progress: null });
       }
     } catch (error) {
       console.error('Error loading album image stats:', error);
@@ -154,25 +180,14 @@ export function createSettingsAlbumImageActions(deps = {}) {
 
       if (!stats) return;
 
-      statsEl.innerHTML = `
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-white text-lg">${stats.totalAlbums || 0}</div>
-            <div class="text-xs text-gray-400 uppercase">Total Albums</div>
-          </div>
-          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-green-400 text-lg">${stats.withImage || 0}</div>
-            <div class="text-xs text-gray-400 uppercase">With Image</div>
-          </div>
-          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-yellow-400 text-lg">${stats.withoutImage || 0}</div>
-            <div class="text-xs text-gray-400 uppercase">Without Image</div>
-          </div>
-        </div>
-        <div class="text-xs text-gray-500 mt-2">
-          Avg size: ${stats.avgSizeKb || 0} KB | Min: ${stats.minSizeKb || 0} KB | Max: ${stats.maxSizeKb || 0} KB
-        </div>
-      `;
+      statsEl.innerHTML = renderImageStats(stats);
+
+      if (categoryData?.admin?.imageStats) {
+        categoryData.admin.imageStats = {
+          ...categoryData.admin.imageStats,
+          stats,
+        };
+      }
     } catch (error) {
       console.error('Error refreshing image stats:', error);
     }
@@ -288,6 +303,7 @@ export function createSettingsAlbumImageActions(deps = {}) {
 
   return {
     loadAlbumImageStats,
+    applyImageStatsPayload,
     handleRefetchAlbumImages,
     handleStopRefetchImages,
   };

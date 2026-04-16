@@ -52,6 +52,7 @@ export function createSettingsDrawer(deps = {}) {
 
   let currentCategory = 'account';
   const categoryData = {};
+  const categoryLoadPromises = {};
   const categoryScrollPositions = {};
   let isOpen = false;
 
@@ -62,28 +63,7 @@ export function createSettingsDrawer(deps = {}) {
     loadPreferencesData,
     loadStatsData,
     loadAdminData,
-    loadAdminAggregateYearStats,
-    createEmptyAdminData,
   } = createSettingsDataLoaders({ apiCall });
-
-  function mergeAdminDataState(existing, partial) {
-    const safeExisting = existing || createEmptyAdminData();
-    const safePartial = partial || {};
-
-    return {
-      ...safeExisting,
-      ...safePartial,
-      events: safePartial.events || safeExisting.events,
-      telegram: safePartial.telegram || safeExisting.telegram,
-      telegramRecs: safePartial.telegramRecs || safeExisting.telegramRecs,
-      users: safePartial.users || safeExisting.users,
-      aggregateLists: safePartial.aggregateLists || safeExisting.aggregateLists,
-      loading: {
-        ...(safeExisting.loading || {}),
-        ...(safePartial.loading || {}),
-      },
-    };
-  }
 
   const {
     renderAccountCategory,
@@ -226,9 +206,11 @@ export function createSettingsDrawer(deps = {}) {
     pollAlbumSummaryStatus,
     handleFetchAlbumSummaries,
     handleStopAlbumSummaries,
+    applySummaryStatsPayload,
   } = createSettingsAlbumSummaryActions({
     apiCall,
     showToast,
+    categoryData,
     getAlbumSummaryPollInterval: () => albumSummaryPollInterval,
     setAlbumSummaryPollInterval: (value) => {
       albumSummaryPollInterval = value;
@@ -239,10 +221,12 @@ export function createSettingsDrawer(deps = {}) {
     loadAlbumImageStats,
     handleRefetchAlbumImages,
     handleStopRefetchImages,
+    applyImageStatsPayload,
   } = createSettingsAlbumImageActions({
     apiCall,
     showToast,
     showConfirmation,
+    categoryData,
   });
 
   const { handleShowContributorManager } =
@@ -294,7 +278,8 @@ export function createSettingsDrawer(deps = {}) {
       albumSummaryPollInterval = value;
     },
     loadAlbumImageStats,
-    loadAggregateYearStats: loadAdminAggregateYearStats,
+    applySummaryStatsPayload,
+    applyImageStatsPayload,
     categoryData,
     handleAdminEventAction,
     handleConfigureTelegram,
@@ -348,8 +333,33 @@ export function createSettingsDrawer(deps = {}) {
 
     // Load initial category if not loaded
     if (!categoryData[currentCategory]) {
-      loadCategoryData(currentCategory);
+      void ensureCategoryDataLoaded(currentCategory);
     }
+
+    if (
+      window.currentUser?.role === 'admin' &&
+      !categoryData.admin &&
+      !categoryLoadPromises.admin
+    ) {
+      void ensureCategoryDataLoaded('admin');
+    }
+  }
+
+  async function ensureCategoryDataLoaded(categoryId) {
+    if (categoryData[categoryId]) {
+      return categoryData[categoryId];
+    }
+
+    if (!categoryLoadPromises[categoryId]) {
+      categoryLoadPromises[categoryId] = loadCategoryData(categoryId).finally(
+        () => {
+          delete categoryLoadPromises[categoryId];
+        }
+      );
+    }
+
+    await categoryLoadPromises[categoryId];
+    return categoryData[categoryId];
   }
 
   /**
@@ -414,16 +424,12 @@ export function createSettingsDrawer(deps = {}) {
 
     // Load category data if not cached
     if (!categoryData[categoryId]) {
-      if (categoryId === 'admin') {
-        categoryData.admin = createEmptyAdminData();
-        renderCategoryContent(categoryId);
-        void loadCategoryData(categoryId);
-      } else {
-        await loadCategoryData(categoryId);
-      }
-    } else {
-      renderCategoryContent(categoryId);
+      await ensureCategoryDataLoaded(categoryId);
     }
+
+    renderCategoryContent(categoryId, {
+      skipAnimation: categoryId === 'admin',
+    });
   }
 
   /**
@@ -433,8 +439,6 @@ export function createSettingsDrawer(deps = {}) {
   async function loadCategoryData(categoryId) {
     const contentEl = document.getElementById('settingsCategoryContent');
     if (!contentEl) return;
-
-    let adminRenderedFromPartial = false;
 
     if (categoryId !== 'admin') {
       // Show loading state
@@ -446,9 +450,6 @@ export function createSettingsDrawer(deps = {}) {
         </div>
       </div>
     `;
-    } else if (!categoryData.admin) {
-      categoryData.admin = createEmptyAdminData();
-      renderCategoryContent('admin');
     }
 
     try {
@@ -471,43 +472,19 @@ export function createSettingsDrawer(deps = {}) {
           data = await loadStatsData();
           break;
         case 'admin':
-          data = await loadAdminData({
-            onPartialUpdate: (partialData) => {
-              categoryData.admin = mergeAdminDataState(
-                categoryData.admin,
-                partialData
-              );
-
-              const hasAggregateListsPayload =
-                Object.prototype.hasOwnProperty.call(
-                  partialData || {},
-                  'aggregateLists'
-                );
-
-              if (currentCategory === 'admin' && hasAggregateListsPayload) {
-                adminRenderedFromPartial = true;
-                renderCategoryContent('admin', { skipAnimation: true });
-              }
-            },
-          });
+          data = await loadAdminData();
           break;
         default:
           console.error('Unknown category:', categoryId);
           return;
       }
 
-      if (categoryId === 'admin') {
-        categoryData.admin = mergeAdminDataState(categoryData.admin, data);
-      } else {
-        categoryData[categoryId] = data;
-      }
+      categoryData[categoryId] = data;
 
       if (currentCategory === categoryId) {
-        if (!(categoryId === 'admin' && adminRenderedFromPartial)) {
-          renderCategoryContent(categoryId, {
-            skipAnimation: categoryId === 'admin',
-          });
-        }
+        renderCategoryContent(categoryId, {
+          skipAnimation: categoryId === 'admin',
+        });
       }
     } catch (error) {
       console.error('Error loading category data:', error);

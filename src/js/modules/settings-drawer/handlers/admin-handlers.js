@@ -18,7 +18,8 @@ export function createSettingsAdminHandlers(deps = {}) {
     getAlbumSummaryPollInterval,
     setAlbumSummaryPollInterval,
     loadAlbumImageStats,
-    loadAggregateYearStats,
+    applySummaryStatsPayload,
+    applyImageStatsPayload,
     categoryData,
     handleAdminEventAction,
     handleConfigureTelegram,
@@ -46,89 +47,6 @@ export function createSettingsAdminHandlers(deps = {}) {
     handleScanDuplicates,
     handleAuditManualAlbums,
   } = deps;
-
-  function renderAggregateStatsGrid(stats) {
-    return `
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
-        <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-          <div class="font-bold text-white text-lg">${stats?.participantCount || 0}</div>
-          <div class="text-xs text-gray-400 uppercase">Contributors</div>
-        </div>
-        <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-          <div class="font-bold text-white text-lg">${stats?.totalAlbums || 0}</div>
-          <div class="text-xs text-gray-400 uppercase">Albums</div>
-        </div>
-        <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-          <div class="font-bold text-white text-lg">${stats?.albumsWith3PlusVoters || 0}</div>
-          <div class="text-xs text-gray-400 uppercase">3+ Votes</div>
-        </div>
-        <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-          <div class="font-bold text-white text-lg">${stats?.albumsWith2Voters || 0}</div>
-          <div class="text-xs text-gray-400 uppercase">2 Votes</div>
-        </div>
-      </div>
-    `;
-  }
-
-  async function maybeLoadAggregateYearStats(yearValue, yearContent) {
-    if (typeof loadAggregateYearStats !== 'function' || !categoryData?.admin) {
-      return;
-    }
-
-    const year = parseInt(yearValue, 10);
-    const aggregateLists = categoryData.admin.aggregateLists;
-    if (!Array.isArray(aggregateLists)) {
-      return;
-    }
-
-    const yearItem = aggregateLists.find((item) => item.year === year);
-    if (!yearItem || yearItem.status?.revealed) {
-      return;
-    }
-
-    if (yearItem.stats || yearItem.statsState === 'loading') {
-      return;
-    }
-
-    yearItem.statsState = 'loading';
-
-    const statsContainer = doc.getElementById(`aggregate-year-stats-${year}`);
-    if (statsContainer) {
-      statsContainer.innerHTML =
-        '<div class="mt-3 text-xs text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Loading stats...</div>';
-    }
-
-    try {
-      const stats = await loadAggregateYearStats(year);
-      yearItem.stats = stats;
-      yearItem.statsState = stats ? 'ready' : 'empty';
-
-      if (statsContainer) {
-        if (stats) {
-          statsContainer.innerHTML = renderAggregateStatsGrid(stats);
-        } else {
-          statsContainer.innerHTML =
-            '<div class="mt-3 text-xs text-gray-500">No stats available for this year.</div>';
-        }
-      }
-    } catch (error) {
-      yearItem.statsState = 'error';
-      console.error('Error loading aggregate year stats:', error);
-
-      if (statsContainer) {
-        statsContainer.innerHTML =
-          '<div class="mt-3 text-xs text-red-400">Failed to load stats.</div>';
-      }
-    }
-
-    if (
-      yearContent &&
-      yearContent.classList &&
-      !yearContent.classList.contains('hidden')
-    ) {
-      yearContent.style.maxHeight = `${yearContent.scrollHeight}px`;
-    }
-  }
 
   function attachAdminHandlers() {
     doc.querySelectorAll('.admin-event-action').forEach((btn) => {
@@ -245,8 +163,6 @@ export function createSettingsAdminHandlers(deps = {}) {
           });
           chevron.style.transform = 'rotate(90deg)';
           btn.setAttribute('aria-expanded', 'true');
-
-          void maybeLoadAggregateYearStats(year, content);
         }
       });
 
@@ -383,7 +299,12 @@ export function createSettingsAdminHandlers(deps = {}) {
       stopAlbumSummariesBtn.addEventListener('click', handleStopAlbumSummaries);
     }
 
-    loadAlbumSummaryStats();
+    const initialSummaryPayload = categoryData?.admin?.summaryStats;
+    if (initialSummaryPayload?.stats && applySummaryStatsPayload) {
+      applySummaryStatsPayload(initialSummaryPayload);
+    } else {
+      loadAlbumSummaryStats();
+    }
 
     const refetchAlbumImagesBtn = doc.getElementById('refetchAlbumImagesBtn');
     const stopRefetchImagesBtn = doc.getElementById('stopRefetchImagesBtn');
@@ -396,7 +317,12 @@ export function createSettingsAdminHandlers(deps = {}) {
       stopRefetchImagesBtn.addEventListener('click', handleStopRefetchImages);
     }
 
-    loadAlbumImageStats();
+    const initialImagePayload = categoryData?.admin?.imageStats;
+    if (initialImagePayload?.stats && applyImageStatsPayload) {
+      applyImageStatsPayload(initialImagePayload);
+    } else {
+      loadAlbumImageStats();
+    }
 
     const scanDuplicatesBtn = doc.getElementById('scanDuplicatesBtn');
     if (scanDuplicatesBtn) {
