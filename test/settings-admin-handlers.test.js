@@ -275,7 +275,6 @@ describe('settings admin handlers', () => {
     const orphanCount = createElement();
     const statsRefCount = createElement();
     const distinctPairCount = createElement();
-    const sampleContainer = createElement();
 
     const doc = createDocument({
       ids: {
@@ -286,7 +285,6 @@ describe('settings admin handlers', () => {
         catalogCleanupOrphanCount: orphanCount,
         catalogCleanupStatsRefCount: statsRefCount,
         catalogCleanupDistinctPairCount: distinctPairCount,
-        catalogCleanupSampleContainer: sampleContainer,
       },
     });
 
@@ -331,6 +329,6 @@ describe('settings admin handlers', () => {
     assert.strictEqual(orphanCount.textContent, '7');
     assert.strictEqual(statsRefCount.textContent, '2');
     assert.strictEqual(distinctPairCount.textContent, '1');
-    assert.match(sampleContainer.innerHTML, /internal-x/);
+    assert.strictEqual(cleanupStatus.textContent, '');
   });
 });

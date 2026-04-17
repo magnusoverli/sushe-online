@@ -57,39 +57,11 @@ export function createSettingsAdminHandlers(deps = {}) {
     return Math.min(Math.max(parsed, 0), 3650);
   }
 
-  function escapeText(value) {
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function renderCleanupSampleList(sampleAlbums) {
-    if (!Array.isArray(sampleAlbums) || sampleAlbums.length === 0) {
-      return '<div class="mt-2 text-xs text-gray-500" id="catalogCleanupSampleList">No candidate sample available.</div>';
-    }
-
-    const items = sampleAlbums
-      .map((album) => {
-        const artist = escapeText(album.artist || '(unknown artist)');
-        const title = escapeText(album.album || '(unknown album)');
-        const albumId = escapeText(album.album_id || '(null album_id)');
-        return `<li class="text-xs text-gray-500 truncate">${artist} - ${title} <span class="text-gray-600">[${albumId}]</span></li>`;
-      })
-      .join('');
-
-    return `<div class="mt-2"><div class="text-xs text-gray-400 mb-1">Sample candidates:</div><ul id="catalogCleanupSampleList" class="space-y-1">${items}</ul></div>`;
-  }
-
   function updateCatalogCleanupPreview(preview) {
     const orphanCountEl = doc.getElementById('catalogCleanupOrphanCount');
     const statsRefCountEl = doc.getElementById('catalogCleanupStatsRefCount');
     const pairCountEl = doc.getElementById('catalogCleanupDistinctPairCount');
     const minAgeInput = doc.getElementById('catalogCleanupMinAgeDays');
-    const statusEl = doc.getElementById('catalogCleanupStatus');
-    const sampleContainer = doc.getElementById('catalogCleanupSampleContainer');
 
     if (orphanCountEl) {
       orphanCountEl.textContent = String(preview?.orphanAlbums || 0);
@@ -108,19 +80,20 @@ export function createSettingsAdminHandlers(deps = {}) {
     if (minAgeInput && preview?.minAgeDays !== undefined) {
       minAgeInput.value = String(preview.minAgeDays);
     }
+  }
 
-    if (statusEl) {
-      const generatedAt = preview?.generatedAt
-        ? new Date(preview.generatedAt).toLocaleString()
-        : 'just now';
-      statusEl.textContent = `Preview generated at ${generatedAt}`;
+  function setCleanupStatus(message = '') {
+    const statusEl = doc.getElementById('catalogCleanupStatus');
+    if (!statusEl) return;
+
+    if (message) {
+      statusEl.textContent = message;
+      statusEl.classList.remove('hidden');
+      return;
     }
 
-    if (sampleContainer) {
-      sampleContainer.innerHTML = renderCleanupSampleList(
-        preview?.sampleAlbums
-      );
-    }
+    statusEl.textContent = '';
+    statusEl.classList.add('hidden');
   }
 
   function attachAdminHandlers() {
@@ -402,7 +375,6 @@ export function createSettingsAdminHandlers(deps = {}) {
     const cleanupMinAgeInput = doc.getElementById('catalogCleanupMinAgeDays');
     const cleanupPreviewBtn = doc.getElementById('catalogCleanupPreviewBtn');
     const cleanupExecuteBtn = doc.getElementById('catalogCleanupExecuteBtn');
-    const cleanupStatusEl = doc.getElementById('catalogCleanupStatus');
 
     const runCleanupPreview = async (minAgeDays) => {
       const response = await apiCall(
@@ -425,18 +397,16 @@ export function createSettingsAdminHandlers(deps = {}) {
 
         try {
           cleanupPreviewBtn.disabled = true;
-          if (cleanupStatusEl) {
-            cleanupStatusEl.textContent = 'Refreshing cleanup preview...';
-          }
+          setCleanupStatus('Refreshing cleanup preview...');
 
           await runCleanupPreview(minAgeDays);
+          setCleanupStatus('');
           showToast('Cleanup preview refreshed', 'success');
         } catch (error) {
           console.error('Error loading cleanup preview:', error);
-          if (cleanupStatusEl) {
-            cleanupStatusEl.textContent =
-              error?.data?.error || 'Failed to refresh cleanup preview';
-          }
+          setCleanupStatus(
+            error?.data?.error || 'Failed to refresh cleanup preview'
+          );
           showToast('Failed to refresh cleanup preview', 'error');
         } finally {
           cleanupPreviewBtn.disabled = false;
@@ -452,15 +422,13 @@ export function createSettingsAdminHandlers(deps = {}) {
 
         try {
           cleanupExecuteBtn.disabled = true;
-          if (cleanupStatusEl) {
-            cleanupStatusEl.textContent =
-              'Refreshing preview before cleanup...';
-          }
+          setCleanupStatus('Refreshing preview before cleanup...');
 
           const preview = await runCleanupPreview(minAgeDays);
           const orphanAlbums = preview?.orphanAlbums || 0;
 
           if (orphanAlbums === 0) {
+            setCleanupStatus('No orphan albums to clean up.');
             showToast('No orphan albums to clean up', 'info');
             return;
           }
@@ -473,15 +441,11 @@ export function createSettingsAdminHandlers(deps = {}) {
           );
 
           if (!confirmed) {
-            if (cleanupStatusEl) {
-              cleanupStatusEl.textContent = 'Cleanup cancelled.';
-            }
+            setCleanupStatus('Cleanup cancelled.');
             return;
           }
 
-          if (cleanupStatusEl) {
-            cleanupStatusEl.textContent = 'Running catalog cleanup...';
-          }
+          setCleanupStatus('Running catalog cleanup...');
 
           const executeResponse = await apiCall(
             '/api/admin/catalog-cleanup/execute',
@@ -511,16 +475,12 @@ export function createSettingsAdminHandlers(deps = {}) {
             'success'
           );
 
-          if (cleanupStatusEl) {
-            cleanupStatusEl.textContent = 'Cleanup completed.';
-          }
+          setCleanupStatus('Cleanup completed.');
         } catch (error) {
           console.error('Error executing catalog cleanup:', error);
           const errorMessage =
             error?.data?.error || 'Failed to execute catalog cleanup';
-          if (cleanupStatusEl) {
-            cleanupStatusEl.textContent = errorMessage;
-          }
+          setCleanupStatus(errorMessage);
           showToast(errorMessage, 'error');
         } finally {
           cleanupExecuteBtn.disabled = false;

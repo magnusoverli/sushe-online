@@ -90,17 +90,7 @@ export function createSettingsAdminRenderer() {
       orphanAlbums: 0,
       userAlbumStatsReferences: 0,
       distinctPairReferences: 0,
-      sampleAlbums: [],
     };
-
-    const cleanupSampleHtml = Array.isArray(cleanupPreview.sampleAlbums)
-      ? cleanupPreview.sampleAlbums
-          .map((album) => {
-            const albumId = album.album_id || '(null album_id)';
-            return `<li class="text-xs text-gray-500 truncate">${escapeHtml(album.artist || '(unknown artist)')} - ${escapeHtml(album.album || '(unknown album)')} <span class="text-gray-600">[${escapeHtml(albumId)}]</span></li>`;
-          })
-          .join('')
-      : '';
 
     const formatRelativeTime = (dateString) => {
       if (!dateString) return 'Unknown';
@@ -412,10 +402,10 @@ export function createSettingsAdminRenderer() {
                 <div class="text-xs text-gray-400 uppercase">Distinct pairs</div>
               </div>
             </div>
-            <div class="settings-row">
-              <div class="settings-row-label">
+            <div class="space-y-3">
+              <div>
                 <label class="settings-label">Remove Orphan Albums</label>
-                <p class="settings-description">Deletes albums that are not referenced by lists, recommendations, service mappings, or artist alias source links. User album stats references are preserved by nulling album_id.</p>
+                <p class="settings-description max-w-none">Deletes albums that are not referenced by lists, recommendations, service mappings, or artist alias source links. User album stats references are preserved by setting <code>album_id</code> to null.</p>
               </div>
               <div class="flex items-center gap-2 flex-wrap">
                 <label for="catalogCleanupMinAgeDays" class="text-xs text-gray-400 whitespace-nowrap">Min age (days):</label>
@@ -424,14 +414,7 @@ export function createSettingsAdminRenderer() {
                 <button id="catalogCleanupExecuteBtn" class="settings-button settings-button-danger">Delete Safe Orphans</button>
               </div>
             </div>
-            <div id="catalogCleanupStatus" class="text-xs text-gray-400 mt-2">Preview generated at ${formatRelativeTime(cleanupPreview.generatedAt)}</div>
-            <div id="catalogCleanupSampleContainer">
-              ${
-                cleanupSampleHtml
-                  ? `<div class="mt-2"><div class="text-xs text-gray-400 mb-1">Sample candidates:</div><ul id="catalogCleanupSampleList" class="space-y-1">${cleanupSampleHtml}</ul></div>`
-                  : '<div class="mt-2 text-xs text-gray-500" id="catalogCleanupSampleList">No candidate sample available.</div>'
-              }
-            </div>
+            <div id="catalogCleanupStatus" class="hidden text-xs text-gray-400 mt-2"></div>
           </div>
         </div>
 
