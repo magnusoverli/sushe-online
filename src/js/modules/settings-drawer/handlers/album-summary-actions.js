@@ -40,12 +40,6 @@ export function createSettingsAlbumSummaryActions(deps = {}) {
           <div class="text-xs text-gray-400 uppercase">Never Attempted</div>
         </div>
       </div>
-      <div class="grid grid-cols-1 gap-2">
-        <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-          <div class="font-bold text-orange-400 text-lg">${stats.fromClaude || 0}</div>
-          <div class="text-xs text-gray-400 uppercase"><i class="fas fa-robot mr-1"></i>From Claude AI</div>
-        </div>
-      </div>
     `;
   }
 

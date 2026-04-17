@@ -246,6 +246,13 @@ function createTestApp(options = {}) {
       mock.fn(() => Promise.resolve({ rows: [], rowCount: 0 })),
   };
 
+  mockPool.connect =
+    options.poolConnect ||
+    mock.fn(async () => ({
+      query: (...args) => mockPool.query(...args),
+      release: () => {},
+    }));
+
   // Mock upload middleware (for restore endpoint)
   const mockUpload = {
     single: () => (req, res, next) => {
@@ -316,6 +323,7 @@ function createTestApp(options = {}) {
     mockLists,
     mockListsAsync,
     mockListItemsAsync,
+    mockPool,
     mockInvalidateUserCache,
   };
 }
@@ -901,6 +909,86 @@ describe('GET /api/admin/bootstrap', () => {
     assert.strictEqual(response.body.aggregateLists[0].recStatus.locked, true);
     assert.strictEqual(response.body.summaryStats.stats.withSummary, 12);
     assert.strictEqual(response.body.imageStats.stats.withImage, 18);
+  });
+});
+
+describe('Admin catalog cleanup routes', () => {
+  it('should return cleanup preview', async () => {
+    const poolQuery = mock.fn(async (sql) => {
+      if (sql.includes('FROM pg_tables')) {
+        return { rows: [{ tablename: 'list_items' }] };
+      }
+
+      if (
+        sql.includes('FROM albums a') &&
+        sql.includes('COUNT(*)::int AS count')
+      ) {
+        return { rows: [{ count: 4 }] };
+      }
+
+      if (sql.includes('SELECT a.album_id, a.artist, a.album, a.created_at')) {
+        return {
+          rows: [
+            {
+              album_id: 'internal-1',
+              artist: 'Artist',
+              album: 'Album',
+              created_at: new Date(),
+            },
+          ],
+        };
+      }
+
+      return { rows: [], rowCount: 0 };
+    });
+
+    const { app } = createTestApp({ poolQuery });
+    const response = await request(app).get(
+      '/api/admin/catalog-cleanup/preview'
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(response.body.success, true);
+    assert.strictEqual(response.body.preview.orphanAlbums, 4);
+    assert.strictEqual(Array.isArray(response.body.preview.sampleAlbums), true);
+  });
+
+  it('should reject cleanup execute with stale preview count', async () => {
+    const poolQuery = mock.fn(async (sql) => {
+      if (sql === 'BEGIN' || sql === 'ROLLBACK' || sql === 'COMMIT') {
+        return { rows: [], rowCount: 0 };
+      }
+
+      if (sql.includes('FROM pg_tables')) {
+        return { rows: [{ tablename: 'list_items' }] };
+      }
+
+      if (sql.includes('DROP TABLE IF EXISTS cleanup_album_targets')) {
+        return { rows: [], rowCount: 0 };
+      }
+
+      if (sql.includes('CREATE TEMP TABLE cleanup_album_targets')) {
+        return { rows: [], rowCount: 0 };
+      }
+
+      if (
+        sql.includes('SELECT COUNT(*)::int AS count FROM cleanup_album_targets')
+      ) {
+        return { rows: [{ count: 3 }] };
+      }
+
+      return { rows: [], rowCount: 0 };
+    });
+
+    const { app } = createTestApp({ poolQuery });
+    const response = await request(app)
+      .post('/api/admin/catalog-cleanup/execute')
+      .send({ minAgeDays: 30, expectedDeleteCount: 1 });
+
+    assert.strictEqual(response.status, 409);
+    assert.match(response.body.error, /stale/i);
+    assert.strictEqual(response.body.expectedDeleteCount, 1);
+    assert.strictEqual(response.body.currentDeleteCount, 3);
   });
 });
 

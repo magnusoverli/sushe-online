@@ -173,6 +173,7 @@ module.exports = (app, deps) => {
         app.locals.telegramNotifier || createTelegramNotifier({ pool, logger });
       const albumSummaryService = app.locals.albumSummaryService;
       const imageRefetchService = app.locals.imageRefetchService;
+      const catalogCleanupService = app.locals.catalogCleanupService;
 
       const [
         eventsResponse,
@@ -197,6 +198,23 @@ module.exports = (app, deps) => {
           albumSummaryService ? albumSummaryService.getStats() : null,
           imageRefetchService ? imageRefetchService.getStats() : null,
         ]);
+
+      let catalogCleanupPreview = null;
+      if (catalogCleanupService) {
+        try {
+          catalogCleanupPreview = await catalogCleanupService.getPreview({
+            minAgeDays: 90,
+            sampleLimit: 5,
+          });
+        } catch (cleanupPreviewError) {
+          logger.warn(
+            'Failed to include catalog cleanup preview in bootstrap',
+            {
+              error: cleanupPreviewError.message,
+            }
+          );
+        }
+      }
 
       const aggregateLists = buildAggregateLists({
         years,
@@ -255,6 +273,7 @@ module.exports = (app, deps) => {
               ? imageRefetchService.getProgress()
               : null,
         },
+        catalogCleanupPreview,
       });
     } catch (error) {
       logger.error('Error fetching admin bootstrap payload', {

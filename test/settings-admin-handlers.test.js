@@ -266,4 +266,71 @@ describe('settings admin handlers', () => {
     assert.deepStrictEqual(summaryCalls, [summaryPayload]);
     assert.deepStrictEqual(imageCalls, [imagePayload]);
   });
+
+  it('loads cleanup preview and updates catalog cleanup panel', async () => {
+    const cleanupPreviewBtn = createElement();
+    const cleanupExecuteBtn = createElement();
+    const cleanupMinAgeDays = createElement({ value: '45' });
+    const cleanupStatus = createElement();
+    const orphanCount = createElement();
+    const statsRefCount = createElement();
+    const distinctPairCount = createElement();
+    const sampleContainer = createElement();
+
+    const doc = createDocument({
+      ids: {
+        catalogCleanupPreviewBtn: cleanupPreviewBtn,
+        catalogCleanupExecuteBtn: cleanupExecuteBtn,
+        catalogCleanupMinAgeDays: cleanupMinAgeDays,
+        catalogCleanupStatus: cleanupStatus,
+        catalogCleanupOrphanCount: orphanCount,
+        catalogCleanupStatsRefCount: statsRefCount,
+        catalogCleanupDistinctPairCount: distinctPairCount,
+        catalogCleanupSampleContainer: sampleContainer,
+      },
+    });
+
+    const { deps, calls } = buildDeps({
+      doc,
+      categoryData: { admin: {} },
+      apiCall: async (...args) => {
+        calls.api.push(args);
+        if (
+          String(args[0]).includes(
+            '/api/admin/catalog-cleanup/preview?minAgeDays=45'
+          )
+        ) {
+          return {
+            preview: {
+              minAgeDays: 45,
+              orphanAlbums: 7,
+              userAlbumStatsReferences: 2,
+              distinctPairReferences: 1,
+              sampleAlbums: [
+                {
+                  album_id: 'internal-x',
+                  artist: 'Artist X',
+                  album: 'Album X',
+                },
+              ],
+              generatedAt: new Date().toISOString(),
+            },
+          };
+        }
+
+        return { success: true };
+      },
+    });
+
+    const { attachAdminHandlers } = createSettingsAdminHandlers(deps);
+    attachAdminHandlers();
+
+    await cleanupPreviewBtn.listeners.click();
+
+    assert.strictEqual(calls.api.length > 0, true);
+    assert.strictEqual(orphanCount.textContent, '7');
+    assert.strictEqual(statsRefCount.textContent, '2');
+    assert.strictEqual(distinctPairCount.textContent, '1');
+    assert.match(sampleContainer.innerHTML, /internal-x/);
+  });
 });

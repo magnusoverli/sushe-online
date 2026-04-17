@@ -60,12 +60,6 @@ export function createSettingsAdminRenderer() {
             <div class="text-xs text-gray-400 uppercase">Never Attempted</div>
           </div>
         </div>
-        <div class="grid grid-cols-1 gap-2">
-          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-orange-400 text-lg">${summaryStatsPayload.stats.fromClaude || 0}</div>
-            <div class="text-xs text-gray-400 uppercase"><i class="fas fa-robot mr-1"></i>From Claude AI</div>
-          </div>
-        </div>
       `
       : '<div class="text-gray-500 text-sm">Summary stats unavailable.</div>';
 
@@ -90,6 +84,23 @@ export function createSettingsAdminRenderer() {
         </div>
       `
       : '<div class="text-gray-500 text-sm">Image stats unavailable.</div>';
+
+    const cleanupPreview = data.catalogCleanupPreview || {
+      minAgeDays: 90,
+      orphanAlbums: 0,
+      userAlbumStatsReferences: 0,
+      distinctPairReferences: 0,
+      sampleAlbums: [],
+    };
+
+    const cleanupSampleHtml = Array.isArray(cleanupPreview.sampleAlbums)
+      ? cleanupPreview.sampleAlbums
+          .map((album) => {
+            const albumId = album.album_id || '(null album_id)';
+            return `<li class="text-xs text-gray-500 truncate">${escapeHtml(album.artist || '(unknown artist)')} - ${escapeHtml(album.album || '(unknown album)')} <span class="text-gray-600">[${escapeHtml(albumId)}]</span></li>`;
+          })
+          .join('')
+      : '';
 
     const formatRelativeTime = (dateString) => {
       if (!dateString) return 'Unknown';
@@ -379,6 +390,47 @@ export function createSettingsAdminRenderer() {
             </div>
             <div id="imageRefetchResult" class="hidden mt-4 p-3 bg-gray-800/50 rounded text-sm">
               <div id="imageRefetchResultText" class="text-gray-300"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Catalog Cleanup -->
+        <div class="settings-group">
+          <h3 class="settings-group-title">Catalog Cleanup</h3>
+          <div class="settings-group-content">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+              <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                <div id="catalogCleanupOrphanCount" class="font-bold text-white text-lg">${cleanupPreview.orphanAlbums || 0}</div>
+                <div class="text-xs text-gray-400 uppercase">Orphan Albums</div>
+              </div>
+              <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                <div id="catalogCleanupStatsRefCount" class="font-bold text-yellow-400 text-lg">${cleanupPreview.userAlbumStatsReferences || 0}</div>
+                <div class="text-xs text-gray-400 uppercase">Stats refs to null</div>
+              </div>
+              <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                <div id="catalogCleanupDistinctPairCount" class="font-bold text-blue-400 text-lg">${cleanupPreview.distinctPairReferences || 0}</div>
+                <div class="text-xs text-gray-400 uppercase">Distinct pairs</div>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Remove Orphan Albums</label>
+                <p class="settings-description">Deletes albums that are not referenced by lists, recommendations, service mappings, or artist alias source links. User album stats references are preserved by nulling album_id.</p>
+              </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <label for="catalogCleanupMinAgeDays" class="text-xs text-gray-400 whitespace-nowrap">Min age (days):</label>
+                <input id="catalogCleanupMinAgeDays" type="number" min="0" max="3650" value="${cleanupPreview.minAgeDays || 90}" class="bg-gray-700 text-white text-sm rounded px-2 py-1 border border-gray-600 w-24" />
+                <button id="catalogCleanupPreviewBtn" class="settings-button">Preview</button>
+                <button id="catalogCleanupExecuteBtn" class="settings-button settings-button-danger">Delete Safe Orphans</button>
+              </div>
+            </div>
+            <div id="catalogCleanupStatus" class="text-xs text-gray-400 mt-2">Preview generated at ${formatRelativeTime(cleanupPreview.generatedAt)}</div>
+            <div id="catalogCleanupSampleContainer">
+              ${
+                cleanupSampleHtml
+                  ? `<div class="mt-2"><div class="text-xs text-gray-400 mb-1">Sample candidates:</div><ul id="catalogCleanupSampleList" class="space-y-1">${cleanupSampleHtml}</ul></div>`
+                  : '<div class="mt-2 text-xs text-gray-500" id="catalogCleanupSampleList">No candidate sample available.</div>'
+              }
             </div>
           </div>
         </div>

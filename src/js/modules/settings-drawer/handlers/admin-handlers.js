@@ -48,6 +48,81 @@ export function createSettingsAdminHandlers(deps = {}) {
     handleAuditManualAlbums,
   } = deps;
 
+  function normalizeCleanupMinAgeDays(value) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) {
+      return 90;
+    }
+
+    return Math.min(Math.max(parsed, 0), 3650);
+  }
+
+  function escapeText(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function renderCleanupSampleList(sampleAlbums) {
+    if (!Array.isArray(sampleAlbums) || sampleAlbums.length === 0) {
+      return '<div class="mt-2 text-xs text-gray-500" id="catalogCleanupSampleList">No candidate sample available.</div>';
+    }
+
+    const items = sampleAlbums
+      .map((album) => {
+        const artist = escapeText(album.artist || '(unknown artist)');
+        const title = escapeText(album.album || '(unknown album)');
+        const albumId = escapeText(album.album_id || '(null album_id)');
+        return `<li class="text-xs text-gray-500 truncate">${artist} - ${title} <span class="text-gray-600">[${albumId}]</span></li>`;
+      })
+      .join('');
+
+    return `<div class="mt-2"><div class="text-xs text-gray-400 mb-1">Sample candidates:</div><ul id="catalogCleanupSampleList" class="space-y-1">${items}</ul></div>`;
+  }
+
+  function updateCatalogCleanupPreview(preview) {
+    const orphanCountEl = doc.getElementById('catalogCleanupOrphanCount');
+    const statsRefCountEl = doc.getElementById('catalogCleanupStatsRefCount');
+    const pairCountEl = doc.getElementById('catalogCleanupDistinctPairCount');
+    const minAgeInput = doc.getElementById('catalogCleanupMinAgeDays');
+    const statusEl = doc.getElementById('catalogCleanupStatus');
+    const sampleContainer = doc.getElementById('catalogCleanupSampleContainer');
+
+    if (orphanCountEl) {
+      orphanCountEl.textContent = String(preview?.orphanAlbums || 0);
+    }
+
+    if (statsRefCountEl) {
+      statsRefCountEl.textContent = String(
+        preview?.userAlbumStatsReferences || 0
+      );
+    }
+
+    if (pairCountEl) {
+      pairCountEl.textContent = String(preview?.distinctPairReferences || 0);
+    }
+
+    if (minAgeInput && preview?.minAgeDays !== undefined) {
+      minAgeInput.value = String(preview.minAgeDays);
+    }
+
+    if (statusEl) {
+      const generatedAt = preview?.generatedAt
+        ? new Date(preview.generatedAt).toLocaleString()
+        : 'just now';
+      statusEl.textContent = `Preview generated at ${generatedAt}`;
+    }
+
+    if (sampleContainer) {
+      sampleContainer.innerHTML = renderCleanupSampleList(
+        preview?.sampleAlbums
+      );
+    }
+  }
+
   function attachAdminHandlers() {
     doc.querySelectorAll('.admin-event-action').forEach((btn) => {
       btn.addEventListener('click', async () => {
@@ -322,6 +397,135 @@ export function createSettingsAdminHandlers(deps = {}) {
       applyImageStatsPayload(initialImagePayload);
     } else {
       loadAlbumImageStats();
+    }
+
+    const cleanupMinAgeInput = doc.getElementById('catalogCleanupMinAgeDays');
+    const cleanupPreviewBtn = doc.getElementById('catalogCleanupPreviewBtn');
+    const cleanupExecuteBtn = doc.getElementById('catalogCleanupExecuteBtn');
+    const cleanupStatusEl = doc.getElementById('catalogCleanupStatus');
+
+    const runCleanupPreview = async (minAgeDays) => {
+      const response = await apiCall(
+        `/api/admin/catalog-cleanup/preview?minAgeDays=${minAgeDays}`
+      );
+      if (response?.preview) {
+        if (categoryData?.admin) {
+          categoryData.admin.catalogCleanupPreview = response.preview;
+        }
+        updateCatalogCleanupPreview(response.preview);
+      }
+      return response?.preview || null;
+    };
+
+    if (cleanupPreviewBtn) {
+      cleanupPreviewBtn.addEventListener('click', async () => {
+        const minAgeDays = normalizeCleanupMinAgeDays(
+          cleanupMinAgeInput?.value
+        );
+
+        try {
+          cleanupPreviewBtn.disabled = true;
+          if (cleanupStatusEl) {
+            cleanupStatusEl.textContent = 'Refreshing cleanup preview...';
+          }
+
+          await runCleanupPreview(minAgeDays);
+          showToast('Cleanup preview refreshed', 'success');
+        } catch (error) {
+          console.error('Error loading cleanup preview:', error);
+          if (cleanupStatusEl) {
+            cleanupStatusEl.textContent =
+              error?.data?.error || 'Failed to refresh cleanup preview';
+          }
+          showToast('Failed to refresh cleanup preview', 'error');
+        } finally {
+          cleanupPreviewBtn.disabled = false;
+        }
+      });
+    }
+
+    if (cleanupExecuteBtn) {
+      cleanupExecuteBtn.addEventListener('click', async () => {
+        const minAgeDays = normalizeCleanupMinAgeDays(
+          cleanupMinAgeInput?.value
+        );
+
+        try {
+          cleanupExecuteBtn.disabled = true;
+          if (cleanupStatusEl) {
+            cleanupStatusEl.textContent =
+              'Refreshing preview before cleanup...';
+          }
+
+          const preview = await runCleanupPreview(minAgeDays);
+          const orphanAlbums = preview?.orphanAlbums || 0;
+
+          if (orphanAlbums === 0) {
+            showToast('No orphan albums to clean up', 'info');
+            return;
+          }
+
+          const confirmed = await showConfirmation(
+            'Delete Safe Orphan Albums',
+            `Delete ${orphanAlbums} orphan album${orphanAlbums === 1 ? '' : 's'}?`,
+            'This removes albums not referenced by lists, recommendations, service mappings, or alias source links. Historical user album stats references will be preserved by setting album_id to null.',
+            'Delete Orphans'
+          );
+
+          if (!confirmed) {
+            if (cleanupStatusEl) {
+              cleanupStatusEl.textContent = 'Cleanup cancelled.';
+            }
+            return;
+          }
+
+          if (cleanupStatusEl) {
+            cleanupStatusEl.textContent = 'Running catalog cleanup...';
+          }
+
+          const executeResponse = await apiCall(
+            '/api/admin/catalog-cleanup/execute',
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                minAgeDays,
+                expectedDeleteCount: orphanAlbums,
+              }),
+            }
+          );
+
+          const result = executeResponse?.result || {};
+          if (categoryData?.admin) {
+            categoryData.admin.catalogCleanupPreview =
+              result.postCleanupPreview;
+          }
+
+          if (result.postCleanupPreview) {
+            updateCatalogCleanupPreview(result.postCleanupPreview);
+          }
+
+          await Promise.all([loadAlbumSummaryStats(), loadAlbumImageStats()]);
+
+          showToast(
+            `Deleted ${result.deletedAlbums || 0} orphan album${result.deletedAlbums === 1 ? '' : 's'}${result.nullifiedUserAlbumStats ? `, nulled ${result.nullifiedUserAlbumStats} stats refs` : ''}`,
+            'success'
+          );
+
+          if (cleanupStatusEl) {
+            cleanupStatusEl.textContent = 'Cleanup completed.';
+          }
+        } catch (error) {
+          console.error('Error executing catalog cleanup:', error);
+          const errorMessage =
+            error?.data?.error || 'Failed to execute catalog cleanup';
+          if (cleanupStatusEl) {
+            cleanupStatusEl.textContent = errorMessage;
+          }
+          showToast(errorMessage, 'error');
+        } finally {
+          cleanupExecuteBtn.disabled = false;
+        }
+      });
     }
 
     const scanDuplicatesBtn = doc.getElementById('scanDuplicatesBtn');
