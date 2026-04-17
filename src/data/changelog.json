@@ -1,6 +1,20 @@
 [
   {
     "date": "2026-04-17",
+    "category": "fix",
+    "description": "Fixed notifications appearing behind settings panel",
+    "hash": "5eea105fa1442962b20922604e8281273d09b44e",
+    "commitMessage": "Raise toast layer above settings drawer\n\nIncrease toast z-index globally so success/error notifications remain visible while the settings drawer is open. Apply the same stacking level to both app and layout toast styles for consistent behavior across pages."
+  },
+  {
+    "date": "2026-04-17",
+    "category": "ui",
+    "description": "Improved database cleanup interface in admin settings",
+    "hash": "89c5fddffa932aa9f040c6a661ecb8ddb724f34e",
+    "commitMessage": "Polishing the DB cleanup process UX/UI"
+  },
+  {
+    "date": "2026-04-17",
     "category": "ui",
     "description": "Improved visibility of cleanup preview in admin settings",
     "hash": "0e0df894b17d48d3d6c2bace2f6b8eb68f30ab25",
