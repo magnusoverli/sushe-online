@@ -238,7 +238,7 @@ test('startBatchFetch should freeze batch scope to snapshot start time', async (
         };
       }
 
-      if (query.includes('SELECT a.album_id, a.artist, a.album')) {
+      if (query.includes('SELECT a.id, a.album_id, a.artist, a.album')) {
         return { rows: [] };
       }
 
@@ -263,7 +263,7 @@ test('startBatchFetch should freeze batch scope to snapshot start time', async (
   );
   const pageCall = calls.find(
     (call) =>
-      call.query.includes('SELECT a.album_id') &&
+      call.query.includes('SELECT a.id, a.album_id') &&
       call.query.includes('FROM albums a')
   );
 
@@ -279,6 +279,66 @@ test('startBatchFetch should freeze batch scope to snapshot start time', async (
   );
   assert.ok(countCall.params[0] instanceof Date);
   assert.ok(pageCall.params[0] instanceof Date);
+});
+
+test('startBatchFetch should not loop when album_id is null', async () => {
+  let pageCalls = 0;
+
+  const mockPool = {
+    query: async (query, params = []) => {
+      if (query.includes('SELECT COUNT(*) AS total')) {
+        return { rows: [{ total: '2' }] };
+      }
+
+      if (query.includes('SELECT a.id, a.album_id, a.artist, a.album')) {
+        pageCalls += 1;
+        if (pageCalls === 1) {
+          return {
+            rows: [
+              { id: 1, album_id: 'ok-1', artist: 'Artist', album: 'Album' },
+              { id: 2, album_id: null, artist: 'Unknown', album: 'Missing ID' },
+            ],
+          };
+        }
+
+        return { rows: [] };
+      }
+
+      if (query.includes('SELECT album_id, artist, album FROM albums')) {
+        if (params[0] === 'ok-1') {
+          return {
+            rows: [{ album_id: 'ok-1', artist: 'Artist', album: 'Album' }],
+          };
+        }
+
+        return { rows: [] };
+      }
+
+      if (query.includes('UPDATE albums SET summary')) {
+        return { rows: [], rowCount: 1 };
+      }
+
+      return { rows: [], rowCount: 0 };
+    },
+  };
+
+  const service = createAlbumSummaryService({
+    pool: mockPool,
+    logger: createMockLogger(),
+  });
+
+  await service.startBatchFetch();
+
+  const waitUntil = Date.now() + 1000;
+  while (service.getBatchStatus()?.running && Date.now() < waitUntil) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  const status = service.getBatchStatus();
+  assert.strictEqual(status.running, false);
+  assert.strictEqual(status.total, 2);
+  assert.strictEqual(status.processed, 2);
+  assert.strictEqual(pageCalls, 2);
 });
 
 test('fetchAndStoreSummary should return error for missing album', async () => {

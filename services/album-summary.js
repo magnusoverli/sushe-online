@@ -645,28 +645,28 @@ function createAlbumSummaryService(deps = {}) {
       snapshotStartedAt: snapshotStartedAt.toISOString(),
     };
 
-    let lastAlbumId = null;
+    let lastAlbumRowId = null;
     const fetchNextPage = async () => {
       const params = [snapshotStartedAt];
       let pageWhere = `WHERE ${whereClause} AND ${snapshotBoundaryClause}`;
 
-      if (lastAlbumId) {
-        params.push(lastAlbumId);
-        pageWhere += ` AND a.album_id > $${params.length}`;
+      if (lastAlbumRowId !== null) {
+        params.push(lastAlbumRowId);
+        pageWhere += ` AND a.id > $${params.length}`;
       }
 
       params.push(pageSize);
       const limitParam = `$${params.length}`;
 
-      const query = `SELECT a.album_id, a.artist, a.album
+      const query = `SELECT a.id, a.album_id, a.artist, a.album
         FROM albums a
         ${pageWhere}
-        ORDER BY a.album_id
+        ORDER BY a.id
         LIMIT ${limitParam}`;
 
       const result = await pool.query(query, params);
       if (result.rows.length > 0) {
-        lastAlbumId = result.rows[result.rows.length - 1].album_id;
+        lastAlbumRowId = result.rows[result.rows.length - 1].id;
       }
       return result.rows;
     };
