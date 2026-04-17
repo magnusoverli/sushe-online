@@ -921,9 +921,18 @@ describe('Admin catalog cleanup routes', () => {
 
       if (
         sql.includes('FROM albums a') &&
-        sql.includes('COUNT(*)::int AS count')
+        sql.includes('orphan_albums_total')
       ) {
-        return { rows: [{ count: 4 }] };
+        return {
+          rows: [
+            {
+              total_albums: 846,
+              orphan_albums_total: 401,
+              orphan_albums_eligible: 4,
+              orphan_albums_too_young: 2,
+            },
+          ],
+        };
       }
 
       if (sql.includes('SELECT a.album_id, a.artist, a.album, a.created_at')) {
@@ -949,7 +958,10 @@ describe('Admin catalog cleanup routes', () => {
 
     assert.strictEqual(response.status, 200);
     assert.strictEqual(response.body.success, true);
+    assert.strictEqual(response.body.preview.totalAlbums, 846);
+    assert.strictEqual(response.body.preview.orphanAlbumsTotal, 401);
     assert.strictEqual(response.body.preview.orphanAlbums, 4);
+    assert.strictEqual(response.body.preview.orphanAlbumsTooYoung, 2);
     assert.strictEqual(Array.isArray(response.body.preview.sampleAlbums), true);
   });
 

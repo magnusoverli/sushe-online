@@ -37,9 +37,18 @@ describe('catalog cleanup service', () => {
 
       if (
         sql.includes('FROM albums a') &&
-        sql.includes('COUNT(*)::int AS count')
+        sql.includes('orphan_albums_total')
       ) {
-        return { rows: [{ count: 12 }] };
+        return {
+          rows: [
+            {
+              total_albums: 846,
+              orphan_albums_total: 401,
+              orphan_albums_eligible: 12,
+              orphan_albums_too_young: 4,
+            },
+          ],
+        };
       }
 
       if (sql.includes('SELECT a.album_id, a.artist, a.album, a.created_at')) {
@@ -69,7 +78,10 @@ describe('catalog cleanup service', () => {
     });
 
     assert.strictEqual(preview.minAgeDays, 45);
+    assert.strictEqual(preview.totalAlbums, 846);
+    assert.strictEqual(preview.orphanAlbumsTotal, 401);
     assert.strictEqual(preview.orphanAlbums, 12);
+    assert.strictEqual(preview.orphanAlbumsTooYoung, 4);
     assert.strictEqual(preview.userAlbumStatsReferences, 2);
     assert.strictEqual(preview.distinctPairReferences, 1);
     assert.strictEqual(preview.sampleAlbums.length, 1);

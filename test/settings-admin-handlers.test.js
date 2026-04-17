@@ -272,7 +272,10 @@ describe('settings admin handlers', () => {
     const cleanupExecuteBtn = createElement();
     const cleanupMinAgeDays = createElement({ value: '45' });
     const cleanupStatus = createElement();
+    const totalAlbums = createElement();
+    const orphanTotal = createElement();
     const orphanCount = createElement();
+    const orphanYoungCount = createElement();
     const statsRefCount = createElement();
     const distinctPairCount = createElement();
 
@@ -282,7 +285,10 @@ describe('settings admin handlers', () => {
         catalogCleanupExecuteBtn: cleanupExecuteBtn,
         catalogCleanupMinAgeDays: cleanupMinAgeDays,
         catalogCleanupStatus: cleanupStatus,
+        catalogCleanupTotalAlbums: totalAlbums,
+        catalogCleanupOrphanTotal: orphanTotal,
         catalogCleanupOrphanCount: orphanCount,
+        catalogCleanupOrphanYoungCount: orphanYoungCount,
         catalogCleanupStatsRefCount: statsRefCount,
         catalogCleanupDistinctPairCount: distinctPairCount,
       },
@@ -301,16 +307,12 @@ describe('settings admin handlers', () => {
           return {
             preview: {
               minAgeDays: 45,
+              totalAlbums: 846,
+              orphanAlbumsTotal: 401,
               orphanAlbums: 7,
+              orphanAlbumsTooYoung: 4,
               userAlbumStatsReferences: 2,
               distinctPairReferences: 1,
-              sampleAlbums: [
-                {
-                  album_id: 'internal-x',
-                  artist: 'Artist X',
-                  album: 'Album X',
-                },
-              ],
               generatedAt: new Date().toISOString(),
             },
           };
@@ -326,9 +328,12 @@ describe('settings admin handlers', () => {
     await cleanupPreviewBtn.listeners.click();
 
     assert.strictEqual(calls.api.length > 0, true);
+    assert.strictEqual(totalAlbums.textContent, '846');
+    assert.strictEqual(orphanTotal.textContent, '401');
     assert.strictEqual(orphanCount.textContent, '7');
+    assert.strictEqual(orphanYoungCount.textContent, '4');
     assert.strictEqual(statsRefCount.textContent, '2');
     assert.strictEqual(distinctPairCount.textContent, '1');
-    assert.strictEqual(cleanupStatus.textContent, '');
+    assert.match(cleanupStatus.textContent, /will be removed/);
   });
 });

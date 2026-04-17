@@ -45,7 +45,7 @@ async function getExistingTableSet(queryable, tableNames) {
   return new Set(result.rows.map((row) => row.tablename));
 }
 
-function buildOrphanWhereClause(existingTables, ageParamIndex = 1) {
+function buildOrphanReferenceClause(existingTables) {
   const checks = [];
 
   for (const [tableName, query] of Object.entries(REFERENCE_CHECKS)) {
@@ -54,9 +54,17 @@ function buildOrphanWhereClause(existingTables, ageParamIndex = 1) {
     }
   }
 
+  if (checks.length === 0) {
+    return 'FALSE';
+  }
+
+  return checks.join('\n    AND ');
+}
+
+function buildOrphanWhereClause(orphanReferenceClause, ageParamIndex = 1) {
   return `
     (a.created_at IS NULL OR a.created_at < NOW() - ($${ageParamIndex}::int * INTERVAL '1 day'))
-    ${checks.length > 0 ? `AND ${checks.join('\n    AND ')}` : ''}
+    AND ${orphanReferenceClause}
   `;
 }
 
@@ -82,12 +90,20 @@ function createCatalogCleanupService(deps = {}) {
       'user_album_stats',
       'album_distinct_pairs',
     ]);
-    const orphanWhereClause = buildOrphanWhereClause(existingTables, 1);
+    const orphanReferenceClause = buildOrphanReferenceClause(existingTables);
+    const orphanWhereClause = buildOrphanWhereClause(orphanReferenceClause, 1);
 
-    const orphanCountResult = await pool.query(
-      `SELECT COUNT(*)::int AS count
-       FROM albums a
-       WHERE ${orphanWhereClause}`,
+    const coverageResult = await pool.query(
+      `SELECT
+         COUNT(*)::int AS total_albums,
+         COUNT(*) FILTER (WHERE ${orphanReferenceClause})::int AS orphan_albums_total,
+         COUNT(*) FILTER (WHERE ${orphanWhereClause})::int AS orphan_albums_eligible,
+         COUNT(*) FILTER (
+           WHERE ${orphanReferenceClause}
+             AND a.created_at IS NOT NULL
+             AND a.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+         )::int AS orphan_albums_too_young
+       FROM albums a`,
       [minAgeDays]
     );
 
@@ -136,7 +152,14 @@ function createCatalogCleanupService(deps = {}) {
 
     return {
       minAgeDays,
-      orphanAlbums: toRowCount(orphanCountResult.rows[0]?.count),
+      totalAlbums: toRowCount(coverageResult.rows[0]?.total_albums),
+      orphanAlbumsTotal: toRowCount(
+        coverageResult.rows[0]?.orphan_albums_total
+      ),
+      orphanAlbums: toRowCount(coverageResult.rows[0]?.orphan_albums_eligible),
+      orphanAlbumsTooYoung: toRowCount(
+        coverageResult.rows[0]?.orphan_albums_too_young
+      ),
       userAlbumStatsReferences,
       distinctPairReferences,
       sampleAlbums: sampleResult.rows,
@@ -159,7 +182,11 @@ function createCatalogCleanupService(deps = {}) {
         'user_album_stats',
         'album_distinct_pairs',
       ]);
-      const orphanWhereClause = buildOrphanWhereClause(existingTables, 1);
+      const orphanReferenceClause = buildOrphanReferenceClause(existingTables);
+      const orphanWhereClause = buildOrphanWhereClause(
+        orphanReferenceClause,
+        1
+      );
 
       await client.query(`DROP TABLE IF EXISTS cleanup_album_targets`);
       await client.query(

@@ -58,13 +58,28 @@ export function createSettingsAdminHandlers(deps = {}) {
   }
 
   function updateCatalogCleanupPreview(preview) {
+    const totalAlbumsEl = doc.getElementById('catalogCleanupTotalAlbums');
+    const orphanTotalEl = doc.getElementById('catalogCleanupOrphanTotal');
     const orphanCountEl = doc.getElementById('catalogCleanupOrphanCount');
+    const orphanYoungEl = doc.getElementById('catalogCleanupOrphanYoungCount');
     const statsRefCountEl = doc.getElementById('catalogCleanupStatsRefCount');
     const pairCountEl = doc.getElementById('catalogCleanupDistinctPairCount');
     const minAgeInput = doc.getElementById('catalogCleanupMinAgeDays');
 
+    if (totalAlbumsEl) {
+      totalAlbumsEl.textContent = String(preview?.totalAlbums || 0);
+    }
+
+    if (orphanTotalEl) {
+      orphanTotalEl.textContent = String(preview?.orphanAlbumsTotal || 0);
+    }
+
     if (orphanCountEl) {
       orphanCountEl.textContent = String(preview?.orphanAlbums || 0);
+    }
+
+    if (orphanYoungEl) {
+      orphanYoungEl.textContent = String(preview?.orphanAlbumsTooYoung || 0);
     }
 
     if (statsRefCountEl) {
@@ -399,8 +414,10 @@ export function createSettingsAdminHandlers(deps = {}) {
           cleanupPreviewBtn.disabled = true;
           setCleanupStatus('Refreshing cleanup preview...');
 
-          await runCleanupPreview(minAgeDays);
-          setCleanupStatus('');
+          const preview = await runCleanupPreview(minAgeDays);
+          setCleanupStatus(
+            `Preview: ${preview?.orphanAlbums || 0} will be removed, ${preview?.orphanAlbumsTooYoung || 0} are too new.`
+          );
           showToast('Cleanup preview refreshed', 'success');
         } catch (error) {
           console.error('Error loading cleanup preview:', error);

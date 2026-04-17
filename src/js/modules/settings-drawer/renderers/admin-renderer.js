@@ -87,7 +87,10 @@ export function createSettingsAdminRenderer() {
 
     const cleanupPreview = data.catalogCleanupPreview || {
       minAgeDays: 90,
+      totalAlbums: 0,
+      orphanAlbumsTotal: 0,
       orphanAlbums: 0,
+      orphanAlbumsTooYoung: 0,
       userAlbumStatsReferences: 0,
       distinctPairReferences: 0,
     };
@@ -388,11 +391,25 @@ export function createSettingsAdminRenderer() {
         <div class="settings-group">
           <h3 class="settings-group-title">Catalog Cleanup</h3>
           <div class="settings-group-content">
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
               <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-                <div id="catalogCleanupOrphanCount" class="font-bold text-white text-lg">${cleanupPreview.orphanAlbums || 0}</div>
+                <div id="catalogCleanupTotalAlbums" class="font-bold text-white text-lg">${cleanupPreview.totalAlbums || 0}</div>
+                <div class="text-xs text-gray-400 uppercase">Albums in DB</div>
+              </div>
+              <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                <div id="catalogCleanupOrphanTotal" class="font-bold text-white text-lg">${cleanupPreview.orphanAlbumsTotal || 0}</div>
                 <div class="text-xs text-gray-400 uppercase">Orphan Albums</div>
               </div>
+              <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                <div id="catalogCleanupOrphanCount" class="font-bold text-white text-lg">${cleanupPreview.orphanAlbums || 0}</div>
+                <div class="text-xs text-gray-400 uppercase">Will be removed</div>
+              </div>
+              <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                <div id="catalogCleanupOrphanYoungCount" class="font-bold text-yellow-400 text-lg">${cleanupPreview.orphanAlbumsTooYoung || 0}</div>
+                <div class="text-xs text-gray-400 uppercase">Too new to remove</div>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
               <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
                 <div id="catalogCleanupStatsRefCount" class="font-bold text-yellow-400 text-lg">${cleanupPreview.userAlbumStatsReferences || 0}</div>
                 <div class="text-xs text-gray-400 uppercase">Stats refs to null</div>
