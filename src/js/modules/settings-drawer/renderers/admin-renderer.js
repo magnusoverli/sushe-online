@@ -391,7 +391,7 @@ export function createSettingsAdminRenderer() {
         <div class="settings-group">
           <h3 class="settings-group-title">Catalog Cleanup</h3>
           <div class="settings-group-content">
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
               <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
                 <div id="catalogCleanupTotalAlbums" class="font-bold text-white text-lg">${cleanupPreview.totalAlbums || 0}</div>
                 <div class="text-xs text-gray-400 uppercase">Albums in DB</div>
@@ -399,10 +399,6 @@ export function createSettingsAdminRenderer() {
               <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
                 <div id="catalogCleanupOrphanTotal" class="font-bold text-white text-lg">${cleanupPreview.orphanAlbumsTotal || 0}</div>
                 <div class="text-xs text-gray-400 uppercase">Orphan Albums</div>
-              </div>
-              <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
-                <div id="catalogCleanupOrphanCount" class="font-bold text-white text-lg">${cleanupPreview.orphanAlbums || 0}</div>
-                <div class="text-xs text-gray-400 uppercase">Will be removed</div>
               </div>
               <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
                 <div id="catalogCleanupOrphanYoungCount" class="font-bold text-yellow-400 text-lg">${cleanupPreview.orphanAlbumsTooYoung || 0}</div>
@@ -422,7 +418,7 @@ export function createSettingsAdminRenderer() {
             <div class="space-y-3">
               <div>
                 <label class="settings-label">Remove Orphan Albums</label>
-                <p class="settings-description max-w-none">Deletes albums that are not referenced by lists, recommendations, service mappings, or artist alias source links. User album stats references are preserved by setting <code>album_id</code> to null.</p>
+                <p class="settings-description max-w-none">Deletes albums that are not referenced by lists, recommendations, service mappings, or artist alias source links. User album stats references are preserved by setting <code>album_id</code> to null. Click <strong>Preview</strong> to see how many will be removed.</p>
               </div>
               <div class="flex items-center gap-2 flex-wrap">
                 <label for="catalogCleanupMinAgeDays" class="text-xs text-gray-400 whitespace-nowrap">Min age (days):</label>

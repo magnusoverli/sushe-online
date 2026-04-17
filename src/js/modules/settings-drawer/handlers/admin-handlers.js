@@ -60,7 +60,6 @@ export function createSettingsAdminHandlers(deps = {}) {
   function updateCatalogCleanupPreview(preview) {
     const totalAlbumsEl = doc.getElementById('catalogCleanupTotalAlbums');
     const orphanTotalEl = doc.getElementById('catalogCleanupOrphanTotal');
-    const orphanCountEl = doc.getElementById('catalogCleanupOrphanCount');
     const orphanYoungEl = doc.getElementById('catalogCleanupOrphanYoungCount');
     const statsRefCountEl = doc.getElementById('catalogCleanupStatsRefCount');
     const pairCountEl = doc.getElementById('catalogCleanupDistinctPairCount');
@@ -72,10 +71,6 @@ export function createSettingsAdminHandlers(deps = {}) {
 
     if (orphanTotalEl) {
       orphanTotalEl.textContent = String(preview?.orphanAlbumsTotal || 0);
-    }
-
-    if (orphanCountEl) {
-      orphanCountEl.textContent = String(preview?.orphanAlbums || 0);
     }
 
     if (orphanYoungEl) {

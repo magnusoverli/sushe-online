@@ -174,7 +174,7 @@ function createCatalogCleanupService(deps = {}) {
         : toRowCount(options.expectedDeleteCount);
     const sampleLimit = normalizeSampleLimit(options.sampleLimit);
 
-    return withTransaction(pool, async (client) => {
+    const executionResult = await withTransaction(pool, async (client) => {
       const existingTables = await getExistingTableSet(client, [
         ...Object.keys(REFERENCE_CHECKS),
         'user_album_stats',
@@ -221,7 +221,6 @@ function createCatalogCleanupService(deps = {}) {
           nullifiedUserAlbumStats: 0,
           deletedDistinctPairs: 0,
           sampleDeletedAlbums: [],
-          postCleanupPreview: await getPreview({ minAgeDays, sampleLimit }),
         };
       }
 
@@ -281,9 +280,14 @@ function createCatalogCleanupService(deps = {}) {
         nullifiedUserAlbumStats,
         deletedDistinctPairs,
         sampleDeletedAlbums: sampleDeletedResult.rows,
-        postCleanupPreview: await getPreview({ minAgeDays, sampleLimit }),
       };
     });
+
+    const postCleanupPreview = await getPreview({ minAgeDays, sampleLimit });
+    return {
+      ...executionResult,
+      postCleanupPreview,
+    };
   }
 
   return {

@@ -274,7 +274,6 @@ describe('settings admin handlers', () => {
     const cleanupStatus = createElement();
     const totalAlbums = createElement();
     const orphanTotal = createElement();
-    const orphanCount = createElement();
     const orphanYoungCount = createElement();
     const statsRefCount = createElement();
     const distinctPairCount = createElement();
@@ -287,7 +286,6 @@ describe('settings admin handlers', () => {
         catalogCleanupStatus: cleanupStatus,
         catalogCleanupTotalAlbums: totalAlbums,
         catalogCleanupOrphanTotal: orphanTotal,
-        catalogCleanupOrphanCount: orphanCount,
         catalogCleanupOrphanYoungCount: orphanYoungCount,
         catalogCleanupStatsRefCount: statsRefCount,
         catalogCleanupDistinctPairCount: distinctPairCount,
@@ -330,10 +328,9 @@ describe('settings admin handlers', () => {
     assert.strictEqual(calls.api.length > 0, true);
     assert.strictEqual(totalAlbums.textContent, '846');
     assert.strictEqual(orphanTotal.textContent, '401');
-    assert.strictEqual(orphanCount.textContent, '7');
     assert.strictEqual(orphanYoungCount.textContent, '4');
     assert.strictEqual(statsRefCount.textContent, '2');
     assert.strictEqual(distinctPairCount.textContent, '1');
-    assert.match(cleanupStatus.textContent, /will be removed/);
+    assert.match(cleanupStatus.textContent, /7 will be removed/);
   });
 });
