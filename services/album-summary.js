@@ -609,10 +609,16 @@ function createAlbumSummaryService(deps = {}) {
         : 'a.summary_fetched_at IS NULL';
     const pageSize = parseInt(process.env.ALBUM_SUMMARY_PAGE_SIZE || '500', 10);
 
+    const snapshotStartedAt = new Date();
+    const snapshotBoundaryClause =
+      '(a.created_at IS NULL OR a.created_at <= $1::timestamptz)';
+
     const countResult = await pool.query(
       `SELECT COUNT(*) AS total
        FROM albums a
-       WHERE ${whereClause}`
+       WHERE ${whereClause}
+         AND ${snapshotBoundaryClause}`,
+      [snapshotStartedAt]
     );
     const total = parseInt(countResult.rows[0]?.total, 10) || 0;
 
@@ -626,6 +632,7 @@ function createAlbumSummaryService(deps = {}) {
       includeRetries,
       regenerateAll: !!regenerateAll,
       concurrency: parseInt(process.env.ALBUM_SUMMARY_CONCURRENCY || '3', 10),
+      snapshotStartedAt: snapshotStartedAt.toISOString(),
     });
     batchJob = {
       running: true,
@@ -635,12 +642,13 @@ function createAlbumSummaryService(deps = {}) {
       notFound: 0,
       errors: 0,
       startedAt: new Date().toISOString(),
+      snapshotStartedAt: snapshotStartedAt.toISOString(),
     };
 
     let lastAlbumId = null;
     const fetchNextPage = async () => {
-      const params = [];
-      let pageWhere = `WHERE ${whereClause}`;
+      const params = [snapshotStartedAt];
+      let pageWhere = `WHERE ${whereClause} AND ${snapshotBoundaryClause}`;
 
       if (lastAlbumId) {
         params.push(lastAlbumId);

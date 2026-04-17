@@ -225,6 +225,62 @@ test('startBatchFetch should throw if already running', async () => {
   service.stopBatchFetch();
 });
 
+test('startBatchFetch should freeze batch scope to snapshot start time', async () => {
+  const calls = [];
+
+  const mockPool = {
+    query: async (query, params = []) => {
+      calls.push({ query, params });
+
+      if (query.includes('SELECT COUNT(*) AS total')) {
+        return {
+          rows: [{ total: '1' }],
+        };
+      }
+
+      if (query.includes('SELECT a.album_id, a.artist, a.album')) {
+        return { rows: [] };
+      }
+
+      return { rows: [] };
+    },
+  };
+
+  const service = createAlbumSummaryService({
+    pool: mockPool,
+    logger: createMockLogger(),
+  });
+
+  await service.startBatchFetch();
+
+  const waitUntil = Date.now() + 500;
+  while (service.getBatchStatus()?.running && Date.now() < waitUntil) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  const countCall = calls.find((call) =>
+    call.query.includes('SELECT COUNT(*) AS total')
+  );
+  const pageCall = calls.find(
+    (call) =>
+      call.query.includes('SELECT a.album_id') &&
+      call.query.includes('FROM albums a')
+  );
+
+  assert.ok(countCall);
+  assert.ok(pageCall);
+  assert.ok(
+    countCall.query.includes('a.created_at <= $1::timestamptz'),
+    'count query should include snapshot boundary'
+  );
+  assert.ok(
+    pageCall.query.includes('a.created_at <= $1::timestamptz'),
+    'page query should include snapshot boundary'
+  );
+  assert.ok(countCall.params[0] instanceof Date);
+  assert.ok(pageCall.params[0] instanceof Date);
+});
+
 test('fetchAndStoreSummary should return error for missing album', async () => {
   const mockPool = {
     query: async () => ({ rows: [] }),
