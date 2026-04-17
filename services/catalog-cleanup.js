@@ -284,20 +284,10 @@ function createCatalogCleanupService(deps = {}) {
     });
 
     const postCleanupPreview = await getPreview({ minAgeDays, sampleLimit });
-    return {
-      ...executionResult,
-      postCleanupPreview,
-    };
+    return { ...executionResult, postCleanupPreview };
   }
 
-  return {
-    getPreview,
-    executeCleanup,
-    normalizeMinAgeDays,
-  };
+  return { getPreview, executeCleanup, normalizeMinAgeDays };
 }
 
-module.exports = {
-  createCatalogCleanupService,
-  DEFAULT_MIN_AGE_DAYS,
-};
+module.exports = { createCatalogCleanupService, DEFAULT_MIN_AGE_DAYS };
