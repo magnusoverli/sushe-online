@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-04-17",
+    "category": "ui",
+    "description": "Improved catalog cleanup panel text and layout",
+    "hash": "3035c1a1ff2358cef2abd56ac1e927dd89e26be1",
+    "commitMessage": "Polish catalog cleanup panel copy and layout\n\nRemove sample candidate rendering and hide cleanup status text by default so the panel reads cleanly. Simplify status messaging to show only active actions/errors and prevent narrow line wrapping in the description block."
+  },
+  {
+    "date": "2026-04-17",
     "category": "feature",
     "description": "Added admin tools to safely clean up orphaned albums",
     "hash": "12c2ff94a4a334759d20d4ece1571efefed9cd80",
