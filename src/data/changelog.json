@@ -1,5 +1,26 @@
 [
   {
+    "date": "2026-04-17",
+    "category": "feature",
+    "description": "Added admin tools to safely clean up orphaned albums",
+    "hash": "12c2ff94a4a334759d20d4ece1571efefed9cd80",
+    "commitMessage": "Add safe orphan album cleanup tools for admins\n\nIntroduce admin preview/execute cleanup endpoints and a settings UI panel for removing orphan albums with transactional safeguards, then set the default cleanup minimum age to 90 days for a more conservative production baseline."
+  },
+  {
+    "date": "2026-04-17",
+    "category": "fix",
+    "description": "Fixed album list pagination breaking on missing albums",
+    "hash": "407b7a64c5e1a54f8709a5649d52a8edd859ad1b",
+    "commitMessage": "Fix album-summary pagination on null album IDs\n\nRoot cause: keyset pagination used album_id cursor, which can be NULL for legacy rows. When the last row in a page had null album_id, the cursor reset and the same page was reprocessed, pushing progress past the initial total. Switch pagination cursor to albums.id and add regression coverage for null album_id batches."
+  },
+  {
+    "date": "2026-04-16",
+    "category": "fix",
+    "description": "Fixed album summaries timing out and not loading",
+    "hash": "fe5689a98262bc568a09f4df7f8addf34b42fbe0",
+    "commitMessage": "Add timeout guard for Claude summary requests\n\nPrevent stalled album-summary batches by timing out hung Claude API calls, classifying timeout errors clearly, and adding regression coverage for never-resolving requests."
+  },
+  {
     "date": "2026-04-16",
     "category": "ui",
     "description": "Smooth admin settings loading transitions",
