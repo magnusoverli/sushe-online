@@ -4,7 +4,6 @@ const { withTransaction } = require('../db/transaction');
 const DEFAULT_MIN_AGE_DAYS = 90;
 const MAX_MIN_AGE_DAYS = 3650;
 const DEFAULT_SAMPLE_LIMIT = 8;
-
 const REFERENCE_CHECKS = {
   list_items: 'SELECT 1 FROM list_items li WHERE li.album_id = a.album_id',
   recommendations:
@@ -67,7 +66,6 @@ function buildOrphanWhereClause(orphanReferenceClause, ageParamIndex = 1) {
     AND ${orphanReferenceClause}
   `;
 }
-
 function toRowCount(value) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -227,21 +225,6 @@ function createCatalogCleanupService(deps = {}) {
         };
       }
 
-      let nullifiedUserAlbumStats = 0;
-      if (existingTables.has('user_album_stats')) {
-        const nullifyStatsResult = await client.query(
-          `UPDATE user_album_stats uas
-           SET album_id = NULL
-           WHERE uas.album_id IS NOT NULL
-             AND EXISTS (
-               SELECT 1
-               FROM cleanup_album_targets t
-               WHERE t.album_id = uas.album_id
-             )`
-        );
-        nullifiedUserAlbumStats = nullifyStatsResult.rowCount;
-      }
-
       let deletedDistinctPairs = 0;
       if (existingTables.has('album_distinct_pairs')) {
         const pairDeleteResult = await client.query(
@@ -269,6 +252,21 @@ function createCatalogCleanupService(deps = {}) {
          USING cleanup_album_targets t
          WHERE a.id = t.id`
       );
+
+      let nullifiedUserAlbumStats = 0;
+      if (existingTables.has('user_album_stats')) {
+        const nullifyStatsResult = await client.query(
+          `UPDATE user_album_stats uas
+           SET album_id = NULL
+           WHERE uas.album_id IS NOT NULL
+             AND NOT EXISTS (
+               SELECT 1
+               FROM albums a
+               WHERE a.album_id = uas.album_id
+             )`
+        );
+        nullifiedUserAlbumStats = nullifyStatsResult.rowCount;
+      }
 
       log.info('Catalog cleanup removed orphan albums', {
         deletedAlbums: deleteResult.rowCount,
