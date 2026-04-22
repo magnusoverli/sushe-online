@@ -67,6 +67,7 @@ const {
   dataDir,
   ready,
   pool,
+  closePool,
 } = require('./db');
 const {
   sanitizeUser,
@@ -379,9 +380,7 @@ registerProcessHandlers({
     await stopSyncServices();
   },
   closeDatabasePool: async () => {
-    if (pool && typeof pool.end === 'function') {
-      await pool.end();
-    }
+    await closePool();
   },
 });
 

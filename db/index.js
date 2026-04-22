@@ -7,6 +7,7 @@ const {
   waitForPostgres,
   warmConnections,
 } = require('./postgres');
+const { drainPool } = require('./close-pool');
 const logger = require('../utils/logger');
 const { setPoolReference } = require('../utils/metrics');
 
@@ -406,6 +407,20 @@ if (process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL must be set');
 }
 
+/**
+ * Drain and close the singleton database pool. Idempotent.
+ * @param {Object} [opts] - Forwarded to drainPool (e.g. { timeoutMs }).
+ * @returns {Promise<{ drained: boolean }>}
+ */
+let _closed = false;
+async function closePool(opts = {}) {
+  if (_closed) {
+    return { drained: true };
+  }
+  _closed = true;
+  return drainPool(pool, opts);
+}
+
 module.exports = {
   users,
   lists,
@@ -420,4 +435,5 @@ module.exports = {
   dataDir,
   ready,
   pool,
+  closePool,
 };

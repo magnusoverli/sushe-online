@@ -15,6 +15,28 @@ const VALID_ISOLATION_LEVELS = new Set([
   'SERIALIZABLE',
 ]);
 
+// Set of pools marked as draining. Once a pool is in this set, any new
+// PgDatastore query attempt rejects immediately with a SHUTTING_DOWN error
+// instead of waiting on pool.connect() — which could otherwise block for
+// the full acquire timeout during shutdown.
+const _drainingPools = new WeakSet();
+
+function markPoolDraining(pool) {
+  _drainingPools.add(pool);
+}
+
+function isPoolDraining(pool) {
+  return _drainingPools.has(pool);
+}
+
+class ShuttingDownError extends Error {
+  constructor(message = 'Database pool is shutting down') {
+    super(message);
+    this.name = 'ShuttingDownError';
+    this.code = 'SHUTTING_DOWN';
+  }
+}
+
 async function waitForPostgres(pool, retries = 10, interval = 3000) {
   logger.info('Checking PostgreSQL connection...');
   for (let i = 0; i < retries; i++) {
@@ -105,6 +127,9 @@ class PgDatastore {
   }
 
   async _query(text, params) {
+    if (isPoolDraining(this.pool)) {
+      throw new ShuttingDownError();
+    }
     if (this.logQueries) {
       logger.debug('SQL', {
         query: text,
@@ -125,6 +150,9 @@ class PgDatastore {
   }
 
   async _preparedQuery(name, text, params) {
+    if (isPoolDraining(this.pool)) {
+      throw new ShuttingDownError();
+    }
     if (this.logQueries) {
       logger.debug('Prepared SQL', {
         name,
@@ -721,6 +749,10 @@ class PgDatastore {
   async withClient(callback, opts = {}) {
     const { retryable = false } = opts;
 
+    if (isPoolDraining(this.pool)) {
+      throw new ShuttingDownError();
+    }
+
     // When retryable is true we only retry pool.connect() — once the callback
     // has a client in hand, we run it exactly once. This prevents a transient
     // socket failure during connection from taking down the whole call, while
@@ -769,6 +801,10 @@ class PgDatastore {
       );
     }
 
+    if (isPoolDraining(this.pool)) {
+      throw new ShuttingDownError();
+    }
+
     const run = () =>
       baseWithTransaction(this.pool, async (client) => {
         if (isolation) {
@@ -792,4 +828,7 @@ module.exports = {
   Pool,
   waitForPostgres,
   warmConnections,
+  markPoolDraining,
+  isPoolDraining,
+  ShuttingDownError,
 };
