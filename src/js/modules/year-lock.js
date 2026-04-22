@@ -92,6 +92,30 @@ export async function isListLocked(year, isMain) {
   return await isYearLocked(year);
 }
 
+/**
+ * Synchronous lock check against the populated cache.
+ * Returns false if the cache has not yet been populated — callers must treat
+ * this as advisory (the server remains authoritative via YEAR_LOCKED 403).
+ * @param {number|null} year - Year to check
+ * @returns {boolean}
+ */
+export function isYearLockedSync(year) {
+  if (!year) return false;
+  if (!lockedYearsCache) return false;
+  return lockedYearsCache.includes(year);
+}
+
+/**
+ * Synchronous list-lock check. Same caveats as isYearLockedSync.
+ * @param {number|null} year
+ * @param {boolean} isMain
+ * @returns {boolean}
+ */
+export function isListLockedSync(year, isMain) {
+  if (!year || !isMain) return false;
+  return isYearLockedSync(year);
+}
+
 // ============ RECOMMENDATION LOCK UTILITIES ============
 
 /**

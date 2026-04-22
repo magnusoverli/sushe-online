@@ -134,6 +134,8 @@ test('validateYearNotLocked should throw TransactionAbort for locked year', asyn
       assert.strictEqual(err.statusCode, 403);
       assert.ok(err.body.error.includes('locked'));
       assert.ok(err.body.error.includes('2024'));
+      assert.strictEqual(err.body.code, 'YEAR_LOCKED');
+      assert.strictEqual(err.body.year, 2024);
       return true;
     }
   );
@@ -176,6 +178,8 @@ test('validateMainListNotLocked should throw TransactionAbort for main list in l
       assert.strictEqual(err.statusCode, 403);
       assert.ok(err.body.error.includes('locked'));
       assert.ok(err.body.error.includes('2024'));
+      assert.strictEqual(err.body.code, 'YEAR_LOCKED');
+      assert.strictEqual(err.body.year, 2024);
       return true;
     }
   );

@@ -28,6 +28,7 @@ import {
   invalidateLockedYearsCache,
   invalidateLockedRecommendationYearsCache,
   isListLocked,
+  isListLockedSync,
   showYearLockUI,
   clearYearLockUI,
 } from './modules/year-lock.js';
@@ -680,6 +681,9 @@ const getEditableFieldsModule = createLazyModule(() =>
     getAvailableCountries,
     getAvailableGenres,
     isTextTruncated,
+    getListMetadata,
+    isListLockedSync,
+    refreshLockedYearStatus: () => refreshLockedYearStatus(),
   })
 );
 

@@ -29,7 +29,42 @@ export function createEditableFields(deps = {}) {
     getAvailableCountries,
     getAvailableGenres,
     isTextTruncated,
+    getListMetadata = () => null,
+    isListLockedSync = () => false,
+    refreshLockedYearStatus = () => {},
   } = deps;
+
+  /**
+   * Advisory sync check: is the current list locked for editing?
+   * Server remains authoritative via YEAR_LOCKED 403 responses.
+   */
+  function isCurrentListLocked() {
+    const meta = getListMetadata(getCurrentList());
+    if (!meta) return false;
+    return isListLockedSync(meta.year, meta.isMain);
+  }
+
+  function notifyLocked() {
+    const meta = getListMetadata(getCurrentList());
+    const year = meta?.year;
+    const msg = year
+      ? `Year ${year} is locked — changes are not saved.`
+      : 'This list is locked — changes are not saved.';
+    showToast(msg, 'info');
+  }
+
+  /**
+   * Translate a save error into an "informational" outcome when the server
+   * reports the year is locked. Returns true if handled (caller should skip
+   * the generic error toast and reconcile cached lock state).
+   */
+  function handleLockedError(error) {
+    if (error?.code !== 'YEAR_LOCKED') return false;
+    const msg = error.error || error.message || `Year ${error.year} is locked.`;
+    showToast(`${msg} Changes were not saved.`, 'info');
+    refreshLockedYearStatus();
+    return true;
+  }
 
   // Batch update queue for rapid field edits
   // Groups updates by albumId to reduce API calls
@@ -118,6 +153,11 @@ export function createEditableFields(deps = {}) {
    * @param {number} albumIndex - Album index in list
    */
   function makeCountryEditable(countryDiv, albumIndex) {
+    if (isCurrentListLocked()) {
+      notifyLocked();
+      return;
+    }
+
     const currentList = getCurrentList();
     const availableCountries = getAvailableCountries();
 
@@ -244,8 +284,11 @@ export function createEditableFields(deps = {}) {
         queueFieldUpdate(albumId, 'country', newCountry || null);
 
         showToast(newCountry === '' ? 'Country cleared' : 'Country updated');
-      } catch (_error) {
-        showToast('Error saving country', 'error');
+      } catch (error) {
+        const handled = handleLockedError(error);
+        if (!handled) {
+          showToast('Error saving country', 'error');
+        }
         // Revert on error
         albumsToUpdate[albumIndex].country = currentCountry;
         restoreDisplay(currentCountry);
@@ -294,6 +337,11 @@ export function createEditableFields(deps = {}) {
    * @param {string} genreField - Field name ('genre_1' or 'genre_2')
    */
   function makeGenreEditable(genreDiv, albumIndex, genreField) {
+    if (isCurrentListLocked()) {
+      notifyLocked();
+      return;
+    }
+
     const currentList = getCurrentList();
     const availableGenres = getAvailableGenres();
 
@@ -441,8 +489,11 @@ export function createEditableFields(deps = {}) {
         queueFieldUpdate(albumId, genreField, newGenre || null);
 
         showToast(newGenre === '' ? 'Genre cleared' : 'Genre updated');
-      } catch (_error) {
-        showToast('Error saving genre', 'error');
+      } catch (error) {
+        const handled = handleLockedError(error);
+        if (!handled) {
+          showToast('Error saving genre', 'error');
+        }
         // Revert on error
         albumsToUpdate[albumIndex][genreField] = currentGenre;
         restoreDisplay(currentGenre);
@@ -706,6 +757,11 @@ export function createEditableFields(deps = {}) {
    * @param {number} albumIndex - Album index in list
    */
   function makeCommentEditable(commentDiv, albumIndex) {
+    if (isCurrentListLocked()) {
+      notifyLocked();
+      return;
+    }
+
     const currentList = getCurrentList();
     const albumsForComment = getListData(currentList);
     if (!albumsForComment || !albumsForComment[albumIndex]) return;
@@ -778,8 +834,11 @@ export function createEditableFields(deps = {}) {
             }
           }, 0);
         }
-      } catch (_error) {
-        showToast('Error saving comment', 'error');
+      } catch (error) {
+        const handled = handleLockedError(error);
+        if (!handled) {
+          showToast('Error saving comment', 'error');
+        }
         // Revert on error - also handle placeholder for empty comments
         let revertDisplay = currentComment;
         let revertClass = 'text-gray-300';
@@ -841,6 +900,11 @@ export function createEditableFields(deps = {}) {
    * @param {number} albumIndex - Album index in list
    */
   function makeComment2Editable(commentDiv, albumIndex) {
+    if (isCurrentListLocked()) {
+      notifyLocked();
+      return;
+    }
+
     const currentList = getCurrentList();
     const albumsForComment = getListData(currentList);
     if (!albumsForComment || !albumsForComment[albumIndex]) return;
@@ -913,8 +977,11 @@ export function createEditableFields(deps = {}) {
             }
           }, 0);
         }
-      } catch (_error) {
-        showToast('Error saving comment', 'error');
+      } catch (error) {
+        const handled = handleLockedError(error);
+        if (!handled) {
+          showToast('Error saving comment', 'error');
+        }
         // Revert on error
         let revertDisplay = currentComment;
         let revertClass = 'text-gray-300';
