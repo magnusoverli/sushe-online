@@ -1,5 +1,5 @@
 // MusicBrainz API integration
-import { isAlbumInList } from './modules/utils.js';
+import { isAlbumInList, showToast } from './modules/utils.js';
 import { checkAndPromptSimilar } from './modules/similar-album-modal.js';
 import {
   stringSimilarity,
