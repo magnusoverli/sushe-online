@@ -1,6 +1,6 @@
 import { showToast, apiCall, showConfirmation } from './utils.js';
 
-export async function updatePlaylist(listName, listData = []) {
+export async function updatePlaylist(listId, listName, listData = []) {
   try {
     // Validate track selection before proceeding
     const totalAlbums = listData.length;
@@ -34,7 +34,7 @@ export async function updatePlaylist(listName, listData = []) {
     showToast('Checking for existing playlist...', 'info');
 
     const checkResult = await apiCall(
-      `/api/playlists/${encodeURIComponent(listName)}`,
+      `/api/playlists/${encodeURIComponent(listId)}`,
       {
         method: 'POST',
         body: JSON.stringify({ action: 'check' }),
@@ -57,7 +57,7 @@ export async function updatePlaylist(listName, listData = []) {
     showToast('Updating playlist...', 'info');
 
     const result = await apiCall(
-      `/api/playlists/${encodeURIComponent(listName)}`,
+      `/api/playlists/${encodeURIComponent(listId)}`,
       {
         method: 'POST',
         body: JSON.stringify({ action: 'update' }),

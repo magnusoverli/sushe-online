@@ -61,7 +61,7 @@ export function createAppServiceIntegrations(deps = {}) {
     const data = listData !== null ? listData : getListData(listId) || [];
     const meta = getListMetadata(listId);
     const listName = meta?.name || listId;
-    return mod.updatePlaylist(listName, data);
+    return mod.updatePlaylist(listId, listName, data);
   }
 
   return {

@@ -49,7 +49,11 @@ describe('app-service-integrations module', () => {
     const importMusicServices = mock.fn(async () => ({
       showServicePicker: async (spotify, tidal) =>
         spotify && tidal ? 'both' : 'single',
-      updatePlaylist: async (name, data) => ({ name, count: data.length }),
+      updatePlaylist: async (id, name, data) => ({
+        id,
+        name,
+        count: data.length,
+      }),
     }));
 
     const integrations = createAppServiceIntegrations({
@@ -66,7 +70,11 @@ describe('app-service-integrations module', () => {
     });
 
     const playlistResult = await integrations.updatePlaylist('trip');
-    assert.deepStrictEqual(playlistResult, { name: 'Road Trip', count: 1 });
+    assert.deepStrictEqual(playlistResult, {
+      id: 'trip',
+      name: 'Road Trip',
+      count: 1,
+    });
 
     assert.strictEqual(
       await integrations.showServicePicker(true, true),
@@ -74,7 +82,11 @@ describe('app-service-integrations module', () => {
     );
 
     const explicitResult = await integrations.updatePlaylist('trip', []);
-    assert.deepStrictEqual(explicitResult, { name: 'Road Trip', count: 0 });
+    assert.deepStrictEqual(explicitResult, {
+      id: 'trip',
+      name: 'Road Trip',
+      count: 0,
+    });
 
     assert.strictEqual(importMusicServices.mock.calls.length, 1);
     assert.strictEqual(showToast.mock.calls.length, 1);
