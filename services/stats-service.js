@@ -11,17 +11,14 @@
 
 /**
  * @param {Object} deps
- * @param {Object} deps.pool - PostgreSQL pool
  * @param {Object} deps.usersAsync - Async user datastore
- * @param {Object} deps.listsAsync - Async list datastore
+ * @param {Object} deps.listsAsync - Async list datastore (used for raw SQL too)
  * @returns {Object} Stats service methods
  */
 function createStatsService(deps = {}) {
-  const pool = deps.pool;
   const usersAsync = deps.usersAsync;
   const listsAsync = deps.listsAsync;
 
-  if (!pool) throw new Error('pool is required for StatsService');
   if (!usersAsync) throw new Error('usersAsync is required for StatsService');
   if (!listsAsync) throw new Error('listsAsync is required for StatsService');
 
@@ -38,7 +35,7 @@ function createStatsService(deps = {}) {
         usersAsync.count({}),
         listsAsync.count({}),
         usersAsync.count({ role: 'admin' }),
-        pool.query(
+        listsAsync.raw(
           `WITH unique_albums AS (
              SELECT COUNT(DISTINCT album_id) as total
              FROM list_items
@@ -50,7 +47,8 @@ function createStatsService(deps = {}) {
            SELECT
              (SELECT total FROM unique_albums) as total_albums,
              (SELECT count FROM active_users) as active_users`,
-          [sevenDaysAgo]
+          [sevenDaysAgo],
+          { name: 'stats-public-aggregate', retryable: true }
         ),
       ]);
 
@@ -79,10 +77,12 @@ function createStatsService(deps = {}) {
       usersAsync.find({}),
       listsAsync.count({}),
       usersAsync.count({ role: 'admin' }),
-      pool.query(
-        'SELECT user_id, COUNT(*) as list_count FROM lists GROUP BY user_id'
+      listsAsync.raw(
+        'SELECT user_id, COUNT(*) as list_count FROM lists GROUP BY user_id',
+        [],
+        { name: 'stats-admin-list-counts', retryable: true }
       ),
-      pool.query(
+      listsAsync.raw(
         `WITH album_genres AS (
            SELECT DISTINCT li.album_id, a.genre_1, a.genre_2
            FROM list_items li
@@ -99,7 +99,8 @@ function createStatsService(deps = {}) {
          SELECT
            (SELECT total FROM unique_albums) as total_albums,
            (SELECT count FROM active_users) as active_users`,
-        [sevenDaysAgo]
+        [sevenDaysAgo],
+        { name: 'stats-admin-aggregate', retryable: true }
       ),
     ]);
 

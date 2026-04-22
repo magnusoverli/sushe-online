@@ -14,9 +14,8 @@ const { createStatsService } = require('../../services/stats-service');
 module.exports = (app, deps) => {
   const { ensureAuth, ensureAdmin, usersAsync, listsAsync, adminCodeState } =
     deps;
-  const { pool } = deps;
 
-  const statsService = createStatsService({ pool, usersAsync, listsAsync });
+  const statsService = createStatsService({ usersAsync, listsAsync });
 
   // Admin status endpoint (for debugging)
   app.get('/api/admin/status', ensureAuth, (req, res) => {

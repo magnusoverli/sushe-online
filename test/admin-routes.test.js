@@ -171,7 +171,14 @@ function createTestApp(options = {}) {
       }),
   };
 
+  // Forward reference — mockPool is defined below; the raw() default
+  // closes over poolHolder so tests that customize poolQuery continue to
+  // intercept stats/list-service SQL by text match.
+  const poolHolder = { pool: null };
   const mockListsAsync = {
+    raw:
+      options.listsAsyncRaw ||
+      mock.fn((sql, params) => poolHolder.pool.query(sql, params)),
     count:
       options.listsAsyncCount ||
       mock.fn(() => {
@@ -252,6 +259,8 @@ function createTestApp(options = {}) {
       query: (...args) => mockPool.query(...args),
       release: () => {},
     }));
+
+  poolHolder.pool = mockPool;
 
   // Mock upload middleware (for restore endpoint)
   const mockUpload = {
