@@ -46,8 +46,8 @@ function createMissingMetadataIssue(album, usedIn) {
   };
 }
 
-async function loadManualReconciliationData(pool) {
-  const manualItemsResult = await pool.query(`
+async function loadManualReconciliationData(db) {
+  const manualItemsResult = await db.raw(`
     SELECT DISTINCT ON (li.album_id)
       li.album_id,
       a.artist,
@@ -59,7 +59,7 @@ async function loadManualReconciliationData(pool) {
     ORDER BY li.album_id
   `);
 
-  const usageResult = await pool.query(`
+  const usageResult = await db.raw(`
     SELECT
       li.album_id,
       l._id as list_id,
@@ -74,7 +74,7 @@ async function loadManualReconciliationData(pool) {
     ORDER BY li.album_id, l.year DESC
   `);
 
-  const canonicalResult = await pool.query(`
+  const canonicalResult = await db.raw(`
     SELECT
       album_id,
       artist,
@@ -87,7 +87,7 @@ async function loadManualReconciliationData(pool) {
       AND album IS NOT NULL AND album != ''
   `);
 
-  const excludedResult = await pool.query(`
+  const excludedResult = await db.raw(`
     SELECT album_id_1, album_id_2 FROM album_distinct_pairs
   `);
 
@@ -190,13 +190,13 @@ function buildManualAlbumEntry(manualAlbum, usedIn, matches) {
 }
 
 async function findManualAlbumsForReconciliation(ctx, options = {}) {
-  const { pool, log, normalizeAlbumKey, findPotentialDuplicates } = ctx;
+  const { db, log, normalizeAlbumKey, findPotentialDuplicates } = ctx;
   const { threshold = 0.15, maxMatchesPerAlbum = 5 } = options;
 
   log.info('Finding manual albums for reconciliation');
 
   const { manualItems, usageRows, canonicalRows, excludedRows } =
-    await loadManualReconciliationData(pool);
+    await loadManualReconciliationData(db);
 
   if (manualItems.length === 0) {
     log.info('No manual albums found');
@@ -287,7 +287,7 @@ async function mergeManualAlbum(
   canonicalAlbumId,
   options = {}
 ) {
-  const { pool, log, duplicateService } = ctx;
+  const { db, log, duplicateService } = ctx;
   const { syncMetadata = true, adminUserId = null } = options;
 
   log.info(`Merging manual album ${manualAlbumId} into ${canonicalAlbumId}`);
@@ -305,7 +305,7 @@ async function mergeManualAlbum(
     throw new Error('duplicateService.mergeAlbums is required');
   }
 
-  const canonicalResult = await pool.query(
+  const canonicalResult = await db.raw(
     `SELECT artist, album FROM albums WHERE album_id = $1`,
     [canonicalAlbumId]
   );
@@ -316,7 +316,7 @@ async function mergeManualAlbum(
 
   const canonicalAlbum = canonicalResult.rows[0];
 
-  const affectedResult = await pool.query(
+  const affectedResult = await db.raw(
     `
     SELECT DISTINCT
       l._id as list_id,
@@ -345,7 +345,7 @@ async function mergeManualAlbum(
   const updatedCount = mergeResult.listItemsUpdated || 0;
 
   try {
-    await pool.query(
+    await db.raw(
       `
       INSERT INTO admin_events (event_type, event_data, created_by)
       VALUES ($1, $2, $3)
@@ -402,13 +402,13 @@ async function mergeManualAlbum(
 }
 
 async function deleteOrphanedReferences(ctx, albumId, adminUserId) {
-  const { pool, log } = ctx;
+  const { db, log } = ctx;
 
   if (!albumId || !albumId.startsWith('manual-')) {
     throw new Error('albumId must be a manual album (manual-* prefix)');
   }
 
-  const albumCheck = await pool.query(
+  const albumCheck = await db.raw(
     'SELECT album_id FROM albums WHERE album_id = $1',
     [albumId]
   );
@@ -416,7 +416,7 @@ async function deleteOrphanedReferences(ctx, albumId, adminUserId) {
     throw new Error('Album exists in albums table - not orphaned');
   }
 
-  const affectedResult = await pool.query(
+  const affectedResult = await db.raw(
     `
     SELECT DISTINCT
       l._id as list_id,
@@ -434,13 +434,13 @@ async function deleteOrphanedReferences(ctx, albumId, adminUserId) {
   const affectedLists = affectedResult.rows;
   const affectedYears = [...new Set(affectedLists.map((list) => list.year))];
 
-  const deleteResult = await pool.query(
+  const deleteResult = await db.raw(
     'DELETE FROM list_items WHERE album_id = $1',
     [albumId]
   );
   const deletedCount = deleteResult.rowCount;
 
-  await pool.query(
+  await db.raw(
     `
     INSERT INTO admin_events (event_type, event_data, created_by)
     VALUES ($1, $2, $3)
@@ -477,8 +477,14 @@ async function deleteOrphanedReferences(ctx, albumId, adminUserId) {
 }
 
 function createManualReconciliationService(deps = {}) {
+  // Accept either a datastore or a legacy pool (adapted to the .raw API).
+  let db = deps.db;
+  if (!db && deps.pool) {
+    db = { raw: (sql, params) => deps.pool.query(sql, params) };
+  }
+
   const context = {
-    pool: deps.pool,
+    db,
     log: deps.log,
     normalizeAlbumKey: deps.normalizeAlbumKey,
     findPotentialDuplicates: deps.findPotentialDuplicates,

@@ -15,10 +15,13 @@ const logger = require('../../utils/logger');
 const { createAdminEventService } = require('../../services/admin-events');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin, usersAsync, pool } = deps;
+  const { ensureAuth, ensureAdmin, usersAsync } = deps;
 
   // Create admin event service instance
-  const adminEventService = createAdminEventService({ pool, logger });
+  const adminEventService = createAdminEventService({
+    db: usersAsync,
+    logger,
+  });
 
   // Register handlers for account_approval events (approve/reject new registrations)
   adminEventService.registerActionHandler(

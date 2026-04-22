@@ -40,10 +40,11 @@ function buildEventQueryFilters(filters, baseCondition) {
 /**
  * Get count of rows matching filters
  */
-async function getEventCount(pool, whereClause, params) {
-  const result = await pool.query(
+async function getEventCount(db, whereClause, params) {
+  const result = await db.raw(
     `SELECT COUNT(*) FROM admin_events WHERE ${whereClause}`,
-    params
+    params,
+    { retryable: true }
   );
   return parseInt(result.rows[0].count, 10);
 }
@@ -51,22 +52,17 @@ async function getEventCount(pool, whereClause, params) {
 /**
  * Update event status after action execution
  */
-async function updateEventStatus(
-  pool,
-  eventId,
-  action,
-  adminUser,
-  resolvedVia
-) {
+async function updateEventStatus(db, eventId, action, adminUser, resolvedVia) {
   const status = action === 'dismiss' ? 'dismissed' : action;
   const resolvedById = adminUser.source === 'telegram' ? null : adminUser._id;
 
-  const updateResult = await pool.query(
-    `UPDATE admin_events 
+  const updateResult = await db.raw(
+    `UPDATE admin_events
      SET status = $1, resolved_at = NOW(), resolved_by = $2, resolved_via = $3
      WHERE id = $4
      RETURNING *`,
-    [status, resolvedById, resolvedVia, eventId]
+    [status, resolvedById, resolvedVia, eventId],
+    { name: 'admin-events-update-status' }
   );
 
   return updateResult.rows[0];
@@ -76,7 +72,7 @@ async function updateEventStatus(
  * Notify Telegram about a new event and update the event record
  */
 async function notifyTelegramForEvent(
-  pool,
+  db,
   telegramNotifier,
   event,
   actions,
@@ -94,9 +90,10 @@ async function notifyTelegramForEvent(
       actions
     );
     if (telegramResult?.messageId) {
-      await pool.query(
+      await db.raw(
         `UPDATE admin_events SET telegram_message_id = $1, telegram_chat_id = $2 WHERE id = $3`,
-        [telegramResult.messageId, telegramResult.chatId, event.id]
+        [telegramResult.messageId, telegramResult.chatId, event.id],
+        { name: 'admin-events-set-telegram-ids' }
       );
       event.telegram_message_id = telegramResult.messageId;
       event.telegram_chat_id = telegramResult.chatId;
@@ -135,15 +132,23 @@ async function notifyTelegramForUpdate(
 // ============================================
 
 /**
- * Create admin event service with injected dependencies
- * @param {Object} deps - Dependencies
- * @param {Object} deps.pool - PostgreSQL connection pool
- * @param {Object} deps.logger - Logger instance
- * @param {Function} deps.telegramNotifier - Optional telegram notifier function
+ * Create admin event service with injected dependencies.
+ *
+ * @param {Object} deps
+ * @param {Object} deps.db - A PgDatastore (any table) used for its .raw()
+ *   method to run admin_events SQL. All datastores share the same pool,
+ *   so which one is passed in is cosmetic; by convention pass the
+ *   datastore most closely related to the caller (e.g. usersAsync).
+ * @param {Object} [deps.logger]
+ * @param {Function} [deps.telegramNotifier]
  */
 function createAdminEventService(deps = {}) {
   const log = deps.logger || logger;
-  const pool = deps.pool;
+  // Accept either a datastore (preferred) or a legacy pg pool.
+  // When given a pool, adapt to the .raw() interface for internal use.
+  const db =
+    deps.db ||
+    (deps.pool ? { raw: (sql, params) => deps.pool.query(sql, params) } : null);
   let telegramNotifier = deps.telegramNotifier || null;
 
   const actionHandlers = new Map();
@@ -178,9 +183,9 @@ function createAdminEventService(deps = {}) {
     priority = 'normal',
     actions = [],
   }) {
-    if (!pool) throw new Error('Database pool not configured');
+    if (!db) throw new Error('Database datastore not configured');
 
-    const result = await pool.query(
+    const result = await db.raw(
       `INSERT INTO admin_events (event_type, title, description, data, priority, actions)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
@@ -191,13 +196,14 @@ function createAdminEventService(deps = {}) {
         JSON.stringify(data),
         priority,
         JSON.stringify(actions),
-      ]
+      ],
+      { name: 'admin-events-insert' }
     );
 
     const event = result.rows[0];
     log.info(`Admin event created: ${type}`, { eventId: event.id, title });
 
-    await notifyTelegramForEvent(pool, telegramNotifier, event, actions, log);
+    await notifyTelegramForEvent(db, telegramNotifier, event, actions, log);
 
     return event;
   }
@@ -206,7 +212,7 @@ function createAdminEventService(deps = {}) {
    * Get pending events with optional filters
    */
   async function getPendingEvents(filters = {}) {
-    if (!pool) throw new Error('Database pool not configured');
+    if (!db) throw new Error('Database datastore not configured');
 
     const { limit = 50, offset = 0 } = filters;
     const { whereClause, params, nextParamIndex } = buildEventQueryFilters(
@@ -214,21 +220,22 @@ function createAdminEventService(deps = {}) {
       "status = 'pending'"
     );
 
-    const total = await getEventCount(pool, whereClause, params);
+    const total = await getEventCount(db, whereClause, params);
 
-    const eventsResult = await pool.query(
-      `SELECT * FROM admin_events 
+    const eventsResult = await db.raw(
+      `SELECT * FROM admin_events
        WHERE ${whereClause}
-       ORDER BY 
-         CASE priority 
-           WHEN 'urgent' THEN 1 
-           WHEN 'high' THEN 2 
-           WHEN 'normal' THEN 3 
-           WHEN 'low' THEN 4 
+       ORDER BY
+         CASE priority
+           WHEN 'urgent' THEN 1
+           WHEN 'high' THEN 2
+           WHEN 'normal' THEN 3
+           WHEN 'low' THEN 4
          END,
          created_at DESC
        LIMIT $${nextParamIndex} OFFSET $${nextParamIndex + 1}`,
-      [...params, limit, offset]
+      [...params, limit, offset],
+      { retryable: true }
     );
 
     return { events: eventsResult.rows, total, limit, offset };
@@ -238,11 +245,12 @@ function createAdminEventService(deps = {}) {
    * Get a single event by ID
    */
   async function getEventById(eventId) {
-    if (!pool) throw new Error('Database pool not configured');
+    if (!db) throw new Error('Database datastore not configured');
 
-    const result = await pool.query(
+    const result = await db.raw(
       'SELECT * FROM admin_events WHERE id = $1',
-      [eventId]
+      [eventId],
+      { name: 'admin-events-get-by-id', retryable: true }
     );
     return result.rows[0] || null;
   }
@@ -251,23 +259,24 @@ function createAdminEventService(deps = {}) {
    * Get event history (resolved events)
    */
   async function getEventHistory({ limit = 50, offset = 0, type = null } = {}) {
-    if (!pool) throw new Error('Database pool not configured');
+    if (!db) throw new Error('Database datastore not configured');
 
     const { whereClause, params, nextParamIndex } = buildEventQueryFilters(
       { type },
       "status != 'pending'"
     );
 
-    const total = await getEventCount(pool, whereClause, params);
+    const total = await getEventCount(db, whereClause, params);
 
-    const eventsResult = await pool.query(
+    const eventsResult = await db.raw(
       `SELECT ae.*, u.username as resolved_by_username
        FROM admin_events ae
        LEFT JOIN users u ON ae.resolved_by = u._id
        WHERE ${whereClause}
        ORDER BY resolved_at DESC
        LIMIT $${nextParamIndex} OFFSET $${nextParamIndex + 1}`,
-      [...params, limit, offset]
+      [...params, limit, offset],
+      { retryable: true }
     );
 
     return { events: eventsResult.rows, total, limit, offset };
@@ -282,7 +291,7 @@ function createAdminEventService(deps = {}) {
     adminUser,
     resolvedVia = 'web'
   ) {
-    if (!pool) throw new Error('Database pool not configured');
+    if (!db) throw new Error('Database datastore not configured');
 
     const event = await getEventById(eventId);
     if (!event) return { success: false, message: 'Event not found' };
@@ -317,7 +326,7 @@ function createAdminEventService(deps = {}) {
     if (!handlerResult.success) return handlerResult;
 
     const updatedEvent = await updateEventStatus(
-      pool,
+      db,
       eventId,
       action,
       adminUser,
@@ -348,10 +357,12 @@ function createAdminEventService(deps = {}) {
    * Get pending event count for dashboard badge
    */
   async function getPendingCount() {
-    if (!pool) return 0;
+    if (!db) return 0;
 
-    const result = await pool.query(
-      "SELECT COUNT(*) FROM admin_events WHERE status = 'pending'"
+    const result = await db.raw(
+      "SELECT COUNT(*) FROM admin_events WHERE status = 'pending'",
+      [],
+      { name: 'admin-events-pending-count', retryable: true }
     );
     return parseInt(result.rows[0].count, 10);
   }
@@ -360,14 +371,16 @@ function createAdminEventService(deps = {}) {
    * Get counts by priority for dashboard
    */
   async function getPendingCountsByPriority() {
-    if (!pool) return { urgent: 0, high: 0, normal: 0, low: 0, total: 0 };
+    if (!db) return { urgent: 0, high: 0, normal: 0, low: 0, total: 0 };
 
-    const result = await pool.query(`
-      SELECT priority, COUNT(*) as count 
-      FROM admin_events 
-      WHERE status = 'pending'
-      GROUP BY priority
-    `);
+    const result = await db.raw(
+      `SELECT priority, COUNT(*) as count
+       FROM admin_events
+       WHERE status = 'pending'
+       GROUP BY priority`,
+      [],
+      { name: 'admin-events-priority-counts', retryable: true }
+    );
 
     const counts = { urgent: 0, high: 0, normal: 0, low: 0, total: 0 };
     for (const row of result.rows) {

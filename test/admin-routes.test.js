@@ -144,7 +144,14 @@ function createTestApp(options = {}) {
   };
 
   // Mock async datastores
+  // Forward reference — mockPool is defined below; the raw() defaults
+  // close over poolHolder so tests that customize poolQuery continue to
+  // intercept stats/list-service SQL by text match.
+  const poolHolder = { pool: null };
   const mockUsersAsync = {
+    raw:
+      options.usersAsyncRaw ||
+      mock.fn((sql, params) => poolHolder.pool.query(sql, params)),
     find:
       options.usersAsyncFind ||
       mock.fn(() => {
@@ -171,10 +178,6 @@ function createTestApp(options = {}) {
       }),
   };
 
-  // Forward reference — mockPool is defined below; the raw() default
-  // closes over poolHolder so tests that customize poolQuery continue to
-  // intercept stats/list-service SQL by text match.
-  const poolHolder = { pool: null };
   const mockListsAsync = {
     raw:
       options.listsAsyncRaw ||

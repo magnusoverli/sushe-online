@@ -61,10 +61,10 @@ describe('aggregate-list', () => {
   // ===========================================================================
 
   describe('createAggregateList', () => {
-    it('should throw if pool is not provided', () => {
+    it('should throw if no db or pool is provided', () => {
       assert.throws(
         () => createAggregateList({}),
-        /PostgreSQL pool is required/
+        /db datastore \(or legacy pool\) is required/
       );
     });
 

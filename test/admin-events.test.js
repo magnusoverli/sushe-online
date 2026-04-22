@@ -3,105 +3,109 @@ const assert = require('node:assert');
 const { createAdminEventService } = require('../services/admin-events.js');
 const { createMockLogger } = require('./helpers');
 
-// Mock pool that simulates PostgreSQL behavior
+// Mock datastore that simulates PostgreSQL behavior via the .raw() method.
+// Also exposes .query for any consumers that still want the raw pg-style API.
 const createMockPool = (mockData = {}) => {
   const events = mockData.events || [];
   let eventCounter = 0;
 
+  const impl = async (sql, params = []) => {
+    // INSERT admin_events
+    if (sql.includes('INSERT INTO admin_events')) {
+      const newEvent = {
+        id: `test-event-${++eventCounter}`,
+        event_type: params[0],
+        title: params[1],
+        description: params[2],
+        data: params[3],
+        priority: params[4],
+        status: 'pending',
+        created_at: new Date(),
+        resolved_at: null,
+        resolved_by: null,
+        resolved_via: null,
+        telegram_message_id: null,
+        telegram_chat_id: null,
+      };
+      events.push(newEvent);
+      return { rows: [newEvent] };
+    }
+
+    // COUNT pending events (check this before the general SELECT)
+    if (
+      sql.includes('COUNT(*)') &&
+      sql.includes("status = 'pending'") &&
+      !sql.includes('GROUP BY')
+    ) {
+      const pending = events.filter((e) => e.status === 'pending');
+      return { rows: [{ count: String(pending.length) }] };
+    }
+
+    // COUNT by priority
+    if (sql.includes('COUNT') && sql.includes('GROUP BY priority')) {
+      const counts = {};
+      events
+        .filter((e) => e.status === 'pending')
+        .forEach((e) => {
+          counts[e.priority] = (counts[e.priority] || 0) + 1;
+        });
+      return {
+        rows: Object.entries(counts).map(([priority, count]) => ({
+          priority,
+          count: String(count),
+        })),
+      };
+    }
+
+    // SELECT pending events
+    if (sql.includes('SELECT *') && sql.includes("status = 'pending'")) {
+      const pending = events.filter((e) => e.status === 'pending');
+      return { rows: pending };
+    }
+
+    // SELECT by ID
+    if (sql.includes('SELECT') && sql.includes('WHERE id = $1')) {
+      const event = events.find((e) => e.id === params[0]);
+      return { rows: event ? [event] : [] };
+    }
+
+    // UPDATE event (resolve)
+    if (sql.includes('UPDATE admin_events') && sql.includes('SET status')) {
+      const event = events.find((e) => e.id === params[3]);
+      if (event) {
+        event.status = params[0];
+        event.resolved_at = new Date();
+        event.resolved_by = params[1];
+        event.resolved_via = params[2];
+      }
+      return { rows: event ? [event] : [] };
+    }
+
+    // UPDATE telegram info
+    if (
+      sql.includes('UPDATE admin_events') &&
+      sql.includes('telegram_message_id')
+    ) {
+      const event = events.find((e) => e.id === params[2]);
+      if (event) {
+        event.telegram_message_id = params[0];
+        event.telegram_chat_id = params[1];
+      }
+      return { rows: event ? [event] : [] };
+    }
+
+    // SELECT history (non-pending)
+    if (sql.includes("status != 'pending'")) {
+      const resolved = events.filter((e) => e.status !== 'pending');
+      return { rows: resolved };
+    }
+
+    return { rows: [] };
+  };
+
   return {
-    query: async (sql, params = []) => {
-      // INSERT admin_events
-      if (sql.includes('INSERT INTO admin_events')) {
-        const newEvent = {
-          id: `test-event-${++eventCounter}`,
-          event_type: params[0],
-          title: params[1],
-          description: params[2],
-          data: params[3],
-          priority: params[4],
-          status: 'pending',
-          created_at: new Date(),
-          resolved_at: null,
-          resolved_by: null,
-          resolved_via: null,
-          telegram_message_id: null,
-          telegram_chat_id: null,
-        };
-        events.push(newEvent);
-        return { rows: [newEvent] };
-      }
-
-      // COUNT pending events (check this before the general SELECT)
-      if (
-        sql.includes('COUNT(*)') &&
-        sql.includes("status = 'pending'") &&
-        !sql.includes('GROUP BY')
-      ) {
-        const pending = events.filter((e) => e.status === 'pending');
-        return { rows: [{ count: String(pending.length) }] };
-      }
-
-      // COUNT by priority
-      if (sql.includes('COUNT') && sql.includes('GROUP BY priority')) {
-        const counts = {};
-        events
-          .filter((e) => e.status === 'pending')
-          .forEach((e) => {
-            counts[e.priority] = (counts[e.priority] || 0) + 1;
-          });
-        return {
-          rows: Object.entries(counts).map(([priority, count]) => ({
-            priority,
-            count: String(count),
-          })),
-        };
-      }
-
-      // SELECT pending events
-      if (sql.includes('SELECT *') && sql.includes("status = 'pending'")) {
-        const pending = events.filter((e) => e.status === 'pending');
-        return { rows: pending };
-      }
-
-      // SELECT by ID
-      if (sql.includes('SELECT') && sql.includes('WHERE id = $1')) {
-        const event = events.find((e) => e.id === params[0]);
-        return { rows: event ? [event] : [] };
-      }
-
-      // UPDATE event (resolve)
-      if (sql.includes('UPDATE admin_events') && sql.includes('SET status')) {
-        const event = events.find((e) => e.id === params[3]);
-        if (event) {
-          event.status = params[0];
-          event.resolved_at = new Date();
-          event.resolved_by = params[1];
-          event.resolved_via = params[2];
-        }
-        return { rows: event ? [event] : [] };
-      }
-
-      // UPDATE telegram info
-      if (
-        sql.includes('UPDATE admin_events') &&
-        sql.includes('telegram_message_id')
-      ) {
-        const event = events.find((e) => e.id === params[2]);
-        if (event) {
-          event.telegram_message_id = params[0];
-          event.telegram_chat_id = params[1];
-        }
-        return { rows: event ? [event] : [] };
-      }
-
-      // SELECT history (non-pending)
-      if (sql.includes("status != 'pending'")) {
-        const resolved = events.filter((e) => e.status !== 'pending');
-        return { rows: resolved };
-      }
-
-      return { rows: [] };
-    },
+    query: impl,
+    raw: impl,
   };
 };
 
@@ -112,7 +116,7 @@ const createMockPool = (mockData = {}) => {
 test('createEvent should create a new event in the database', async () => {
   const pool = createMockPool();
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   const event = await service.createEvent({
     type: 'account_approval',
@@ -132,7 +136,7 @@ test('createEvent should create a new event in the database', async () => {
 test('createEvent should default to normal priority', async () => {
   const pool = createMockPool();
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   const event = await service.createEvent({
     type: 'test_event',
@@ -142,7 +146,7 @@ test('createEvent should default to normal priority', async () => {
   assert.strictEqual(event.priority, 'normal');
 });
 
-test('createEvent should throw without pool', async () => {
+test('createEvent should throw without db', async () => {
   const logger = createMockLogger();
   const service = createAdminEventService({ logger });
 
@@ -153,7 +157,7 @@ test('createEvent should throw without pool', async () => {
         title: 'Test',
       });
     },
-    { message: 'Database pool not configured' }
+    { message: 'Database datastore not configured' }
   );
 });
 
@@ -169,7 +173,7 @@ test('getPendingEvents should return only pending events', async () => {
   ];
   const pool = createMockPool({ events: mockEvents });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   const result = await service.getPendingEvents();
 
@@ -190,7 +194,7 @@ test('getPendingEvents should filter by type', async () => {
   ];
   const pool = createMockPool({ events: mockEvents });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   const result = await service.getPendingEvents({ type: 'account_approval' });
 
@@ -214,7 +218,7 @@ test('getEventById should return event when found', async () => {
   ];
   const pool = createMockPool({ events: mockEvents });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   const event = await service.getEventById('test-uuid-1');
 
@@ -226,7 +230,7 @@ test('getEventById should return event when found', async () => {
 test('getEventById should return null when not found', async () => {
   const pool = createMockPool({ events: [] });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   const event = await service.getEventById('non-existent');
 
@@ -240,7 +244,7 @@ test('getEventById should return null when not found', async () => {
 test('registerActionHandler should register handlers', () => {
   const pool = createMockPool();
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   service.registerActionHandler('account_approval', 'approve', async () => ({
     success: true,
@@ -257,7 +261,7 @@ test('registerActionHandler should register handlers', () => {
 test('getAvailableActions should return empty array for unknown type', () => {
   const pool = createMockPool();
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   const actions = service.getAvailableActions('unknown_type');
 
@@ -279,7 +283,7 @@ test('executeAction should execute handler and update event', async () => {
   ];
   const pool = createMockPool({ events: mockEvents });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   let handlerCalled = false;
   service.registerActionHandler('account_approval', 'approve', async (data) => {
@@ -306,7 +310,7 @@ test('executeAction should execute handler and update event', async () => {
 test('executeAction should fail for non-existent event', async () => {
   const pool = createMockPool({ events: [] });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   const result = await service.executeAction(
     'non-existent',
@@ -329,7 +333,7 @@ test('executeAction should fail for already resolved event', async () => {
   ];
   const pool = createMockPool({ events: mockEvents });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   const result = await service.executeAction(
     'test-event-1',
@@ -352,7 +356,7 @@ test('executeAction should fail for unknown action', async () => {
   ];
   const pool = createMockPool({ events: mockEvents });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   const result = await service.executeAction(
     'test-event-1',
@@ -377,7 +381,7 @@ test('getPendingCount should return count of pending events', async () => {
   ];
   const pool = createMockPool({ events: mockEvents });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   const count = await service.getPendingCount();
 
@@ -406,7 +410,7 @@ test('getPendingCountsByPriority should return counts by priority', async () => 
   ];
   const pool = createMockPool({ events: mockEvents });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   const counts = await service.getPendingCountsByPriority();
 
@@ -422,7 +426,7 @@ test('getPendingCountsByPriority should return counts by priority', async () => 
 test('setTelegramNotifier should allow late binding of notifier', async () => {
   const pool = createMockPool();
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   let notifierCalled = false;
   const mockNotifier = {

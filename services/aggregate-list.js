@@ -1,7 +1,6 @@
 const logger = require('../utils/logger');
 const { normalizeAlbumKey } = require('../utils/fuzzy-match');
 const { POSITION_POINTS, getPositionPoints } = require('../utils/scoring');
-const { withTransaction } = require('../db/transaction');
 
 // ============================================
 // AGGREGATION HELPER FUNCTIONS
@@ -213,8 +212,8 @@ function createEmptyResult(year) {
 /**
  * Fetch main lists and build user map for a year
  */
-async function fetchMainListsForYear(pool, year) {
-  const listsResult = await pool.query(
+async function fetchMainListsForYear(db, year) {
+  const listsResult = await db.raw(
     `
     SELECT l._id as list_id, l.user_id, u.username
     FROM lists l
@@ -242,9 +241,9 @@ async function fetchMainListsForYear(pool, year) {
  * Fetch all list items for given list IDs
  * Only includes items in positions 1-40 (top 40 albums per list)
  */
-async function fetchListItemsForLists(pool, listIds) {
+async function fetchListItemsForLists(db, listIds) {
   // All album metadata comes from canonical albums table
-  const itemsResult = await pool.query(
+  const itemsResult = await db.raw(
     `
     SELECT 
       li.list_id,
@@ -273,8 +272,8 @@ async function fetchListItemsForLists(pool, listIds) {
 /**
  * Save or update aggregate list in database
  */
-async function saveAggregateList(pool, year, data, stats) {
-  const result = await pool.query(
+async function saveAggregateList(db, year, data, stats) {
+  const result = await db.raw(
     `
     INSERT INTO master_lists (year, data, stats, computed_at, created_at, updated_at)
     VALUES ($1, $2, $3, NOW(), NOW(), NOW())
@@ -293,7 +292,7 @@ async function saveAggregateList(pool, year, data, stats) {
 /**
  * Get aggregate list status with confirmations
  */
-async function buildAggregateStatus(pool, aggregateList, year) {
+async function buildAggregateStatus(db, aggregateList, year) {
   if (!aggregateList) {
     return {
       exists: false,
@@ -305,7 +304,7 @@ async function buildAggregateStatus(pool, aggregateList, year) {
     };
   }
 
-  const confirmResult = await pool.query(
+  const confirmResult = await db.raw(
     `
     SELECT c.confirmed_at, u.username
     FROM master_list_confirmations c
@@ -339,8 +338,8 @@ async function buildAggregateStatus(pool, aggregateList, year) {
 /**
  * Query contributors for a year
  */
-async function queryContributors(pool, year) {
-  const result = await pool.query(
+async function queryContributors(db, year) {
+  const result = await db.raw(
     `
     SELECT 
       c.user_id,
@@ -362,8 +361,8 @@ async function queryContributors(pool, year) {
 /**
  * Query eligible users for a year
  */
-async function queryEligibleUsers(pool, year) {
-  const result = await pool.query(
+async function queryEligibleUsers(db, year) {
+  const result = await db.raw(
     `
     SELECT 
       u._id as user_id,
@@ -389,9 +388,9 @@ async function queryEligibleUsers(pool, year) {
 /**
  * Bulk set contributors for a year (transaction)
  */
-async function setContributorsTransaction(pool, year, userIds, addedBy, log) {
+async function setContributorsTransaction(db, year, userIds, addedBy, log) {
   try {
-    await withTransaction(pool, async (client) => {
+    await db.withTransaction(async (client) => {
       await client.query(
         'DELETE FROM aggregate_list_contributors WHERE year = $1',
         [year]
@@ -422,8 +421,8 @@ async function setContributorsTransaction(pool, year, userIds, addedBy, log) {
 /**
  * Check if a user has seen the dramatic reveal for a year
  */
-async function checkHasSeen(pool, year, userId) {
-  const result = await pool.query(
+async function checkHasSeen(db, year, userId) {
+  const result = await db.raw(
     'SELECT 1 FROM aggregate_list_views WHERE year = $1 AND user_id = $2',
     [year, userId]
   );
@@ -433,9 +432,9 @@ async function checkHasSeen(pool, year, userId) {
 /**
  * Mark that a user has seen the dramatic reveal for a year
  */
-async function markAsSeen(pool, log, year, userId) {
+async function markAsSeen(db, log, year, userId) {
   log.info(`Marking user ${userId} as having seen reveal for year ${year}`);
-  await pool.query(
+  await db.raw(
     `
     INSERT INTO aggregate_list_views (year, user_id, viewed_at)
     VALUES ($1, $2, NOW())
@@ -449,9 +448,9 @@ async function markAsSeen(pool, log, year, userId) {
 /**
  * Reset a user's reveal view status for a year (admin testing)
  */
-async function resetSeenStatus(pool, log, year, userId) {
+async function resetSeenStatus(db, log, year, userId) {
   log.info(`Resetting reveal view status for user ${userId}, year ${year}`);
-  const result = await pool.query(
+  const result = await db.raw(
     'DELETE FROM aggregate_list_views WHERE year = $1 AND user_id = $2',
     [year, userId]
   );
@@ -461,8 +460,8 @@ async function resetSeenStatus(pool, log, year, userId) {
 /**
  * Get all years a user has viewed the reveal for
  */
-async function queryViewedYears(pool, userId) {
-  const result = await pool.query(
+async function queryViewedYears(db, userId) {
+  const result = await db.raw(
     `
     SELECT year, viewed_at 
     FROM aggregate_list_views 
@@ -483,8 +482,8 @@ async function queryViewedYears(pool, userId) {
 // ============================================
 
 /** Lock a year to prevent list modifications */
-async function lockYearOp(pool, year) {
-  await pool.query(
+async function lockYearOp(db, year) {
+  await db.raw(
     `INSERT INTO master_lists (year, locked, created_at, updated_at)
      VALUES ($1, TRUE, NOW(), NOW())
      ON CONFLICT (year) DO UPDATE SET
@@ -495,8 +494,8 @@ async function lockYearOp(pool, year) {
 }
 
 /** Unlock a year to allow list modifications */
-async function unlockYearOp(pool, year) {
-  await pool.query(
+async function unlockYearOp(db, year) {
+  await db.raw(
     `UPDATE master_lists
      SET locked = FALSE, updated_at = NOW()
      WHERE year = $1`,
@@ -505,16 +504,16 @@ async function unlockYearOp(pool, year) {
 }
 
 /** Get all locked years (descending order) */
-async function getLockedYearsOp(pool) {
-  const result = await pool.query(
+async function getLockedYearsOp(db) {
+  const result = await db.raw(
     `SELECT year FROM master_lists WHERE locked = TRUE ORDER BY year DESC`
   );
   return result.rows.map((r) => r.year);
 }
 
 /** Get years that have at least one main list (descending order) */
-async function getYearsWithMainListsOp(pool) {
-  const result = await pool.query(
+async function getYearsWithMainListsOp(db) {
+  const result = await db.raw(
     `SELECT DISTINCT year FROM lists
      WHERE is_main = TRUE AND year IS NOT NULL
      ORDER BY year DESC`
@@ -525,15 +524,26 @@ async function getYearsWithMainListsOp(pool) {
 /**
  * Create aggregate list utilities with injected dependencies
  * @param {Object} deps - Dependencies
- * @param {Object} deps.pool - PostgreSQL pool instance
+ * @param {Object} deps.db - A PgDatastore (any table) used for .raw() and
+ *   .withTransaction(). Legacy alias: deps.pool (adapted to .raw()).
  * @param {Object} deps.logger - Logger instance (optional)
  */
 function createAggregateList(deps = {}) {
   const log = deps.logger || logger;
-  const pool = deps.pool;
+  let db = deps.db;
 
-  if (!pool) {
-    throw new Error('PostgreSQL pool is required');
+  if (!db && deps.pool) {
+    // Legacy adapter: wrap a raw pg pool so internal code can still use .raw
+    // and .withTransaction without the caller being updated.
+    const { withTransaction: baseTx } = require('../db/transaction');
+    db = {
+      raw: (sql, params) => deps.pool.query(sql, params),
+      withTransaction: (cb) => baseTx(deps.pool, cb),
+    };
+  }
+
+  if (!db) {
+    throw new Error('A db datastore (or legacy pool) is required');
   }
 
   /**
@@ -543,7 +553,7 @@ function createAggregateList(deps = {}) {
     log.info(`Aggregating list for year ${year}`);
 
     const { mainLists, userMap, listIds } = await fetchMainListsForYear(
-      pool,
+      db,
       year
     );
     log.info(`Found ${mainLists.length} main lists for year ${year}`);
@@ -552,7 +562,7 @@ function createAggregateList(deps = {}) {
       return createEmptyResult(year);
     }
 
-    const items = await fetchListItemsForLists(pool, listIds);
+    const items = await fetchListItemsForLists(db, listIds);
     const albumMap = buildAlbumMap(items, userMap);
     const albums = sortAndRankAlbums(albumMap);
     const stats = computeStats(albums, mainLists.length, year);
@@ -577,7 +587,7 @@ function createAggregateList(deps = {}) {
   async function recompute(year) {
     log.info(`Recomputing aggregate list for year ${year}`);
     const { data, stats } = await aggregateForYear(year);
-    const result = await saveAggregateList(pool, year, data, stats);
+    const result = await saveAggregateList(db, year, data, stats);
     log.info(`Aggregate list for ${year} recomputed successfully`);
     return result;
   }
@@ -586,10 +596,9 @@ function createAggregateList(deps = {}) {
    * Get aggregate list for a year (from cache)
    */
   async function get(year) {
-    const result = await pool.query(
-      'SELECT * FROM master_lists WHERE year = $1',
-      [year]
-    );
+    const result = await db.raw('SELECT * FROM master_lists WHERE year = $1', [
+      year,
+    ]);
     return result.rows[0] || null;
   }
 
@@ -598,7 +607,7 @@ function createAggregateList(deps = {}) {
    */
   async function getStatus(year) {
     const aggregateList = await get(year);
-    return buildAggregateStatus(pool, aggregateList, year);
+    return buildAggregateStatus(db, aggregateList, year);
   }
 
   /**
@@ -617,7 +626,7 @@ function createAggregateList(deps = {}) {
       return { alreadyRevealed: true, status: await getStatus(year) };
     }
 
-    await pool.query(
+    await db.raw(
       `
       INSERT INTO master_list_confirmations (year, admin_user_id)
       VALUES ($1, $2)
@@ -626,7 +635,7 @@ function createAggregateList(deps = {}) {
       [year, adminUserId]
     );
 
-    const countResult = await pool.query(
+    const countResult = await db.raw(
       'SELECT COUNT(*) FROM master_list_confirmations WHERE year = $1',
       [year]
     );
@@ -636,7 +645,7 @@ function createAggregateList(deps = {}) {
       log.info(
         `Aggregate list for ${year} has reached 2 confirmations - revealing!`
       );
-      await pool.query(
+      await db.raw(
         `
         UPDATE master_lists 
         SET revealed = TRUE, revealed_at = NOW(), updated_at = NOW()
@@ -660,7 +669,7 @@ function createAggregateList(deps = {}) {
       return { alreadyRevealed: true, status: await getStatus(year) };
     }
 
-    await pool.query(
+    await db.raw(
       'DELETE FROM master_list_confirmations WHERE year = $1 AND admin_user_id = $2',
       [year, adminUserId]
     );
@@ -680,7 +689,7 @@ function createAggregateList(deps = {}) {
    * Get list of years that have revealed aggregate lists
    */
   async function getRevealedYears() {
-    const result = await pool.query(`
+    const result = await db.raw(`
       SELECT year, revealed_at 
       FROM master_lists 
       WHERE revealed = TRUE 
@@ -693,14 +702,14 @@ function createAggregateList(deps = {}) {
    * Get approved contributors for a year
    */
   async function getContributors(year) {
-    return queryContributors(pool, year);
+    return queryContributors(db, year);
   }
 
   /**
    * Get all users who have main lists for a year (eligible for contribution)
    */
   async function getEligibleUsers(year) {
-    return queryEligibleUsers(pool, year);
+    return queryEligibleUsers(db, year);
   }
 
   /**
@@ -709,7 +718,7 @@ function createAggregateList(deps = {}) {
   async function addContributor(year, userId, addedBy) {
     log.info(`Adding user ${userId} as contributor for year ${year}`);
 
-    await pool.query(
+    await db.raw(
       `
       INSERT INTO aggregate_list_contributors (year, user_id, added_by)
       VALUES ($1, $2, $3)
@@ -727,7 +736,7 @@ function createAggregateList(deps = {}) {
   async function removeContributor(year, userId) {
     log.info(`Removing user ${userId} as contributor for year ${year}`);
 
-    const result = await pool.query(
+    const result = await db.raw(
       `
       DELETE FROM aggregate_list_contributors 
       WHERE year = $1 AND user_id = $2
@@ -744,20 +753,20 @@ function createAggregateList(deps = {}) {
    */
   async function setContributors(year, userIds, addedBy) {
     log.info(`Setting ${userIds.length} contributors for year ${year}`);
-    return setContributorsTransaction(pool, year, userIds, addedBy, log);
+    return setContributorsTransaction(db, year, userIds, addedBy, log);
   }
 
   // Reveal view tracking (delegating to extracted functions)
-  const hasSeen = (year, userId) => checkHasSeen(pool, year, userId);
-  const markSeen = (year, userId) => markAsSeen(pool, log, year, userId);
-  const resetSeen = (year, userId) => resetSeenStatus(pool, log, year, userId);
-  const getViewedYears = (userId) => queryViewedYears(pool, userId);
+  const hasSeen = (year, userId) => checkHasSeen(db, year, userId);
+  const markSeen = (year, userId) => markAsSeen(db, log, year, userId);
+  const resetSeen = (year, userId) => resetSeenStatus(db, log, year, userId);
+  const getViewedYears = (userId) => queryViewedYears(db, userId);
 
   // Year locking (delegates to extracted functions)
-  const lockYear = (year) => lockYearOp(pool, year);
-  const unlockYear = (year) => unlockYearOp(pool, year);
-  const getLockedYears = () => getLockedYearsOp(pool);
-  const getYearsWithMainLists = () => getYearsWithMainListsOp(pool);
+  const lockYear = (year) => lockYearOp(db, year);
+  const unlockYear = (year) => unlockYearOp(db, year);
+  const getLockedYears = () => getLockedYearsOp(db);
+  const getYearsWithMainLists = () => getYearsWithMainListsOp(db);
 
   return {
     aggregateForYear,

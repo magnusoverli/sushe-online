@@ -91,26 +91,27 @@ function validateDumpFile(fsDep, tmpFile) {
   return header.toString() === 'PGDMP';
 }
 
-async function dropPublicTablesForRestore({ pool, logger, restoreId }) {
+async function dropPublicTablesForRestore({ db, logger, restoreId }) {
   try {
     logger.info(
       `[${restoreId}] Dropping all tables before restore to avoid FK conflicts`
     );
 
-    const tablesResult = await pool.query(`
-      SELECT tablename FROM pg_tables
-      WHERE schemaname = 'public'
-    `);
+    const tablesResult = await db.raw(
+      `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`,
+      [],
+      { name: 'backup-list-public-tables', retryable: true }
+    );
 
     if (tablesResult.rows.length > 0) {
       const tableNames = tablesResult.rows
         .map((row) => `"${row.tablename}"`)
         .join(', ');
-      await pool.query(`DROP TABLE IF EXISTS ${tableNames} CASCADE`);
+      await db.raw(`DROP TABLE IF EXISTS ${tableNames} CASCADE`);
       logger.info(`[${restoreId}] Dropped ${tablesResult.rows.length} tables`);
     }
 
-    await pool.query('DROP TABLE IF EXISTS migrations CASCADE');
+    await db.raw('DROP TABLE IF EXISTS migrations CASCADE');
     logger.info(`[${restoreId}] Dropped migrations table`);
   } catch (error) {
     logger.warn(`[${restoreId}] Pre-restore table drop failed (non-fatal)`, {
@@ -179,9 +180,9 @@ async function runRestoreProcess({
   });
 }
 
-async function clearSessions({ pool, logger, restoreId }) {
+async function clearSessions({ db, logger, restoreId }) {
   const startedAt = Date.now();
-  await pool.query('DELETE FROM session');
+  await db.raw('DELETE FROM session', [], { name: 'backup-clear-sessions' });
   logger.info(`[${restoreId}] All sessions cleared`, {
     duration: `${Date.now() - startedAt}ms`,
   });
@@ -243,7 +244,16 @@ function scheduleRestart({
 
 function createAdminBackupService(deps = {}) {
   const logger = deps.logger || require('../utils/logger');
-  const pool = deps.pool || require('../db').pool;
+  // Accept either a datastore (preferred) or a legacy pool.
+  // When given a pool, adapt it to the .raw() interface for internal use.
+  const db =
+    deps.db ||
+    (deps.pool
+      ? { raw: (sql, params) => deps.pool.query(sql, params) }
+      : (() => {
+          const { usersAsync } = require('../db');
+          return usersAsync;
+        })());
   const fsDep = deps.fs || fs;
   const pathDep = deps.path || path;
   const spawnDep = deps.spawn || spawn;
@@ -255,7 +265,7 @@ function createAdminBackupService(deps = {}) {
       createBackup({ config, spawnDep, logger, processRef }),
     validateDumpFile: (tmpFile) => validateDumpFile(fsDep, tmpFile),
     dropPublicTablesForRestore: (restoreId) =>
-      dropPublicTablesForRestore({ pool, logger, restoreId }),
+      dropPublicTablesForRestore({ db, logger, restoreId }),
     runRestoreProcess: (input) =>
       runRestoreProcess({
         ...input,
@@ -264,7 +274,7 @@ function createAdminBackupService(deps = {}) {
         logger,
         processRef,
       }),
-    clearSessions: (restoreId) => clearSessions({ pool, logger, restoreId }),
+    clearSessions: (restoreId) => clearSessions({ db, logger, restoreId }),
     cleanupTempFile: (tmpFile) => cleanupTempFile(fsDep, tmpFile),
     scheduleRestart: (restoreId, delayMs = 3000) =>
       scheduleRestart({

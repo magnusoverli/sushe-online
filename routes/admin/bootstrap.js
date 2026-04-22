@@ -163,8 +163,11 @@ async function getRecommendationStatuses(pool, years, userId) {
 module.exports = (app, deps) => {
   const { ensureAuth, ensureAdmin, pool, usersAsync, listsAsync } = deps;
 
-  const statsService = createStatsService({ pool, usersAsync, listsAsync });
-  const adminEventService = createAdminEventService({ pool, logger });
+  const statsService = createStatsService({ usersAsync, listsAsync });
+  const adminEventService = createAdminEventService({
+    db: usersAsync,
+    logger,
+  });
   const aggregateListService = createAggregateList({ pool, logger });
 
   app.get('/api/admin/bootstrap', ensureAuth, ensureAdmin, async (req, res) => {

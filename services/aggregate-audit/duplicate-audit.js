@@ -9,10 +9,10 @@ function basicNormalizeAlbumKey(artist, album) {
 }
 
 async function applyFixTransaction(ctx, year, preview) {
-  const { pool, log, withTransaction } = ctx;
+  const { db, log } = ctx;
   let totalUpdated = 0;
 
-  await withTransaction(pool, async (client) => {
+  await db.withTransaction(async (client) => {
     for (const change of preview.changes) {
       for (const entry of change.affectedEntries) {
         const updateResult = await client.query(
@@ -47,10 +47,10 @@ async function applyFixTransaction(ctx, year, preview) {
 }
 
 async function findDuplicates(ctx, year) {
-  const { pool, log, normalizeAlbumKey } = ctx;
+  const { db, log, normalizeAlbumKey } = ctx;
   log.info(`Running aggregate audit for year ${year}`);
 
-  const result = await pool.query(
+  const result = await db.raw(
     `
     SELECT
       li.album_id,
@@ -70,7 +70,8 @@ async function findDuplicates(ctx, year) {
       AND l.user_id IN (SELECT user_id FROM aggregate_list_contributors WHERE year = $1)
     ORDER BY li.position
   `,
-    [year]
+    [year],
+    { name: 'aggregate-audit-find-duplicates', retryable: true }
   );
 
   const normalizedGroups = new Map();
@@ -133,10 +134,10 @@ async function findDuplicates(ctx, year) {
 }
 
 async function diagnoseNormalization(ctx, year) {
-  const { pool, log, normalizeAlbumKey } = ctx;
+  const { db, log, normalizeAlbumKey } = ctx;
   log.info(`Running normalization diagnostic for year ${year}`);
 
-  const result = await pool.query(
+  const result = await db.raw(
     `
     SELECT
       li.album_id,
@@ -155,7 +156,8 @@ async function diagnoseNormalization(ctx, year) {
       AND l.user_id IN (SELECT user_id FROM aggregate_list_contributors WHERE year = $1)
     ORDER BY li.position
   `,
-    [year]
+    [year],
+    { name: 'aggregate-audit-diagnose-normalization', retryable: true }
   );
 
   const basicGroups = new Map();
@@ -376,12 +378,26 @@ async function getAuditReport(ctx, year) {
 }
 
 function createDuplicateAuditService(deps = {}) {
+  // Accept either a datastore (preferred) or a legacy pool + withTransaction.
+  let db = deps.db;
+  if (!db && deps.pool) {
+    const legacyTx = deps.withTransaction;
+    db = {
+      raw: (sql, params) => deps.pool.query(sql, params),
+      withTransaction: (cb) =>
+        legacyTx
+          ? legacyTx(deps.pool, cb)
+          : Promise.reject(
+              new Error('withTransaction not provided for legacy pool')
+            ),
+    };
+  }
+
   const context = {
-    pool: deps.pool,
+    db,
     log: deps.log,
     normalizeAlbumKey: deps.normalizeAlbumKey,
     selectCanonicalAlbumId: deps.selectCanonicalAlbumId,
-    withTransaction: deps.withTransaction,
   };
 
   return {
