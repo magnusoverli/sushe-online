@@ -24,6 +24,8 @@
  *   }
  */
 
+const logger = require('../utils/logger');
+
 /**
  * Lightweight class for expected transaction failures (validation errors, not-found, etc.)
  * Throwing this inside withTransaction() will trigger ROLLBACK and propagate
@@ -46,6 +48,10 @@ class TransactionAbort {
  * and COMMITs on success. On any error (including TransactionAbort),
  * it ROLLBACKs and re-throws. The client is always released.
  *
+ * If ROLLBACK itself fails, the original error is still thrown — the
+ * rollback failure is logged and the client is released with the error
+ * so pg discards it rather than returning a poisoned connection to the pool.
+ *
  * @param {import('pg').Pool} pool - PostgreSQL connection pool
  * @param {function(import('pg').PoolClient): Promise<*>} callback - Async function receiving the transaction client
  * @returns {Promise<*>} - The return value of the callback
@@ -54,16 +60,27 @@ class TransactionAbort {
  */
 async function withTransaction(pool, callback) {
   const client = await pool.connect();
+  let releaseError;
   try {
     await client.query('BEGIN');
     const result = await callback(client);
     await client.query('COMMIT');
     return result;
   } catch (err) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackErr) {
+      releaseError = rollbackErr;
+      logger.error('ROLLBACK failed after transaction error', {
+        originalError: err?.message,
+        originalCode: err?.code,
+        rollbackError: rollbackErr?.message,
+        rollbackCode: rollbackErr?.code,
+      });
+    }
     throw err;
   } finally {
-    client.release();
+    client.release(releaseError);
   }
 }
 

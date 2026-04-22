@@ -187,5 +187,117 @@ test('Transaction Utilities', async (t) => {
         assert.strictEqual(calls[3].arguments[0], 'COMMIT');
       }
     );
+
+    // ============================================
+    // ROLLBACK failure preservation
+    // ============================================
+
+    await t.test(
+      'should preserve original error when ROLLBACK itself fails',
+      async () => {
+        // Build a mock where BEGIN succeeds, ROLLBACK fails.
+        const mockClient = {
+          query: mock.fn(async (sql) => {
+            if (sql === 'ROLLBACK') {
+              const rollbackErr = new Error('connection terminated');
+              rollbackErr.code = '08006';
+              throw rollbackErr;
+            }
+            return { rows: [], rowCount: 0 };
+          }),
+          release: mock.fn(),
+        };
+        const mockPool = { connect: mock.fn(async () => mockClient) };
+        const originalError = new Error('business logic failed');
+        originalError.code = 'CUSTOM_BUSINESS_ERROR';
+
+        await assert.rejects(
+          () =>
+            withTransaction(mockPool, async () => {
+              throw originalError;
+            }),
+          (err) => {
+            // MUST be the original error, not the rollback error
+            assert.strictEqual(err, originalError);
+            assert.strictEqual(err.code, 'CUSTOM_BUSINESS_ERROR');
+            return true;
+          }
+        );
+
+        // Confirm ROLLBACK was actually attempted
+        const calls = mockClient.query.mock.calls;
+        assert.strictEqual(calls[0].arguments[0], 'BEGIN');
+        assert.strictEqual(calls[1].arguments[0], 'ROLLBACK');
+      }
+    );
+
+    await t.test(
+      'should release client with the rollback error so pg discards the connection',
+      async () => {
+        const mockClient = {
+          query: mock.fn(async (sql) => {
+            if (sql === 'ROLLBACK') {
+              const rollbackErr = new Error('connection terminated');
+              rollbackErr.code = '08006';
+              throw rollbackErr;
+            }
+            return { rows: [], rowCount: 0 };
+          }),
+          release: mock.fn(),
+        };
+        const mockPool = { connect: mock.fn(async () => mockClient) };
+
+        await assert.rejects(() =>
+          withTransaction(mockPool, async () => {
+            throw new Error('anything');
+          })
+        );
+
+        // release() must be called exactly once, with the rollback error
+        // as its argument — this tells pg the connection is poisoned.
+        assert.strictEqual(mockClient.release.mock.calls.length, 1);
+        const releaseArg = mockClient.release.mock.calls[0].arguments[0];
+        assert.ok(
+          releaseArg instanceof Error,
+          'release should receive the rollback error'
+        );
+        assert.strictEqual(releaseArg.code, '08006');
+      }
+    );
+
+    await t.test(
+      'should release client without error when ROLLBACK succeeds',
+      async () => {
+        const { mockPool, mockClient } = createMockPool();
+
+        await assert.rejects(() =>
+          withTransaction(mockPool, async () => {
+            throw new Error('business error');
+          })
+        );
+
+        // release() called with undefined (no error) since ROLLBACK succeeded
+        assert.strictEqual(mockClient.release.mock.calls.length, 1);
+        assert.strictEqual(
+          mockClient.release.mock.calls[0].arguments[0],
+          undefined
+        );
+      }
+    );
+
+    await t.test(
+      'should release client without error on happy path (COMMIT success)',
+      async () => {
+        const { mockPool, mockClient } = createMockPool();
+
+        await withTransaction(mockPool, async () => 'ok');
+
+        assert.strictEqual(mockClient.release.mock.calls.length, 1);
+        assert.strictEqual(
+          mockClient.release.mock.calls[0].arguments[0],
+          undefined
+        );
+      }
+    );
   });
 });
