@@ -1163,3 +1163,290 @@ describe('warmConnections', () => {
     assert.strictEqual(mockPool.query.mock.calls.length, 5);
   });
 });
+
+// ============================================================================
+// Unified query interface: raw / withClient / withTransaction
+// ============================================================================
+
+describe('PgDatastore.raw', () => {
+  let mockPool;
+  let datastore;
+
+  beforeEach(() => {
+    mockPool = {
+      query: mock.fn(() => Promise.resolve({ rows: [{ n: 1 }], rowCount: 1 })),
+    };
+    datastore = new PgDatastore(mockPool, 'test_table', { _id: '_id' });
+  });
+
+  it('executes SQL with positional params and returns the pg result', async () => {
+    const res = await datastore.raw('SELECT * FROM t WHERE id = $1', [7]);
+    assert.deepStrictEqual(res.rows, [{ n: 1 }]);
+    assert.strictEqual(mockPool.query.mock.calls.length, 1);
+    assert.strictEqual(
+      mockPool.query.mock.calls[0].arguments[0],
+      'SELECT * FROM t WHERE id = $1'
+    );
+    assert.deepStrictEqual(mockPool.query.mock.calls[0].arguments[1], [7]);
+  });
+
+  it('uses prepared statement path when name is provided', async () => {
+    await datastore.raw('SELECT 1 FROM t WHERE id = $1', [42], {
+      name: 'lookup-by-id',
+    });
+    // Prepared path passes { name, text } as first arg
+    const [firstArg, params] = mockPool.query.mock.calls[0].arguments;
+    assert.deepStrictEqual(firstArg, {
+      name: 'lookup-by-id',
+      text: 'SELECT 1 FROM t WHERE id = $1',
+    });
+    assert.deepStrictEqual(params, [42]);
+  });
+
+  it('does NOT retry by default (retryable not set)', async () => {
+    let calls = 0;
+    mockPool.query = mock.fn(() => {
+      calls++;
+      const err = new Error('deadlock');
+      err.code = '40P01';
+      return Promise.reject(err);
+    });
+    datastore = new PgDatastore(mockPool, 'test_table', { _id: '_id' });
+
+    await assert.rejects(
+      () => datastore.raw('UPDATE t SET x=1', []),
+      (err) => err.code === '40P01'
+    );
+    assert.strictEqual(calls, 1, 'no retry without retryable: true');
+  });
+
+  it('retries retryable errors when retryable: true (idempotent)', async () => {
+    let calls = 0;
+    mockPool.query = mock.fn(() => {
+      calls++;
+      if (calls < 3) {
+        const err = new Error('serialization failure');
+        err.code = '40001';
+        return Promise.reject(err);
+      }
+      return Promise.resolve({ rows: [{ ok: true }], rowCount: 1 });
+    });
+    datastore = new PgDatastore(mockPool, 'test_table', { _id: '_id' });
+
+    const res = await datastore.raw('SELECT 1', [], { retryable: true });
+    assert.strictEqual(res.rows[0].ok, true);
+    assert.strictEqual(calls, 3);
+  });
+
+  it('does NOT retry constraint violations even with retryable: true', async () => {
+    let calls = 0;
+    mockPool.query = mock.fn(() => {
+      calls++;
+      const err = new Error('unique');
+      err.code = '23505';
+      return Promise.reject(err);
+    });
+    datastore = new PgDatastore(mockPool, 'test_table', { _id: '_id' });
+
+    await assert.rejects(
+      () => datastore.raw('INSERT ...', [], { retryable: true }),
+      (err) => err.code === '23505'
+    );
+    assert.strictEqual(calls, 1);
+  });
+});
+
+describe('PgDatastore.withClient', () => {
+  let mockPool;
+  let mockClient;
+  let datastore;
+
+  beforeEach(() => {
+    mockClient = {
+      query: mock.fn(() => Promise.resolve({ rows: [], rowCount: 0 })),
+      release: mock.fn(),
+    };
+    mockPool = {
+      connect: mock.fn(() => Promise.resolve(mockClient)),
+    };
+    datastore = new PgDatastore(mockPool, 'test_table', { _id: '_id' });
+  });
+
+  it('acquires a client, runs the callback, and releases', async () => {
+    const result = await datastore.withClient(async (client) => {
+      await client.query('SELECT 1');
+      await client.query('SELECT 2');
+      return 'done';
+    });
+    assert.strictEqual(result, 'done');
+    assert.strictEqual(mockPool.connect.mock.calls.length, 1);
+    assert.strictEqual(mockClient.query.mock.calls.length, 2);
+    assert.strictEqual(mockClient.release.mock.calls.length, 1);
+    // released without error argument
+    assert.strictEqual(
+      mockClient.release.mock.calls[0].arguments[0],
+      undefined
+    );
+  });
+
+  it('releases the client with the error when the callback throws', async () => {
+    const boom = new Error('boom');
+    await assert.rejects(
+      () =>
+        datastore.withClient(async () => {
+          throw boom;
+        }),
+      (err) => err === boom
+    );
+    assert.strictEqual(mockClient.release.mock.calls.length, 1);
+    // release(err) tells pg to discard the connection
+    assert.strictEqual(mockClient.release.mock.calls[0].arguments[0], boom);
+  });
+
+  it('retries pool.connect on retryable failure when retryable: true', async () => {
+    let connectCalls = 0;
+    mockPool.connect = mock.fn(() => {
+      connectCalls++;
+      if (connectCalls === 1) {
+        const err = new Error('reset');
+        err.code = 'ECONNRESET';
+        return Promise.reject(err);
+      }
+      return Promise.resolve(mockClient);
+    });
+    datastore = new PgDatastore(mockPool, 'test_table', { _id: '_id' });
+
+    const result = await datastore.withClient(async () => 'reconnected', {
+      retryable: true,
+    });
+    assert.strictEqual(result, 'reconnected');
+    assert.strictEqual(connectCalls, 2);
+  });
+
+  it('does NOT retry errors from inside the callback (not connection-level)', async () => {
+    let cbCalls = 0;
+    await assert.rejects(
+      () =>
+        datastore.withClient(
+          async () => {
+            cbCalls++;
+            const err = new Error('serialization');
+            err.code = '40001';
+            throw err;
+          },
+          { retryable: true }
+        ),
+      (err) => err.code === '40001'
+    );
+    assert.strictEqual(cbCalls, 1);
+  });
+});
+
+describe('PgDatastore.withTransaction', () => {
+  let mockPool;
+  let mockClient;
+  let datastore;
+
+  beforeEach(() => {
+    mockClient = {
+      query: mock.fn(() => Promise.resolve({ rows: [], rowCount: 0 })),
+      release: mock.fn(),
+    };
+    mockPool = {
+      connect: mock.fn(() => Promise.resolve(mockClient)),
+    };
+    datastore = new PgDatastore(mockPool, 'test_table', { _id: '_id' });
+  });
+
+  it('wraps the callback in BEGIN/COMMIT', async () => {
+    const result = await datastore.withTransaction(async (client) => {
+      await client.query('UPDATE t SET x = $1', [1]);
+      return 'ok';
+    });
+    assert.strictEqual(result, 'ok');
+    const calls = mockClient.query.mock.calls.map((c) => c.arguments[0]);
+    assert.deepStrictEqual(calls, ['BEGIN', 'UPDATE t SET x = $1', 'COMMIT']);
+  });
+
+  it('emits SET TRANSACTION ISOLATION LEVEL when isolation is provided', async () => {
+    await datastore.withTransaction(async () => {}, {
+      isolation: 'SERIALIZABLE',
+    });
+    const calls = mockClient.query.mock.calls.map((c) => c.arguments[0]);
+    assert.deepStrictEqual(calls, [
+      'BEGIN',
+      'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE',
+      'COMMIT',
+    ]);
+  });
+
+  it('rejects invalid isolation levels (SQL injection guard)', async () => {
+    await assert.rejects(
+      () =>
+        datastore.withTransaction(async () => {}, {
+          isolation: 'SERIALIZABLE; DROP TABLE users',
+        }),
+      (err) => /Invalid isolation level/.test(err.message)
+    );
+    // pool.connect must never have been called for the injection case
+    assert.strictEqual(mockPool.connect.mock.calls.length, 0);
+  });
+
+  it('retries on 40001 when retryable: true', async () => {
+    let txAttempts = 0;
+    mockClient.query = mock.fn((sql) => {
+      if (sql === 'BEGIN') {
+        return Promise.resolve({ rows: [] });
+      }
+      if (sql === 'COMMIT') {
+        return Promise.resolve({ rows: [] });
+      }
+      if (sql === 'ROLLBACK') {
+        return Promise.resolve({ rows: [] });
+      }
+      // Simulate a conflict on the body statement
+      txAttempts++;
+      if (txAttempts < 3) {
+        const err = new Error('serialization');
+        err.code = '40001';
+        return Promise.reject(err);
+      }
+      return Promise.resolve({ rows: [{ done: true }] });
+    });
+
+    const result = await datastore.withTransaction(
+      async (client) => {
+        const r = await client.query('UPDATE t SET x=1');
+        return r.rows[0];
+      },
+      { retryable: true }
+    );
+    assert.deepStrictEqual(result, { done: true });
+    assert.strictEqual(txAttempts, 3);
+  });
+
+  it('does NOT retry constraint violations even when retryable: true', async () => {
+    let bodyAttempts = 0;
+    mockClient.query = mock.fn((sql) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+        return Promise.resolve({ rows: [] });
+      }
+      bodyAttempts++;
+      const err = new Error('unique');
+      err.code = '23505';
+      return Promise.reject(err);
+    });
+
+    await assert.rejects(
+      () =>
+        datastore.withTransaction(
+          async (client) => {
+            await client.query('INSERT INTO t ...');
+          },
+          { retryable: true }
+        ),
+      (err) => err.code === '23505'
+    );
+    assert.strictEqual(bodyAttempts, 1);
+  });
+});

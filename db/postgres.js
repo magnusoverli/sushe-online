@@ -2,6 +2,18 @@ const { Pool } = require('pg');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 const { observeDbQuery } = require('../utils/metrics');
+const { withRetry } = require('./retry-wrapper');
+const { withTransaction: baseWithTransaction } = require('./transaction');
+
+// Whitelist of allowed SQL isolation levels. The literal is interpolated into
+// the `SET TRANSACTION ISOLATION LEVEL ...` statement, so only exact matches
+// from this set are accepted.
+const VALID_ISOLATION_LEVELS = new Set([
+  'READ UNCOMMITTED',
+  'READ COMMITTED',
+  'REPEATABLE READ',
+  'SERIALIZABLE',
+]);
 
 async function waitForPostgres(pool, retries = 10, interval = 3000) {
   logger.info('Checking PostgreSQL connection...');
@@ -645,6 +657,133 @@ class PgDatastore {
 
       return { primary: null, secondary: null };
     }
+  }
+
+  // ==========================================================================
+  // Unified query interface
+  //
+  // These three methods are the canonical entry points for code that needs
+  // more expressive queries than find/findOne/insert/update/remove cover.
+  // They share logging, metrics, and optional classifier-aware retry with
+  // the rest of the datastore — so callers no longer need to reach into the
+  // raw pool.
+  // ==========================================================================
+
+  /**
+   * Execute an arbitrary SQL statement with the datastore's logging, metrics,
+   * and optional retry semantics.
+   *
+   * Rows are returned verbatim (not field-mapped) — callers of raw() are
+   * working at the SQL level and usually alias columns explicitly.
+   *
+   * @param {string} sql - SQL text with $1, $2 placeholders.
+   * @param {Array} [params] - Bound parameter values.
+   * @param {Object} [opts]
+   * @param {string} [opts.name] - Prepared-statement name (enables pg's plan cache).
+   * @param {boolean} [opts.retryable=false] - If true, retry on transient errors
+   *   (serialization failure, deadlock, connection loss) with exponential backoff.
+   *   Only set to true when the statement is idempotent — a pure SELECT, or an
+   *   INSERT ... ON CONFLICT / UPDATE that can safely be replayed.
+   * @returns {Promise<import('pg').QueryResult>}
+   */
+  async raw(sql, params, opts = {}) {
+    const { name, retryable = false } = opts;
+    const run = name
+      ? () => this._preparedQuery(name, sql, params)
+      : () => this._query(sql, params);
+
+    if (!retryable) {
+      return run();
+    }
+    return withRetry(run, {
+      idempotent: true,
+      label: name ? `raw:${name}` : `raw:${this.table}`,
+    });
+  }
+
+  /**
+   * Run `callback` with a single dedicated client checked out from the pool.
+   * Useful for multi-statement work that must share a connection (advisory
+   * locks, SET LOCAL, temp tables) without wrapping the whole thing in a
+   * transaction.
+   *
+   * The client is ALWAYS released. If the callback throws, the client is
+   * released with the error as argument so pg discards it rather than
+   * returning a potentially poisoned connection to the pool.
+   *
+   * @param {(client: import('pg').PoolClient) => Promise<*>} callback
+   * @param {Object} [opts]
+   * @param {boolean} [opts.retryable=false] - Retry connection-level failures
+   *   that occur before the callback has observed any query result. Does NOT
+   *   retry errors thrown from inside the callback after queries have run.
+   * @returns {Promise<*>}
+   */
+  async withClient(callback, opts = {}) {
+    const { retryable = false } = opts;
+
+    // When retryable is true we only retry pool.connect() — once the callback
+    // has a client in hand, we run it exactly once. This prevents a transient
+    // socket failure during connection from taking down the whole call, while
+    // never replaying user side effects.
+    const client = retryable
+      ? await withRetry(() => this.pool.connect(), {
+          idempotent: true,
+          label: `withClient:${this.table}:connect`,
+        })
+      : await this.pool.connect();
+
+    let releaseError;
+    try {
+      return await callback(client);
+    } catch (err) {
+      releaseError = err;
+      throw err;
+    } finally {
+      client.release(releaseError);
+    }
+  }
+
+  /**
+   * Run `callback` inside a database transaction. Thin wrapper over the
+   * standalone withTransaction() in db/transaction.js that adds optional
+   * classifier-aware retry on serialization failures and deadlocks, plus
+   * optional isolation-level override.
+   *
+   * @param {(client: import('pg').PoolClient) => Promise<*>} callback
+   * @param {Object} [opts]
+   * @param {boolean} [opts.retryable=false] - Retry on 40001/40P01 (only
+   *   meaningful when the transaction body is safe to re-execute from scratch).
+   * @param {string} [opts.isolation] - Override isolation level, e.g.
+   *   'SERIALIZABLE' or 'REPEATABLE READ'. Emitted as `SET TRANSACTION
+   *   ISOLATION LEVEL ...` immediately after BEGIN.
+   * @returns {Promise<*>}
+   */
+  async withTransaction(callback, opts = {}) {
+    const { retryable = false, isolation } = opts;
+
+    if (isolation !== undefined && !VALID_ISOLATION_LEVELS.has(isolation)) {
+      throw new Error(
+        `Invalid isolation level: ${isolation}. Allowed: ${Array.from(
+          VALID_ISOLATION_LEVELS
+        ).join(', ')}`
+      );
+    }
+
+    const run = () =>
+      baseWithTransaction(this.pool, async (client) => {
+        if (isolation) {
+          await client.query(`SET TRANSACTION ISOLATION LEVEL ${isolation}`);
+        }
+        return callback(client);
+      });
+
+    if (!retryable) {
+      return run();
+    }
+    return withRetry(run, {
+      idempotent: true,
+      label: `tx:${this.table}`,
+    });
   }
 }
 
