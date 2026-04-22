@@ -187,3 +187,4 @@ docker-app-logs.txt
 nul
 code_groups.md
 debloat_plan.md
+.claude/settings.local.json
