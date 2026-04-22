@@ -693,7 +693,10 @@ describe('aggregate-audit', () => {
     it('should throw error when manual album ID is invalid', async () => {
       const pool = createMockPool([]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const duplicateService = {
+        mergeAlbums: mock.fn(async () => ({ listItemsUpdated: 0 })),
+      };
+      const audit = createAggregateAudit({ pool, logger, duplicateService });
 
       await assert.rejects(
         async () => {
@@ -709,7 +712,10 @@ describe('aggregate-audit', () => {
         { rows: [] },
       ]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const duplicateService = {
+        mergeAlbums: mock.fn(async () => ({ listItemsUpdated: 0 })),
+      };
+      const audit = createAggregateAudit({ pool, logger, duplicateService });
 
       await assert.rejects(
         async () => {
@@ -720,16 +726,10 @@ describe('aggregate-audit', () => {
     });
 
     it('should successfully merge manual album into canonical', async () => {
-      // Create a more sophisticated mock for this test
-      let queryIndex = 0;
       const queryResults = [
-        // Query 1: Check manual album exists
-        { rows: [{ count: '1' }] },
-        // Query 2: Check canonical album exists
-        { rows: [{ count: '1' }] },
-        // Query 3: Get canonical album metadata
+        // Query 1: Get canonical album metadata
         { rows: [{ artist: 'Radiohead', album: 'OK Computer' }] },
-        // Query 4: Get affected lists
+        // Query 2: Get affected lists
         {
           rows: [
             {
@@ -740,11 +740,7 @@ describe('aggregate-audit', () => {
             },
           ],
         },
-        // Query 5: Update list_items (UPDATE query)
-        { rowCount: 1 },
-        // Query 6: Delete manual album
-        { rowCount: 1 },
-        // Query 7: Insert admin event (returns the inserted event)
+        // Query 3: Insert admin event
         {
           rows: [
             {
@@ -756,20 +752,31 @@ describe('aggregate-audit', () => {
         },
       ];
 
-      const pool = {
-        query: mock.fn(async () => {
-          const result = queryResults[queryIndex] || { rows: [] };
-          queryIndex++;
-          return result;
-        }),
-        connect: mock.fn(async () => ({
-          query: mock.fn(async () => ({ rowCount: 1 })),
-          release: mock.fn(),
+      const pool = createMockPool(queryResults);
+
+      const duplicateService = {
+        mergeAlbums: mock.fn(async () => ({
+          listItemsUpdated: 1,
+          albumsDeleted: 1,
+          metadataMerged: true,
+          mergedFieldNames: ['artist', 'album'],
+          collisionsResolved: 0,
+          collisionRowsDeleted: 0,
+          dependentRemaps: {
+            recommendationsUpdated: 0,
+            recommendationsConflictsRemoved: 0,
+            albumMappingsUpdated: 0,
+            albumMappingsConflictsRemoved: 0,
+            artistAliasSourcesUpdated: 0,
+            userAlbumStatsUpdated: 0,
+            distinctPairsRemapped: 0,
+            distinctPairsRemoved: 0,
+          },
         })),
       };
 
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const audit = createAggregateAudit({ pool, logger, duplicateService });
 
       const result = await audit.mergeManualAlbum(
         'manual-123',
@@ -783,6 +790,7 @@ describe('aggregate-audit', () => {
       assert.strictEqual(result.success, true);
       assert.strictEqual(result.updatedListItems, 1);
       assert.ok(result.affectedLists.length > 0);
+      assert.strictEqual(duplicateService.mergeAlbums.mock.calls.length, 1);
     });
   });
 });

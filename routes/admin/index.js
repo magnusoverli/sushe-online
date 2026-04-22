@@ -15,6 +15,7 @@
  * - audit.js: Aggregate list audit and manual album reconciliation
  * - images.js: Image refetch service
  * - reidentify.js: MusicBrainz album re-identification
+ * - catalog-cleanup.js: orphan album preview and cleanup
  */
 
 // Import all submodules
@@ -28,6 +29,8 @@ const registerDuplicateRoutes = require('./duplicates');
 const registerAuditRoutes = require('./audit');
 const registerImageRoutes = require('./images');
 const registerReidentifyRoutes = require('./reidentify');
+const registerBootstrapRoutes = require('./bootstrap');
+const registerCatalogCleanupRoutes = require('./catalog-cleanup');
 
 module.exports = (app, deps) => {
   // Register standalone modules (no interdependencies)
@@ -39,10 +42,14 @@ module.exports = (app, deps) => {
   registerAuditRoutes(app, deps);
   registerImageRoutes(app, deps);
   registerReidentifyRoutes(app, deps);
+  registerCatalogCleanupRoutes(app, deps);
 
   // Register events first - it returns the adminEventService
   const { adminEventService } = registerEventRoutes(app, deps);
 
   // Register telegram with the adminEventService for notifications
   registerTelegramRoutes(app, deps, adminEventService);
+
+  // Register unified bootstrap endpoint after admin services are initialized
+  registerBootstrapRoutes(app, deps);
 };

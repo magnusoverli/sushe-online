@@ -145,6 +145,24 @@ function createTestApp(options = {}) {
 
   // Mock async datastores
   const mockUsersAsync = {
+    find:
+      options.usersAsyncFind ||
+      mock.fn(() => {
+        return Promise.resolve([
+          {
+            _id: 'admin-123',
+            username: 'adminuser',
+            email: 'admin@example.com',
+            role: 'admin',
+            createdAt: new Date(),
+          },
+        ]);
+      }),
+    count:
+      options.usersAsyncCount ||
+      mock.fn(() => {
+        return Promise.resolve(1);
+      }),
     update:
       options.usersAsyncUpdate ||
       mock.fn((_query, _update) => {
@@ -154,6 +172,11 @@ function createTestApp(options = {}) {
   };
 
   const mockListsAsync = {
+    count:
+      options.listsAsyncCount ||
+      mock.fn(() => {
+        return Promise.resolve(2);
+      }),
     find:
       options.listsAsyncFind ||
       mock.fn((query) => {
@@ -218,8 +241,17 @@ function createTestApp(options = {}) {
 
   // Mock pool
   const mockPool = {
-    query: mock.fn(() => Promise.resolve({ rows: [], rowCount: 0 })),
+    query:
+      options.poolQuery ||
+      mock.fn(() => Promise.resolve({ rows: [], rowCount: 0 })),
   };
+
+  mockPool.connect =
+    options.poolConnect ||
+    mock.fn(async () => ({
+      query: (...args) => mockPool.query(...args),
+      release: () => {},
+    }));
 
   // Mock upload middleware (for restore endpoint)
   const mockUpload = {
@@ -291,6 +323,7 @@ function createTestApp(options = {}) {
     mockLists,
     mockListsAsync,
     mockListItemsAsync,
+    mockPool,
     mockInvalidateUserCache,
   };
 }
@@ -732,6 +765,242 @@ describe('GET /api/admin/status', () => {
     const response = await request(app).get('/api/admin/status');
 
     assert.strictEqual(response.status, 401);
+  });
+});
+
+describe('GET /api/admin/bootstrap', () => {
+  it('should return unified admin bootstrap payload', async () => {
+    const poolQuery = mock.fn(async (sql) => {
+      if (sql.includes('SELECT COUNT(*) FROM admin_events')) {
+        return { rows: [{ count: '1' }] };
+      }
+
+      if (sql.includes('SELECT * FROM admin_events')) {
+        return {
+          rows: [
+            {
+              id: 1,
+              event_type: 'account_approval',
+              title: 'Needs approval',
+              priority: 'high',
+              status: 'pending',
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('SELECT priority, COUNT(*) as count')) {
+        return { rows: [{ priority: 'high', count: '1' }] };
+      }
+
+      if (
+        sql.includes(
+          'SELECT user_id, COUNT(*) as list_count FROM lists GROUP BY user_id'
+        )
+      ) {
+        return { rows: [{ user_id: 'admin-123', list_count: '2' }] };
+      }
+
+      if (sql.includes('WITH album_genres AS')) {
+        return { rows: [{ total_albums: '10', active_users: '1' }] };
+      }
+
+      if (sql.includes('SELECT DISTINCT year FROM lists')) {
+        return { rows: [{ year: 2024 }] };
+      }
+
+      if (
+        sql.includes('FROM master_lists') &&
+        sql.includes('WHERE year = ANY($1::int[])')
+      ) {
+        return {
+          rows: [
+            {
+              year: 2024,
+              revealed: false,
+              revealed_at: null,
+              computed_at: new Date(),
+              locked: false,
+              stats: {
+                participantCount: 3,
+                totalAlbums: 20,
+                albumsWith3PlusVoters: 4,
+                albumsWith2Voters: 6,
+              },
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('FROM master_list_confirmations')) {
+        return {
+          rows: [
+            { year: 2024, confirmed_at: new Date(), username: 'adminuser' },
+          ],
+        };
+      }
+
+      if (sql.includes('FROM recommendation_settings')) {
+        return { rows: [{ year: 2024, locked: true }] };
+      }
+
+      if (
+        sql.includes('FROM recommendation_access') &&
+        sql.includes('COUNT(*)::int AS count')
+      ) {
+        return { rows: [] };
+      }
+
+      if (
+        sql.includes('FROM recommendation_access') &&
+        sql.includes('AND user_id = $2')
+      ) {
+        return { rows: [] };
+      }
+
+      if (
+        sql.includes('FROM recommendations') &&
+        sql.includes('GROUP BY year')
+      ) {
+        return { rows: [{ year: 2024, count: 5 }] };
+      }
+
+      return { rows: [], rowCount: 0 };
+    });
+
+    const { app } = createTestApp({ poolQuery });
+
+    app.locals.telegramNotifier = {
+      getConfig: mock.fn(async () => null),
+      getRecommendationThreads: mock.fn(async () => []),
+    };
+
+    app.locals.albumSummaryService = {
+      getStats: mock.fn(async () => ({
+        totalAlbums: 20,
+        withSummary: 12,
+        attemptedNoSummary: 3,
+        neverAttempted: 5,
+        fromClaude: 12,
+      })),
+      getBatchStatus: mock.fn(() => ({ running: false })),
+    };
+
+    app.locals.imageRefetchService = {
+      getStats: mock.fn(async () => ({
+        totalAlbums: 20,
+        withImage: 18,
+        withoutImage: 2,
+        avgSizeKb: 80,
+        minSizeKb: 20,
+        maxSizeKb: 220,
+      })),
+      isJobRunning: mock.fn(() => false),
+      getProgress: mock.fn(() => null),
+    };
+
+    const response = await request(app).get('/api/admin/bootstrap');
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(response.body.hasData, true);
+    assert.strictEqual(response.body.events.pending.length, 1);
+    assert.strictEqual(response.body.aggregateLists.length, 1);
+    assert.strictEqual(response.body.aggregateLists[0].year, 2024);
+    assert.strictEqual(response.body.aggregateLists[0].recStatus.locked, true);
+    assert.strictEqual(response.body.summaryStats.stats.withSummary, 12);
+    assert.strictEqual(response.body.imageStats.stats.withImage, 18);
+  });
+});
+
+describe('Admin catalog cleanup routes', () => {
+  it('should return cleanup preview', async () => {
+    const poolQuery = mock.fn(async (sql) => {
+      if (sql.includes('FROM pg_tables')) {
+        return { rows: [{ tablename: 'list_items' }] };
+      }
+
+      if (
+        sql.includes('FROM albums a') &&
+        sql.includes('orphan_albums_total')
+      ) {
+        return {
+          rows: [
+            {
+              total_albums: 846,
+              orphan_albums_total: 401,
+              orphan_albums_eligible: 4,
+              orphan_albums_too_young: 2,
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('SELECT a.album_id, a.artist, a.album, a.created_at')) {
+        return {
+          rows: [
+            {
+              album_id: 'internal-1',
+              artist: 'Artist',
+              album: 'Album',
+              created_at: new Date(),
+            },
+          ],
+        };
+      }
+
+      return { rows: [], rowCount: 0 };
+    });
+
+    const { app } = createTestApp({ poolQuery });
+    const response = await request(app).get(
+      '/api/admin/catalog-cleanup/preview'
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(response.body.success, true);
+    assert.strictEqual(response.body.preview.totalAlbums, 846);
+    assert.strictEqual(response.body.preview.orphanAlbumsTotal, 401);
+    assert.strictEqual(response.body.preview.orphanAlbums, 4);
+    assert.strictEqual(response.body.preview.orphanAlbumsTooYoung, 2);
+    assert.strictEqual(Array.isArray(response.body.preview.sampleAlbums), true);
+  });
+
+  it('should reject cleanup execute with stale preview count', async () => {
+    const poolQuery = mock.fn(async (sql) => {
+      if (sql === 'BEGIN' || sql === 'ROLLBACK' || sql === 'COMMIT') {
+        return { rows: [], rowCount: 0 };
+      }
+
+      if (sql.includes('FROM pg_tables')) {
+        return { rows: [{ tablename: 'list_items' }] };
+      }
+
+      if (sql.includes('DROP TABLE IF EXISTS cleanup_album_targets')) {
+        return { rows: [], rowCount: 0 };
+      }
+
+      if (sql.includes('CREATE TEMP TABLE cleanup_album_targets')) {
+        return { rows: [], rowCount: 0 };
+      }
+
+      if (
+        sql.includes('SELECT COUNT(*)::int AS count FROM cleanup_album_targets')
+      ) {
+        return { rows: [{ count: 3 }] };
+      }
+
+      return { rows: [], rowCount: 0 };
+    });
+
+    const { app } = createTestApp({ poolQuery });
+    const response = await request(app)
+      .post('/api/admin/catalog-cleanup/execute')
+      .send({ minAgeDays: 30, expectedDeleteCount: 1 });
+
+    assert.strictEqual(response.status, 409);
+    assert.match(response.body.error, /stale/i);
+    assert.strictEqual(response.body.expectedDeleteCount, 1);
+    assert.strictEqual(response.body.currentDeleteCount, 3);
   });
 });
 

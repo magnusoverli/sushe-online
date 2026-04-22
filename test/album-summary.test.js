@@ -185,13 +185,13 @@ test('startBatchFetch should throw if already running', async () => {
   let pageCalls = 0;
   const mockPool = {
     query: async (query) => {
-      if (query.includes('COUNT(DISTINCT a.album_id)')) {
+      if (query.includes('SELECT COUNT(*) AS total')) {
         return {
           rows: [{ total: '1' }],
         };
       }
-      // Return albums for the paged query (now uses JOIN with list_items)
-      if (query.includes('SELECT DISTINCT a.album_id')) {
+      // Return albums for the paged query
+      if (query.includes('SELECT a.album_id, a.artist, a.album')) {
         return {
           rows:
             pageCalls++ === 0
@@ -223,6 +223,122 @@ test('startBatchFetch should throw if already running', async () => {
 
   // Clean up
   service.stopBatchFetch();
+});
+
+test('startBatchFetch should freeze batch scope to snapshot start time', async () => {
+  const calls = [];
+
+  const mockPool = {
+    query: async (query, params = []) => {
+      calls.push({ query, params });
+
+      if (query.includes('SELECT COUNT(*) AS total')) {
+        return {
+          rows: [{ total: '1' }],
+        };
+      }
+
+      if (query.includes('SELECT a.id, a.album_id, a.artist, a.album')) {
+        return { rows: [] };
+      }
+
+      return { rows: [] };
+    },
+  };
+
+  const service = createAlbumSummaryService({
+    pool: mockPool,
+    logger: createMockLogger(),
+  });
+
+  await service.startBatchFetch();
+
+  const waitUntil = Date.now() + 500;
+  while (service.getBatchStatus()?.running && Date.now() < waitUntil) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  const countCall = calls.find((call) =>
+    call.query.includes('SELECT COUNT(*) AS total')
+  );
+  const pageCall = calls.find(
+    (call) =>
+      call.query.includes('SELECT a.id, a.album_id') &&
+      call.query.includes('FROM albums a')
+  );
+
+  assert.ok(countCall);
+  assert.ok(pageCall);
+  assert.ok(
+    countCall.query.includes('a.created_at <= $1::timestamptz'),
+    'count query should include snapshot boundary'
+  );
+  assert.ok(
+    pageCall.query.includes('a.created_at <= $1::timestamptz'),
+    'page query should include snapshot boundary'
+  );
+  assert.ok(countCall.params[0] instanceof Date);
+  assert.ok(pageCall.params[0] instanceof Date);
+});
+
+test('startBatchFetch should not loop when album_id is null', async () => {
+  let pageCalls = 0;
+
+  const mockPool = {
+    query: async (query, params = []) => {
+      if (query.includes('SELECT COUNT(*) AS total')) {
+        return { rows: [{ total: '2' }] };
+      }
+
+      if (query.includes('SELECT a.id, a.album_id, a.artist, a.album')) {
+        pageCalls += 1;
+        if (pageCalls === 1) {
+          return {
+            rows: [
+              { id: 1, album_id: 'ok-1', artist: 'Artist', album: 'Album' },
+              { id: 2, album_id: null, artist: 'Unknown', album: 'Missing ID' },
+            ],
+          };
+        }
+
+        return { rows: [] };
+      }
+
+      if (query.includes('SELECT album_id, artist, album FROM albums')) {
+        if (params[0] === 'ok-1') {
+          return {
+            rows: [{ album_id: 'ok-1', artist: 'Artist', album: 'Album' }],
+          };
+        }
+
+        return { rows: [] };
+      }
+
+      if (query.includes('UPDATE albums SET summary')) {
+        return { rows: [], rowCount: 1 };
+      }
+
+      return { rows: [], rowCount: 0 };
+    },
+  };
+
+  const service = createAlbumSummaryService({
+    pool: mockPool,
+    logger: createMockLogger(),
+  });
+
+  await service.startBatchFetch();
+
+  const waitUntil = Date.now() + 1000;
+  while (service.getBatchStatus()?.running && Date.now() < waitUntil) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  const status = service.getBatchStatus();
+  assert.strictEqual(status.running, false);
+  assert.strictEqual(status.total, 2);
+  assert.strictEqual(status.processed, 2);
+  assert.strictEqual(pageCalls, 2);
 });
 
 test('fetchAndStoreSummary should return error for missing album', async () => {

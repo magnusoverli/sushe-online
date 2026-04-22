@@ -32,6 +32,7 @@ import { createSettingsRecommenderManagerActions } from './settings-drawer/handl
 import { createSettingsCoreHandlers } from './settings-drawer/handlers/core-handlers.js';
 import { createSettingsAuditHandlers } from './settings-drawer/handlers/audit-handlers.js';
 import { createSettingsAdminHandlers } from './settings-drawer/handlers/admin-handlers.js';
+import { getCurrentListId } from './app-state.js';
 
 /**
  * Create settings drawer utilities with injected dependencies
@@ -39,6 +40,7 @@ import { createSettingsAdminHandlers } from './settings-drawer/handlers/admin-ha
  * @param {Function} deps.showToast - Toast notification function
  * @param {Function} deps.showConfirmation - Modal confirmation function
  * @param {Function} deps.apiCall - API call function
+ * @param {Function} deps.refreshLockedYearStatus - Refresh lock UI for one year
  */
 export function createSettingsDrawer(deps = {}) {
   const showToast = deps.showToast || (() => {});
@@ -46,9 +48,11 @@ export function createSettingsDrawer(deps = {}) {
     deps.showConfirmation || (() => Promise.resolve(false));
   const apiCall =
     deps.apiCall || (() => Promise.reject(new Error('apiCall not provided')));
+  const refreshLockedYearStatus = deps.refreshLockedYearStatus;
 
   let currentCategory = 'account';
   const categoryData = {};
+  const categoryLoadPromises = {};
   const categoryScrollPositions = {};
   let isOpen = false;
 
@@ -202,9 +206,11 @@ export function createSettingsDrawer(deps = {}) {
     pollAlbumSummaryStatus,
     handleFetchAlbumSummaries,
     handleStopAlbumSummaries,
+    applySummaryStatsPayload,
   } = createSettingsAlbumSummaryActions({
     apiCall,
     showToast,
+    categoryData,
     getAlbumSummaryPollInterval: () => albumSummaryPollInterval,
     setAlbumSummaryPollInterval: (value) => {
       albumSummaryPollInterval = value;
@@ -215,10 +221,12 @@ export function createSettingsDrawer(deps = {}) {
     loadAlbumImageStats,
     handleRefetchAlbumImages,
     handleStopRefetchImages,
+    applyImageStatsPayload,
   } = createSettingsAlbumImageActions({
     apiCall,
     showToast,
     showConfirmation,
+    categoryData,
   });
 
   const { handleShowContributorManager } =
@@ -256,6 +264,7 @@ export function createSettingsDrawer(deps = {}) {
     handleShowContributorManager,
     handleShowRecommenderManager,
     createSettingsModalBase,
+    refreshLockedYearStatus,
   });
 
   const { attachAdminHandlers } = createSettingsAdminHandlers({
@@ -269,6 +278,9 @@ export function createSettingsDrawer(deps = {}) {
       albumSummaryPollInterval = value;
     },
     loadAlbumImageStats,
+    applySummaryStatsPayload,
+    applyImageStatsPayload,
+    categoryData,
     handleAdminEventAction,
     handleConfigureTelegram,
     handleDisconnectTelegram,
@@ -321,8 +333,33 @@ export function createSettingsDrawer(deps = {}) {
 
     // Load initial category if not loaded
     if (!categoryData[currentCategory]) {
-      loadCategoryData(currentCategory);
+      void ensureCategoryDataLoaded(currentCategory);
     }
+
+    if (
+      window.currentUser?.role === 'admin' &&
+      !categoryData.admin &&
+      !categoryLoadPromises.admin
+    ) {
+      void ensureCategoryDataLoaded('admin');
+    }
+  }
+
+  async function ensureCategoryDataLoaded(categoryId) {
+    if (categoryData[categoryId]) {
+      return categoryData[categoryId];
+    }
+
+    if (!categoryLoadPromises[categoryId]) {
+      categoryLoadPromises[categoryId] = loadCategoryData(categoryId).finally(
+        () => {
+          delete categoryLoadPromises[categoryId];
+        }
+      );
+    }
+
+    await categoryLoadPromises[categoryId];
+    return categoryData[categoryId];
   }
 
   /**
@@ -339,7 +376,7 @@ export function createSettingsDrawer(deps = {}) {
     // Restore FAB and mobile now-playing bar visibility
     const fab = document.getElementById('addAlbumFAB');
     const nowPlaying = document.getElementById('mobileNowPlaying');
-    const currentList = window.currentList || null;
+    const currentList = getCurrentListId();
 
     if (fab) {
       // Only show FAB if there's a current list (matches mobile menu pattern)
@@ -387,10 +424,12 @@ export function createSettingsDrawer(deps = {}) {
 
     // Load category data if not cached
     if (!categoryData[categoryId]) {
-      await loadCategoryData(categoryId);
-    } else {
-      renderCategoryContent(categoryId);
+      await ensureCategoryDataLoaded(categoryId);
     }
+
+    renderCategoryContent(categoryId, {
+      skipAnimation: categoryId === 'admin',
+    });
   }
 
   /**
@@ -401,8 +440,9 @@ export function createSettingsDrawer(deps = {}) {
     const contentEl = document.getElementById('settingsCategoryContent');
     if (!contentEl) return;
 
-    // Show loading state
-    contentEl.innerHTML = `
+    if (categoryId !== 'admin') {
+      // Show loading state
+      contentEl.innerHTML = `
       <div class="flex items-center justify-center py-12">
         <div class="text-center">
           <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mb-2"></i>
@@ -410,6 +450,7 @@ export function createSettingsDrawer(deps = {}) {
         </div>
       </div>
     `;
+    }
 
     try {
       let data = {};
@@ -439,7 +480,12 @@ export function createSettingsDrawer(deps = {}) {
       }
 
       categoryData[categoryId] = data;
-      renderCategoryContent(categoryId);
+
+      if (currentCategory === categoryId) {
+        renderCategoryContent(categoryId, {
+          skipAnimation: categoryId === 'admin',
+        });
+      }
     } catch (error) {
       console.error('Error loading category data:', error);
       contentEl.innerHTML = `
@@ -457,15 +503,18 @@ export function createSettingsDrawer(deps = {}) {
    * Render category content
    * @param {string} categoryId - Category ID
    */
-  function renderCategoryContent(categoryId) {
+  function renderCategoryContent(categoryId, options = {}) {
+    const skipAnimation = options.skipAnimation === true;
     const contentEl = document.getElementById('settingsCategoryContent');
     if (!contentEl) return;
 
-    // Re-trigger fade-in animation by removing and adding animation
-    contentEl.style.animation = 'none';
-    // Force reflow to ensure animation restart
-    void contentEl.offsetHeight;
-    contentEl.style.animation = '';
+    if (!skipAnimation) {
+      // Re-trigger fade-in animation by removing and adding animation
+      contentEl.style.animation = 'none';
+      // Force reflow to ensure animation restart
+      void contentEl.offsetHeight;
+      contentEl.style.animation = '';
+    }
 
     const data = categoryData[categoryId] || {};
 

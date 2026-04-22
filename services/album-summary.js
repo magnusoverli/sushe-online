@@ -582,15 +582,15 @@ function createAlbumSummaryService(deps = {}) {
     };
   }
 
-  /** Get summary statistics (only for albums that are in lists) */
+  /** Get summary statistics across the full albums dataset */
   async function getStats() {
     const result = await pool.query(`
-      SELECT COUNT(DISTINCT a.album_id) AS total_albums,
-        COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary IS NOT NULL) AS with_summary,
-        COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_fetched_at IS NOT NULL AND a.summary IS NULL) AS attempted_no_summary,
-        COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_fetched_at IS NULL) AS never_attempted,
-        COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_source = 'claude') AS from_claude
-      FROM albums a INNER JOIN list_items li ON li.album_id = a.album_id
+      SELECT COUNT(*) AS total_albums,
+        COUNT(*) FILTER (WHERE summary IS NOT NULL) AS with_summary,
+        COUNT(*) FILTER (WHERE summary_fetched_at IS NOT NULL AND summary IS NULL) AS attempted_no_summary,
+        COUNT(*) FILTER (WHERE summary_fetched_at IS NULL) AS never_attempted,
+        COUNT(*) FILTER (WHERE summary_source = 'claude') AS from_claude
+      FROM albums
     `);
     return parseStatsRow(result.rows[0]);
   }
@@ -609,10 +609,16 @@ function createAlbumSummaryService(deps = {}) {
         : 'a.summary_fetched_at IS NULL';
     const pageSize = parseInt(process.env.ALBUM_SUMMARY_PAGE_SIZE || '500', 10);
 
+    const snapshotStartedAt = new Date();
+    const snapshotBoundaryClause =
+      '(a.created_at IS NULL OR a.created_at <= $1::timestamptz)';
+
     const countResult = await pool.query(
-      `SELECT COUNT(DISTINCT a.album_id) AS total
-       FROM albums a INNER JOIN list_items li ON li.album_id = a.album_id
-       WHERE ${whereClause}`
+      `SELECT COUNT(*) AS total
+       FROM albums a
+       WHERE ${whereClause}
+         AND ${snapshotBoundaryClause}`,
+      [snapshotStartedAt]
     );
     const total = parseInt(countResult.rows[0]?.total, 10) || 0;
 
@@ -626,6 +632,7 @@ function createAlbumSummaryService(deps = {}) {
       includeRetries,
       regenerateAll: !!regenerateAll,
       concurrency: parseInt(process.env.ALBUM_SUMMARY_CONCURRENCY || '3', 10),
+      snapshotStartedAt: snapshotStartedAt.toISOString(),
     });
     batchJob = {
       running: true,
@@ -635,31 +642,31 @@ function createAlbumSummaryService(deps = {}) {
       notFound: 0,
       errors: 0,
       startedAt: new Date().toISOString(),
+      snapshotStartedAt: snapshotStartedAt.toISOString(),
     };
 
-    let lastAlbumId = null;
+    let lastAlbumRowId = null;
     const fetchNextPage = async () => {
-      const params = [];
-      let pageWhere = `WHERE ${whereClause}`;
+      const params = [snapshotStartedAt];
+      let pageWhere = `WHERE ${whereClause} AND ${snapshotBoundaryClause}`;
 
-      if (lastAlbumId) {
-        params.push(lastAlbumId);
-        pageWhere += ` AND a.album_id > $${params.length}`;
+      if (lastAlbumRowId !== null) {
+        params.push(lastAlbumRowId);
+        pageWhere += ` AND a.id > $${params.length}`;
       }
 
       params.push(pageSize);
       const limitParam = `$${params.length}`;
 
-      const query = `SELECT DISTINCT a.album_id, a.artist, a.album
+      const query = `SELECT a.id, a.album_id, a.artist, a.album
         FROM albums a
-        INNER JOIN list_items li ON li.album_id = a.album_id
         ${pageWhere}
-        ORDER BY a.album_id
+        ORDER BY a.id
         LIMIT ${limitParam}`;
 
       const result = await pool.query(query, params);
       if (result.rows.length > 0) {
-        lastAlbumId = result.rows[result.rows.length - 1].album_id;
+        lastAlbumRowId = result.rows[result.rows.length - 1].id;
       }
       return result.rows;
     };

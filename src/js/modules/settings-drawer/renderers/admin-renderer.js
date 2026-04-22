@@ -37,6 +37,63 @@ export function createSettingsAdminRenderer() {
     };
     const users = data.users || [];
     const aggregateLists = data.aggregateLists || [];
+    const summaryStatsPayload = data.summaryStats || {};
+    const imageStatsPayload = data.imageStats || {};
+
+    const summaryStatsHtml = summaryStatsPayload.stats
+      ? `
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-white text-lg">${summaryStatsPayload.stats.totalAlbums || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">Total Albums</div>
+          </div>
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-green-400 text-lg">${summaryStatsPayload.stats.withSummary || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">With Summary</div>
+          </div>
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-yellow-400 text-lg">${summaryStatsPayload.stats.attemptedNoSummary || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">No Summary Found</div>
+          </div>
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-blue-400 text-lg">${summaryStatsPayload.stats.neverAttempted || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">Never Attempted</div>
+          </div>
+        </div>
+      `
+      : '<div class="text-gray-500 text-sm">Summary stats unavailable.</div>';
+
+    const imageStatsHtml = imageStatsPayload.stats
+      ? `
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-white text-lg">${imageStatsPayload.stats.totalAlbums || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">Total Albums</div>
+          </div>
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-green-400 text-lg">${imageStatsPayload.stats.withImage || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">With Image</div>
+          </div>
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-yellow-400 text-lg">${imageStatsPayload.stats.withoutImage || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">Without Image</div>
+          </div>
+        </div>
+        <div class="text-xs text-gray-500 mt-2">
+          Avg size: ${imageStatsPayload.stats.avgSizeKb || 0} KB | Min: ${imageStatsPayload.stats.minSizeKb || 0} KB | Max: ${imageStatsPayload.stats.maxSizeKb || 0} KB
+        </div>
+      `
+      : '<div class="text-gray-500 text-sm">Image stats unavailable.</div>';
+
+    const cleanupPreview = data.catalogCleanupPreview || {
+      minAgeDays: 90,
+      totalAlbums: 0,
+      orphanAlbumsTotal: 0,
+      orphanAlbums: 0,
+      orphanAlbumsTooYoung: 0,
+      userAlbumStatsReferences: 0,
+      distinctPairReferences: 0,
+    };
 
     const formatRelativeTime = (dateString) => {
       if (!dateString) return 'Unknown';
@@ -124,9 +181,9 @@ export function createSettingsAdminRenderer() {
                   }
 
                   let statsHtml = '';
-                  if (stats && !isRevealed) {
+                  if (!isRevealed && stats) {
                     statsHtml = `
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3" id="aggregate-year-stats-${year}">
                       <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
                         <div class="font-bold text-white text-lg">${stats.participantCount || 0}</div>
                         <div class="text-xs text-gray-400 uppercase">Contributors</div>
@@ -276,7 +333,7 @@ export function createSettingsAdminRenderer() {
           <h3 class="settings-group-title">Album Summaries</h3>
           <div class="settings-group-content">
             <div id="albumSummaryStats" class="mb-4">
-              <div class="text-gray-400 text-sm">Loading stats...</div>
+              ${summaryStatsHtml}
             </div>
             <div class="settings-row">
               <div class="settings-row-label">
@@ -303,7 +360,7 @@ export function createSettingsAdminRenderer() {
           <h3 class="settings-group-title">Album Images</h3>
           <div class="settings-group-content">
             <div id="albumImageStats" class="mb-4">
-              <div class="text-gray-400 text-sm">Loading stats...</div>
+              ${imageStatsHtml}
             </div>
             <div class="settings-row">
               <div class="settings-row-label">
@@ -327,6 +384,50 @@ export function createSettingsAdminRenderer() {
             <div id="imageRefetchResult" class="hidden mt-4 p-3 bg-gray-800/50 rounded text-sm">
               <div id="imageRefetchResultText" class="text-gray-300"></div>
             </div>
+          </div>
+        </div>
+
+        <!-- Catalog Cleanup -->
+        <div class="settings-group">
+          <h3 class="settings-group-title">Catalog Cleanup</h3>
+          <div class="settings-group-content">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+              <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                <div id="catalogCleanupTotalAlbums" class="font-bold text-white text-lg">${cleanupPreview.totalAlbums || 0}</div>
+                <div class="text-xs text-gray-400 uppercase">Albums in DB</div>
+              </div>
+              <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                <div id="catalogCleanupOrphanTotal" class="font-bold text-white text-lg">${cleanupPreview.orphanAlbumsTotal || 0}</div>
+                <div class="text-xs text-gray-400 uppercase">Orphan Albums</div>
+              </div>
+              <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                <div id="catalogCleanupOrphanYoungCount" class="font-bold text-yellow-400 text-lg">${cleanupPreview.orphanAlbumsTooYoung || 0}</div>
+                <div class="text-xs text-gray-400 uppercase">Too new to remove</div>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+              <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                <div id="catalogCleanupStatsRefCount" class="font-bold text-yellow-400 text-lg">${cleanupPreview.userAlbumStatsReferences || 0}</div>
+                <div class="text-xs text-gray-400 uppercase">Stats refs to null</div>
+              </div>
+              <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                <div id="catalogCleanupDistinctPairCount" class="font-bold text-blue-400 text-lg">${cleanupPreview.distinctPairReferences || 0}</div>
+                <div class="text-xs text-gray-400 uppercase">Distinct pairs</div>
+              </div>
+            </div>
+            <div class="space-y-3">
+              <div>
+                <label class="settings-label">Remove Orphan Albums</label>
+                <p class="settings-description max-w-none">Deletes albums that are not referenced by lists, recommendations, service mappings, or artist alias source links. User album stats references are preserved by setting <code>album_id</code> to null. Click <strong>Preview</strong> to see how many will be removed.</p>
+              </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <label for="catalogCleanupMinAgeDays" class="text-xs text-gray-400 whitespace-nowrap">Min age (days):</label>
+                <input id="catalogCleanupMinAgeDays" type="number" min="0" max="3650" value="${cleanupPreview.minAgeDays || 90}" class="bg-gray-700 text-white text-sm rounded px-2 py-1 border border-gray-600 w-24" />
+                <button id="catalogCleanupPreviewBtn" class="settings-button">Preview</button>
+                <button id="catalogCleanupExecuteBtn" class="settings-button settings-button-danger">Delete Safe Orphans</button>
+              </div>
+            </div>
+            <div id="catalogCleanupStatus" class="hidden text-xs text-gray-400 mt-2"></div>
           </div>
         </div>
 

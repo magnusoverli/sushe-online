@@ -49,6 +49,36 @@ CRITICAL: Write ONLY the final summary. Use only verified search results. If ins
 }
 
 /**
+ * Run async operation with timeout.
+ */
+async function withTimeout(operation, timeoutMs) {
+  if (!timeoutMs || timeoutMs <= 0) {
+    return operation;
+  }
+
+  let timeoutId = null;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      const timeoutError = new Error(
+        `Claude request timed out after ${timeoutMs}ms`
+      );
+      timeoutError.code = 'CLAUDE_TIMEOUT';
+      timeoutError.status = 408;
+      reject(timeoutError);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([operation, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+/**
  * Remove common preambles and meta-commentary from summary text
  */
 function stripPreambles(text) {
@@ -212,6 +242,14 @@ function handleApiError(
       retryAfter: err.headers?.['retry-after'] || err.retryAfter,
     });
     observeExternalApiCall('claude', 'messages.create', duration, 429);
+  } else if (err.code === 'CLAUDE_TIMEOUT' || err.status === 408) {
+    log.warn('Claude API request timed out', {
+      artist,
+      album,
+      status: err.status,
+      error: err.message,
+    });
+    observeExternalApiCall('claude', 'messages.create', duration, 408);
   } else if (err.status >= 500) {
     log.error('Claude API server error', {
       artist,
@@ -358,6 +396,10 @@ function createClaudeSummaryService(deps = {}) {
     // Read config at call time, not module load time
     const model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5';
     const maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '400', 10);
+    const requestTimeoutMs = parseInt(
+      process.env.CLAUDE_REQUEST_TIMEOUT_MS || '30000',
+      10
+    );
 
     // Configurable summary length preferences
     const targetSentences = parseInt(
@@ -389,26 +431,29 @@ function createClaudeSummaryService(deps = {}) {
             model,
           });
 
-          return await anthropic.messages.create({
-            model,
-            max_tokens: maxTokens,
-            temperature: 0.43,
-            system:
-              'You are a music encyclopedia providing accurate, concise album information from web search results.',
-            tools: [
-              {
-                type: 'web_search_20250305',
-                name: 'web_search',
-                max_uses: 3,
-              },
-            ],
-            messages: [
-              {
-                role: 'user',
-                content: prompt,
-              },
-            ],
-          });
+          return await withTimeout(
+            anthropic.messages.create({
+              model,
+              max_tokens: maxTokens,
+              temperature: 0.43,
+              system:
+                'You are a music encyclopedia providing accurate, concise album information from web search results.',
+              tools: [
+                {
+                  type: 'web_search_20250305',
+                  name: 'web_search',
+                  max_uses: 3,
+                },
+              ],
+              messages: [
+                {
+                  role: 'user',
+                  content: prompt,
+                },
+              ],
+            }),
+            requestTimeoutMs
+          );
         },
         3,
         log

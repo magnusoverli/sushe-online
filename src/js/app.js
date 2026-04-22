@@ -10,7 +10,7 @@ import { createSorting } from './modules/sorting.js';
 import { createImportConflictHandler } from './modules/import-export.js';
 // Date utilities are imported directly by modules that need them
 import { createNowPlaying } from './modules/now-playing.js';
-import { createRealtimeSync } from './modules/realtime-sync.js';
+import { createAppRealtimeSync } from './modules/app-realtime-sync.js';
 import { showToast } from './modules/toast.js';
 import {
   showConfirmation,
@@ -56,8 +56,14 @@ import { createAppShellUi } from './modules/app-shell-ui.js';
 import { createListSelection } from './modules/list-selection.js';
 import { createYearLockStatusRefresh } from './modules/year-lock-status-refresh.js';
 import { createAppStartupUi } from './modules/app-startup-ui.js';
+import { createAppBootstrap } from './modules/app-bootstrap.js';
+import { registerAppGlobalEvents } from './modules/app-global-events.js';
 import { registerAppWindowGlobals } from './modules/app-window-globals.js';
 import { createAppDiscoveryImport } from './modules/app-discovery-import.js';
+import { createAppServiceIntegrations } from './modules/app-service-integrations.js';
+import { createMainStatusToggler } from './modules/app-main-status.js';
+import { createAppListOperations } from './modules/app-list-operations.js';
+import { createAppApiClient } from './modules/app-api-client.js';
 
 // Centralized state store
 import {
@@ -68,7 +74,6 @@ import {
   getListMetadata,
   updateListMetadata,
   findListByName,
-  getCurrentListName,
   isListDataLoaded,
   getGroups,
   getGroup,
@@ -133,6 +138,11 @@ function setPendingImportFilenameValue(filename) {
   setPendingImportState(pending.data, filename);
 }
 
+const appApiClient = createAppApiClient({
+  getRealtimeSyncModuleInstance,
+  logger: console,
+});
+
 // ============ LOCAL STATE ============
 // State variables scoped to app.js — passed to extracted modules via DI getters/setters.
 // The canonical shared state (lists, groups, currentListId, etc.) lives in app-state.js.
@@ -167,6 +177,37 @@ const { registerDiscoveryAddAlbumHandler, initializeFileImportHandlers } =
     setPendingImportFilename: setPendingImportFilenameValue,
     logger: console,
   });
+
+const appServiceIntegrations = createAppServiceIntegrations({
+  getMusicServicesModule,
+  setMusicServicesModule,
+  getImportExportModule,
+  setImportExportModule,
+  showToast,
+  getListData,
+  getListMetadata,
+});
+
+const appListOperations = createAppListOperations({
+  apiCall,
+  showToast,
+  getLists,
+  setLists,
+  setListData,
+  updateListMetadata,
+  updateGroupsFromServer,
+  getCurrentListId,
+  selectList,
+  updateListNav,
+  setRecommendationYears,
+  loadSnapshotFromStorage,
+  getLastSavedSnapshots,
+  createListSnapshot,
+  saveSnapshotToStorage,
+  markLocalSave,
+  computeListDiff,
+  logger: console,
+});
 
 /**
  * Get or initialize the link preview module
@@ -252,7 +293,7 @@ function getTrackName(track) {
 function getTrackLength(track) {
   return getTrackSelectionModule().getTrackLength(track);
 }
-function fetchTracksForAlbum(album, signal) {
+export function fetchTracksForAlbum(album, signal) {
   return getTrackSelectionModule().fetchTracksForAlbum(album, signal);
 }
 function showTrackSelectionMenu(album, albumIndex, x, y) {
@@ -314,9 +355,6 @@ const getPlaybackModule = createLazyModule(() =>
 // Wrapper functions for playback module
 function playAlbum(index) {
   return getPlaybackModule().playAlbum(index);
-}
-function playTrack(index) {
-  return getPlaybackModule().playTrack(index);
 }
 function playSpecificTrack(index, trackName) {
   return getPlaybackModule().playSpecificTrack(index, trackName);
@@ -390,12 +428,13 @@ const getAlbumDisplayModule = createLazyModule(() =>
       getLinkPreviewModule().attachLinkPreview(...args),
     showTrackSelectionMenu,
     showMobileEditForm,
-    showMobileAlbumMenu: (el) => window.showMobileAlbumMenu(el),
-    showMobileSummarySheet: (summary, albumName, artist) =>
-      window.showMobileSummarySheet(summary, albumName, artist),
+    showMobileAlbumMenu,
+    showMobileSummarySheet,
     playAlbumByMetadata: (artist, album, options) =>
       getPlaybackModule().playAlbumByMetadata(artist, album, options),
-    playTrackSafe: (albumId) => window.playTrackSafe(albumId),
+    playTrackSafe: (albumId) => getPlaybackModule().playTrackSafe(albumId),
+    playSpecificTrack,
+    isViewingRecommendations,
     getTrackName,
     getTrackLength,
     formatTrackTime,
@@ -438,12 +477,10 @@ const getContextMenusModule = createLazyModule(() =>
     getListMetadata,
     getCurrentList: () => getCurrentListId(),
     getLists,
-    saveList,
     selectList,
     showToast,
     showConfirmation,
     apiCall,
-    findAlbumByIdentity,
     downloadListAsJSON,
     downloadListAsPDF,
     downloadListAsCSV,
@@ -451,14 +488,7 @@ const getContextMenusModule = createLazyModule(() =>
     openRenameModal,
     updateListNav,
     updateListMetadata,
-    showMobileEditForm,
-    playAlbum,
-    playAlbumSafe: (albumId) => window.playAlbumSafe(albumId),
-    loadLists,
-    getContextAlbum: () => getContextAlbumState(),
-    setContextAlbum: (index, albumId) => {
-      setContextAlbumState(index, albumId);
-    },
+    clearSnapshotFromStorage,
     getContextList: () => getContextListState(),
     setContextList: (listId) => {
       setContextListState(listId);
@@ -471,6 +501,7 @@ const getContextMenusModule = createLazyModule(() =>
         window.refreshMobileBarVisibility();
       }
     },
+    getCurrentUser: () => window.currentUser || {},
     toggleMainStatus,
     getSortedGroups,
     refreshGroupsAndLists,
@@ -478,10 +509,6 @@ const getContextMenusModule = createLazyModule(() =>
 );
 
 // Wrapper functions for context menus module
-function getListMenuConfig(listName) {
-  return getContextMenusModule().getListMenuConfig(listName);
-}
-
 function getDeviceIcon(type) {
   return getContextMenusModule().getDeviceIcon(type);
 }
@@ -521,7 +548,6 @@ const getMobileUIModule = createLazyModule(() =>
     updatePlaylist,
     toggleMainStatus,
     getDeviceIcon,
-    getListMenuConfig,
     getAvailableCountries,
     getAvailableGenres,
     setCurrentContextAlbum: (idx) => {
@@ -543,16 +569,14 @@ const getMobileUIModule = createLazyModule(() =>
     isViewingRecommendations,
     recommendAlbum: (...args) =>
       getRecommendationsModule().recommendAlbum(...args),
+    openRenameCategoryModal,
+    getCurrentUser: () => window.currentUser || {},
   })
 );
 
 // Wrapper functions for mobile UI module
 function showMobileAlbumMenu(indexOrElement) {
   return getMobileUIModule().showMobileAlbumMenu(indexOrElement);
-}
-
-function showMobileMoveToListSheet(index, albumId) {
-  return getMobileUIModule().showMobileMoveToListSheet(index, albumId);
 }
 
 function showMobileListMenu(listName) {
@@ -583,10 +607,6 @@ function playAlbumSafe(albumId) {
   return getMobileUIModule().playAlbumSafe(albumId);
 }
 
-function removeAlbumSafe(albumId) {
-  return getMobileUIModule().removeAlbumSafe(albumId);
-}
-
 function findAlbumByIdentity(albumId) {
   return getMobileUIModule().findAlbumByIdentity(albumId);
 }
@@ -596,53 +616,7 @@ function findAlbumByIdentity(albumId) {
  * Used after drag-and-drop reordering
  */
 async function refreshGroupsAndLists() {
-  try {
-    const [fetchedLists, fetchedGroups] = await Promise.all([
-      apiCall('/api/lists'),
-      apiCall('/api/groups'),
-    ]);
-
-    // Update groups
-    updateGroupsFromServer(fetchedGroups);
-
-    // Update lists metadata (preserve loaded _data)
-    const currentLists = getLists();
-    Object.keys(fetchedLists).forEach((listId) => {
-      const meta = fetchedLists[listId];
-      if (currentLists[listId]) {
-        // Preserve existing _data if loaded, but update all metadata including name
-        currentLists[listId] = {
-          ...currentLists[listId],
-          name: meta.name || currentLists[listId].name || 'Unknown',
-          year: meta.year || null,
-          isMain: meta.isMain || false,
-          count: meta.count || 0,
-          groupId: meta.groupId || null,
-          sortOrder: meta.sortOrder || 0,
-          updatedAt: meta.updatedAt || null,
-        };
-      } else {
-        currentLists[listId] = {
-          _id: listId,
-          name: meta.name || 'Unknown',
-          year: meta.year || null,
-          isMain: meta.isMain || false,
-          count: meta.count || 0,
-          groupId: meta.groupId || null,
-          sortOrder: meta.sortOrder || 0,
-          _data: null,
-          updatedAt: meta.updatedAt || null,
-          createdAt: meta.createdAt || null,
-        };
-      }
-    });
-    window.lists = currentLists;
-
-    // Re-render the sidebar navigation
-    updateListNav();
-  } catch (err) {
-    console.error('Failed to refresh groups and lists:', err);
-  }
+  return appListOperations.refreshGroupsAndLists();
 }
 
 const getListNavModule = createLazyModule(() =>
@@ -653,7 +627,6 @@ const getListNavModule = createLazyModule(() =>
     getSortedGroups,
     getCurrentList: () => getCurrentListId(),
     selectList,
-    getListMenuConfig,
     hideAllContextMenus,
     positionContextMenu,
     toggleMobileLists,
@@ -667,6 +640,11 @@ const getListNavModule = createLazyModule(() =>
     showToast,
     refreshGroupsAndLists,
     yearHasRecommendations,
+    getCurrentUser: () => window.currentUser || {},
+    showMobileListMenu,
+    showMobileCategoryMenu,
+    selectRecommendations,
+    getCurrentRecommendationsYear,
   })
 );
 
@@ -796,406 +774,66 @@ function reapplyNowPlayingBorder() {
   return getNowPlayingModule().reapplyNowPlayingBorder();
 }
 
-/**
- * Get or initialize the realtime sync module
- * Uses lazy initialization to avoid dependency ordering issues
- */
-function getRealtimeSyncModule() {
-  let realtimeSyncModule = getRealtimeSyncModuleInstance();
-  if (!realtimeSyncModule) {
-    realtimeSyncModule = createRealtimeSync({
-      getCurrentList: () => getCurrentListId(),
-      getListData,
-      apiCall,
-      updateAlbumSummaryInPlace: (albumId, summaryData) =>
-        getAlbumDisplayModule().updateAlbumSummaryInPlace(albumId, summaryData),
-      refreshListData: async (listId) => {
-        // Check if this was our own save - skip refresh and notification
-        if (wasRecentLocalSave(listId)) {
-          console.log(
-            '[RealtimeSync] Skipping refresh for local save:',
-            listId
-          );
-          return { wasLocalSave: true };
-        }
-
-        // Fetch fresh data and update the display
-        const data = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
-        setListData(listId, data);
-        if (getCurrentListId() === listId) {
-          displayAlbums(data, { forceFullRebuild: true });
-        }
-        return { wasLocalSave: false };
-      },
-      refreshListDataSilent: async (listId) => {
-        // Silent refresh without notifications (for summary updates)
-        const data = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
-        setListData(listId, data);
-        if (getCurrentListId() === listId) {
-          displayAlbums(data, { forceFullRebuild: true });
-        }
-      },
-      refreshListNav: () => {
-        // Re-fetch list metadata and update sidebar
-        loadLists();
-      },
-      showToast,
-      displayAlbums,
-    });
-    setRealtimeSyncModuleInstance(realtimeSyncModule);
-  }
-  return realtimeSyncModule;
-}
-
-/**
- * Initialize realtime sync for cross-device list updates
- */
-function initializeRealtimeSync() {
-  const sync = getRealtimeSyncModule();
-  sync.connect();
-
-  // Clean up on page unload
-  window.addEventListener('beforeunload', () => {
-    sync.disconnect();
-  });
-}
-
-/**
- * Toggle main status for a list
- * @param {string} listName - The name of the list
- */
-async function toggleMainStatus(listId) {
-  const meta = getListMetadata(listId);
-  if (!meta) return;
-
-  const listName = meta.name || listId;
-
-  // Check if list is in a year-group or has a year directly
-  let isInYearGroup = false;
-  if (meta.groupId) {
-    const sortedGroups = getSortedGroups();
-    const group = sortedGroups.find((g) => g._id === meta.groupId);
-    isInYearGroup = group?.isYearGroup || false;
-  }
-
-  // List must have a year (either directly or via year-group) to be marked as main
-  if (!meta.year && !isInYearGroup) {
-    showToast('List must be in a year category to be marked as main', 'error');
-    return;
-  }
-
-  const newMainStatus = !meta.isMain;
-
-  try {
-    const response = await apiCall(
-      `/api/lists/${encodeURIComponent(listId)}/main`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ isMain: newMainStatus }),
-      }
-    );
-
-    // Update local metadata
-    updateListMetadata(listId, { isMain: newMainStatus });
-
-    // If another list lost its main status, update it too
-    if (response.previousMainListId) {
-      updateListMetadata(response.previousMainListId, { isMain: false });
-    }
-
-    // Refresh sidebar to show updated star icons
-    updateListNav();
-
-    // If this is the currently displayed list, re-render to show/hide position numbers
-    // Position numbers only appear on main lists (they have semantic meaning for rankings)
-    if (listId === getCurrentListId()) {
-      const albums = getListData(getCurrentListId());
-      if (albums) {
-        displayAlbums(albums, { forceFullRebuild: true });
-      }
-    }
-
-    // Show appropriate message
-    if (newMainStatus) {
-      if (response.previousMainList) {
-        showToast(
-          `"${listName}" is now your main ${meta.year} list (replaced "${response.previousMainList}")`
-        );
-      } else {
-        showToast(`"${listName}" is now your main ${meta.year} list`);
-      }
-    } else {
-      showToast(`"${listName}" is no longer marked as main`);
-    }
-  } catch (error) {
-    console.error('Error toggling main status:', error);
-    showToast('Error updating main status', 'error');
-  }
-}
-
-// Hide context menus when clicking elsewhere
-document.addEventListener('click', hideAllContextMenus);
-
-// Hide context menus when right-clicking elsewhere (before new menu opens)
-document.addEventListener('contextmenu', hideAllContextMenus);
-
-// Prevent default context menu on right-click in list nav (only for list buttons, not year headers)
-document.addEventListener('contextmenu', (e) => {
-  const listButton = e.target.closest('[data-list-name]');
-  if (listButton) {
-    e.preventDefault();
-  }
+const { initializeRealtimeSync } = createAppRealtimeSync({
+  getRealtimeSyncModuleInstance,
+  setRealtimeSyncModuleInstance,
+  getCurrentListId,
+  getListData,
+  apiCall,
+  updateAlbumSummaryInPlace: (albumId, summaryData) =>
+    getAlbumDisplayModule().updateAlbumSummaryInPlace(albumId, summaryData),
+  wasRecentLocalSave,
+  setListData,
+  displayAlbums,
+  loadLists,
+  showToast,
+  logger: console,
 });
+
+const toggleMainStatus = createMainStatusToggler({
+  getListMetadata,
+  getSortedGroups,
+  showToast,
+  apiCall,
+  updateListMetadata,
+  updateListNav,
+  getCurrentListId,
+  getListData,
+  displayAlbums,
+  logger: console,
+});
+
+registerAppGlobalEvents({ hideAllContextMenus });
 
 // Show modal to choose a music service
 async function showServicePicker(hasSpotify, hasTidal) {
-  let mod = getMusicServicesModule();
-  if (!mod) {
-    mod = await import('./modules/music-services.js');
-    setMusicServicesModule(mod);
-  }
-  return mod.showServicePicker(hasSpotify, hasTidal);
+  return appServiceIntegrations.showServicePicker(hasSpotify, hasTidal);
 }
 
 async function downloadListAsJSON(listName) {
-  let mod = getImportExportModule();
-  if (!mod) {
-    showToast('Loading export module...', 'info', 1000);
-    mod = await import('./modules/import-export.js');
-    setImportExportModule(mod);
-  }
-  return mod.downloadListAsJSON(listName);
+  return appServiceIntegrations.downloadListAsJSON(listName);
 }
 
 async function downloadListAsPDF(listName) {
-  let mod = getImportExportModule();
-  if (!mod) {
-    showToast('Loading export module...', 'info', 1000);
-    mod = await import('./modules/import-export.js');
-    setImportExportModule(mod);
-  }
-  return mod.downloadListAsPDF(listName);
+  return appServiceIntegrations.downloadListAsPDF(listName);
 }
 
 async function downloadListAsCSV(listName) {
-  let mod = getImportExportModule();
-  if (!mod) {
-    showToast('Loading export module...', 'info', 1000);
-    mod = await import('./modules/import-export.js');
-    setImportExportModule(mod);
-  }
-  return mod.downloadListAsCSV(listName);
+  return appServiceIntegrations.downloadListAsCSV(listName);
 }
 
 async function updatePlaylist(listId, listData = null) {
-  let mod = getMusicServicesModule();
-  if (!mod) {
-    showToast('Loading playlist integration...', 'info', 1000);
-    mod = await import('./modules/music-services.js');
-    setMusicServicesModule(mod);
-  }
-  // If listData not provided, get it from global lists
-  const data = listData !== null ? listData : getListData(listId) || [];
-  // Get list name for display in music service
-  const meta = getListMetadata(listId);
-  const listName = meta?.name || listId;
-  return mod.updatePlaylist(listName, data);
+  return appServiceIntegrations.updatePlaylist(listId, listData);
 }
 
 // API helper functions
 export async function apiCall(url, options = {}) {
-  try {
-    // Get socket ID to exclude self from real-time broadcasts
-    const socketId = getRealtimeSyncModuleInstance()?.getSocket()?.id;
-
-    // Skip Content-Type for FormData (browser sets multipart boundary automatically)
-    const isFormData =
-      typeof FormData !== 'undefined' && options.body instanceof FormData;
-    const headers = {
-      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-      ...options.headers,
-    };
-    if (socketId) {
-      headers['X-Socket-ID'] = socketId;
-    }
-    // Add CSRF token for POST/PUT/DELETE requests
-    const method = options.method || 'GET';
-    if (
-      window.csrfToken &&
-      (method === 'POST' ||
-        method === 'PUT' ||
-        method === 'DELETE' ||
-        method === 'PATCH')
-    ) {
-      headers['X-CSRF-Token'] = window.csrfToken;
-    }
-
-    const response = await fetch(url, {
-      ...options,
-      headers,
-      credentials: 'same-origin',
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        // Try to parse error response to distinguish between session expiration and OAuth issues
-        try {
-          const errorData = await response.json();
-
-          // OAuth-specific errors (token expired, music service not authenticated)
-          // These should be handled by the caller, not redirect to login
-          if (
-            errorData.code === 'TOKEN_EXPIRED' ||
-            errorData.code === 'TOKEN_REFRESH_FAILED' ||
-            (errorData.code === 'NOT_AUTHENTICATED' && errorData.service)
-          ) {
-            const error = new Error(
-              errorData.error || `HTTP error! status: ${response.status}`
-            );
-            error.response = response;
-            error.data = errorData;
-            throw error;
-          }
-
-          // Session expired or generic authentication failure - redirect to login
-          window.location.href = '/login';
-          return;
-        } catch (parseError) {
-          // If we can't parse the response, treat it as session expiration
-          if (parseError.data) {
-            // This is the error we threw above for OAuth issues
-            throw parseError;
-          }
-          // JSON parse failed, likely session expired
-          window.location.href = '/login';
-          return;
-        }
-      }
-      // Try to parse error response body for additional details
-      let errorData = null;
-      try {
-        errorData = await response.json();
-      } catch (_parseErr) {
-        // Response body wasn't JSON, continue with generic error
-      }
-
-      const error = new Error(
-        errorData?.error || `HTTP error! status: ${response.status}`
-      );
-      error.response = response;
-      error.status = response.status;
-      // Spread error data onto the error object for easy access
-      if (errorData) {
-        Object.assign(error, errorData);
-      }
-      throw error;
-    }
-
-    return await response.json();
-  } catch (error) {
-    // Don't log AbortError — these are intentional cancellations
-    if (error.name !== 'AbortError') {
-      console.error('API call failed:', error);
-    }
-    throw error;
-  }
+  return appApiClient.apiCall(url, options);
 }
 
 // Load lists from server
 async function loadLists() {
-  try {
-    // OPTIMIZATION: Determine which list to load (now by ID)
-    const localLastListId = localStorage.getItem('lastSelectedList');
-    const serverLastListId = window.lastSelectedList;
-    const targetListId = localLastListId || serverLastListId;
-
-    // OPTIMIZATION: Parallel execution - fetch metadata, groups, rec years, and target list simultaneously
-    // This dramatically improves page refresh performance by:
-    // 1. Loading only metadata (tiny payload) for the sidebar
-    // 2. Loading groups (tiny payload) for sidebar organization
-    // 3. Loading recommendation years (tiny payload) for sidebar visibility
-    // 4. Loading the target list data in parallel (only what's needed)
-    const metadataPromise = apiCall('/api/lists'); // Metadata only (default)
-    const groupsPromise = apiCall('/api/groups'); // Groups for sidebar
-    const recYearsPromise = apiCall('/api/recommendations/years').catch(() => ({
-      years: [],
-    })); // Non-critical
-    const listDataPromise = targetListId
-      ? apiCall(`/api/lists/${encodeURIComponent(targetListId)}`)
-      : null;
-
-    // Wait for metadata, groups, and rec years (fast - small payloads)
-    const [fetchedLists, fetchedGroups, recYearsData] = await Promise.all([
-      metadataPromise,
-      groupsPromise,
-      recYearsPromise,
-    ]);
-
-    // Store which years have recommendations (for sidebar visibility)
-    setRecommendationYears(recYearsData.years || []);
-
-    // Initialize groups via centralized state store
-    updateGroupsFromServer(fetchedGroups);
-
-    // Initialize lists object with metadata objects (keyed by _id, not name)
-    const newLists = {};
-    Object.keys(fetchedLists).forEach((listId) => {
-      const meta = fetchedLists[listId];
-      newLists[listId] = {
-        _id: listId,
-        name: meta.name || 'Unknown',
-        year: meta.year || null,
-        isMain: meta.isMain || false,
-        count: meta.count || 0,
-        groupId: meta.groupId || null,
-        sortOrder: meta.sortOrder || 0,
-        _data: null, // Data not loaded yet (lazy load)
-        updatedAt: meta.updatedAt || null,
-        createdAt: meta.createdAt || null,
-      };
-    });
-    setLists(newLists);
-
-    // Load snapshots from localStorage for all lists (enables PATCH on first save after page load)
-    const lists = getLists();
-    Object.keys(lists).forEach((listId) => {
-      const snapshot = loadSnapshotFromStorage(listId);
-      if (snapshot && snapshot.length > 0) {
-        getLastSavedSnapshots().set(listId, snapshot);
-      }
-    });
-
-    // Update navigation immediately - sidebar appears right away
-    updateListNav();
-
-    // If we're loading a specific list, wait for it and display
-    if (listDataPromise && targetListId) {
-      try {
-        const listData = await listDataPromise;
-        // Store the actual data in the metadata object
-        setListData(targetListId, listData);
-
-        // Only auto-select if no list is currently selected
-        if (!getCurrentListId()) {
-          selectList(targetListId);
-          // Sync localStorage if we used server preference
-          if (!localLastListId && serverLastListId) {
-            try {
-              localStorage.setItem('lastSelectedList', serverLastListId);
-            } catch (_e) {
-              // Silently fail if localStorage is full
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to load last selected list:', err);
-        // Sidebar is still populated, user can manually select a list
-      }
-    }
-  } catch (error) {
-    console.error('Error loading lists:', error);
-    showToast('Error loading lists', 'error');
-  }
+  return appListOperations.loadLists();
 }
 
 // Import list with full data support (track picks, summaries, metadata)
@@ -1204,235 +842,15 @@ async function loadLists() {
 // @param {Object|null} metadata - Optional metadata from export (year, groupId, groupName)
 // @returns {string} - The created list ID
 async function importList(name, albums, metadata = null) {
-  try {
-    // Extract year and groupId from metadata
-    let year = undefined;
-    let groupId = null;
-
-    if (metadata) {
-      // Prefer year from metadata, or derive from group if it's a year-group
-      if (metadata.year !== null && metadata.year !== undefined) {
-        year = metadata.year;
-      }
-      // groupId will be resolved on the server side based on group_id or year
-      if (metadata.group_id) {
-        groupId = metadata.group_id;
-      }
-    }
-
-    // Clean albums data (remove rank/points, keep everything else)
-    const cleanedAlbums = albums.map((album) => {
-      const cleaned = { ...album };
-      delete cleaned.points;
-      delete cleaned.rank;
-      delete cleaned._id; // Remove list item ID (will be regenerated)
-      return cleaned;
-    });
-
-    // Create the list using the new POST /api/lists endpoint
-    const body = { name, data: cleanedAlbums };
-    if (year !== undefined) {
-      body.year = year;
-    }
-    if (groupId) {
-      body.groupId = groupId;
-    }
-
-    const createResult = await apiCall('/api/lists', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-
-    const listId = createResult._id;
-
-    // Fetch the saved list to get list item IDs (needed for track picks API)
-    const savedList = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
-
-    // Add the new list to in-memory lists object
-    getLists()[listId] = {
-      _id: listId,
-      name: name,
-      year: year || null,
-      isMain: false,
-      count: savedList.length,
-      groupId: groupId,
-      sortOrder: 0,
-      _data: savedList,
-      updatedAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-    };
-    window.lists = getLists();
-
-    // Build a map from album_id to list_item_id for track picks
-    const albumToListItemMap = new Map();
-    for (const item of savedList) {
-      if (item.album_id && item._id) {
-        albumToListItemMap.set(item.album_id, item._id);
-      }
-    }
-
-    // Import track picks and summaries for each album
-    let trackPicksImported = 0;
-    let summariesImported = 0;
-
-    for (const album of albums) {
-      const albumId = album.album_id;
-      if (!albumId) continue;
-
-      // Import track picks (primary_track, secondary_track)
-      // Track picks now use list item ID, not album ID
-      const listItemId = albumToListItemMap.get(albumId);
-      if (listItemId && (album.primary_track || album.secondary_track)) {
-        try {
-          // Set primary track if present
-          if (album.primary_track) {
-            await apiCall(`/api/track-picks/${listItemId}`, {
-              method: 'POST',
-              body: JSON.stringify({
-                trackIdentifier: album.primary_track,
-                priority: 1,
-              }),
-            });
-            trackPicksImported++;
-          }
-          // Set secondary track if present
-          if (album.secondary_track) {
-            await apiCall(`/api/track-picks/${listItemId}`, {
-              method: 'POST',
-              body: JSON.stringify({
-                trackIdentifier: album.secondary_track,
-                priority: 2,
-              }),
-            });
-            trackPicksImported++;
-          }
-        } catch (err) {
-          console.warn(
-            'Failed to import track picks for list item',
-            listItemId,
-            err
-          );
-        }
-      }
-
-      // Import summary fields if present (still uses album_id)
-      if (album.summary || album.summary_source) {
-        try {
-          await apiCall(`/api/albums/${albumId}/summary`, {
-            method: 'PUT',
-            body: JSON.stringify({
-              summary: album.summary || '',
-              summary_source: album.summary_source || '',
-            }),
-          });
-          summariesImported++;
-        } catch (err) {
-          console.warn('Failed to import summary for album', albumId, err);
-        }
-      }
-    }
-
-    // Refresh mobile bar visibility if this is the current list
-    if (listId === getCurrentListId() && window.refreshMobileBarVisibility) {
-      window.refreshMobileBarVisibility();
-    }
-
-    if (trackPicksImported > 0 || summariesImported > 0) {
-      console.log(
-        `Imported ${trackPicksImported} track picks and ${summariesImported} summaries`
-      );
-    }
-
-    return listId;
-  } catch (error) {
-    showToast('Error importing list', 'error');
-    throw error;
-  }
+  return appListOperations.importList(name, albums, metadata);
 }
 
 // Save list to server
 // @param {string} listId - List ID
 // @param {Array} data - Album array
 // @param {number|null} year - Optional year for the list (required for new lists)
-async function saveList(listId, data, year = undefined) {
-  try {
-    const cleanedData = data.map((album) => {
-      const cleaned = { ...album };
-      delete cleaned.points;
-      delete cleaned.rank;
-      return cleaned;
-    });
-
-    // Mark this as a local save BEFORE the API call to prevent race condition
-    // The WebSocket broadcast can arrive before the HTTP response
-    markLocalSave(listId);
-
-    // Try incremental save if we have a previous snapshot
-    const oldSnapshot = getLastSavedSnapshots().get(listId);
-    const diff = computeListDiff(oldSnapshot, cleanedData);
-
-    if (diff && diff.totalChanges > 0) {
-      // Use incremental endpoint (now ID-based)
-      const result = await apiCall(
-        `/api/lists/${encodeURIComponent(listId)}/items`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify({
-            added: diff.added,
-            removed: diff.removed,
-            updated: diff.updated,
-          }),
-        }
-      );
-
-      // Update local items with server-generated IDs for newly added items
-      if (result.addedItems && result.addedItems.length > 0) {
-        for (const added of result.addedItems) {
-          const localItem = cleanedData.find(
-            (a) => a.album_id === added.album_id
-          );
-          if (localItem && !localItem._id) {
-            localItem._id = added._id;
-          }
-        }
-      }
-
-      const listName = getLists()[listId]?.name || listId;
-      console.log(
-        `List "${listName}" saved incrementally: +${diff.added.length} -${diff.removed.length} ~${diff.updated.length}`
-      );
-    } else {
-      // Fall back to full save using PUT (update items only)
-      const body = { data: cleanedData };
-
-      await apiCall(`/api/lists/${encodeURIComponent(listId)}`, {
-        method: 'PUT',
-        body: JSON.stringify(body),
-      });
-    }
-
-    // Update snapshot after successful save (persist to localStorage)
-    const snapshot = createListSnapshot(cleanedData);
-    getLastSavedSnapshots().set(listId, snapshot);
-    saveSnapshotToStorage(listId, snapshot);
-
-    // Update in-memory list data using helper (preserves metadata)
-    setListData(listId, cleanedData);
-
-    // Update year in metadata if provided
-    if (year !== undefined) {
-      updateListMetadata(listId, { year: year });
-    }
-
-    // Refresh mobile bar visibility if this is the current list
-    // (albums may have been added/removed, affecting whether current track is in list)
-    if (listId === getCurrentListId() && window.refreshMobileBarVisibility) {
-      window.refreshMobileBarVisibility();
-    }
-  } catch (error) {
-    showToast('Error saving list', 'error');
-    throw error;
-  }
+export async function saveList(listId, data, year = undefined) {
+  return appListOperations.saveList(listId, data, year);
 }
 
 // Select and display a list by ID
@@ -1459,14 +877,13 @@ const getListSelectionModule = createLazyModule(() =>
   })
 );
 
-async function selectList(listId) {
+export async function selectList(listId) {
   return getListSelectionModule().selectList(listId);
 }
 
 // ============ RECOMMENDATIONS MODULE BRIDGE ============
-// Thin wrapper for backward compatibility (called via window.selectRecommendations)
 
-function selectRecommendations(year) {
+export function selectRecommendations(year) {
   // Clear any stale lock indicator from a previously viewed locked main list
   clearYearLockUI();
   return getRecommendationsModule().selectRecommendations(year);
@@ -1486,151 +903,50 @@ const { refreshLockedYearStatus } = createYearLockStatusRefresh({
 const debouncedSaveList = createDebouncedSave({ saveList, showToast });
 
 registerAppWindowGlobals({
-  apiCall,
-  showToast,
-  showReasoningModal,
-  getListData,
-  setListData,
-  getListMetadata,
-  updateListMetadata,
-  isListDataLoaded,
-  saveList,
-  loadLists,
   selectList,
   updateListNav,
   collapseGroupsForActiveList,
-  updatePlaylist,
-  toggleMainStatus,
   displayAlbums,
-  getGroup,
-  updateGroupsFromServer,
-  getCurrentListName,
-  findListByName,
-  isViewingRecommendations,
-  getCurrentRecommendationsYear,
-  selectRecommendations,
-  clearSnapshotFromStorage,
-  showMobileAlbumMenu,
-  showMobileMoveToListSheet,
-  showMobileListMenu,
-  showMobileCategoryMenu,
-  showMobileEditForm,
-  showMobileEditFormSafe,
-  showMobileSummarySheet,
-  openRenameCategoryModal,
-  playAlbum,
-  playTrack,
-  getPlaybackModule,
-  playSpecificTrack,
-  playAlbumSafe,
-  removeAlbumSafe,
-  fetchTracksForAlbum,
-  getTrackName,
-  getTrackLength,
-  formatTrackTime,
-  refreshLockedYearStatus,
 });
 
-document.addEventListener('DOMContentLoaded', () => {
-  convertFlashToToast();
+function initializeSettingsDrawer() {
+  const settingsDrawer = createSettingsDrawer({
+    showToast,
+    showConfirmation,
+    apiCall,
+    refreshLockedYearStatus,
+  });
 
-  // Check if we're on a main app page (not auth pages)
-  const isAuthPage = window.location.pathname.match(
-    /\/(login|register|forgot)/
-  );
-  if (isAuthPage) {
-    // Don't initialize main app features on auth pages
-    return;
-  }
+  settingsDrawer.initialize();
 
-  // Initialize column visibility before any album rendering occurs
-  initColumnConfig(window.currentUser?.columnVisibility || null);
+  window.openSettingsDrawer = () => {
+    settingsDrawer.openDrawer();
+  };
+}
 
-  // PERFORMANCE: Start loading list data immediately - this is the critical path
-  // Other UI initializations run in parallel while data is fetched
-  const listLoadPromise = loadLists();
+createAppBootstrap({
+  logger: console,
+  convertFlashToToast,
+  initColumnConfig,
+  loadLists,
+  initializeSettingsDrawer,
+  initAboutModal,
+  initializeSidebarCollapse,
+  cleanupLegacyListCache,
+  hydrateSidebarFromCachedNames,
+  getLists,
+  updateListNav,
+  initializeContextMenu,
+  initializeAlbumContextMenu,
+  getRecommendationsModule,
+  getListCrudModule,
+  initializeImportConflictHandling,
+  initializeRealtimeSync,
+  registerDiscoveryAddAlbumHandler,
+  initializeFileImportHandlers,
+  checkListSetupStatus,
+  showToast,
+  importMusicbrainz: () => import('./musicbrainz.js'),
+}).initialize();
 
-  // Initialize settings drawer
-  function initializeSettingsDrawer() {
-    const settingsDrawer = createSettingsDrawer({
-      showToast,
-      showConfirmation,
-      apiCall: window.apiCall,
-    });
-
-    settingsDrawer.initialize();
-
-    // Expose open function globally for header button
-    window.openSettingsDrawer = () => {
-      settingsDrawer.openDrawer();
-    };
-  }
-
-  // Initialize settings drawer
-  initializeSettingsDrawer();
-
-  // Initialize about modal
-  initAboutModal();
-
-  // Initialize sidebar collapse first
-  initializeSidebarCollapse();
-
-  // Initialize FAB button click handler
-  // musicbrainz.js is loaded on-demand (not in the initial bundle) to reduce
-  // initial JS payload from ~533 KB to ~25 KB. The first click loads the chunk.
-  const fab = document.getElementById('addAlbumFAB');
-  if (fab) {
-    fab.addEventListener('click', async () => {
-      if (!window.openAddAlbumModal) {
-        try {
-          await import('./musicbrainz.js');
-        } catch (err) {
-          console.error('Failed to load album editor:', err);
-          showToast('Error loading album editor. Please try again.', 'error');
-          return;
-        }
-      }
-      if (window.openAddAlbumModal) {
-        window.openAddAlbumModal();
-      }
-    });
-  }
-
-  cleanupLegacyListCache();
-  hydrateSidebarFromCachedNames(getLists, updateListNav);
-
-  // Initialize features after list data is loaded
-  // Note: loadLists() was started immediately after auth check for faster loading
-  listLoadPromise
-    .then(() => {
-      initializeContextMenu();
-      initializeAlbumContextMenu();
-      getRecommendationsModule().initializeRecommendationContextMenu();
-      getListCrudModule().initializeCategoryContextMenu();
-      getListCrudModule().initializeCreateList();
-      getListCrudModule().initializeCreateCollection();
-      getListCrudModule().initializeRenameList();
-      initializeImportConflictHandling();
-
-      // Initialize real-time sync for cross-device list updates
-      initializeRealtimeSync();
-
-      registerDiscoveryAddAlbumHandler();
-      initializeFileImportHandlers();
-
-      // Confirmation modal handlers are managed by showConfirmation function
-      // No static handlers needed since we use the Promise-based approach
-
-      // Check if user needs to complete list setup (year + main list designation)
-      // Delay slightly to let the main UI render first
-      setTimeout(() => {
-        checkListSetupStatus().catch((err) => {
-          console.warn('Failed to check list setup status:', err);
-        });
-      }, 1000);
-    })
-    .catch((_err) => {
-      showToast('Failed to initialize', 'error');
-    });
-});
 registerBeforeUnloadListSaver(getCurrentListId);

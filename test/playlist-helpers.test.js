@@ -15,27 +15,14 @@ describe('resolveTrackPicks', () => {
     assert.strictEqual(result.secondaryTrack, 'Track B');
   });
 
-  it('should resolve primary_track and secondary_track fields', () => {
+  it('should ignore legacy track field aliases', () => {
     const result = resolveTrackPicks({
       primary_track: 'Track A',
       secondary_track: 'Track B',
+      track_pick: 'Legacy Track',
     });
-    assert.strictEqual(result.primaryTrack, 'Track A');
-    assert.strictEqual(result.secondaryTrack, 'Track B');
-  });
-
-  it('should resolve legacy track_pick field', () => {
-    const result = resolveTrackPicks({ track_pick: 'Legacy Track' });
-    assert.strictEqual(result.primaryTrack, 'Legacy Track');
+    assert.strictEqual(result.primaryTrack, null);
     assert.strictEqual(result.secondaryTrack, null);
-  });
-
-  it('should prefer primaryTrack over legacy fields', () => {
-    const result = resolveTrackPicks({
-      primaryTrack: 'Primary',
-      track_pick: 'Legacy',
-    });
-    assert.strictEqual(result.primaryTrack, 'Primary');
   });
 
   it('should return null for both when no fields present', () => {

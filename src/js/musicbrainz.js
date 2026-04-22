@@ -9,6 +9,23 @@ import {
   hasNonLatinCharacters,
   formatArtistDisplayName,
 } from './modules/musicbrainz-artist-name.js';
+import {
+  getCurrentListId,
+  getListData,
+  setListData,
+  getListMetadata,
+  isViewingRecommendations,
+  getCurrentRecommendationsYear,
+  getAvailableCountries,
+} from './modules/app-state.js';
+import {
+  apiCall,
+  saveList,
+  selectList,
+  fetchTracksForAlbum,
+  selectRecommendations,
+  showReasoningModal,
+} from './app.js';
 
 const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
 const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
@@ -23,7 +40,7 @@ const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
  */
 async function mergeMetadataToCanonical(album) {
   try {
-    await window.apiCall('/api/albums/merge-metadata', {
+    await apiCall('/api/albums/merge-metadata', {
       method: 'POST',
       body: JSON.stringify({
         album_id: album.album_id,
@@ -591,8 +608,8 @@ async function loadAlbumCover(
 
     if (coverUrl && imgElement && imgElement.parentElement) {
       // Store the cover URL for later use
-      if (window.currentReleaseGroups && window.currentReleaseGroups[index]) {
-        window.currentReleaseGroups[index].coverArt = coverUrl;
+      if (currentReleaseGroups[index]) {
+        currentReleaseGroups[index].coverArt = coverUrl;
       }
       // Remove loading state and set the verified image
       imgElement.parentElement.classList.remove('animate-pulse');
@@ -615,6 +632,7 @@ let currentArtist = null;
 let modal = null;
 let modalElements = {};
 let currentLoadingController = null;
+let currentReleaseGroups = [];
 
 // =============================================================================
 // ALBUM PROVIDER SYSTEM
@@ -950,8 +968,7 @@ async function displayDirectAlbumResults(releaseGroups) {
     modalElements.backToArtists.style.display = 'none';
   }
 
-  // Store releaseGroups globally
-  window.currentReleaseGroups = releaseGroups;
+  currentReleaseGroups = releaseGroups;
 
   modalElements.albumList.className = 'space-y-3';
 
@@ -1244,17 +1261,19 @@ function clearSearchResults() {
 
 // Unified open modal function
 window.openAddAlbumModal = function () {
+  const currentListId = getCurrentListId();
+
   console.log(
     'openAddAlbumModal called, currentList:',
-    window.currentList,
+    currentListId,
     'recommendations year:',
-    window.currentRecommendationsYear,
+    getCurrentRecommendationsYear(),
     'modal:',
     modal
   );
 
   // Allow opening if we have a list OR if we're viewing recommendations
-  if (!window.currentList && !window.currentRecommendationsYear) {
+  if (!currentListId && !getCurrentRecommendationsYear()) {
     console.log('No list or recommendations selected, showing toast');
     showToast('Please select a list first', 'error');
     return;
@@ -1347,9 +1366,9 @@ function populateCountryDropdown() {
     select.remove(1);
   }
 
-  // Add countries from the global availableCountries array
-  if (window.availableCountries && Array.isArray(window.availableCountries)) {
-    window.availableCountries.forEach((country) => {
+  const availableCountries = getAvailableCountries();
+  if (Array.isArray(availableCountries)) {
+    availableCountries.forEach((country) => {
       const option = document.createElement('option');
       option.value = country;
       option.textContent = country;
@@ -1417,7 +1436,7 @@ async function handleManualSubmit(e) {
   const album = {
     artist: artist,
     album: albumTitle,
-    album_id: 'manual-' + window.crypto.randomUUID(), // Generate a unique ID for manual entries
+    album_id: 'manual-' + globalThis.crypto.randomUUID(), // Generate a unique ID for manual entries
     release_date: formData.get('release_date') || '',
     country: formData.get('country') || '',
     genre_1: '',
@@ -1495,8 +1514,10 @@ async function handleManualSubmit(e) {
 }
 
 async function finishManualAdd(album) {
+  const currentListId = getCurrentListId();
+
   try {
-    const currentListData = window.getListData(window.currentList);
+    const currentListData = getListData(currentListId);
     if (!currentListData) {
       showToast('No list selected', 'error');
       return;
@@ -1514,31 +1535,35 @@ async function finishManualAdd(album) {
         `"${album.album}" is already in this list${label}`,
         usedExisting ? 'info' : 'error'
       );
-      if (usedExisting) window.selectList(window.currentList);
+      if (usedExisting && currentListId) selectList(currentListId);
       return;
     }
 
     // Add to current list
     currentListData.push(resolved);
-    window.setListData(window.currentList, currentListData);
+    if (!currentListId) {
+      showToast('No list selected', 'error');
+      return;
+    }
+    setListData(currentListId, currentListData);
 
     if (!Array.isArray(resolved.tracks) || resolved.tracks.length === 0) {
       try {
-        await window.fetchTracksForAlbum(resolved);
+        await fetchTracksForAlbum(resolved);
       } catch (_err) {
         // Auto track fetch failed - not critical
       }
     }
 
-    await window.saveList(window.currentList, currentListData);
+    await saveList(currentListId, currentListData);
 
     // Force refresh from server to get merged album data
-    const listMetadata = window.lists[window.currentList];
+    const listMetadata = getListMetadata(currentListId);
     if (listMetadata) {
       listMetadata._data = null;
     }
 
-    window.selectList(window.currentList);
+    selectList(currentListId);
     closeAddAlbumModal();
 
     const suffix = usedExisting ? ' (using existing album)' : ' to the list';
@@ -1546,10 +1571,12 @@ async function finishManualAdd(album) {
   } catch (_error) {
     showToast('Error adding album to list', 'error');
 
-    const currentListData = window.getListData(window.currentList);
+    const currentListData = getListData(currentListId);
     if (currentListData) {
       currentListData.pop();
-      window.setListData(window.currentList, currentListData);
+      if (currentListId) {
+        setListData(currentListId, currentListData);
+      }
     }
   }
 }
@@ -1900,8 +1927,7 @@ function displayAlbumResultsWithProvider(albums, providerName) {
     _artistName: album.artistName,
   }));
 
-  // Store globally for addAlbumToList
-  window.currentReleaseGroups = normalizedAlbums;
+  currentReleaseGroups = normalizedAlbums;
 
   modalElements.albumList.className = 'space-y-3';
 
@@ -1926,8 +1952,7 @@ function displayAlbumResultsWithProvider(albums, providerName) {
     const coverHtml = hasCover
       ? `<img src="${album.coverArt}" 
              alt="${album.title.replace(/"/g, '&quot;')}"
-             class="w-20 h-20 object-cover rounded-lg"
-             onerror="this.onerror=null; this.parentElement.classList.add('animate-pulse'); window.loadAlbumCoverFallback && window.loadAlbumCoverFallback(this, '${currentArtist.name.replace(/'/g, "\\'")}', '${album.title.replace(/'/g, "\\'")}', '${album.id}', ${index})">`
+             class="w-20 h-20 object-cover rounded-lg">`
       : `<img data-artist="${currentArtist.name.replace(/"/g, '&quot;')}"
              data-album="${album.title.replace(/"/g, '&quot;')}"
              data-release-group-id="${album.id}"
@@ -1971,6 +1996,21 @@ function displayAlbumResultsWithProvider(albums, providerName) {
 
     modalElements.albumList.appendChild(albumEl);
 
+    const renderedImg = albumEl.querySelector('.album-cover-container img');
+    if (hasCover && renderedImg) {
+      renderedImg.onerror = () => {
+        renderedImg.onerror = null;
+        renderedImg.parentElement.classList.add('animate-pulse');
+        loadAlbumCover(
+          renderedImg,
+          currentArtist.name,
+          album.title,
+          album.id,
+          index
+        );
+      };
+    }
+
     // If no cover from provider, use cover art provider system
     if (!hasCover) {
       const img = albumEl.querySelector('img');
@@ -1984,17 +2024,6 @@ function displayAlbumResultsWithProvider(albums, providerName) {
     `📊 [ALBUMS] Displayed ${albums.length} albums from ${providerName}`
   );
 }
-
-// Fallback cover loader for when provider cover fails
-window.loadAlbumCoverFallback = function (
-  imgElement,
-  artistName,
-  albumTitle,
-  albumId,
-  index
-) {
-  loadAlbumCover(imgElement, artistName, albumTitle, albumId, index);
-};
 
 async function addAlbumToList(releaseGroup) {
   // Show initial loading message
@@ -2034,7 +2063,7 @@ async function addAlbumToList(releaseGroup) {
     for (const el of albumElements) {
       if (
         parseInt(el.dataset.albumIndex) ===
-        window.currentReleaseGroups.indexOf(releaseGroup)
+        currentReleaseGroups.indexOf(releaseGroup)
       ) {
         const imgEl = el.querySelector('.album-cover-container img');
         if (imgEl && imgEl.src && !imgEl.src.includes('data:image/svg')) {
@@ -2081,13 +2110,15 @@ async function addAlbumToList(releaseGroup) {
 
 async function addAlbumToCurrentList(album) {
   // Check if we're viewing recommendations - route to recommendations flow
-  if (window.isViewingRecommendations && window.isViewingRecommendations()) {
+  if (isViewingRecommendations()) {
     await addAlbumToRecommendations(album);
     return;
   }
 
+  const currentListId = getCurrentListId();
+
   try {
-    const currentListData = window.getListData(window.currentList);
+    const currentListData = getListData(currentListId);
     if (!currentListData) {
       showToast('No list selected', 'error');
       return;
@@ -2105,40 +2136,46 @@ async function addAlbumToCurrentList(album) {
         `"${album.album}" is already in this list${label}`,
         usedExisting ? 'info' : 'error'
       );
-      if (usedExisting) window.selectList(window.currentList);
+      if (usedExisting && currentListId) selectList(currentListId);
       return;
     }
 
     currentListData.push(resolved);
-    window.setListData(window.currentList, currentListData);
+    if (!currentListId) {
+      showToast('No list selected', 'error');
+      return;
+    }
+    setListData(currentListId, currentListData);
 
     if (!Array.isArray(resolved.tracks) || resolved.tracks.length === 0) {
       try {
-        await window.fetchTracksForAlbum(resolved);
+        await fetchTracksForAlbum(resolved);
       } catch (_err) {
         // Auto track fetch failed - not critical
       }
     }
 
-    await window.saveList(window.currentList, currentListData);
+    await saveList(currentListId, currentListData);
 
     // Force refresh from server to get merged album data
-    const listMetadata = window.lists[window.currentList];
+    const listMetadata = getListMetadata(currentListId);
     if (listMetadata) {
       listMetadata._data = null;
     }
 
-    window.selectList(window.currentList);
+    selectList(currentListId);
     closeAddAlbumModal();
 
     showToast(`Added "${resolved.album}" by ${resolved.artist} to the list`);
   } catch (_error) {
     showToast('Error adding album to list', 'error');
 
-    const currentListData = window.getListData(window.currentList);
+    const currentListData = getListData(currentListId);
     if (currentListData) {
       currentListData.pop();
-      window.setListData(window.currentList, currentListData);
+      if (currentListId) {
+        setListData(currentListId, currentListData);
+      }
     }
   }
 }
@@ -2148,7 +2185,7 @@ async function addAlbumToCurrentList(album) {
  * @param {Object} album - Album object with artist, album, etc.
  */
 async function addAlbumToRecommendations(album) {
-  const year = window.getCurrentRecommendationsYear();
+  const year = getCurrentRecommendationsYear();
   if (!year) {
     showToast('No recommendations year selected', 'error');
     return;
@@ -2158,14 +2195,14 @@ async function addAlbumToRecommendations(album) {
   closeAddAlbumModal();
 
   // Show reasoning modal
-  const reasoning = await window.showReasoningModal(album, year);
+  const reasoning = await showReasoningModal(album, year);
   if (!reasoning) {
     // User cancelled
     return;
   }
 
   try {
-    await window.apiCall(`/api/recommendations/${year}`, {
+    await apiCall(`/api/recommendations/${year}`, {
       method: 'POST',
       body: JSON.stringify({ album, reasoning }),
     });
@@ -2173,8 +2210,8 @@ async function addAlbumToRecommendations(album) {
     showToast(`Recommended "${album.album}" by ${album.artist}`, 'success');
 
     // Refresh recommendations display
-    if (window.selectRecommendations) {
-      window.selectRecommendations(year);
+    if (typeof selectRecommendations === 'function') {
+      selectRecommendations(year);
     }
   } catch (error) {
     if (error.status === 409) {

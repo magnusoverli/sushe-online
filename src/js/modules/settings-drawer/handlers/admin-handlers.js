@@ -18,6 +18,9 @@ export function createSettingsAdminHandlers(deps = {}) {
     getAlbumSummaryPollInterval,
     setAlbumSummaryPollInterval,
     loadAlbumImageStats,
+    applySummaryStatsPayload,
+    applyImageStatsPayload,
+    categoryData,
     handleAdminEventAction,
     handleConfigureTelegram,
     handleDisconnectTelegram,
@@ -44,6 +47,64 @@ export function createSettingsAdminHandlers(deps = {}) {
     handleScanDuplicates,
     handleAuditManualAlbums,
   } = deps;
+
+  function normalizeCleanupMinAgeDays(value) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) {
+      return 90;
+    }
+
+    return Math.min(Math.max(parsed, 0), 3650);
+  }
+
+  function updateCatalogCleanupPreview(preview) {
+    const totalAlbumsEl = doc.getElementById('catalogCleanupTotalAlbums');
+    const orphanTotalEl = doc.getElementById('catalogCleanupOrphanTotal');
+    const orphanYoungEl = doc.getElementById('catalogCleanupOrphanYoungCount');
+    const statsRefCountEl = doc.getElementById('catalogCleanupStatsRefCount');
+    const pairCountEl = doc.getElementById('catalogCleanupDistinctPairCount');
+    const minAgeInput = doc.getElementById('catalogCleanupMinAgeDays');
+
+    if (totalAlbumsEl) {
+      totalAlbumsEl.textContent = String(preview?.totalAlbums || 0);
+    }
+
+    if (orphanTotalEl) {
+      orphanTotalEl.textContent = String(preview?.orphanAlbumsTotal || 0);
+    }
+
+    if (orphanYoungEl) {
+      orphanYoungEl.textContent = String(preview?.orphanAlbumsTooYoung || 0);
+    }
+
+    if (statsRefCountEl) {
+      statsRefCountEl.textContent = String(
+        preview?.userAlbumStatsReferences || 0
+      );
+    }
+
+    if (pairCountEl) {
+      pairCountEl.textContent = String(preview?.distinctPairReferences || 0);
+    }
+
+    if (minAgeInput && preview?.minAgeDays !== undefined) {
+      minAgeInput.value = String(preview.minAgeDays);
+    }
+  }
+
+  function setCleanupStatus(message = '') {
+    const statusEl = doc.getElementById('catalogCleanupStatus');
+    if (!statusEl) return;
+
+    if (message) {
+      statusEl.textContent = message;
+      statusEl.classList.remove('hidden');
+      return;
+    }
+
+    statusEl.textContent = '';
+    statusEl.classList.add('hidden');
+  }
 
   function attachAdminHandlers() {
     doc.querySelectorAll('.admin-event-action').forEach((btn) => {
@@ -150,7 +211,11 @@ export function createSettingsAdminHandlers(deps = {}) {
           const height = content.scrollHeight;
           content.style.maxHeight = '0';
           void content.offsetHeight;
-          requestAnimationFrame(() => {
+          const raf =
+            typeof requestAnimationFrame === 'function'
+              ? requestAnimationFrame
+              : (callback) => setTimeout(callback, 0);
+          raf(() => {
             content.style.maxHeight = `${height}px`;
             content.style.opacity = '1';
           });
@@ -292,7 +357,12 @@ export function createSettingsAdminHandlers(deps = {}) {
       stopAlbumSummariesBtn.addEventListener('click', handleStopAlbumSummaries);
     }
 
-    loadAlbumSummaryStats();
+    const initialSummaryPayload = categoryData?.admin?.summaryStats;
+    if (initialSummaryPayload?.stats && applySummaryStatsPayload) {
+      applySummaryStatsPayload(initialSummaryPayload);
+    } else {
+      loadAlbumSummaryStats();
+    }
 
     const refetchAlbumImagesBtn = doc.getElementById('refetchAlbumImagesBtn');
     const stopRefetchImagesBtn = doc.getElementById('stopRefetchImagesBtn');
@@ -305,7 +375,130 @@ export function createSettingsAdminHandlers(deps = {}) {
       stopRefetchImagesBtn.addEventListener('click', handleStopRefetchImages);
     }
 
-    loadAlbumImageStats();
+    const initialImagePayload = categoryData?.admin?.imageStats;
+    if (initialImagePayload?.stats && applyImageStatsPayload) {
+      applyImageStatsPayload(initialImagePayload);
+    } else {
+      loadAlbumImageStats();
+    }
+
+    const cleanupMinAgeInput = doc.getElementById('catalogCleanupMinAgeDays');
+    const cleanupPreviewBtn = doc.getElementById('catalogCleanupPreviewBtn');
+    const cleanupExecuteBtn = doc.getElementById('catalogCleanupExecuteBtn');
+
+    const runCleanupPreview = async (minAgeDays) => {
+      const response = await apiCall(
+        `/api/admin/catalog-cleanup/preview?minAgeDays=${minAgeDays}`
+      );
+      if (response?.preview) {
+        if (categoryData?.admin) {
+          categoryData.admin.catalogCleanupPreview = response.preview;
+        }
+        updateCatalogCleanupPreview(response.preview);
+      }
+      return response?.preview || null;
+    };
+
+    if (cleanupPreviewBtn) {
+      cleanupPreviewBtn.addEventListener('click', async () => {
+        const minAgeDays = normalizeCleanupMinAgeDays(
+          cleanupMinAgeInput?.value
+        );
+
+        try {
+          cleanupPreviewBtn.disabled = true;
+          setCleanupStatus('Refreshing cleanup preview...');
+
+          const preview = await runCleanupPreview(minAgeDays);
+          setCleanupStatus(
+            `Preview: ${preview?.orphanAlbums || 0} will be removed, ${preview?.orphanAlbumsTooYoung || 0} are too new.`
+          );
+          showToast('Cleanup preview refreshed', 'success');
+        } catch (error) {
+          console.error('Error loading cleanup preview:', error);
+          setCleanupStatus(
+            error?.data?.error || 'Failed to refresh cleanup preview'
+          );
+          showToast('Failed to refresh cleanup preview', 'error');
+        } finally {
+          cleanupPreviewBtn.disabled = false;
+        }
+      });
+    }
+
+    if (cleanupExecuteBtn) {
+      cleanupExecuteBtn.addEventListener('click', async () => {
+        const minAgeDays = normalizeCleanupMinAgeDays(
+          cleanupMinAgeInput?.value
+        );
+
+        try {
+          cleanupExecuteBtn.disabled = true;
+          setCleanupStatus('Refreshing preview before cleanup...');
+
+          const preview = await runCleanupPreview(minAgeDays);
+          const orphanAlbums = preview?.orphanAlbums || 0;
+
+          if (orphanAlbums === 0) {
+            setCleanupStatus('No orphan albums to clean up.');
+            showToast('No orphan albums to clean up', 'info');
+            return;
+          }
+
+          const confirmed = await showConfirmation(
+            'Delete Safe Orphan Albums',
+            `Delete ${orphanAlbums} orphan album${orphanAlbums === 1 ? '' : 's'}?`,
+            'This removes albums not referenced by lists, recommendations, service mappings, or alias source links. Historical user album stats references will be preserved by setting album_id to null.',
+            'Delete Orphans'
+          );
+
+          if (!confirmed) {
+            setCleanupStatus('Cleanup cancelled.');
+            return;
+          }
+
+          setCleanupStatus('Running catalog cleanup...');
+
+          const executeResponse = await apiCall(
+            '/api/admin/catalog-cleanup/execute',
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                minAgeDays,
+                expectedDeleteCount: orphanAlbums,
+              }),
+            }
+          );
+
+          const result = executeResponse?.result || {};
+          if (categoryData?.admin) {
+            categoryData.admin.catalogCleanupPreview =
+              result.postCleanupPreview;
+          }
+
+          if (result.postCleanupPreview) {
+            updateCatalogCleanupPreview(result.postCleanupPreview);
+          }
+
+          await Promise.all([loadAlbumSummaryStats(), loadAlbumImageStats()]);
+
+          showToast(
+            `Deleted ${result.deletedAlbums || 0} orphan album${result.deletedAlbums === 1 ? '' : 's'}${result.nullifiedUserAlbumStats ? `, nulled ${result.nullifiedUserAlbumStats} stats refs` : ''}`,
+            'success'
+          );
+
+          setCleanupStatus('Cleanup completed.');
+        } catch (error) {
+          console.error('Error executing catalog cleanup:', error);
+          const errorMessage =
+            error?.data?.error || 'Failed to execute catalog cleanup';
+          setCleanupStatus(errorMessage);
+          showToast(errorMessage, 'error');
+        } finally {
+          cleanupExecuteBtn.disabled = false;
+        }
+      });
+    }
 
     const scanDuplicatesBtn = doc.getElementById('scanDuplicatesBtn');
     if (scanDuplicatesBtn) {

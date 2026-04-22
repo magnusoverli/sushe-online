@@ -14,6 +14,8 @@ module.exports = (app, deps) => {
     logger,
   });
 
+  app.locals.imageRefetchService = imageRefetchService;
+
   // Get image statistics
   app.get(
     '/api/admin/images/stats',

@@ -37,52 +37,10 @@ function normalizeClusterMember(member) {
   };
 }
 
-function normalizeClusters(input) {
-  let sourceClusters = [];
-
-  if (Array.isArray(input)) {
-    if (input.length > 0 && Array.isArray(input[0].members)) {
-      sourceClusters = input;
-    } else if (input.length > 0 && input[0].album1 && input[0].album2) {
-      sourceClusters = input.map((pair, index) => {
-        return {
-          clusterId: `pair-${index}`,
-          suggestedCanonicalId: pair.album1.album_id,
-          members: [pair.album1, pair.album2],
-          maxConfidence: pair.confidence,
-          avgConfidence: pair.confidence,
-          pairs: [
-            {
-              album1Id: pair.album1.album_id,
-              album2Id: pair.album2.album_id,
-              confidence: pair.confidence,
-            },
-          ],
-        };
-      });
-    }
-  } else if (input && typeof input === 'object') {
-    if (Array.isArray(input.clusters) && input.clusters.length > 0) {
-      sourceClusters = input.clusters;
-    } else if (Array.isArray(input.pairs) && input.pairs.length > 0) {
-      sourceClusters = input.pairs.map((pair, index) => {
-        return {
-          clusterId: `pair-${index}`,
-          suggestedCanonicalId: pair.album1.album_id,
-          members: [pair.album1, pair.album2],
-          maxConfidence: pair.confidence,
-          avgConfidence: pair.confidence,
-          pairs: [
-            {
-              album1Id: pair.album1.album_id,
-              album2Id: pair.album2.album_id,
-              confidence: pair.confidence,
-            },
-          ],
-        };
-      });
-    }
-  }
+function normalizeClusters(scanData) {
+  const sourceClusters = Array.isArray(scanData?.clusters)
+    ? scanData.clusters
+    : [];
 
   return sourceClusters
     .filter(
@@ -122,7 +80,7 @@ function normalizeClusters(input) {
 /**
  * Open the duplicate review modal.
  *
- * @param {Object|Array} scanData - scan response or legacy pair array
+ * @param {Object} scanData - duplicate scan response with `clusters`
  * @param {Function} onCompleteCallback - completion callback
  * @returns {Promise<{resolved: number, remaining: number}>}
  */
@@ -433,6 +391,43 @@ function renderPreview(preview) {
   const panel = modalElement.querySelector('#clusterPreviewPanel');
   if (!panel) return;
 
+  const dependentImpacts = preview.dependentImpacts || {};
+  const dependentLines = [
+    {
+      label: 'Recommendations to update',
+      value: dependentImpacts.recommendationsRowsToUpdate,
+    },
+    {
+      label: 'Recommendation conflicts to drop',
+      value: dependentImpacts.recommendationsConflictsToDrop,
+    },
+    {
+      label: 'External mappings to update',
+      value: dependentImpacts.albumMappingRowsToUpdate,
+    },
+    {
+      label: 'Mapping conflicts to drop',
+      value: dependentImpacts.albumMappingConflictsToDrop,
+    },
+    {
+      label: 'Alias source refs to update',
+      value: dependentImpacts.artistAliasSourcesToUpdate,
+    },
+    {
+      label: 'User album stats to update',
+      value: dependentImpacts.userAlbumStatsRowsToUpdate,
+    },
+    {
+      label: 'Distinct pairs to rewrite',
+      value: dependentImpacts.distinctPairsRowsToRewrite,
+    },
+  ]
+    .filter((entry) => Number.isFinite(entry.value) && entry.value > 0)
+    .map((entry) => {
+      return `<div>${entry.label}: ${entry.value}</div>`;
+    })
+    .join('');
+
   panel.classList.remove('hidden');
   panel.innerHTML = `
     <div class="font-medium text-gray-100 mb-2">Dry-run impact</div>
@@ -446,6 +441,11 @@ function renderPreview(preview) {
             .join(', ')
         : 'none'
     }</div>
+    ${
+      dependentLines
+        ? `<div class="mt-2 text-gray-400">${dependentLines}</div>`
+        : ''
+    }
     ${
       preview.missingRetireAlbumIds?.length
         ? `<div class="mt-2 text-yellow-400">Already missing: ${preview.missingRetireAlbumIds.map((id) => escapeHtml(id)).join(', ')}</div>`
@@ -499,9 +499,22 @@ async function handleMergeCluster() {
     const fieldsSummary = Array.isArray(result.mergedFieldNames)
       ? result.mergedFieldNames.length
       : 0;
+    const remapSummary = result.dependentRemaps || {};
+    const totalDependentChanges = [
+      remapSummary.recommendationsUpdated,
+      remapSummary.recommendationsConflictsRemoved,
+      remapSummary.albumMappingsUpdated,
+      remapSummary.albumMappingsConflictsRemoved,
+      remapSummary.artistAliasSourcesUpdated,
+      remapSummary.userAlbumStatsUpdated,
+      remapSummary.distinctPairsRemapped,
+      remapSummary.distinctPairsRemoved,
+    ].reduce((sum, value) => {
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
 
     showToast(
-      `Merged ${result.mergedAlbums} album variants, updated ${result.listItemsUpdated} list references${fieldsSummary ? `, ${fieldsSummary} metadata fields` : ''}`,
+      `Merged ${result.mergedAlbums} album variants, updated ${result.listItemsUpdated} list references${fieldsSummary ? `, ${fieldsSummary} metadata fields` : ''}${totalDependentChanges ? `, ${totalDependentChanges} dependent refs` : ''}`,
       'success'
     );
 

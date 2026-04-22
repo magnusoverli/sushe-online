@@ -18,6 +18,7 @@ export function createSettingsAggregateActions(deps = {}) {
     handleShowContributorManager,
     handleShowRecommenderManager,
     createSettingsModalBase,
+    refreshLockedYearStatus,
   } = deps;
 
   async function handleConfirmAggregateReveal(year) {
@@ -144,8 +145,8 @@ export function createSettingsAggregateActions(deps = {}) {
       if (response.success) {
         await updateSingleYearLockStatus(year, !isCurrentlyLocked);
 
-        if (win?.refreshLockedYearStatus) {
-          await win.refreshLockedYearStatus(year);
+        if (typeof refreshLockedYearStatus === 'function') {
+          await refreshLockedYearStatus(year);
         }
       }
     } catch (error) {

@@ -11,7 +11,11 @@ module.exports = (app, deps) => {
   const logger = require('../../utils/logger');
 
   // Create aggregate audit instance
-  const aggregateAudit = createAggregateAudit({ pool: deps.pool, logger });
+  const aggregateAudit = createAggregateAudit({
+    pool: deps.pool,
+    logger,
+    duplicateService: deps.duplicateService,
+  });
 
   // Shared helper: recompute aggregate lists for affected years
   async function recomputeAffectedYears(affectedYears) {

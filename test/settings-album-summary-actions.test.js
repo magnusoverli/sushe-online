@@ -243,4 +243,72 @@ describe('settings album summary actions', () => {
     assert.deepStrictEqual(cleared, [99]);
     assert.strictEqual(pollRef, null);
   });
+
+  it('refreshes summary stats periodically while batch is running', async () => {
+    const fetchBtn = createElement({ classList: createClassList(['hidden']) });
+    const stopBtn = createElement();
+    const progressEl = createElement();
+    const progressBar = createElement({ style: {} });
+    const progressText = createElement();
+    const statsEl = createElement();
+
+    const calls = [];
+
+    const actions = createSettingsAlbumSummaryActions({
+      doc: createDoc({
+        fetchAlbumSummariesBtn: fetchBtn,
+        stopAlbumSummariesBtn: stopBtn,
+        albumSummaryProgress: progressEl,
+        albumSummaryProgressBar: progressBar,
+        albumSummaryProgressText: progressText,
+        albumSummaryStats: statsEl,
+      }),
+      apiCall: async (url) => {
+        calls.push(url);
+        if (url === '/api/admin/album-summaries/status') {
+          return {
+            status: {
+              running: true,
+              progress: 20,
+              processed: 2,
+              total: 10,
+              found: 1,
+              notFound: 1,
+              errors: 0,
+            },
+          };
+        }
+
+        return {
+          stats: {
+            totalAlbums: 10,
+            withSummary: 5,
+            attemptedNoSummary: 2,
+            neverAttempted: 3,
+            fromClaude: 5,
+          },
+          batchStatus: { running: true, progress: 20, processed: 2, total: 10 },
+        };
+      },
+      showToast: () => {},
+      getAlbumSummaryPollInterval: () => 123,
+      setAlbumSummaryPollInterval: () => {},
+      setIntervalFn: () => 0,
+      clearIntervalFn: () => {},
+    });
+
+    for (let i = 0; i < 10; i++) {
+      await actions.pollAlbumSummaryStatus();
+    }
+
+    const statusCalls = calls.filter(
+      (url) => url === '/api/admin/album-summaries/status'
+    );
+    const statsCalls = calls.filter(
+      (url) => url === '/api/admin/album-summaries/stats'
+    );
+
+    assert.strictEqual(statusCalls.length, 10);
+    assert.strictEqual(statsCalls.length, 1);
+  });
 });

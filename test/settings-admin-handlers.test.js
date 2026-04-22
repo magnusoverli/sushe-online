@@ -3,12 +3,27 @@ const assert = require('node:assert');
 
 function createElement(overrides = {}) {
   const listeners = {};
+  const classSet = new Set();
+
+  const classList = {
+    add(...values) {
+      values.forEach((value) => classSet.add(value));
+    },
+    remove(...values) {
+      values.forEach((value) => classSet.delete(value));
+    },
+    contains(value) {
+      return classSet.has(value);
+    },
+  };
+
   return {
     dataset: {},
     disabled: false,
     textContent: '',
     innerHTML: '',
     style: {},
+    classList,
     listeners,
     addEventListener(event, handler) {
       listeners[event] = handler;
@@ -87,6 +102,9 @@ function buildDeps(overrides = {}) {
     handleStopRefetchImages: async () => {},
     handleScanDuplicates: async () => {},
     handleAuditManualAlbums: async () => {},
+    applySummaryStatsPayload: () => {},
+    applyImageStatsPayload: () => {},
+    categoryData: { admin: { aggregateLists: [] } },
     setIntervalFn: (fn, delay) => {
       calls.intervals.push({ fn, delay });
       return 42;
@@ -211,5 +229,108 @@ describe('settings admin handlers', () => {
     assert.strictEqual(regenBtn.disabled, false);
     assert.strictEqual(fetchBtn.disabled, false);
     assert.strictEqual(regenBtn.textContent, 'Regenerate All');
+  });
+
+  it('hydrates summary/image stats from existing admin payload', () => {
+    const doc = createDocument();
+    const summaryPayload = {
+      stats: { totalAlbums: 10 },
+      batchStatus: { running: false },
+    };
+    const imagePayload = {
+      stats: { totalAlbums: 20 },
+      isRunning: false,
+      progress: null,
+    };
+
+    const summaryCalls = [];
+    const imageCalls = [];
+
+    const { deps, calls } = buildDeps({
+      doc,
+      categoryData: {
+        admin: {
+          summaryStats: summaryPayload,
+          imageStats: imagePayload,
+        },
+      },
+      applySummaryStatsPayload: (payload) => summaryCalls.push(payload),
+      applyImageStatsPayload: (payload) => imageCalls.push(payload),
+    });
+
+    const { attachAdminHandlers } = createSettingsAdminHandlers(deps);
+    attachAdminHandlers();
+
+    assert.strictEqual(calls.summaryLoads, 0);
+    assert.strictEqual(calls.imageLoads, 0);
+    assert.deepStrictEqual(summaryCalls, [summaryPayload]);
+    assert.deepStrictEqual(imageCalls, [imagePayload]);
+  });
+
+  it('loads cleanup preview and updates catalog cleanup panel', async () => {
+    const cleanupPreviewBtn = createElement();
+    const cleanupExecuteBtn = createElement();
+    const cleanupMinAgeDays = createElement({ value: '45' });
+    const cleanupStatus = createElement();
+    const totalAlbums = createElement();
+    const orphanTotal = createElement();
+    const orphanYoungCount = createElement();
+    const statsRefCount = createElement();
+    const distinctPairCount = createElement();
+
+    const doc = createDocument({
+      ids: {
+        catalogCleanupPreviewBtn: cleanupPreviewBtn,
+        catalogCleanupExecuteBtn: cleanupExecuteBtn,
+        catalogCleanupMinAgeDays: cleanupMinAgeDays,
+        catalogCleanupStatus: cleanupStatus,
+        catalogCleanupTotalAlbums: totalAlbums,
+        catalogCleanupOrphanTotal: orphanTotal,
+        catalogCleanupOrphanYoungCount: orphanYoungCount,
+        catalogCleanupStatsRefCount: statsRefCount,
+        catalogCleanupDistinctPairCount: distinctPairCount,
+      },
+    });
+
+    const { deps, calls } = buildDeps({
+      doc,
+      categoryData: { admin: {} },
+      apiCall: async (...args) => {
+        calls.api.push(args);
+        if (
+          String(args[0]).includes(
+            '/api/admin/catalog-cleanup/preview?minAgeDays=45'
+          )
+        ) {
+          return {
+            preview: {
+              minAgeDays: 45,
+              totalAlbums: 846,
+              orphanAlbumsTotal: 401,
+              orphanAlbums: 7,
+              orphanAlbumsTooYoung: 4,
+              userAlbumStatsReferences: 2,
+              distinctPairReferences: 1,
+              generatedAt: new Date().toISOString(),
+            },
+          };
+        }
+
+        return { success: true };
+      },
+    });
+
+    const { attachAdminHandlers } = createSettingsAdminHandlers(deps);
+    attachAdminHandlers();
+
+    await cleanupPreviewBtn.listeners.click();
+
+    assert.strictEqual(calls.api.length > 0, true);
+    assert.strictEqual(totalAlbums.textContent, '846');
+    assert.strictEqual(orphanTotal.textContent, '401');
+    assert.strictEqual(orphanYoungCount.textContent, '4');
+    assert.strictEqual(statsRefCount.textContent, '2');
+    assert.strictEqual(distinctPairCount.textContent, '1');
+    assert.match(cleanupStatus.textContent, /7 will be removed/);
   });
 });

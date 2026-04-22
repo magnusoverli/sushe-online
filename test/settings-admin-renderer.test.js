@@ -45,6 +45,7 @@ describe('settings admin renderer', () => {
     assert.match(html, /Not configured/);
     assert.match(html, /id="configureTelegramBtn"/);
     assert.match(html, /Database Management/);
+    assert.match(html, /Catalog Cleanup/);
   });
 
   it('renders aggregate and user controls from populated admin data', () => {

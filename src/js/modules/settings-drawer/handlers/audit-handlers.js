@@ -11,6 +11,25 @@ export function createSettingsAuditHandlers(deps = {}) {
   const { apiCall, showToast, openDuplicateReviewModal, openManualAlbumAudit } =
     deps;
 
+  function parseDuplicateClusters(response) {
+    if (!Array.isArray(response?.clusters)) {
+      throw new Error(
+        'Invalid duplicate scan response: missing clusters array'
+      );
+    }
+
+    const hasInvalidCluster = response.clusters.some((cluster) => {
+      return !Array.isArray(cluster?.members);
+    });
+    if (hasInvalidCluster) {
+      throw new Error(
+        'Invalid duplicate scan response: each cluster must include members'
+      );
+    }
+
+    return response.clusters;
+  }
+
   async function handleScanDuplicates() {
     const scanBtn = doc.getElementById('scanDuplicatesBtn');
     const statusDiv = doc.getElementById('duplicateScanStatus');
@@ -34,12 +53,10 @@ export function createSettingsAuditHandlers(deps = {}) {
         throw new Error(response.error);
       }
 
-      const hasClusters =
-        Array.isArray(response.clusters) && response.clusters.length > 0;
-      const hasPairs =
-        Array.isArray(response.pairs) && response.pairs.length > 0;
+      const clusters = parseDuplicateClusters(response);
+      const hasClusters = clusters.length > 0;
 
-      if (!hasClusters && !hasPairs) {
+      if (!hasClusters) {
         statusDiv.innerHTML = `
           <span class="text-green-400">
             <i class="fas fa-check-circle mr-2"></i>
@@ -48,23 +65,33 @@ export function createSettingsAuditHandlers(deps = {}) {
         `;
         showToast('No potential duplicates found', 'success');
       } else {
+        const duplicatePairCount = Number.isFinite(response.potentialDuplicates)
+          ? response.potentialDuplicates
+          : clusters.reduce((count, cluster) => {
+              return (
+                count +
+                (Array.isArray(cluster.pairs) ? cluster.pairs.length : 0)
+              );
+            }, 0);
+
         const clusterCount = Number.isFinite(response.totalClusters)
           ? response.totalClusters
-          : hasClusters
-            ? response.clusters.length
-            : 0;
+          : clusters.length;
 
         statusDiv.innerHTML = `
           <span class="text-yellow-400">
-            Found ${response.potentialDuplicates} potential duplicate pairs across ${clusterCount} clusters. Opening review...
+            Found ${duplicatePairCount} potential duplicate pairs across ${clusterCount} clusters. Opening review...
           </span>
         `;
 
-        const result = await openDuplicateReviewModal(response);
+        const result = await openDuplicateReviewModal({
+          ...response,
+          clusters,
+        });
 
         statusDiv.innerHTML = `
           <span class="text-gray-400">
-            Last scan: ${response.potentialDuplicates} pairs across ${clusterCount} clusters, ${result.resolved} resolved, ${result.remaining} remaining
+            Last scan: ${duplicatePairCount} pairs across ${clusterCount} clusters, ${result.resolved} resolved, ${result.remaining} remaining
           </span>
         `;
       }

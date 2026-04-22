@@ -60,29 +60,27 @@ describe('app-state', async () => {
       assert.deepStrictEqual(mod.getLists(), newLists);
     });
 
-    it('setLists syncs to window.lists', () => {
+    it('setLists does not expose window.lists compatibility bridge', () => {
       const newLists = { id1: { _id: 'id1', name: 'Test' } };
       mod.setLists(newLists);
-      assert.deepStrictEqual(window.lists, newLists);
-      assert.strictEqual(window.lists, mod.getLists());
+      assert.strictEqual(window.lists, undefined);
     });
 
-    it('setLists normalizes albumId aliases inside _data arrays', () => {
+    it('setLists preserves canonical album fields inside _data arrays', () => {
       mod.setLists({
         id1: {
           _id: 'id1',
           name: 'Test',
-          _data: [{ albumId: 'legacy-1' }],
+          _data: [{ album_id: 'canonical-1' }],
           count: 1,
         },
       });
 
       const album = mod.getListData('id1')[0];
-      assert.strictEqual(album.album_id, 'legacy-1');
-      assert.strictEqual(album.albumId, 'legacy-1');
+      assert.strictEqual(album.album_id, 'canonical-1');
     });
 
-    it('setLists normalizes legacy comment and track-pick aliases', () => {
+    it('setLists does not map legacy aliases to canonical fields', () => {
       mod.setLists({
         id1: {
           _id: 'id1',
@@ -93,12 +91,13 @@ describe('app-state', async () => {
       });
 
       const album = mod.getListData('id1')[0];
-      assert.strictEqual(album.comments, 'Legacy note');
-      assert.strictEqual(album.primary_track, '5');
+      assert.strictEqual(album.comments, undefined);
+      assert.strictEqual(album.primary_track, undefined);
+      assert.strictEqual(album.comment, 'Legacy note');
       assert.strictEqual(album.track_pick, '5');
     });
 
-    it('setLists normalizes legacy genre alias to genre_1', () => {
+    it('setLists does not map legacy genre alias to genre_1', () => {
       mod.setLists({
         id1: {
           _id: 'id1',
@@ -109,7 +108,7 @@ describe('app-state', async () => {
       });
 
       const album = mod.getListData('id1')[0];
-      assert.strictEqual(album.genre_1, 'Post-rock');
+      assert.strictEqual(album.genre_1, undefined);
       assert.strictEqual(album.genre, 'Post-rock');
     });
 
@@ -130,10 +129,10 @@ describe('app-state', async () => {
       assert.strictEqual(mod.getListData('id1'), albums);
     });
 
-    it('getListData handles legacy array format', () => {
+    it('getListData ignores legacy array-format list entries', () => {
       const albums = [{ album_id: 'a1' }];
       mod.setLists({ id1: albums });
-      assert.strictEqual(mod.getListData('id1'), albums);
+      assert.strictEqual(mod.getListData('id1'), null);
     });
 
     it('getListData returns null when _data is null', () => {
@@ -171,7 +170,7 @@ describe('app-state', async () => {
       assert.strictEqual(entry.name, 'Test'); // preserved
     });
 
-    it('setListData handles legacy array format by converting', () => {
+    it('setListData creates canonical entry when list metadata is missing', () => {
       mod.setLists({ id1: [{ album_id: 'old' }] });
       const albums = [{ album_id: 'new1' }, { album_id: 'new2' }];
       mod.setListData('id1', albums, false);
@@ -179,18 +178,18 @@ describe('app-state', async () => {
       assert.strictEqual(entry._data, albums);
       assert.strictEqual(entry.count, 2);
       assert.strictEqual(entry._id, 'id1');
+      assert.strictEqual(entry.name, 'Unknown');
     });
 
-    it('setListData normalizes albumId aliases to album_id', () => {
+    it('setListData preserves canonical album_id values', () => {
       mod.setLists({ id1: { _id: 'id1', _data: [], count: 0 } });
-      mod.setListData('id1', [{ albumId: 'legacy-2' }], false);
+      mod.setListData('id1', [{ album_id: 'canonical-2' }], false);
 
       const album = mod.getListData('id1')[0];
-      assert.strictEqual(album.album_id, 'legacy-2');
-      assert.strictEqual(album.albumId, 'legacy-2');
+      assert.strictEqual(album.album_id, 'canonical-2');
     });
 
-    it('setListData normalizes track_picks to canonical track fields', () => {
+    it('setListData does not map track_picks aliases to canonical fields', () => {
       mod.setLists({ id1: { _id: 'id1', _data: [], count: 0 } });
       mod.setListData(
         'id1',
@@ -199,8 +198,10 @@ describe('app-state', async () => {
       );
 
       const album = mod.getListData('id1')[0];
-      assert.strictEqual(album.primary_track, 'Track A');
-      assert.strictEqual(album.secondary_track, 'Track B');
+      assert.strictEqual(album.primary_track, undefined);
+      assert.strictEqual(album.secondary_track, undefined);
+      assert.strictEqual(album.track_picks.primary, 'Track A');
+      assert.strictEqual(album.track_picks.secondary, 'Track B');
     });
 
     it('setListData does nothing when listId is falsy', () => {
@@ -226,12 +227,9 @@ describe('app-state', async () => {
       assert.strictEqual(mod.getListMetadata('id1'), entry);
     });
 
-    it('getListMetadata handles legacy array format', () => {
+    it('getListMetadata ignores legacy array-format list entries', () => {
       mod.setLists({ id1: [{ album_id: 'a1' }] });
-      const meta = mod.getListMetadata('id1');
-      assert.strictEqual(meta._id, 'id1');
-      assert.strictEqual(meta.count, 1);
-      assert.strictEqual(meta.name, 'Unknown');
+      assert.strictEqual(mod.getListMetadata('id1'), null);
     });
 
     it('updateListMetadata applies updates to existing list', () => {
@@ -250,12 +248,10 @@ describe('app-state', async () => {
       assert.deepStrictEqual(mod.getLists(), {});
     });
 
-    it('updateListMetadata converts legacy array format first', () => {
+    it('updateListMetadata does nothing when entry is legacy array format', () => {
       mod.setLists({ id1: [{ album_id: 'a1' }] });
       mod.updateListMetadata('id1', { name: 'Converted' });
-      const entry = mod.getLists()['id1'];
-      assert.strictEqual(entry.name, 'Converted');
-      assert.strictEqual(entry._id, 'id1');
+      assert.strictEqual(mod.getLists()['id1'], undefined);
     });
 
     it('findListByName finds a list by name', () => {
@@ -296,9 +292,9 @@ describe('app-state', async () => {
       assert.strictEqual(mod.isListDataLoaded('nope'), false);
     });
 
-    it('isListDataLoaded returns true for legacy array format', () => {
+    it('isListDataLoaded returns false for legacy array-format list entries', () => {
       mod.setLists({ id1: [{ album_id: 'a1' }] });
-      assert.strictEqual(mod.isListDataLoaded('id1'), true);
+      assert.strictEqual(mod.isListDataLoaded('id1'), false);
     });
 
     it('isListDataLoaded returns true when _data has items', () => {
@@ -730,17 +726,10 @@ describe('app-state', async () => {
   // ============ WINDOW GLOBALS ============
 
   describe('initWindowGlobals', () => {
-    it('creates window.currentList as alias for currentListId', () => {
+    it('does not expose legacy window.currentList alias', () => {
       mod.initWindowGlobals();
       mod.setCurrentListId('test-id');
-      assert.strictEqual(window.currentList, 'test-id');
-    });
-
-    it('window.currentList setter updates currentListId', () => {
-      mod.initWindowGlobals();
-      window.currentList = 'from-window';
-      assert.strictEqual(mod.getCurrentListId(), 'from-window');
-      mod.setCurrentListId(''); // cleanup
+      assert.strictEqual(window.currentList, undefined);
     });
 
     it('window.currentListId getter reflects state', () => {

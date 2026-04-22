@@ -267,6 +267,49 @@ test('fetchClaudeSummary should handle network error', async () => {
   assert.strictEqual(mockLogger.error.mock.calls.length, 1);
 });
 
+test('fetchClaudeSummary should timeout stalled Claude requests', async () => {
+  const originalTimeoutMs = process.env.CLAUDE_REQUEST_TIMEOUT_MS;
+  try {
+    process.env.CLAUDE_REQUEST_TIMEOUT_MS = '25';
+
+    const mockLogger = {
+      info: mock.fn(),
+      warn: mock.fn(),
+      error: mock.fn(),
+      debug: mock.fn(),
+    };
+
+    const mockAnthropic = {
+      messages: {
+        create: mock.fn(
+          () =>
+            new Promise(() => {
+              // Never resolves - simulates hung HTTP request
+            })
+        ),
+      },
+    };
+
+    const service = createClaudeSummaryService({
+      logger: mockLogger,
+      anthropicClient: mockAnthropic,
+    });
+
+    const result = await service.fetchClaudeSummary('Artist', 'Album');
+
+    assert.strictEqual(result.summary, null);
+    assert.strictEqual(result.source, SUMMARY_SOURCE);
+    assert.strictEqual(result.found, false);
+    assert.ok(mockLogger.warn.mock.calls.length >= 1);
+  } finally {
+    if (originalTimeoutMs === undefined) {
+      delete process.env.CLAUDE_REQUEST_TIMEOUT_MS;
+    } else {
+      process.env.CLAUDE_REQUEST_TIMEOUT_MS = originalTimeoutMs;
+    }
+  }
+});
+
 test('fetchClaudeSummary should handle missing API key', async () => {
   // Temporarily remove API key
   const originalApiKey = process.env.ANTHROPIC_API_KEY;

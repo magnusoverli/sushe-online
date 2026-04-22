@@ -206,10 +206,9 @@ describe('settings aggregate actions', () => {
       handleShowRecommenderManager: async () => {},
       createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
       doc,
-      win: {
-        async refreshLockedYearStatus(year) {
-          refreshCalls.push(year);
-        },
+      win: {},
+      async refreshLockedYearStatus(year) {
+        refreshCalls.push(year);
       },
     });
 

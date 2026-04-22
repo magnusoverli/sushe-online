@@ -80,35 +80,20 @@ describe('settings data loaders', () => {
     });
   });
 
-  it('loads admin aggregate list status including recommendation lock', async () => {
+  it('loads admin data from bootstrap endpoint', async () => {
     const apiCall = mock.fn(async (path) => {
-      if (path === '/api/admin/events?limit=50') {
-        return { events: [{ _id: 'evt1' }] };
+      if (path === '/api/admin/bootstrap') {
+        return {
+          hasData: true,
+          aggregateLists: [
+            {
+              year: 2024,
+              recStatus: { locked: true },
+            },
+          ],
+        };
       }
-      if (path === '/api/admin/events/counts') {
-        return { total: 1, byType: {}, byPriority: {} };
-      }
-      if (path === '/api/admin/telegram/status') {
-        return { configured: true };
-      }
-      if (path === '/api/admin/telegram/recommendations/status') {
-        return { configured: true, recommendationsEnabled: true };
-      }
-      if (path === '/api/admin/stats') {
-        return { users: [{ _id: 'user1' }] };
-      }
-      if (path === '/api/aggregate-list-years/with-main-lists') {
-        return { years: [2024] };
-      }
-      if (path === '/api/aggregate-list/2024/status') {
-        return { exists: true, revealed: false };
-      }
-      if (path === '/api/aggregate-list/2024/stats') {
-        return { stats: { totalAlbums: 25 } };
-      }
-      if (path === '/api/recommendations/2024/status') {
-        return { locked: true };
-      }
+
       throw new Error(`Unexpected path: ${path}`);
     });
 
@@ -119,5 +104,10 @@ describe('settings data loaders', () => {
     assert.strictEqual(result.aggregateLists.length, 1);
     assert.strictEqual(result.aggregateLists[0].year, 2024);
     assert.strictEqual(result.aggregateLists[0].recStatus.locked, true);
+    assert.strictEqual(apiCall.mock.calls.length, 1);
+    assert.strictEqual(
+      apiCall.mock.calls[0].arguments[0],
+      '/api/admin/bootstrap'
+    );
   });
 });
