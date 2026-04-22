@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-04-22",
+    "category": "ui",
+    "description": "Improved messaging when trying to edit locked year fields",
+    "hash": "db17ff7d4c7c6221d5ad005d10060b819ce80699",
+    "commitMessage": "Treat locked-year edits as informational, not errors\n\nEditing an album field in a year-locked main list now:\n1. Preempts the edit client-side (no textarea/input opens) when the\n   cached lock state says the list is locked — matching the banner's\n   promise that \"you cannot edit albums in this list.\"\n2. Tags the server's 403 with code: \"YEAR_LOCKED\" (+ year), so the\n   client can distinguish it from real errors and surface an info\n   toast instead of \"Error saving ...\" when the cache is stale and\n   the edit slips through.\n3. Refreshes the locked-year status on YEAR_LOCKED so the UI catches\n   up after out-of-band lock changes.\n\nApplied consistently to country, genre (1/2), and comment (1/2).\n\nCo-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
+  },
+  {
     "date": "2026-04-17",
     "category": "fix",
     "description": "Fixed notifications appearing behind settings panel",
