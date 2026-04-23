@@ -5,7 +5,7 @@ async function toggleMainStatus(ctx, listId, userId, isMain) {
        FROM lists l
        LEFT JOIN list_groups g ON l.group_id = g.id
        WHERE l._id = $1 AND l.user_id = $2
-       FOR UPDATE`,
+       FOR UPDATE OF l`,
       [listId, userId]
     );
 

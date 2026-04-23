@@ -23,7 +23,7 @@ describe('external-identity-service', () => {
 
   it('returns cached album mapping and updates last_used_at', async () => {
     const pool = createMockPoolWithQuery(async (sql) => {
-      if (sql.includes('SELECT external_album_id')) {
+      if (sql.includes('UPDATE album_service_mappings')) {
         return {
           rows: [
             {
@@ -46,12 +46,8 @@ describe('external-identity-service', () => {
     const result = await service.getAlbumServiceMapping('spotify', 'album-1');
 
     assert.strictEqual(result.external_album_id, 'sp123');
-    assert.strictEqual(pool.query.mock.calls.length, 2);
-    assert.ok(
-      pool.query.mock.calls[1].arguments[0].includes(
-        'UPDATE album_service_mappings'
-      )
-    );
+    assert.strictEqual(pool.query.mock.calls.length, 1);
+    assert.ok(pool.query.mock.calls[0].arguments[0].includes('RETURNING'));
   });
 
   it('skips album mapping upsert for unsupported services', async () => {
@@ -94,7 +90,7 @@ describe('external-identity-service', () => {
 
   it('returns artist alias and refreshes last_used_at', async () => {
     const pool = createMockPoolWithQuery(async (sql) => {
-      if (sql.includes('SELECT service_artist')) {
+      if (sql.includes('UPDATE artist_service_aliases')) {
         return { rows: [{ service_artist: 'Exxul' }] };
       }
       return { rows: [] };
@@ -110,7 +106,7 @@ describe('external-identity-service', () => {
     );
 
     assert.strictEqual(alias, 'Exxul');
-    assert.strictEqual(pool.query.mock.calls.length, 2);
+    assert.strictEqual(pool.query.mock.calls.length, 1);
   });
 
   it('dedupes alias candidates', async () => {

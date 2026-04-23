@@ -73,7 +73,7 @@ function createListService(deps = {}) {
     const sql = `SELECT l.*, g._id as group_external_id, g.name as group_name, g.year as group_year
        FROM lists l
        LEFT JOIN list_groups g ON l.group_id = g.id
-       WHERE l._id = $1 AND l.user_id = $2${forUpdate ? ' FOR UPDATE' : ''}`;
+       WHERE l._id = $1 AND l.user_id = $2${forUpdate ? ' FOR UPDATE OF l' : ''}`;
 
     if (queryable && typeof queryable.query === 'function') {
       return queryable.query(sql, [listId, userId]);

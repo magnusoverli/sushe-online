@@ -89,6 +89,7 @@ function createYearLock(deps = {}) {
       throw new TransactionAbort(403, {
         error: `Cannot ${operation}: Year ${year} is locked`,
         code: 'YEAR_LOCKED',
+        yearLocked: true,
         year,
       });
     }
@@ -124,6 +125,7 @@ function createYearLock(deps = {}) {
       throw new TransactionAbort(403, {
         error: `Cannot ${operation}: Main list for year ${year} is locked`,
         code: 'YEAR_LOCKED',
+        yearLocked: true,
         year,
       });
     }

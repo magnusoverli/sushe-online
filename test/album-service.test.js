@@ -6,6 +6,56 @@ const { TransactionAbort } = require('../db/transaction');
 const { createMockLogger, createMockPool } = require('./helpers');
 
 describe('album-service', () => {
+  it('updateSummary should throw 404 when album does not exist', async () => {
+    const pool = createMockPool([{ rows: [], rowCount: 0 }]);
+
+    const service = createAlbumService({
+      db: pool,
+      logger: createMockLogger(),
+      upsertAlbumRecord: mock.fn(),
+      invalidateCachesForAlbumUsers: mock.fn(async () => {}),
+    });
+
+    await assert.rejects(
+      () => service.updateSummary('missing', 'Summary', 'manual'),
+      (err) => {
+        assert.ok(err instanceof TransactionAbort);
+        assert.strictEqual(err.statusCode, 404);
+        assert.strictEqual(err.body.error, 'Album not found');
+        return true;
+      }
+    );
+
+    assert.strictEqual(pool.query.mock.calls.length, 1);
+    assert.ok(
+      pool.query.mock.calls[0].arguments[0].includes('RETURNING album_id')
+    );
+  });
+
+  it('updateCountry should update in a single statement and invalidate caches', async () => {
+    const invalidateCachesForAlbumUsers = mock.fn(async () => {});
+    const pool = createMockPool([{ rows: [{ album_id: 'a1' }], rowCount: 1 }]);
+
+    const service = createAlbumService({
+      db: pool,
+      logger: createMockLogger(),
+      upsertAlbumRecord: mock.fn(),
+      invalidateCachesForAlbumUsers,
+    });
+
+    await service.updateCountry('a1', ' Norway ', 'user1');
+
+    assert.strictEqual(pool.query.mock.calls.length, 1);
+    assert.ok(
+      pool.query.mock.calls[0].arguments[0].includes('RETURNING album_id')
+    );
+    assert.strictEqual(invalidateCachesForAlbumUsers.mock.calls.length, 1);
+    assert.strictEqual(
+      invalidateCachesForAlbumUsers.mock.calls[0].arguments[0],
+      'a1'
+    );
+  });
+
   it('updateGenres should reject empty genre updates', async () => {
     const pool = createMockPool([{ rows: [{ album_id: 'a1' }] }]);
 
@@ -24,6 +74,32 @@ describe('album-service', () => {
         assert.strictEqual(err.body.error, 'No genre updates provided');
         return true;
       }
+    );
+  });
+
+  it('updateGenres should throw 404 when no album row is updated', async () => {
+    const pool = createMockPool([{ rows: [], rowCount: 0 }]);
+
+    const service = createAlbumService({
+      db: pool,
+      logger: createMockLogger(),
+      upsertAlbumRecord: mock.fn(),
+      invalidateCachesForAlbumUsers: mock.fn(async () => {}),
+    });
+
+    await assert.rejects(
+      () =>
+        service.updateGenres('missing', { genre_1: 'Black Metal' }, 'user1'),
+      (err) => {
+        assert.ok(err instanceof TransactionAbort);
+        assert.strictEqual(err.statusCode, 404);
+        assert.strictEqual(err.body.error, 'Album not found');
+        return true;
+      }
+    );
+
+    assert.ok(
+      pool.query.mock.calls[0].arguments[0].includes('RETURNING album_id')
     );
   });
 

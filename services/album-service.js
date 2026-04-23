@@ -171,23 +171,19 @@ function createAlbumService(deps = {}) {
    * @param {string} summarySource
    */
   async function updateSummary(albumId, summary, summarySource) {
-    const checkResult = await db.raw(
-      `SELECT album_id FROM albums WHERE album_id = $1`,
-      [albumId]
-    );
-
-    if (checkResult.rows.length === 0) {
-      throw new TransactionAbort(404, { error: 'Album not found' });
-    }
-
-    await db.raw(
+    const result = await db.raw(
       `UPDATE albums 
        SET summary = COALESCE($1, summary),
            summary_source = COALESCE($2, summary_source),
            updated_at = NOW()
-       WHERE album_id = $3`,
+       WHERE album_id = $3
+       RETURNING album_id`,
       [summary || null, summarySource || null, albumId]
     );
+
+    if (result.rows.length === 0) {
+      throw new TransactionAbort(404, { error: 'Album not found' });
+    }
   }
 
   /**
@@ -199,21 +195,16 @@ function createAlbumService(deps = {}) {
   async function updateCountry(albumId, country, userId) {
     validateOptionalTextField(country, 'Invalid country value');
 
-    const checkResult = await db.raw(
-      'SELECT album_id FROM albums WHERE album_id = $1',
-      [albumId]
-    );
-
-    if (checkResult.rows.length === 0) {
-      throw new TransactionAbort(404, { error: 'Album not found' });
-    }
-
     const trimmedCountry = normalizeOptionalText(country);
 
-    await db.raw(
-      'UPDATE albums SET country = $1, updated_at = $2 WHERE album_id = $3',
+    const result = await db.raw(
+      'UPDATE albums SET country = $1, updated_at = $2 WHERE album_id = $3 RETURNING album_id',
       [trimmedCountry, new Date(), albumId]
     );
+
+    if (result.rows.length === 0) {
+      throw new TransactionAbort(404, { error: 'Album not found' });
+    }
 
     await invalidateCachesForAlbumUsers(albumId);
 
@@ -236,15 +227,6 @@ function createAlbumService(deps = {}) {
     validateOptionalTextField(genre_1, 'Invalid genre values');
     validateOptionalTextField(genre_2, 'Invalid genre values');
 
-    const checkResult = await db.raw(
-      'SELECT album_id FROM albums WHERE album_id = $1',
-      [albumId]
-    );
-
-    if (checkResult.rows.length === 0) {
-      throw new TransactionAbort(404, { error: 'Album not found' });
-    }
-
     const fields = buildAlbumMetadataFields({ genre_1, genre_2 });
 
     if (fields.length === 0) {
@@ -254,7 +236,14 @@ function createAlbumService(deps = {}) {
     }
 
     const update = buildPartialUpdate('albums', 'album_id', albumId, fields);
-    await db.raw(update.query, update.values);
+    const result = await db.raw(
+      `${update.query} RETURNING album_id`,
+      update.values
+    );
+
+    if (result.rows.length === 0) {
+      throw new TransactionAbort(404, { error: 'Album not found' });
+    }
 
     await invalidateCachesForAlbumUsers(albumId);
 

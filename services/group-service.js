@@ -425,7 +425,7 @@ function createGroupService(deps = {}) {
          FROM lists l
          LEFT JOIN list_groups g ON l.group_id = g.id
          WHERE l.user_id = $1 AND l._id = $2
-         FOR UPDATE`,
+         FOR UPDATE OF l`,
         [userId, listExternalId]
       );
 

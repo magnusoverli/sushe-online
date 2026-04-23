@@ -192,26 +192,28 @@ function createRecommendationService(deps = {}) {
     const albumId = await db.withTransaction(async (client) => {
       const upsertedAlbumId = await upsertAlbumRecord(album, timestamp, client);
 
-      const existing = await client.query(
-        `SELECT r._id, u.username 
-         FROM recommendations r 
-         JOIN users u ON r.recommended_by = u._id
-         WHERE r.year = $1 AND r.album_id = $2`,
-        [year, upsertedAlbumId]
-      );
-
-      if (existing.rows.length > 0) {
-        throw new TransactionAbort(409, {
-          error: `This album was already recommended by ${existing.rows[0].username}`,
-          recommended_by: existing.rows[0].username,
-        });
-      }
-
-      await client.query(
+      const insertResult = await client.query(
         `INSERT INTO recommendations (_id, year, album_id, recommended_by, reasoning, created_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())`,
+         VALUES ($1, $2, $3, $4, $5, NOW())
+         ON CONFLICT (year, album_id) DO NOTHING
+         RETURNING album_id`,
         [_id, year, upsertedAlbumId, user._id, trimmedReasoning]
       );
+
+      if (insertResult.rows.length === 0) {
+        const existing = await client.query(
+          `SELECT u.username
+           FROM recommendations r
+           JOIN users u ON r.recommended_by = u._id
+           WHERE r.year = $1 AND r.album_id = $2`,
+          [year, upsertedAlbumId]
+        );
+
+        throw new TransactionAbort(409, {
+          error: `This album was already recommended by ${existing.rows[0]?.username || 'another user'}`,
+          recommended_by: existing.rows[0]?.username,
+        });
+      }
 
       return upsertedAlbumId;
     });
@@ -302,25 +304,28 @@ function createRecommendationService(deps = {}) {
 
     const trimmedReasoning = validateReasoning(reasoning);
 
-    const existing = await db.raw(
-      'SELECT recommended_by FROM recommendations WHERE year = $1 AND album_id = $2',
-      [year, albumId]
+    const updateResult = await db.raw(
+      `UPDATE recommendations
+       SET reasoning = $1
+       WHERE year = $2 AND album_id = $3 AND recommended_by = $4
+       RETURNING album_id`,
+      [trimmedReasoning, year, albumId, userId]
     );
 
-    if (existing.rows.length === 0) {
-      throw new TransactionAbort(404, { error: 'Recommendation not found' });
-    }
+    if (updateResult.rows.length === 0) {
+      const existing = await db.raw(
+        'SELECT recommended_by FROM recommendations WHERE year = $1 AND album_id = $2',
+        [year, albumId]
+      );
 
-    if (existing.rows[0].recommended_by !== userId) {
+      if (existing.rows.length === 0) {
+        throw new TransactionAbort(404, { error: 'Recommendation not found' });
+      }
+
       throw new TransactionAbort(403, {
         error: 'Only the original recommender can edit reasoning',
       });
     }
-
-    await db.raw(
-      'UPDATE recommendations SET reasoning = $1 WHERE year = $2 AND album_id = $3',
-      [trimmedReasoning, year, albumId]
-    );
 
     return trimmedReasoning;
   }

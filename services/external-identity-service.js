@@ -32,25 +32,14 @@ function createExternalIdentityService(deps = {}) {
     }
 
     const result = await db.raw(
-      `SELECT external_album_id, external_artist, external_album, confidence, strategy
-       FROM album_service_mappings
-       WHERE album_id = $1 AND service = $2
-       LIMIT 1`,
-      [albumId, normalizedService]
-    );
-
-    if (!result.rows.length) {
-      return null;
-    }
-
-    await db.raw(
       `UPDATE album_service_mappings
        SET last_used_at = NOW(), updated_at = NOW()
-       WHERE album_id = $1 AND service = $2`,
+       WHERE album_id = $1 AND service = $2
+       RETURNING external_album_id, external_artist, external_album, confidence, strategy`,
       [albumId, normalizedService]
     );
 
-    return result.rows[0];
+    return result.rows[0] || null;
   }
 
   async function upsertAlbumServiceMapping(mapping) {
@@ -100,25 +89,14 @@ function createExternalIdentityService(deps = {}) {
     }
 
     const result = await db.raw(
-      `SELECT service_artist
-       FROM artist_service_aliases
-       WHERE service = $1 AND canonical_artist_key = $2
-       LIMIT 1`,
-      [normalizedService, canonicalArtistKey]
-    );
-
-    if (!result.rows.length) {
-      return null;
-    }
-
-    await db.raw(
       `UPDATE artist_service_aliases
        SET last_used_at = NOW(), updated_at = NOW()
-       WHERE service = $1 AND canonical_artist_key = $2`,
+       WHERE service = $1 AND canonical_artist_key = $2
+       RETURNING service_artist`,
       [normalizedService, canonicalArtistKey]
     );
 
-    return result.rows[0].service_artist;
+    return result.rows[0]?.service_artist || null;
   }
 
   async function getArtistAliasCandidates(
