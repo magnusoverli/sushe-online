@@ -12,149 +12,6 @@ const { drainPool } = require('./close-pool');
 const logger = require('../utils/logger');
 const { setPoolReference } = require('../utils/metrics');
 
-async function ensureTables(pool) {
-  await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
-  await pool.query(`CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    _id TEXT UNIQUE NOT NULL,
-    email TEXT UNIQUE,
-    username TEXT UNIQUE,
-    hash TEXT,
-    accent_color TEXT,
-    time_format TEXT,
-    date_format TEXT,
-    last_selected_list TEXT,
-    role TEXT,
-    admin_granted_at TIMESTAMPTZ,
-    spotify_auth JSONB,
-    tidal_auth JSONB,
-    tidal_country TEXT,
-    music_service TEXT,
-    reset_token TEXT,
-    reset_expires BIGINT,
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ,
-    last_activity TIMESTAMPTZ
-  )`);
-  await pool.query(
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_granted_at TIMESTAMPTZ`
-  );
-  await pool.query(
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ`
-  );
-  await pool.query(
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS time_format TEXT`
-  );
-  await pool.query(
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format TEXT`
-  );
-  await pool.query(
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS music_service TEXT`
-  );
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token)`
-  );
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_users_reset_token_expires ON users(reset_token, reset_expires)`
-  );
-  await pool.query(`CREATE TABLE IF NOT EXISTS lists (
-    id SERIAL PRIMARY KEY,
-    _id TEXT UNIQUE NOT NULL,
-    user_id TEXT NOT NULL REFERENCES users(_id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    data JSONB,
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ,
-    CONSTRAINT unique_user_name UNIQUE(user_id, name)
-  )`);
-  await pool.query(`CREATE TABLE IF NOT EXISTS list_items (
-    id SERIAL PRIMARY KEY,
-    _id TEXT UNIQUE NOT NULL,
-    list_id TEXT NOT NULL REFERENCES lists(_id) ON DELETE CASCADE,
-    position INT,
-    artist TEXT,
-    album TEXT,
-    album_id TEXT,
-    release_date TEXT,
-    country TEXT,
-    genre_1 TEXT,
-    genre_2 TEXT,
-    comments TEXT,
-    tracks JSONB,
-    track_pick TEXT,
-    cover_image TEXT,
-    cover_image_format TEXT,
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
-  )`);
-  await pool.query(
-    `ALTER TABLE list_items ADD COLUMN IF NOT EXISTS tracks JSONB`
-  );
-  await pool.query(
-    `ALTER TABLE list_items ADD COLUMN IF NOT EXISTS track_pick TEXT`
-  );
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_list_items_list_id ON list_items(list_id)`
-  );
-  await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_list_items_album_id ON list_items(album_id)`
-  );
-
-  await pool.query(`CREATE TABLE IF NOT EXISTS albums (
-    id SERIAL PRIMARY KEY,
-    album_id TEXT UNIQUE NOT NULL,
-    artist TEXT,
-    album TEXT,
-    release_date TEXT,
-    country TEXT,
-    genre_1 TEXT,
-    genre_2 TEXT,
-    tracks JSONB,
-    cover_image TEXT,
-    cover_image_format TEXT,
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
-  )`);
-  // Handle historical column name from early schemas
-  const albumIdCompatCheck = await pool.query(
-    `SELECT 1 FROM information_schema.columns WHERE table_name='albums' AND column_name='_id'`
-  );
-  if (albumIdCompatCheck.rowCount) {
-    const albumIdExists = await pool.query(
-      `SELECT 1 FROM information_schema.columns WHERE table_name='albums' AND column_name='album_id'`
-    );
-    if (!albumIdExists.rowCount) {
-      await pool.query('ALTER TABLE albums RENAME COLUMN _id TO album_id');
-    } else {
-      await pool.query('ALTER TABLE albums DROP COLUMN _id');
-    }
-  }
-  await pool.query(
-    `ALTER TABLE albums ADD COLUMN IF NOT EXISTS album_id TEXT UNIQUE`
-  );
-  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS artist TEXT`);
-  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS album TEXT`);
-  await pool.query(
-    `ALTER TABLE albums ADD COLUMN IF NOT EXISTS release_date TEXT`
-  );
-  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS country TEXT`);
-  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS genre_1 TEXT`);
-  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS genre_2 TEXT`);
-  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS tracks JSONB`);
-  await pool.query(
-    `ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_image TEXT`
-  );
-  await pool.query(
-    `ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_image_format TEXT`
-  );
-  await pool.query(
-    `ALTER TABLE albums ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ`
-  );
-  await pool.query(
-    `ALTER TABLE albums ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ`
-  );
-}
-
 const dataDir = process.env.DATA_DIR || './data';
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -191,6 +48,7 @@ if (process.env.DATABASE_URL) {
     statement_timeout: 60000, // 60 seconds for complex queries
     query_timeout: 60000, // 60 seconds query timeout
     allowExitOnIdle: false, // Don't exit when idle
+    application_name: process.env.PG_APP_NAME || 'sushe-online',
   });
   const usersMap = {
     _id: '_id',
@@ -284,54 +142,6 @@ if (process.env.DATABASE_URL) {
   // should receive this via deps.db. Shares the pool with the tabled instances,
   // so logging, metrics, drain-check, and retry apply uniformly.
   db = new PgDatastore(pool);
-  async function migrateUsers() {
-    try {
-      // Run user migrations in parallel for better performance
-      await Promise.all([
-        users.update(
-          { accentColor: { $exists: false } },
-          { $set: { accentColor: '#dc2626' } },
-          { multi: true }
-        ),
-        users.update(
-          { timeFormat: { $exists: false } },
-          { $set: { timeFormat: '24h' } },
-          { multi: true }
-        ),
-        users.update(
-          { dateFormat: { $exists: false } },
-          { $set: { dateFormat: 'MM/DD/YYYY' } },
-          { multi: true }
-        ),
-        users.update(
-          { spotifyAuth: { $exists: false } },
-          { $set: { spotifyAuth: null } },
-          { multi: true }
-        ),
-        users.update(
-          { tidalAuth: { $exists: false } },
-          { $set: { tidalAuth: null } },
-          { multi: true }
-        ),
-        users.update(
-          { tidalCountry: { $exists: false } },
-          { $set: { tidalCountry: null } },
-          { multi: true }
-        ),
-        users.update(
-          { musicService: { $exists: false } },
-          { $set: { musicService: null } },
-          { multi: true }
-        ),
-      ]);
-    } catch (err) {
-      logger.error('User migration error', {
-        error: err.message,
-        stack: err.stack,
-      });
-    }
-  }
-
   async function ensureAdminUser() {
     try {
       logger.info('Checking for admin user...');
@@ -387,14 +197,6 @@ if (process.env.DATABASE_URL) {
       const migrationManager = new MigrationManager(pool);
       await migrationManager.runMigrations();
       return migrationManager;
-    })
-    .then(() => {
-      logger.info('Ensuring base tables...');
-      return ensureTables(pool);
-    })
-    .then(() => {
-      logger.info('Migrating users...');
-      return migrateUsers();
     })
     .then(() => {
       logger.info('Ensuring admin user...');

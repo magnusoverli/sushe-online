@@ -242,7 +242,14 @@ function createUserPreferences(deps = {}) {
     }
 
     const result = await db.raw(
-      'SELECT * FROM user_preferences WHERE user_id = $1',
+      `SELECT user_id, top_genres, top_artists, top_countries, total_albums,
+              spotify_top_artists, spotify_top_tracks, spotify_saved_albums,
+              spotify_synced_at, lastfm_top_artists, lastfm_top_albums,
+              lastfm_total_scrobbles, lastfm_artist_tags, lastfm_synced_at,
+              genre_affinity, artist_affinity, country_affinity,
+              artist_countries, updated_at
+       FROM user_preferences
+       WHERE user_id = $1`,
       [userId],
       { name: 'user-prefs-get', retryable: true }
     );

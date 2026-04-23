@@ -3,29 +3,12 @@ const {
   mapAlbumDataItemToResponse,
 } = require('./item-mapper');
 
+// eslint-disable-next-line max-lines-per-function -- List fetchers keep related read-path SQL together for shared mapping behavior
 function createListFetchers(deps = {}) {
-  const {
-    listsAsync,
-    listItemsAsync,
-    fetchRecommendationMaps,
-    findListById,
-    getPointsForPosition,
-  } = deps;
+  const { db, fetchRecommendationMaps, findListById, getPointsForPosition } =
+    deps;
 
-  if (!listsAsync) throw new Error('listsAsync is required');
-  if (!listItemsAsync) throw new Error('listItemsAsync is required');
-  if (typeof listsAsync.findAllUserListsWithItems !== 'function') {
-    throw new Error('listsAsync.findAllUserListsWithItems is required');
-  }
-  if (typeof listsAsync.findWithCounts !== 'function') {
-    throw new Error('listsAsync.findWithCounts is required');
-  }
-  if (typeof listsAsync.find !== 'function') {
-    throw new Error('listsAsync.find is required');
-  }
-  if (typeof listItemsAsync.findWithAlbumData !== 'function') {
-    throw new Error('listItemsAsync.findWithAlbumData is required');
-  }
+  if (!db) throw new Error('db is required');
   if (!fetchRecommendationMaps) {
     throw new Error('fetchRecommendationMaps is required');
   }
@@ -35,7 +18,41 @@ function createListFetchers(deps = {}) {
   }
 
   async function buildFullListData(userId, userLists) {
-    const allRows = await listsAsync.findAllUserListsWithItems(userId);
+    const allRowsResult = await db.raw(
+      `SELECT 
+         l._id as list_id,
+         l.name as list_name,
+         l.year,
+         l.is_main,
+         l.group_id,
+         l.sort_order,
+         li._id as item_id,
+         li.position,
+         li.album_id,
+         li.comments,
+         li.comments_2,
+         li.primary_track,
+         li.secondary_track,
+         a.artist,
+         a.album,
+         a.release_date,
+         a.country,
+         a.genre_1,
+         a.genre_2,
+         a.tracks,
+         a.cover_image,
+         a.cover_image_format,
+         a.summary,
+         a.summary_source
+       FROM lists l
+       LEFT JOIN list_items li ON li.list_id = l._id
+       LEFT JOIN albums a ON li.album_id = a.album_id
+       WHERE l.user_id = $1
+       ORDER BY l.sort_order, l.name, li.position`,
+      [userId],
+      { name: 'list-fetchers-all-user-lists-with-items', retryable: true }
+    );
+    const allRows = allRowsResult.rows;
     const listMap = new Map();
     const listsObj = {};
 
@@ -80,18 +97,37 @@ function createListFetchers(deps = {}) {
   async function buildMetadataListData(userId) {
     const listsObj = {};
 
-    const listsWithCounts = await listsAsync.findWithCounts({ userId });
-    for (const list of listsWithCounts) {
-      listsObj[list._id] = {
-        _id: list._id,
-        name: list.name,
-        year: list.year || null,
-        isMain: list.isMain || false,
-        count: list.itemCount,
-        groupId: list.group?._id || null,
-        sortOrder: list.sortOrder || 0,
-        updatedAt: list.updatedAt,
-        createdAt: list.createdAt,
+    const listsWithCountsResult = await db.raw(
+      `SELECT l._id,
+              l.name,
+              l.year,
+              l.is_main,
+              l.sort_order,
+              l.created_at,
+              l.updated_at,
+              COUNT(li._id) AS item_count,
+              g._id AS group_external_id
+       FROM lists l
+       LEFT JOIN list_items li ON li.list_id = l._id
+       LEFT JOIN list_groups g ON l.group_id = g.id
+       WHERE l.user_id = $1
+       GROUP BY l.id, g.id
+       ORDER BY l.sort_order, l.name`,
+      [userId],
+      { name: 'list-fetchers-lists-with-counts', retryable: true }
+    );
+
+    for (const row of listsWithCountsResult.rows) {
+      listsObj[row._id] = {
+        _id: row._id,
+        name: row.name,
+        year: row.year || null,
+        isMain: row.is_main || false,
+        count: parseInt(row.item_count, 10) || 0,
+        groupId: row.group_external_id || null,
+        sortOrder: row.sort_order || 0,
+        updatedAt: row.updated_at,
+        createdAt: row.created_at,
       };
     }
 
@@ -99,9 +135,26 @@ function createListFetchers(deps = {}) {
   }
 
   async function getAllLists(userId, { full = false } = {}) {
-    const userLists = await listsAsync.find({ userId });
-
     if (full) {
+      const userListsResult = await db.raw(
+        `SELECT _id, name, year, is_main, group_id, sort_order, created_at, updated_at
+         FROM lists
+         WHERE user_id = $1
+         ORDER BY sort_order, name`,
+        [userId],
+        { name: 'list-fetchers-user-lists', retryable: true }
+      );
+      const userLists = userListsResult.rows.map((row) => ({
+        _id: row._id,
+        name: row.name,
+        year: row.year,
+        isMain: row.is_main,
+        groupId: row.group_id,
+        sortOrder: row.sort_order,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+
       return buildFullListData(userId, userLists);
     }
     return buildMetadataListData(userId);
@@ -115,7 +168,54 @@ function createListFetchers(deps = {}) {
     const list = await findListById(listId, userId);
     if (!list) return null;
 
-    const items = await listItemsAsync.findWithAlbumData(list._id, userId);
+    const itemsResult = await db.raw(
+      `SELECT li._id,
+              li.list_id,
+              li.position,
+              li.comments,
+              li.comments_2,
+              li.album_id,
+              li.primary_track,
+              li.secondary_track,
+              a.artist,
+              a.album,
+              a.release_date,
+              a.country,
+              a.genre_1,
+              a.genre_2,
+              a.tracks,
+              a.cover_image,
+              a.cover_image_format,
+              a.summary,
+              a.summary_source
+       FROM list_items li
+       LEFT JOIN albums a ON li.album_id = a.album_id
+       WHERE li.list_id = $1
+       ORDER BY li.position`,
+      [list._id],
+      { name: 'list-fetchers-list-items-with-album-data', retryable: true }
+    );
+    const items = itemsResult.rows.map((row) => ({
+      _id: row._id,
+      listId: row.list_id,
+      position: row.position,
+      artist: row.artist || '',
+      album: row.album || '',
+      albumId: row.album_id || '',
+      releaseDate: row.release_date || '',
+      country: row.country || '',
+      genre1: row.genre_1 || '',
+      genre2: row.genre_2 || '',
+      primaryTrack: row.primary_track || null,
+      secondaryTrack: row.secondary_track || null,
+      comments: row.comments || '',
+      comments2: row.comments_2 || '',
+      tracks: row.tracks || null,
+      coverImage: row.cover_image || '',
+      coverImageFormat: row.cover_image_format || '',
+      summary: row.summary || '',
+      summarySource: row.summary_source || '',
+    }));
     const recMaps = await fetchRecommendationMaps(
       list.year ? [list.year] : [],
       {

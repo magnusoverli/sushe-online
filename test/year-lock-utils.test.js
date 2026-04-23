@@ -71,6 +71,27 @@ test('isYearLocked should return false for unlocked year', async () => {
   assert.strictEqual(result, false);
 });
 
+test('isYearLocked should fail closed when requested and lookup errors', async () => {
+  const pool = {
+    query: async () => {
+      throw new Error('db unavailable');
+    },
+  };
+
+  await assert.rejects(
+    async () => {
+      await isYearLocked(pool, 2024, { failOpen: false });
+    },
+    (err) => {
+      assert.ok(err instanceof TransactionAbort);
+      assert.strictEqual(err.statusCode, 503);
+      assert.strictEqual(err.body.code, 'YEAR_LOCK_CHECK_FAILED');
+      assert.strictEqual(err.body.year, 2024);
+      return true;
+    }
+  );
+});
+
 // =============================================================================
 // isMainListLocked tests
 // =============================================================================

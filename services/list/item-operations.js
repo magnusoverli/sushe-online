@@ -31,29 +31,63 @@ function buildBatchInsertPayload(itemsToInsert, listId, timestamp) {
 }
 
 async function insertListItems(ctx, client, listId, albums, timestamp) {
-  for (let i = 0; i < albums.length; i++) {
-    const album = albums[i];
-    const albumId = await ctx.upsertAlbumRecord(album, timestamp, client);
-    const itemId = ctx.crypto.randomBytes(12).toString('hex');
+  const validAlbums = (albums || []).filter(Boolean);
+  if (validAlbums.length === 0) return;
 
-    await client.query(
-      `INSERT INTO list_items (
-        _id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [
-        itemId,
-        listId,
-        albumId,
-        i + 1,
-        album.comments || null,
-        album.comments_2 || null,
-        album.primary_track || null,
-        album.secondary_track || null,
-        timestamp,
-        timestamp,
-      ]
-    );
-  }
+  const upsertResults = await ctx.batchUpsertAlbumRecords(
+    validAlbums,
+    timestamp,
+    client
+  );
+
+  const itemsToInsert = validAlbums.map((album, index) => {
+    const key = `${album.artist}|${album.album}`;
+    const upsertResult = upsertResults.get(key);
+    if (!upsertResult) {
+      throw new Error(
+        `Album upsert result missing for ${album.artist || ''} / ${album.album || ''}`
+      );
+    }
+
+    return {
+      _id: ctx.crypto.randomBytes(12).toString('hex'),
+      album_id: upsertResult.albumId,
+      position: index + 1,
+      comments: album.comments || null,
+      comments_2: album.comments_2 || null,
+      primary_track: album.primary_track || null,
+      secondary_track: album.secondary_track || null,
+    };
+  });
+
+  const payload = buildBatchInsertPayload(itemsToInsert, listId, timestamp);
+  await client.query(
+    `INSERT INTO list_items (
+      _id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track,
+      created_at, updated_at
+    )
+    SELECT * FROM UNNEST(
+      $1::text[], $2::text[], $3::text[], $4::int[], $5::text[], $6::text[],
+      $7::text[], $8::text[], $9::timestamptz[], $10::timestamptz[]
+    ) AS t(_id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track, created_at, updated_at)`,
+    [
+      payload.itemIds,
+      payload.listIds,
+      payload.albumIds,
+      payload.positions,
+      payload.comments,
+      payload.comments2,
+      payload.primaryTracks,
+      payload.secondaryTracks,
+      payload.createdAts,
+      payload.updatedAts,
+    ]
+  );
+
+  ctx.logger?.debug('Inserted full list item batch', {
+    listId,
+    count: itemsToInsert.length,
+  });
 }
 
 async function processRemovals(client, listId, removed) {

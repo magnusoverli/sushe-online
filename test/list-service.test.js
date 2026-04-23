@@ -314,26 +314,30 @@ describe('list-service fetchers and setup status', () => {
   it('should return list metadata with counts', async () => {
     const pool = {
       query: mock.fn(async (sql) => {
+        if (sql.includes('COUNT(li._id) AS item_count')) {
+          return {
+            rows: [
+              {
+                _id: 'list1',
+                name: 'My List',
+                year: 2024,
+                is_main: true,
+                item_count: '42',
+                group_external_id: 'group1',
+                sort_order: 0,
+                updated_at: 'updated',
+                created_at: 'created',
+              },
+            ],
+          };
+        }
+
         throw new Error(`Unexpected pool query: ${sql}`);
       }),
       connect: mock.fn(),
     };
 
     const deps = createServiceDeps(pool);
-    deps.listsAsync.find = mock.fn(async () => []);
-    deps.listsAsync.findWithCounts = mock.fn(async () => [
-      {
-        _id: 'list1',
-        name: 'My List',
-        year: 2024,
-        isMain: true,
-        itemCount: 42,
-        group: { _id: 'group1' },
-        sortOrder: 0,
-        updatedAt: 'updated',
-        createdAt: 'created',
-      },
-    ]);
 
     const service = createListService(deps);
     const result = await service.getAllLists('user1', { full: false });
@@ -423,26 +427,54 @@ describe('list-service fetchers and setup status', () => {
     };
 
     const deps = createServiceDeps(pool);
-    deps.listItemsAsync.findWithAlbumData = mock.fn(async () => [
-      {
-        _id: 'item1',
-        artist: 'Artist',
-        album: 'Album',
-        albumId: 'album1',
-        releaseDate: '2024-01-01',
-        country: 'NO',
-        genre1: 'Metal',
-        genre2: 'Prog',
-        primaryTrack: 'Track',
-        secondaryTrack: null,
-        comments: '',
-        comments2: '',
-        tracks: null,
-        coverImageFormat: 'jpeg',
-        summary: '',
-        summarySource: '',
-      },
-    ]);
+    pool.query.mock.mockImplementation(async (sql) => {
+      if (sql.includes('FROM recommendations r')) {
+        return {
+          rows: [
+            {
+              year: 2024,
+              album_id: 'album1',
+              created_at: '2025-01-01',
+              recommended_by: 'alice',
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
+        return { rows: [createOwnedListRow()] };
+      }
+
+      if (sql.includes('FROM list_items li')) {
+        return {
+          rows: [
+            {
+              _id: 'item1',
+              list_id: 'list1',
+              position: 1,
+              comments: '',
+              comments_2: '',
+              album_id: 'album1',
+              primary_track: 'Track',
+              secondary_track: null,
+              artist: 'Artist',
+              album: 'Album',
+              release_date: '2024-01-01',
+              country: 'NO',
+              genre_1: 'Metal',
+              genre_2: 'Prog',
+              tracks: null,
+              cover_image: '',
+              cover_image_format: 'jpeg',
+              summary: '',
+              summary_source: '',
+            },
+          ],
+        };
+      }
+
+      throw new Error(`Unexpected pool query: ${sql}`);
+    });
 
     const service = createListService(deps);
     const result = await service.getListById('list1', 'user1');

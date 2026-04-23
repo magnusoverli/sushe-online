@@ -12,10 +12,9 @@ const logger = require('../../utils/logger');
 const { createStatsService } = require('../../services/stats-service');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin, usersAsync, listsAsync, adminCodeState } =
-    deps;
+  const { ensureAuth, ensureAdmin, db, adminCodeState } = deps;
 
-  const statsService = createStatsService({ usersAsync, listsAsync });
+  const statsService = createStatsService({ db });
 
   // Admin status endpoint (for debugging)
   app.get('/api/admin/status', ensureAuth, (req, res) => {

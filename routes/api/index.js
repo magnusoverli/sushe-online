@@ -133,8 +133,6 @@ module.exports = (app, deps) => {
   const listService = createListService({
     db,
     logger,
-    listsAsync,
-    listItemsAsync,
     crypto,
     validateYear,
     helpers,

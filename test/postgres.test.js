@@ -319,7 +319,11 @@ describe('PgDatastore', () => {
 
       // Check query structure
       const queryCall = mockPool.query.mock.calls[0].arguments[0];
-      assert.ok(queryCall.text.includes('SELECT * FROM test_table'));
+      assert.ok(
+        queryCall.text.includes(
+          'SELECT user_id, album_id, list_name FROM test_table'
+        )
+      );
       assert.ok(queryCall.text.includes('LIMIT 1'));
     });
 

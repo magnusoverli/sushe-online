@@ -10,6 +10,15 @@
 
 const { classify, KINDS } = require('./errors');
 const logger = require('../utils/logger');
+const metrics = require('../utils/metrics');
+
+function callMetric(name, ...args) {
+  if (!(name in metrics)) return;
+  const fn = metrics[name];
+  if (typeof fn === 'function') {
+    fn(...args);
+  }
+}
 
 const DEFAULT_RETRIES = 3;
 const DEFAULT_BASE_MS = 50;
@@ -100,6 +109,7 @@ async function withRetry(fn, opts = {}) {
         throw err;
       }
       if (attempt >= retries) {
+        callMetric('recordDbRetryExhausted', label, code);
         log.warn('Retries exhausted', {
           label,
           attempts: attempt + 1,
@@ -114,6 +124,7 @@ async function withRetry(fn, opts = {}) {
       }
 
       const delay = computeBackoffDelay(attempt, opts);
+      callMetric('recordDbRetry', label);
       log.debug('Retrying after transient DB error', {
         label,
         attempt: attempt + 1,

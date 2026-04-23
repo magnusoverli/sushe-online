@@ -29,10 +29,8 @@ describe('recommendation-service', () => {
     };
     const pool = asMockDb({
       query: mock.fn(async (sql) => {
-        if (
-          sql.includes('SELECT COUNT(*) as count FROM recommendation_access')
-        ) {
-          return { rows: [{ count: '0' }], rowCount: 1 };
+        if (sql.includes('SELECT CASE')) {
+          return { rows: [{ has_access: true }], rowCount: 1 };
         }
 
         if (sql.includes('SELECT locked FROM recommendation_settings')) {

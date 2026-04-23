@@ -11,16 +11,13 @@
 
 /**
  * @param {Object} deps
- * @param {Object} deps.usersAsync - Async user datastore
- * @param {Object} deps.listsAsync - Async list datastore (used for raw SQL too)
+ * @param {import('../db/types').DbFacade} deps.db - Canonical datastore
  * @returns {Object} Stats service methods
  */
 function createStatsService(deps = {}) {
-  const usersAsync = deps.usersAsync;
-  const listsAsync = deps.listsAsync;
+  const db = deps.db;
 
-  if (!usersAsync) throw new Error('usersAsync is required for StatsService');
-  if (!listsAsync) throw new Error('listsAsync is required for StatsService');
+  if (!db) throw new Error('db is required for StatsService');
 
   /**
    * Get public stats visible to all authenticated users.
@@ -30,33 +27,46 @@ function createStatsService(deps = {}) {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const [totalUsers, totalLists, adminUsers, adminStatsResult] =
-      await Promise.all([
-        usersAsync.count({}),
-        listsAsync.count({}),
-        usersAsync.count({ role: 'admin' }),
-        listsAsync.raw(
-          `WITH unique_albums AS (
-             SELECT COUNT(DISTINCT album_id) as total
-             FROM list_items
-             WHERE album_id IS NOT NULL AND album_id != ''
-           ),
-           active_users AS (
-             SELECT COUNT(DISTINCT user_id) as count FROM lists WHERE updated_at >= $1
-           )
-           SELECT
-             (SELECT total FROM unique_albums) as total_albums,
-             (SELECT count FROM active_users) as active_users`,
-          [sevenDaysAgo],
-          { name: 'stats-public-aggregate', retryable: true }
-        ),
-      ]);
+    const [countResult, adminStatsResult] = await Promise.all([
+      db.raw(
+        `SELECT
+           COUNT(*)::int AS total_users,
+           COUNT(*) FILTER (WHERE role = 'admin')::int AS admin_users,
+           (SELECT COUNT(*)::int FROM lists) AS total_lists
+         FROM users`,
+        [],
+        { name: 'stats-public-counts', retryable: true }
+      ),
+      db.raw(
+        `WITH unique_albums AS (
+           SELECT COUNT(DISTINCT album_id) AS total
+           FROM list_items
+           WHERE album_id IS NOT NULL AND album_id != ''
+         ),
+         active_users AS (
+           SELECT COUNT(DISTINCT user_id) AS count FROM lists WHERE updated_at >= $1
+         )
+         SELECT
+           (SELECT total FROM unique_albums) AS total_albums,
+           (SELECT count FROM active_users) AS active_users`,
+        [sevenDaysAgo],
+        { name: 'stats-public-aggregate', retryable: true }
+      ),
+    ]);
+
+    const counts = countResult.rows[0] || {};
 
     const aggregateStats = adminStatsResult.rows[0] || {};
     const totalAlbums = parseInt(aggregateStats.total_albums, 10) || 0;
     const activeUsers = parseInt(aggregateStats.active_users, 10) || 0;
 
-    return { totalUsers, totalLists, totalAlbums, adminUsers, activeUsers };
+    return {
+      totalUsers: counts.total_users || 0,
+      totalLists: counts.total_lists || 0,
+      totalAlbums,
+      adminUsers: counts.admin_users || 0,
+      activeUsers,
+    };
   }
 
   /**
@@ -68,21 +78,33 @@ function createStatsService(deps = {}) {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     const [
-      allUsers,
-      totalLists,
-      adminUsers,
+      countsResult,
+      allUsersResult,
       userListCountsResult,
       adminStatsResult,
     ] = await Promise.all([
-      usersAsync.find({}),
-      listsAsync.count({}),
-      usersAsync.count({ role: 'admin' }),
-      listsAsync.raw(
+      db.raw(
+        `SELECT
+           COUNT(*)::int AS total_users,
+           COUNT(*) FILTER (WHERE role = 'admin')::int AS admin_users,
+           (SELECT COUNT(*)::int FROM lists) AS total_lists
+         FROM users`,
+        [],
+        { name: 'stats-admin-counts', retryable: true }
+      ),
+      db.raw(
+        `SELECT _id, username, email, role, last_activity, created_at
+         FROM users
+         ORDER BY created_at DESC`,
+        [],
+        { name: 'stats-admin-users', retryable: true }
+      ),
+      db.raw(
         'SELECT user_id, COUNT(*) as list_count FROM lists GROUP BY user_id',
         [],
         { name: 'stats-admin-list-counts', retryable: true }
       ),
-      listsAsync.raw(
+      db.raw(
         `WITH album_genres AS (
            SELECT DISTINCT li.album_id, a.genre_1, a.genre_2
            FROM list_items li
@@ -103,6 +125,16 @@ function createStatsService(deps = {}) {
         { name: 'stats-admin-aggregate', retryable: true }
       ),
     ]);
+
+    const counts = countsResult.rows[0] || {};
+    const allUsers = allUsersResult.rows.map((row) => ({
+      _id: row._id,
+      username: row.username,
+      email: row.email,
+      role: row.role,
+      lastActivity: row.last_activity,
+      createdAt: row.created_at,
+    }));
 
     // Build Map for O(1) list count lookup
     const listCountMap = new Map(
@@ -127,10 +159,10 @@ function createStatsService(deps = {}) {
     const activeUsers = parseInt(aggregateStats.active_users, 10) || 0;
 
     return {
-      totalUsers: allUsers.length,
-      totalLists,
+      totalUsers: counts.total_users || allUsers.length,
+      totalLists: counts.total_lists || 0,
       totalAlbums,
-      adminUsers,
+      adminUsers: counts.admin_users || 0,
       activeUsers,
       users: usersWithCounts,
     };

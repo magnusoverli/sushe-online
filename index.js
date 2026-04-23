@@ -99,7 +99,7 @@ const adminCodeState = getAdminCodeState();
 
 // Wrapper to use with the users datastore from this module
 function recordActivity(req) {
-  recordActivityBase(req, users);
+  recordActivityBase(req, db);
 }
 
 // Configure Passport authentication
@@ -191,7 +191,7 @@ app.use(requestIdMiddleware());
 app.use(metricsMiddleware());
 
 // Health check and metrics routes (kept before session/auth stack for lower overhead)
-registerHealthRoutes(app, pool);
+registerHealthRoutes(app, pool, { ready });
 
 // Session middleware with PostgreSQL store and caching
 const sessionMiddleware = createSessionMiddleware(pool);
@@ -220,7 +220,6 @@ app.use((req, res, next) => {
 
 const { validateExtensionToken } = require('./utils/auth-utils');
 const ensureAuthAPI = createEnsureAuthAPI({
-  usersAsync,
   db,
   validateExtensionToken,
   recordActivity: recordActivityBase,
@@ -247,8 +246,9 @@ const { createUserService } = require('./services/user-service');
 const { createDuplicateService } = require('./services/duplicate-service');
 const { createReidentifyService } = require('./services/reidentify-service');
 
-const authService = createAuthService({ usersAsync, bcrypt, logger });
+const authService = createAuthService({ db, usersAsync, bcrypt, logger });
 const userService = createUserService({
+  db,
   users,
   usersAsync,
   logger,

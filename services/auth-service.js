@@ -9,6 +9,7 @@
  */
 
 const logger = require('../utils/logger');
+const { ensureDb } = require('../db/postgres');
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -41,14 +42,53 @@ const USER_DEFAULTS = {
  * @param {Object} [deps.logger]     - Logger instance
  * @returns {Object} Auth service methods
  */
+// eslint-disable-next-line max-lines-per-function -- Auth service intentionally groups registration, password, session, and extension-token flows
 function createAuthService(deps = {}) {
   const usersAsyncDep = deps.usersAsync;
-  if (!usersAsyncDep) {
-    throw new Error('usersAsync is required for AuthService');
+  const db = deps.db ? ensureDb(deps.db, 'AuthService') : null;
+  if (!db && !usersAsyncDep) {
+    throw new Error('db or usersAsync is required for AuthService');
   }
 
   const bcryptDep = deps.bcrypt || require('bcryptjs');
   const log = deps.logger || logger;
+  const crypto = deps.crypto || require('crypto');
+
+  async function getUserById(userId) {
+    if (db) {
+      const result = await db.raw(
+        `SELECT _id, email, username, hash, accent_color, time_format, date_format,
+                last_selected_list, role, spotify_auth, tidal_auth, music_service,
+                lastfm_username, column_visibility, approval_status, last_activity
+         FROM users
+         WHERE _id = $1`,
+        [userId],
+        { name: 'auth-service-get-user-by-id', retryable: true }
+      );
+      if (!result.rows[0]) return null;
+      const row = result.rows[0];
+      return {
+        _id: row._id,
+        email: row.email,
+        username: row.username,
+        hash: row.hash,
+        accentColor: row.accent_color,
+        timeFormat: row.time_format,
+        dateFormat: row.date_format,
+        lastSelectedList: row.last_selected_list,
+        role: row.role,
+        spotifyAuth: row.spotify_auth,
+        tidalAuth: row.tidal_auth,
+        musicService: row.music_service,
+        lastfmUsername: row.lastfm_username,
+        columnVisibility: row.column_visibility,
+        approvalStatus: row.approval_status,
+        lastActivity: row.last_activity,
+      };
+    }
+
+    return usersAsyncDep.findOne({ _id: userId });
+  }
 
   // ── Registration ─────────────────────────────────────────────────────────
 
@@ -103,38 +143,107 @@ function createAuthService(deps = {}) {
 
     const { email, username, password } = input;
 
-    // Check for duplicates
-    const existingEmail = await usersAsyncDep.findOne({ email });
-    if (existingEmail) {
-      return {
-        user: null,
-        validation: { valid: false, error: 'Email already registered' },
-      };
-    }
-
-    const existingUsername = await usersAsyncDep.findOne({ username });
-    if (existingUsername) {
-      return {
-        user: null,
-        validation: { valid: false, error: 'Username already taken' },
-      };
-    }
-
     // Hash password
     const hash = await bcryptDep.hash(password, BCRYPT_SALT_ROUNDS);
     if (!hash) {
       throw new Error('Password hashing failed');
     }
 
-    // Insert user
-    const newUser = await usersAsyncDep.insert({
-      email,
-      username,
-      hash,
-      ...USER_DEFAULTS,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    let newUser;
+    if (db) {
+      const existingResult = await db.raw(
+        `SELECT email, username
+         FROM users
+         WHERE email = $1 OR username = $2`,
+        [email, username],
+        { name: 'auth-service-registration-duplicates', retryable: true }
+      );
+
+      if (existingResult.rows.some((row) => row.email === email)) {
+        return {
+          user: null,
+          validation: { valid: false, error: 'Email already registered' },
+        };
+      }
+
+      if (existingResult.rows.some((row) => row.username === username)) {
+        return {
+          user: null,
+          validation: { valid: false, error: 'Username already taken' },
+        };
+      }
+
+      const timestamp = new Date();
+      const userId = crypto.randomBytes(12).toString('hex');
+      const insertResult = await db.raw(
+        `INSERT INTO users (
+           _id, email, username, hash, spotify_auth, tidal_auth, tidal_country,
+           accent_color, time_format, date_format, approval_status, created_at, updated_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         RETURNING _id, email, username, hash,
+                   accent_color, time_format, date_format,
+                   spotify_auth, tidal_auth, tidal_country,
+                   approval_status, created_at, updated_at`,
+        [
+          userId,
+          email,
+          username,
+          hash,
+          USER_DEFAULTS.spotifyAuth,
+          USER_DEFAULTS.tidalAuth,
+          USER_DEFAULTS.tidalCountry,
+          USER_DEFAULTS.accentColor,
+          USER_DEFAULTS.timeFormat,
+          USER_DEFAULTS.dateFormat,
+          USER_DEFAULTS.approvalStatus,
+          timestamp,
+          timestamp,
+        ],
+        { name: 'auth-service-register-user' }
+      );
+
+      const row = insertResult.rows[0];
+      newUser = {
+        _id: row._id,
+        email: row.email,
+        username: row.username,
+        hash: row.hash,
+        accentColor: row.accent_color,
+        timeFormat: row.time_format,
+        dateFormat: row.date_format,
+        spotifyAuth: row.spotify_auth,
+        tidalAuth: row.tidal_auth,
+        tidalCountry: row.tidal_country,
+        approvalStatus: row.approval_status,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    } else {
+      const existingEmail = await usersAsyncDep.findOne({ email });
+      if (existingEmail) {
+        return {
+          user: null,
+          validation: { valid: false, error: 'Email already registered' },
+        };
+      }
+
+      const existingUsername = await usersAsyncDep.findOne({ username });
+      if (existingUsername) {
+        return {
+          user: null,
+          validation: { valid: false, error: 'Username already taken' },
+        };
+      }
+
+      newUser = await usersAsyncDep.insert({
+        email,
+        username,
+        hash,
+        ...USER_DEFAULTS,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
 
     log.info('New user registered (pending approval)', { email, username });
     return { user: newUser, validation: { valid: true } };
@@ -274,18 +383,14 @@ function createAuthService(deps = {}) {
   /**
    * Generate and store a new extension token for a user.
    *
-   * Historical signature accepted a pool as the first argument; it is now
-   * optional and ignored (usersAsync.raw is used internally so logging,
-   * metrics, and the shutdown drain flag apply).
-   *
-   * @param {Object} [_legacyPoolIgnored]
+   * @param {Object|null} [_unused]
    * @param {string} userId
    * @param {string} userAgent - Request User-Agent string
    * @param {Function} generateToken - Token generation function
    * @returns {Promise<{ token: string, expiresAt: string }>}
    */
   async function createExtensionToken(
-    _legacyPoolIgnored,
+    _unused,
     userId,
     userAgent,
     generateToken
@@ -293,7 +398,8 @@ function createAuthService(deps = {}) {
     const token = generateToken();
     const expiresAt = new Date(Date.now() + EXTENSION_TOKEN_EXPIRY_MS);
 
-    await usersAsyncDep.raw(
+    const queryable = db || usersAsyncDep;
+    await queryable.raw(
       `INSERT INTO extension_tokens (user_id, token, expires_at, user_agent)
        VALUES ($1, $2, $3, $4)`,
       [userId, token, expiresAt, userAgent],
@@ -312,7 +418,8 @@ function createAuthService(deps = {}) {
    * @returns {Promise<{ revoked: boolean }>}
    */
   async function revokeExtensionToken(_legacyPoolIgnored, token, userId) {
-    const result = await usersAsyncDep.raw(
+    const queryable = db || usersAsyncDep;
+    const result = await queryable.raw(
       `UPDATE extension_tokens
        SET is_revoked = TRUE
        WHERE token = $1 AND user_id = $2`,
@@ -330,7 +437,8 @@ function createAuthService(deps = {}) {
    * @returns {Promise<Array>}
    */
   async function listExtensionTokens(_legacyPoolIgnored, userId) {
-    const result = await usersAsyncDep.raw(
+    const queryable = db || usersAsyncDep;
+    const result = await queryable.raw(
       `SELECT id, created_at, last_used_at, expires_at, user_agent, is_revoked
        FROM extension_tokens
        WHERE user_id = $1
@@ -353,6 +461,7 @@ function createAuthService(deps = {}) {
     createExtensionToken,
     revokeExtensionToken,
     listExtensionTokens,
+    getUserById,
   };
 }
 

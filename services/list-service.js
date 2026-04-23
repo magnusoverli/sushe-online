@@ -22,7 +22,7 @@ function createListService(deps = {}) {
   const db = ensureDb(deps.db, 'list-service');
 
   const log = deps.logger || logger;
-  const { listsAsync, listItemsAsync, crypto, validateYear, helpers } = deps;
+  const { crypto, validateYear, helpers } = deps;
   const { getPointsForPosition, refreshPlaycountsInBackground } = deps;
 
   const {
@@ -36,7 +36,7 @@ function createListService(deps = {}) {
     if (!years || years.length === 0) return result;
 
     try {
-      const recResult = await listsAsync.raw(
+      const recResult = await db.raw(
         `SELECT r.year, r.album_id, r.created_at, u.username as recommended_by
          FROM recommendations r
          JOIN users u ON r.recommended_by = u._id
@@ -79,7 +79,7 @@ function createListService(deps = {}) {
       return queryable.query(sql, [listId, userId]);
     }
 
-    return listsAsync.raw(sql, [listId, userId], {
+    return db.raw(sql, [listId, userId], {
       name: 'list-service-find-by-id',
       retryable: true,
     });
@@ -146,8 +146,7 @@ function createListService(deps = {}) {
   });
 
   const listFetchers = createListFetchers({
-    listsAsync,
-    listItemsAsync,
+    db,
     fetchRecommendationMaps,
     findListById,
     getPointsForPosition,
@@ -194,7 +193,7 @@ function createListService(deps = {}) {
 
   async function dismissSetup(userId) {
     const dismissedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    await listsAsync.raw(
+    await db.raw(
       `UPDATE users SET list_setup_dismissed_until = $1 WHERE _id = $2`,
       [dismissedUntil, userId],
       { name: 'list-service-dismiss-setup' }

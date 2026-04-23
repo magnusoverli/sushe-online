@@ -5,11 +5,11 @@
  * Runtime no-op — this file only exists so that other modules can reference
  * its typedefs via `@typedef` imports for editor tooltips and `// @ts-check`.
  *
- * Shapes are derived from the column lists in db/index.js (fieldMap +
- * ensureTables DDL) and the migration files under db/migrations/migrations.
+ * Shapes are derived from the migration files under db/migrations/migrations
+ * and mirrored in the field maps in db/index.js.
  *
- * Keep in sync when columns are added or removed. The canonical source is
- * the DB schema; this file is a reflection of it for editor tooling.
+ * Keep in sync when columns are added or removed. The canonical source is the
+ * migration-owned DB schema; this file is a reflection of it for editor tooling.
  */
 
 /**

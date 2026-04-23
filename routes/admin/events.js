@@ -15,11 +15,11 @@ const logger = require('../../utils/logger');
 const { createAdminEventService } = require('../../services/admin-events');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin, db, usersAsync } = deps;
+  const { ensureAuth, ensureAdmin, db } = deps;
 
   // Create admin event service instance
   const adminEventService = createAdminEventService({
-    db: db || usersAsync, // canonical db preferred, usersAsync as legacy fallback
+    db,
     logger,
   });
 
@@ -27,7 +27,7 @@ module.exports = (app, deps) => {
   adminEventService.registerActionHandler(
     'account_approval',
     'approve',
-    async (eventData, adminUser) => {
+    async (eventData, adminUser, _event, client) => {
       const { userId, username } = eventData;
 
       if (!userId) {
@@ -35,13 +35,15 @@ module.exports = (app, deps) => {
       }
 
       try {
-        // Update user's approval status to 'approved'
-        const result = await usersAsync.update(
-          { _id: userId },
-          { $set: { approvalStatus: 'approved', updatedAt: new Date() } }
+        const result = await client.query(
+          `UPDATE users
+           SET approval_status = 'approved', updated_at = NOW()
+           WHERE _id = $1
+           RETURNING _id`,
+          [userId]
         );
 
-        if (result === 0) {
+        if (result.rows.length === 0) {
           return { success: false, message: 'User not found' };
         }
 
@@ -64,7 +66,7 @@ module.exports = (app, deps) => {
   adminEventService.registerActionHandler(
     'account_approval',
     'reject',
-    async (eventData, adminUser) => {
+    async (eventData, adminUser, _event, client) => {
       const { userId, username } = eventData;
 
       if (!userId) {
@@ -72,13 +74,15 @@ module.exports = (app, deps) => {
       }
 
       try {
-        // Update user's approval status to 'rejected' (keep for audit trail)
-        const result = await usersAsync.update(
-          { _id: userId },
-          { $set: { approvalStatus: 'rejected', updatedAt: new Date() } }
+        const result = await client.query(
+          `UPDATE users
+           SET approval_status = 'rejected', updated_at = NOW()
+           WHERE _id = $1
+           RETURNING _id`,
+          [userId]
         );
 
-        if (result === 0) {
+        if (result.rows.length === 0) {
           return { success: false, message: 'User not found' };
         }
 

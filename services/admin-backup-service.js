@@ -112,8 +112,8 @@ async function dropPublicTablesForRestore({ db, logger, restoreId }) {
       logger.info(`[${restoreId}] Dropped ${tablesResult.rows.length} tables`);
     }
 
-    await db.raw('DROP TABLE IF EXISTS migrations CASCADE');
-    logger.info(`[${restoreId}] Dropped migrations table`);
+    await db.raw('DROP TABLE IF EXISTS schema_migrations CASCADE');
+    logger.info(`[${restoreId}] Dropped schema_migrations table`);
   } catch (error) {
     logger.warn(`[${restoreId}] Pre-restore table drop failed (non-fatal)`, {
       error: error.message,

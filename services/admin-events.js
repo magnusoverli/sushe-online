@@ -53,18 +53,25 @@ async function getEventCount(db, whereClause, params) {
 /**
  * Update event status after action execution
  */
-async function updateEventStatus(db, eventId, action, adminUser, resolvedVia) {
+async function updateEventStatus(
+  queryable,
+  eventId,
+  action,
+  adminUser,
+  resolvedVia
+) {
   const status = action === 'dismiss' ? 'dismissed' : action;
   const resolvedById = adminUser.source === 'telegram' ? null : adminUser._id;
 
-  const updateResult = await db.raw(
-    `UPDATE admin_events
-     SET status = $1, resolved_at = NOW(), resolved_by = $2, resolved_via = $3
-     WHERE id = $4
-     RETURNING *`,
-    [status, resolvedById, resolvedVia, eventId],
-    { name: 'admin-events-update-status' }
-  );
+  const sql = `UPDATE admin_events
+               SET status = $1, resolved_at = NOW(), resolved_by = $2, resolved_via = $3
+               WHERE id = $4
+               RETURNING *`;
+  const updateResult = queryable.query
+    ? await queryable.query(sql, [status, resolvedById, resolvedVia, eventId])
+    : await queryable.raw(sql, [status, resolvedById, resolvedVia, eventId], {
+        name: 'admin-events-update-status',
+      });
 
   return updateResult.rows[0];
 }
@@ -143,6 +150,7 @@ async function notifyTelegramForUpdate(
  * @param {Object} [deps.logger]
  * @param {Function} [deps.telegramNotifier]
  */
+// eslint-disable-next-line max-lines-per-function -- Cohesive admin event module with query helpers and transactional action execution
 function createAdminEventService(deps = {}) {
   const log = deps.logger || logger;
   const db = ensureDb(deps.db, 'admin-events');
@@ -245,18 +253,21 @@ function createAdminEventService(deps = {}) {
   /**
    * Get a single event by ID
    */
-  async function getEventById(eventId) {
+  async function getEventById(eventId, queryable = null, options = {}) {
     if (!db) throw new Error('Database datastore not configured');
+    const lockClause = options.forUpdate ? ' FOR UPDATE' : '';
+    const sql = `SELECT id, event_type, title, description, data, status, priority,
+                        created_at, resolved_at, resolved_by, resolved_via,
+                        telegram_message_id, telegram_chat_id, actions
+                 FROM admin_events
+                 WHERE id = $1${lockClause}`;
 
-    // Explicit column list so schema additions don't leak into API responses.
-    const result = await db.raw(
-      `SELECT id, event_type, title, description, data, status, priority,
-              created_at, resolved_at, resolved_by, resolved_via,
-              telegram_message_id, telegram_chat_id, actions
-       FROM admin_events WHERE id = $1`,
-      [eventId],
-      { name: 'admin-events-get-by-id', retryable: true }
-    );
+    const result = queryable
+      ? await queryable.query(sql, [eventId])
+      : await db.raw(sql, [eventId], {
+          name: 'admin-events-get-by-id',
+          retryable: true,
+        });
     return result.rows[0] || null;
   }
 
@@ -298,46 +309,74 @@ function createAdminEventService(deps = {}) {
   ) {
     if (!db) throw new Error('Database datastore not configured');
 
-    const event = await getEventById(eventId);
-    if (!event) return { success: false, message: 'Event not found' };
-    if (event.status !== 'pending') {
-      return {
-        success: false,
-        message: `Event already resolved (${event.status})`,
-      };
-    }
-
-    const typeHandlers = actionHandlers.get(event.event_type);
-    if (!typeHandlers) {
-      return {
-        success: false,
-        message: `No handlers for event type: ${event.event_type}`,
-      };
-    }
-
-    const handler = typeHandlers.get(action);
-    if (!handler) {
-      return { success: false, message: `No handler for action: ${action}` };
-    }
-
+    let updatedEvent;
     let handlerResult;
+
     try {
-      handlerResult = await handler(event.data, adminUser, event);
+      const executeWithinTransaction = typeof db.withTransaction === 'function';
+      const run = executeWithinTransaction
+        ? (callback) => db.withTransaction(callback)
+        : async (callback) => callback(db);
+
+      await run(async (queryable) => {
+        const event = await getEventById(eventId, queryable, {
+          forUpdate: executeWithinTransaction,
+        });
+        if (!event) {
+          handlerResult = { success: false, message: 'Event not found' };
+          return;
+        }
+        if (event.status !== 'pending') {
+          handlerResult = {
+            success: false,
+            message: `Event already resolved (${event.status})`,
+          };
+          return;
+        }
+
+        const typeHandlers = actionHandlers.get(event.event_type);
+        if (!typeHandlers) {
+          handlerResult = {
+            success: false,
+            message: `No handlers for event type: ${event.event_type}`,
+          };
+          return;
+        }
+
+        const handler = typeHandlers.get(action);
+        if (!handler) {
+          handlerResult = {
+            success: false,
+            message: `No handler for action: ${action}`,
+          };
+          return;
+        }
+
+        handlerResult = await handler(event.data, adminUser, event, queryable);
+        if (!handlerResult.success) {
+          return;
+        }
+
+        updatedEvent = await updateEventStatus(
+          queryable,
+          eventId,
+          action,
+          adminUser,
+          resolvedVia
+        );
+      });
     } catch (err) {
-      log.error(`Action handler error: ${event.event_type}/${action}`, err);
+      log.error('Action handler error', {
+        eventId,
+        action,
+        error: err.message,
+      });
       return { success: false, message: `Action failed: ${err.message}` };
     }
 
-    if (!handlerResult.success) return handlerResult;
+    if (!handlerResult?.success) return handlerResult;
 
-    const updatedEvent = await updateEventStatus(
-      db,
-      eventId,
-      action,
-      adminUser,
-      resolvedVia
-    );
-    log.info(`Admin event resolved: ${event.event_type}/${action}`, {
+    log.info(`Admin event resolved: ${updatedEvent.event_type}/${action}`, {
       eventId,
       resolvedBy: adminUser.username,
       resolvedVia,

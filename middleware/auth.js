@@ -42,7 +42,7 @@ function sanitizeUser(user) {
  */
 const ACTIVITY_UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
-function recordActivity(req, users) {
+function recordActivity(req, queryable) {
   if (!req.user) return;
 
   const now = Date.now();
@@ -60,15 +60,22 @@ function recordActivity(req, users) {
 
     // Fire-and-forget DB update using prepared statement (non-blocking)
     // Use updateFieldById if available (prepared statement), fallback to update
-    if (typeof users.updateFieldById === 'function') {
-      users.updateFieldById(
+    if (typeof queryable.updateFieldById === 'function') {
+      queryable.updateFieldById(
         req.user._id,
         'lastActivity',
         new Date(now),
         () => {} // Ignore result - non-critical operation
       );
+    } else if (typeof queryable.raw === 'function') {
+      queryable
+        .raw('UPDATE users SET last_activity = $1 WHERE _id = $2', [
+          new Date(now),
+          req.user._id,
+        ])
+        .catch(() => {});
     } else {
-      users.update(
+      queryable.update(
         { _id: req.user._id },
         { $set: { lastActivity: new Date(now) } },
         () => {} // Ignore result - non-critical operation
@@ -97,7 +104,7 @@ function ensureAuth(req, res, next) {
  * Supports both session and bearer token authentication
  *
  * @param {Object} deps - Dependencies
- * @param {Object} deps.usersAsync - Users datastore (async)
+ * @param {Object} [deps.usersAsync] - Legacy users datastore for compatibility
  * @param {import('../db/types').DbFacade} deps.db - Canonical datastore
  * @param {Function} deps.validateExtensionToken - Token validation function
  * @param {Function} deps.recordActivity - Activity recording function
@@ -116,7 +123,7 @@ function createEnsureAuthAPI(deps) {
   return async function ensureAuthAPI(req, res, next) {
     // First check if authenticated via session
     if (req.isAuthenticated && req.isAuthenticated()) {
-      recordActivityFn(req, usersAsync);
+      recordActivityFn(req, db || usersAsync);
       return next();
     }
 
@@ -130,7 +137,40 @@ function createEnsureAuthAPI(deps) {
 
         if (userId) {
           // Load user and attach to request
-          const user = await usersAsync.findOne({ _id: userId });
+          const user = usersAsync
+            ? await usersAsync.findOne({ _id: userId })
+            : await (async () => {
+                const userResult = await db.raw(
+                  `SELECT _id, email, username, hash, accent_color, time_format, date_format,
+                          last_selected_list, role, spotify_auth, tidal_auth, music_service,
+                          lastfm_username, column_visibility, approval_status, last_activity
+                   FROM users
+                   WHERE _id = $1`,
+                  [userId],
+                  { name: 'ensure-auth-api-user-by-id', retryable: true }
+                );
+                const row = userResult.rows[0];
+                return row
+                  ? {
+                      _id: row._id,
+                      email: row.email,
+                      username: row.username,
+                      hash: row.hash,
+                      accentColor: row.accent_color,
+                      timeFormat: row.time_format,
+                      dateFormat: row.date_format,
+                      lastSelectedList: row.last_selected_list,
+                      role: row.role,
+                      spotifyAuth: row.spotify_auth,
+                      tidalAuth: row.tidal_auth,
+                      musicService: row.music_service,
+                      lastfmUsername: row.lastfm_username,
+                      columnVisibility: row.column_visibility,
+                      approvalStatus: row.approval_status,
+                      lastActivity: row.last_activity,
+                    }
+                  : null;
+              })();
           if (user) {
             req.user = user;
             // Mark this as token-based auth for logging

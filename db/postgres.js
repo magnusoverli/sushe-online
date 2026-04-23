@@ -2,9 +2,20 @@
 const { Pool } = require('pg');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
-const { observeDbQuery } = require('../utils/metrics');
+const metrics = require('../utils/metrics');
 const { withRetry } = require('./retry-wrapper');
 const { withTransaction: baseWithTransaction } = require('./transaction');
+const { classify } = require('./errors');
+
+const observeDbQuery = metrics.observeDbQuery;
+
+function callMetric(name, ...args) {
+  if (!(name in metrics)) return;
+  const fn = metrics[name];
+  if (typeof fn === 'function') {
+    fn(...args);
+  }
+}
 
 // Whitelist of allowed SQL isolation levels. The literal is interpolated into
 // the `SET TRANSACTION ISOLATION LEVEL ...` statement, so only exact matches
@@ -15,6 +26,11 @@ const VALID_ISOLATION_LEVELS = new Set([
   'REPEATABLE READ',
   'SERIALIZABLE',
 ]);
+
+const SLOW_QUERY_THRESHOLD_MS = Math.max(
+  1,
+  Number.parseInt(process.env.DB_SLOW_QUERY_MS || '250', 10) || 250
+);
 
 /**
  * Coerce a caller-supplied `deps.db` into the canonical shape with `.raw`.
@@ -231,10 +247,21 @@ class PgDatastore {
     const startTime = Date.now();
     try {
       const result = await this.pool.query(text, params);
-      observeDbQuery(operation, Date.now() - startTime);
+      const durationMs = Date.now() - startTime;
+      observeDbQuery(operation, durationMs);
+      this._logSlowQuery({ operation, durationMs, queryText: text });
       return result;
     } catch (error) {
-      observeDbQuery(operation, Date.now() - startTime);
+      const durationMs = Date.now() - startTime;
+      observeDbQuery(operation, durationMs);
+      this._logSlowQuery({ operation, durationMs, queryText: text, error });
+      const classification = classify(error);
+      callMetric(
+        'recordDbError',
+        operation,
+        classification.kind,
+        classification.code
+      );
       throw error;
     }
   }
@@ -255,10 +282,27 @@ class PgDatastore {
     const startTime = Date.now();
     try {
       const result = await this.pool.query({ name, text }, params);
-      observeDbQuery(operation, Date.now() - startTime);
+      const durationMs = Date.now() - startTime;
+      observeDbQuery(operation, durationMs);
+      this._logSlowQuery({ operation, durationMs, queryText: text, name });
       return result;
     } catch (error) {
-      observeDbQuery(operation, Date.now() - startTime);
+      const durationMs = Date.now() - startTime;
+      observeDbQuery(operation, durationMs);
+      this._logSlowQuery({
+        operation,
+        durationMs,
+        queryText: text,
+        name,
+        error,
+      });
+      const classification = classify(error);
+      callMetric(
+        'recordDbError',
+        operation,
+        classification.kind,
+        classification.code
+      );
       throw error;
     }
   }
@@ -497,11 +541,36 @@ class PgDatastore {
     return mapped;
   }
 
+  _selectColumns() {
+    if (!this.fieldMap || Object.keys(this.fieldMap).length === 0) {
+      return '*';
+    }
+
+    return Object.values(this.fieldMap).join(', ');
+  }
+
+  _logSlowQuery({ operation, durationMs, queryText, name, error = null }) {
+    if (durationMs < SLOW_QUERY_THRESHOLD_MS) {
+      return;
+    }
+
+    callMetric('recordDbSlowQuery', operation);
+    logger.warn('Slow database query', {
+      operation,
+      table: this.table || 'db',
+      name: name || null,
+      duration_ms: durationMs,
+      threshold_ms: SLOW_QUERY_THRESHOLD_MS,
+      error: error?.message,
+      query: queryText,
+    });
+  }
+
   findOne(query, cb) {
     this._requireTable('findOne');
     const promise = (async () => {
       const { text, values } = this._buildWhere(query);
-      const queryText = `SELECT * FROM ${this.table} ${text} LIMIT 1`;
+      const queryText = `SELECT ${this._selectColumns()} FROM ${this.table} ${text} LIMIT 1`;
       const queryName = this._statementName(`findOne_${this.table}`, queryText);
       const res = await this._preparedQuery(queryName, queryText, values);
       return res.rows[0] ? this._mapRow(res.rows[0]) : null;
@@ -513,7 +582,7 @@ class PgDatastore {
     this._requireTable('find');
     const promise = (async () => {
       const { text, suffix, values } = this._buildWhere(query);
-      const queryText = `SELECT * FROM ${this.table} ${text}${suffix}`;
+      const queryText = `SELECT ${this._selectColumns()} FROM ${this.table} ${text}${suffix}`;
       const queryName = this._statementName(`find_${this.table}`, queryText);
       const res = await this._preparedQuery(queryName, queryText, values);
       return res.rows.map((r) => this._mapRow(r));
@@ -705,7 +774,7 @@ class PgDatastore {
       }
 
       const placeholders = albumIds.map((_, i) => `$${i + 1}`).join(',');
-      const queryText = `SELECT * FROM ${this.table} WHERE ${this._mapField('albumId')} IN (${placeholders})`;
+      const queryText = `SELECT ${this._selectColumns()} FROM ${this.table} WHERE ${this._mapField('albumId')} IN (${placeholders})`;
       const queryName = `findByAlbumIds_${this.table}_${albumIds.length}`;
       const res = await this._preparedQuery(queryName, queryText, albumIds);
       const result = res.rows.map((r) => this._mapRow(r));
@@ -1094,6 +1163,7 @@ class PgDatastore {
       throw new ShuttingDownError();
     }
 
+    const startTime = Date.now();
     const run = () =>
       baseWithTransaction(this.pool, async (client) => {
         if (isolation) {
@@ -1102,13 +1172,22 @@ class PgDatastore {
         return callback(client);
       });
 
-    if (!retryable) {
-      return run();
+    try {
+      if (!retryable) {
+        const result = await run();
+        callMetric('observeDbTransaction', Date.now() - startTime, 'success');
+        return result;
+      }
+      const result = await withRetry(run, {
+        idempotent: true,
+        label: `tx:${this.table || 'db'}`,
+      });
+      callMetric('observeDbTransaction', Date.now() - startTime, 'success');
+      return result;
+    } catch (error) {
+      callMetric('observeDbTransaction', Date.now() - startTime, 'error');
+      throw error;
     }
-    return withRetry(run, {
-      idempotent: true,
-      label: `tx:${this.table || 'db'}`,
-    });
   }
 }
 

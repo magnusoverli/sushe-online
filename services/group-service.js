@@ -463,11 +463,11 @@ function createGroupService(deps = {}) {
         await acquireYearLocks(client, [oldYear, targetYear]);
 
         const sourceYearLocked = oldYear
-          ? await isYearLocked(client, oldYear)
+          ? await isYearLocked(client, oldYear, { failOpen: false })
           : false;
         const targetYearLocked =
           targetYear && targetYear !== oldYear
-            ? await isYearLocked(client, targetYear)
+            ? await isYearLocked(client, targetYear, { failOpen: false })
             : false;
 
         if (sourceYearLocked) {

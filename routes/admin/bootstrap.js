@@ -161,9 +161,9 @@ async function getRecommendationStatuses(db, years, userId) {
 }
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin, db, usersAsync, listsAsync } = deps;
+  const { ensureAuth, ensureAdmin, db } = deps;
 
-  const statsService = createStatsService({ usersAsync, listsAsync });
+  const statsService = createStatsService({ db });
   const adminEventService = createAdminEventService({ db, logger });
   const aggregateListService = createAggregateList({ db, logger });
 
@@ -193,8 +193,8 @@ module.exports = (app, deps) => {
 
       const [statusByYear, recByYear, summaryStats, imageStats] =
         await Promise.all([
-          getAggregateStatuses(listsAsync, years),
-          getRecommendationStatuses(listsAsync, years, req.user._id),
+          getAggregateStatuses(db, years),
+          getRecommendationStatuses(db, years, req.user._id),
           albumSummaryService ? albumSummaryService.getStats() : null,
           imageRefetchService ? imageRefetchService.getStats() : null,
         ]);

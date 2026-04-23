@@ -6,6 +6,7 @@ const {
 } = require('../utils/normalization');
 
 const SUPPORTED_SERVICES = new Set(['spotify', 'tidal', 'lastfm']);
+const LAST_USED_TOUCH_INTERVAL_SQL = "INTERVAL '1 hour'";
 
 function normalizeService(service) {
   return String(service || '')
@@ -32,11 +33,23 @@ function createExternalIdentityService(deps = {}) {
     }
 
     const result = await db.raw(
-      `UPDATE album_service_mappings
-       SET last_used_at = NOW(), updated_at = NOW()
-       WHERE album_id = $1 AND service = $2
-       RETURNING external_album_id, external_artist, external_album, confidence, strategy`,
-      [albumId, normalizedService]
+      `WITH selected AS (
+         SELECT external_album_id, external_artist, external_album, confidence, strategy
+         FROM album_service_mappings
+         WHERE album_id = $1 AND service = $2
+         LIMIT 1
+       ), touched AS (
+         UPDATE album_service_mappings
+         SET last_used_at = NOW(), updated_at = NOW()
+         WHERE album_id = $1
+           AND service = $2
+           AND (last_used_at IS NULL OR last_used_at < NOW() - ${LAST_USED_TOUCH_INTERVAL_SQL})
+         RETURNING 1
+       )
+       SELECT external_album_id, external_artist, external_album, confidence, strategy
+       FROM selected`,
+      [albumId, normalizedService],
+      { name: 'external-identity-get-album-service-mapping', retryable: true }
     );
 
     return result.rows[0] || null;
@@ -89,11 +102,23 @@ function createExternalIdentityService(deps = {}) {
     }
 
     const result = await db.raw(
-      `UPDATE artist_service_aliases
-       SET last_used_at = NOW(), updated_at = NOW()
-       WHERE service = $1 AND canonical_artist_key = $2
-       RETURNING service_artist`,
-      [normalizedService, canonicalArtistKey]
+      `WITH selected AS (
+         SELECT service_artist
+         FROM artist_service_aliases
+         WHERE service = $1 AND canonical_artist_key = $2
+         LIMIT 1
+       ), touched AS (
+         UPDATE artist_service_aliases
+         SET last_used_at = NOW(), updated_at = NOW()
+         WHERE service = $1
+           AND canonical_artist_key = $2
+           AND (last_used_at IS NULL OR last_used_at < NOW() - ${LAST_USED_TOUCH_INTERVAL_SQL})
+         RETURNING 1
+       )
+       SELECT service_artist
+       FROM selected`,
+      [normalizedService, canonicalArtistKey],
+      { name: 'external-identity-get-artist-alias', retryable: true }
     );
 
     return result.rows[0]?.service_artist || null;

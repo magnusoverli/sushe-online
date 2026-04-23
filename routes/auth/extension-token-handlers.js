@@ -6,7 +6,6 @@ function createExtensionTokenHandlers(deps = {}) {
     generateExtensionToken,
     validateExtensionToken,
     cleanupExpiredTokens,
-    usersAsync,
     sanitizeUser,
     saveSessionAsync,
     logger,
@@ -56,7 +55,7 @@ function createExtensionTokenHandlers(deps = {}) {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
-    const user = await usersAsync.findOne({ _id: userId });
+    const user = await authService.getUserById(userId);
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
     }

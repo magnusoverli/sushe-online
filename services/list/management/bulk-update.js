@@ -77,7 +77,9 @@ async function bulkUpdate(ctx, userId, updates) {
 
       const effectiveYear = newYear || oldYear;
       if (effectiveYear) {
-        const yearLocked = await ctx.isYearLocked(client, effectiveYear);
+        const yearLocked = await ctx.isYearLocked(client, effectiveYear, {
+          failOpen: false,
+        });
         if (yearLocked) {
           if (updateIsMain !== undefined && updateIsMain !== oldList.is_main) {
             results.push({

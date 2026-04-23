@@ -14,50 +14,83 @@ module.exports = (app, deps) => {
   const {
     ensureAuth,
     ensureAdmin,
+    invalidateUserCache,
+    userService,
     users,
     usersAsync,
     lists,
     listsAsync,
-    invalidateUserCache,
   } = deps;
 
+  const deleteUser =
+    userService && typeof userService.deleteUser === 'function'
+      ? (userId) => userService.deleteUser(userId)
+      : (userId) =>
+          new Promise((resolve, reject) => {
+            lists.remove({ userId }, { multi: true }, (listErr) => {
+              if (listErr) {
+                listErr.userFacingMessage = 'Error deleting user data';
+                return reject(listErr);
+              }
+
+              users.remove({ _id: userId }, {}, (userErr, numRemoved) => {
+                if (userErr) return reject(userErr);
+                resolve(numRemoved > 0);
+              });
+            });
+          });
+
+  const setAdminRole =
+    userService && typeof userService.setAdminRole === 'function'
+      ? (userId, isAdmin) => userService.setAdminRole(userId, isAdmin)
+      : (userId, isAdmin) =>
+          usersAsync.update(
+            { _id: userId },
+            isAdmin
+              ? { $set: { role: 'admin', adminGrantedAt: new Date() } }
+              : { $unset: { role: true, adminGrantedAt: true } }
+          );
+
+  const getUserLists =
+    userService && typeof userService.getUserLists === 'function'
+      ? (userId) => userService.getUserLists(userId)
+      : async (userId) => {
+          const userLists = await listsAsync.findWithCounts({ userId });
+          return userLists.map((list) => ({
+            name: list.name,
+            albumCount: list.itemCount,
+            createdAt: list.createdAt,
+            updatedAt: list.updatedAt,
+          }));
+        };
+
   // Admin: Delete user
-  app.post('/admin/delete-user', ensureAuth, ensureAdmin, (req, res) => {
+  app.post('/admin/delete-user', ensureAuth, ensureAdmin, async (req, res) => {
     const { userId } = req.body;
 
     if (userId === req.user._id) {
       return res.status(400).json({ error: 'Cannot delete yourself' });
     }
 
-    // Delete user's lists first
-    lists.remove({ userId }, { multi: true }, (err) => {
-      if (err) {
-        logger.error('Error deleting user lists', {
-          error: err.message,
-          userId,
-        });
-        return res.status(500).json({ error: 'Error deleting user data' });
+    try {
+      const deleted = await deleteUser(userId);
+
+      if (!deleted) {
+        return res.status(404).json({ error: 'User not found' });
       }
 
-      // Then delete the user
-      users.remove({ _id: userId }, {}, (err, numRemoved) => {
-        if (err) {
-          logger.error('Error deleting user', { error: err.message, userId });
-          return res.status(500).json({ error: 'Error deleting user' });
-        }
+      if (typeof invalidateUserCache === 'function') {
+        invalidateUserCache(userId);
+      }
 
-        if (numRemoved === 0) {
-          return res.status(404).json({ error: 'User not found' });
-        }
-
-        if (typeof invalidateUserCache === 'function') {
-          invalidateUserCache(userId);
-        }
-
-        logger.info(`Admin ${req.user.email} deleted user with ID: ${userId}`);
-        res.json({ success: true });
+      logger.info(`Admin ${req.user.email} deleted user with ID: ${userId}`);
+      res.json({ success: true });
+    } catch (err) {
+      logger.error('Error deleting user', { error: err.message, userId });
+      return res.status(500).json({
+        error: err.userFacingMessage || 'Error deleting user',
       });
-    });
+    }
   });
 
   // Admin: Make user admin
@@ -65,12 +98,9 @@ module.exports = (app, deps) => {
     const { userId } = req.body;
 
     try {
-      const numUpdated = await usersAsync.update(
-        { _id: userId },
-        { $set: { role: 'admin', adminGrantedAt: new Date() } }
-      );
+      const updated = await setAdminRole(userId, true);
 
-      if (numUpdated === 0) {
+      if (updated === 0 || updated === false) {
         return res.status(404).json({ error: 'User not found' });
       }
 
@@ -104,12 +134,9 @@ module.exports = (app, deps) => {
     }
 
     try {
-      const numUpdated = await usersAsync.update(
-        { _id: userId },
-        { $unset: { role: true, adminGrantedAt: true } }
-      );
+      const updated = await setAdminRole(userId, false);
 
-      if (numUpdated === 0) {
+      if (updated === 0 || updated === false) {
         return res.status(404).json({ error: 'User not found' });
       }
 
@@ -140,15 +167,8 @@ module.exports = (app, deps) => {
       const { userId } = req.params;
 
       try {
-        const userLists = await listsAsync.findWithCounts({ userId });
-        const listsData = userLists.map((list) => ({
-          name: list.name,
-          albumCount: list.itemCount,
-          createdAt: list.createdAt,
-          updatedAt: list.updatedAt,
-        }));
-
-        res.json({ lists: listsData });
+        const userLists = await getUserLists(userId);
+        res.json({ lists: userLists });
       } catch (err) {
         logger.error('Error fetching user lists', {
           error: err.message,

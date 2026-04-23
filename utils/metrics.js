@@ -141,6 +141,42 @@ const dbQueryDuration = new client.Histogram({
   registers: [register],
 });
 
+const dbErrorsTotal = new client.Counter({
+  name: 'sushe_db_errors_total',
+  help: 'Total number of database errors by classification and operation',
+  labelNames: ['operation', 'kind', 'code'],
+  registers: [register],
+});
+
+const dbRetriesTotal = new client.Counter({
+  name: 'sushe_db_retries_total',
+  help: 'Total number of retried database operations',
+  labelNames: ['label'],
+  registers: [register],
+});
+
+const dbRetriesExhaustedTotal = new client.Counter({
+  name: 'sushe_db_retries_exhausted_total',
+  help: 'Total number of database operations that exhausted retries',
+  labelNames: ['label', 'code'],
+  registers: [register],
+});
+
+const dbTransactionDuration = new client.Histogram({
+  name: 'sushe_db_transaction_duration_seconds',
+  help: 'Duration of database transactions in seconds',
+  labelNames: ['outcome'],
+  buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10],
+  registers: [register],
+});
+
+const dbSlowQueriesTotal = new client.Counter({
+  name: 'sushe_db_slow_queries_total',
+  help: 'Total number of database queries exceeding the slow-query threshold',
+  labelNames: ['operation'],
+  registers: [register],
+});
+
 /**
  * Database connection pool reference for pull-based metrics collection.
  * Set via setPoolReference() after pool initialization.
@@ -313,6 +349,26 @@ function observeDbQuery(operation, durationMs) {
   dbQueryDuration.labels(operation).observe(durationSeconds);
 }
 
+function recordDbError(operation, kind, code = 'unknown') {
+  dbErrorsTotal.labels(operation, kind || 'unknown', code || 'unknown').inc();
+}
+
+function recordDbRetry(label) {
+  dbRetriesTotal.labels(label || 'unknown').inc();
+}
+
+function recordDbRetryExhausted(label, code = 'unknown') {
+  dbRetriesExhaustedTotal.labels(label || 'unknown', code || 'unknown').inc();
+}
+
+function observeDbTransaction(durationMs, outcome) {
+  dbTransactionDuration.labels(outcome || 'unknown').observe(durationMs / 1000);
+}
+
+function recordDbSlowQuery(operation) {
+  dbSlowQueriesTotal.labels(operation || 'other').inc();
+}
+
 /**
  * Record authentication attempt
  * @param {string} type - The auth type (e.g., 'login', 'register', 'logout')
@@ -445,6 +501,11 @@ module.exports = {
   observeExternalApiCall,
   recordExternalApiError,
   observeDbQuery,
+  recordDbError,
+  recordDbRetry,
+  recordDbRetryExhausted,
+  observeDbTransaction,
+  recordDbSlowQuery,
   recordAuthAttempt,
   recordClaudeUsage,
   incWebsocketConnections,

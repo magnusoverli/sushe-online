@@ -60,7 +60,7 @@ module.exports = (app, deps) => {
   });
   const securityHandlers = createSecurityHandlers({
     authService,
-    usersAsync,
+    userService,
     invalidateUserCache,
     saveSessionSafe,
     adminCodeState,
@@ -76,7 +76,6 @@ module.exports = (app, deps) => {
     generateExtensionToken,
     validateExtensionToken,
     cleanupExpiredTokens,
-    usersAsync,
     sanitizeUser,
     saveSessionAsync,
     extensionAuthTemplate,
@@ -196,10 +195,18 @@ module.exports = (app, deps) => {
       const timestamp = new Date();
       req.user.lastActivity = timestamp;
       req.session.lastActivityUpdatedAt = Date.now();
-      await usersAsync.update(
-        { _id: req.user._id },
-        { $set: { lastActivity: timestamp } }
-      );
+      if (db) {
+        await db.raw(
+          'UPDATE users SET last_activity = $1 WHERE _id = $2',
+          [timestamp, req.user._id],
+          { name: 'auth-login-last-activity' }
+        );
+      } else {
+        await usersAsync.update(
+          { _id: req.user._id },
+          { $set: { lastActivity: timestamp } }
+        );
+      }
 
       try {
         await saveSessionAsync(req);

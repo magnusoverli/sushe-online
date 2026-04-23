@@ -12,7 +12,7 @@ const { createAsyncHandler } = require('../../middleware/async-handler');
  * @param {Object} deps - Dependencies
  */
 module.exports = (app, deps) => {
-  const { db, logger, usersAsync } = deps;
+  const { db, logger } = deps;
   const asyncHandler = createAsyncHandler(logger);
 
   const { createTelegramNotifier } = require('../../services/telegram');
@@ -87,7 +87,7 @@ module.exports = (app, deps) => {
           let adminEventService = app.locals.adminEventService;
           if (!adminEventService) {
             adminEventService = createAdminEventService({
-              db: db || usersAsync,
+              db,
               logger,
               telegramNotifier,
             });

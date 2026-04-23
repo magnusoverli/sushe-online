@@ -1,7 +1,7 @@
 function createSecurityHandlers(deps = {}) {
   const {
     authService,
-    usersAsync,
+    userService,
     invalidateUserCache,
     saveSessionSafe,
     adminCodeState,
@@ -24,10 +24,14 @@ function createSecurityHandlers(deps = {}) {
         return respondWithError(req, res, 400, result.error, '/');
       }
 
-      await usersAsync.update(
-        { _id: req.user._id },
-        { $set: { hash: result.newHash, updatedAt: new Date() } }
+      const updated = await userService.updatePasswordHash(
+        req.user._id,
+        result.newHash
       );
+
+      if (!updated) {
+        return respondWithError(req, res, 404, 'User not found', '/');
+      }
 
       if (invalidateUserCache) {
         invalidateUserCache(req.user._id);
@@ -70,10 +74,11 @@ function createSecurityHandlers(deps = {}) {
 
       adminCodeState.adminCodeAttempts.delete(req.user._id);
 
-      await usersAsync.update(
-        { _id: req.user._id },
-        { $set: { role: 'admin', adminGrantedAt: new Date() } }
-      );
+      const updated = await userService.setAdminRole(req.user._id, true);
+
+      if (!updated) {
+        return respondWithError(req, res, 404, 'User not found', '/');
+      }
 
       if (invalidateUserCache) {
         invalidateUserCache(req.user._id);

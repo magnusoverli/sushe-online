@@ -47,8 +47,10 @@ function createYearLock(deps = {}) {
    * @param {number|null} year
    * @returns {Promise<boolean>}
    */
-  async function isYearLocked(dbOrPool, year) {
+  async function isYearLocked(dbOrPool, year, opts = {}) {
     if (!year) return false; // null/undefined years can't be locked
+
+    const failOpen = opts.failOpen !== false;
 
     try {
       const db = asDb(dbOrPool);
@@ -64,8 +66,17 @@ function createYearLock(deps = {}) {
         error: err.message,
         year,
       });
-      // Fail safe: if we can't check, assume not locked to avoid blocking operations
-      return false;
+
+      if (failOpen) {
+        return false;
+      }
+
+      throw new TransactionAbort(503, {
+        error: `Cannot verify year lock status for ${year}`,
+        code: 'YEAR_LOCK_CHECK_FAILED',
+        yearLocked: true,
+        year,
+      });
     }
   }
 
@@ -84,7 +95,7 @@ function createYearLock(deps = {}) {
   async function validateYearNotLocked(pool, year, operation) {
     if (!year) return; // null years are fine (collections)
 
-    const locked = await isYearLocked(pool, year);
+    const locked = await isYearLocked(pool, year, { failOpen: false });
     if (locked) {
       throw new TransactionAbort(403, {
         error: `Cannot ${operation}: Year ${year} is locked`,
@@ -120,7 +131,7 @@ function createYearLock(deps = {}) {
   async function validateMainListNotLocked(pool, year, isMain, operation) {
     if (!year || !isMain) return; // Non-main lists are never locked
 
-    const locked = await isYearLocked(pool, year);
+    const locked = await isYearLocked(pool, year, { failOpen: false });
     if (locked) {
       throw new TransactionAbort(403, {
         error: `Cannot ${operation}: Main list for year ${year} is locked`,

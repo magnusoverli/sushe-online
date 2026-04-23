@@ -41,21 +41,21 @@ function createRecommendationService(deps = {}) {
   }
 
   async function hasAccess(year, userId) {
-    const accessCount = await db.raw(
-      'SELECT COUNT(*) as count FROM recommendation_access WHERE year = $1',
-      [year]
+    const result = await db.raw(
+      `SELECT CASE
+                WHEN EXISTS (
+                  SELECT 1 FROM recommendation_access WHERE year = $1
+                )
+                THEN EXISTS (
+                  SELECT 1 FROM recommendation_access WHERE year = $1 AND user_id = $2
+                )
+                ELSE TRUE
+              END AS has_access`,
+      [year, userId],
+      { name: 'recommendation-access-check', retryable: true }
     );
 
-    if (parseInt(accessCount.rows[0].count, 10) === 0) {
-      return true;
-    }
-
-    const userAccess = await db.raw(
-      'SELECT 1 FROM recommendation_access WHERE year = $1 AND user_id = $2',
-      [year, userId]
-    );
-
-    return userAccess.rows.length > 0;
+    return result.rows[0]?.has_access === true;
   }
 
   function validateReasoning(reasoning) {
@@ -102,10 +102,19 @@ function createRecommendationService(deps = {}) {
     const locked = await isLocked(year);
 
     const result = await db.raw(
-      `SELECT 
-        r._id,
-        r.year,
-        r.album_id,
+      `WITH user_album_lists AS (
+         SELECT li.album_id,
+                ARRAY_AGG(DISTINCT l.name ORDER BY l.name) AS list_names
+         FROM list_items li
+         JOIN lists l ON li.list_id = l._id
+         WHERE l.user_id = $2
+           AND l.year = $1
+         GROUP BY li.album_id
+       )
+       SELECT 
+         r._id,
+         r.year,
+         r.album_id,
         r.created_at,
         r.reasoning,
         r.recommended_by as recommender_id,
@@ -113,24 +122,18 @@ function createRecommendationService(deps = {}) {
         a.album,
         a.release_date,
         a.country,
-        a.genre_1,
-        a.genre_2,
-        u.username as recommended_by,
-        user_lists.list_names as in_user_list_names
-      FROM recommendations r
-      JOIN albums a ON r.album_id = a.album_id
-      JOIN users u ON r.recommended_by = u._id
-      LEFT JOIN LATERAL (
-        SELECT ARRAY_AGG(DISTINCT l.name ORDER BY l.name) as list_names
-        FROM list_items li
-        JOIN lists l ON li.list_id = l._id
-        WHERE li.album_id = r.album_id
-          AND l.user_id = $2
-          AND l.year = $1
-      ) user_lists ON TRUE
-      WHERE r.year = $1
-      ORDER BY r.created_at DESC`,
-      [year, userId]
+         a.genre_1,
+         a.genre_2,
+         u.username as recommended_by,
+         ual.list_names as in_user_list_names
+       FROM recommendations r
+       JOIN albums a ON r.album_id = a.album_id
+       JOIN users u ON r.recommended_by = u._id
+       LEFT JOIN user_album_lists ual ON ual.album_id = r.album_id
+       WHERE r.year = $1
+       ORDER BY r.created_at DESC`,
+      [year, userId],
+      { name: 'recommendation-get-by-year', retryable: true }
     );
 
     return {

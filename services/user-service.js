@@ -9,6 +9,7 @@
  */
 
 const logger = require('../utils/logger');
+const { ensureDb } = require('../db/postgres');
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -38,18 +39,20 @@ const HEX_COLOR_REGEX = /^#[0-9A-F]{6}$/i;
  * @param {Object} [deps.logger]    - Logger instance
  * @returns {Object} User service methods
  */
+// eslint-disable-next-line max-lines-per-function -- User service keeps closely related settings/admin mutations in one injected module
 function createUserService(deps = {}) {
   const usersDep = deps.users;
   const usersAsyncDep = deps.usersAsync;
+  const db = deps.db ? ensureDb(deps.db, 'UserService') : null;
   const invalidateUserCacheDep =
     typeof deps.invalidateUserCache === 'function'
       ? deps.invalidateUserCache
       : () => {};
 
-  if (!usersDep) {
+  if (!db && !usersDep) {
     throw new Error('users (callback-style) is required for UserService');
   }
-  if (!usersAsyncDep) {
+  if (!db && !usersAsyncDep) {
     throw new Error('usersAsync is required for UserService');
   }
 
@@ -66,10 +69,17 @@ function createUserService(deps = {}) {
    * @returns {Promise<void>}
    */
   async function updateSetting(userId, field, value) {
-    await usersAsyncDep.update(
-      { _id: userId },
-      { $set: { [field]: value, updatedAt: new Date() } }
-    );
+    if (db) {
+      await db.raw(
+        `UPDATE users SET ${camelToSnake(field)} = $1, updated_at = $2 WHERE _id = $3`,
+        [value, new Date(), userId]
+      );
+    } else {
+      await usersAsyncDep.update(
+        { _id: userId },
+        { $set: { [field]: value, updatedAt: new Date() } }
+      );
+    }
     invalidateUserCacheDep(userId);
     log.info(`User setting updated`, { userId, field, value });
   }
@@ -87,10 +97,20 @@ function createUserService(deps = {}) {
     const trimmed = value.trim();
 
     // Check uniqueness
-    const existing = await usersAsyncDep.findOne({
-      [field]: trimmed,
-      _id: { $ne: userId },
-    });
+    let existing;
+    if (db) {
+      const result = await db.raw(
+        `SELECT _id FROM users WHERE ${camelToSnake(field)} = $1 AND _id <> $2 LIMIT 1`,
+        [trimmed, userId],
+        { name: `user-service-check-${field}`, retryable: true }
+      );
+      existing = result.rows[0] || null;
+    } else {
+      existing = await usersAsyncDep.findOne({
+        [field]: trimmed,
+        _id: { $ne: userId },
+      });
+    }
 
     if (existing) {
       const label =
@@ -100,10 +120,17 @@ function createUserService(deps = {}) {
       return { success: false, error: label };
     }
 
-    await usersAsyncDep.update(
-      { _id: userId },
-      { $set: { [field]: trimmed, updatedAt: new Date() } }
-    );
+    if (db) {
+      await db.raw(
+        `UPDATE users SET ${camelToSnake(field)} = $1, updated_at = $2 WHERE _id = $3`,
+        [trimmed, new Date(), userId]
+      );
+    } else {
+      await usersAsyncDep.update(
+        { _id: userId },
+        { $set: { [field]: trimmed, updatedAt: new Date() } }
+      );
+    }
 
     invalidateUserCacheDep(userId);
     log.info(`User ${field} updated`, { userId, field });
@@ -118,11 +145,111 @@ function createUserService(deps = {}) {
    * @returns {Promise<void>}
    */
   async function updateLastSelectedList(userId, listId) {
-    await usersAsyncDep.update(
+    if (db) {
+      await db.raw(
+        `UPDATE users SET last_selected_list = $1, updated_at = $2 WHERE _id = $3`,
+        [listId, new Date(), userId]
+      );
+    } else {
+      await usersAsyncDep.update(
+        { _id: userId },
+        { $set: { lastSelectedList: listId, updatedAt: new Date() } }
+      );
+    }
+    invalidateUserCacheDep(userId);
+  }
+
+  async function updatePasswordHash(userId, newHash) {
+    if (db) {
+      const result = await db.raw(
+        `UPDATE users SET hash = $1, updated_at = $2 WHERE _id = $3 RETURNING _id`,
+        [newHash, new Date(), userId]
+      );
+      invalidateUserCacheDep(userId);
+      return result.rows.length > 0;
+    }
+
+    const updated = await usersAsyncDep.update(
       { _id: userId },
-      { $set: { lastSelectedList: listId, updatedAt: new Date() } }
+      { $set: { hash: newHash, updatedAt: new Date() } }
     );
     invalidateUserCacheDep(userId);
+    return updated > 0;
+  }
+
+  async function setAdminRole(userId, isAdmin) {
+    if (db) {
+      const result = await db.raw(
+        isAdmin
+          ? `UPDATE users SET role = 'admin', admin_granted_at = $1, updated_at = $1 WHERE _id = $2 RETURNING _id`
+          : `UPDATE users SET role = NULL, admin_granted_at = NULL, updated_at = $1 WHERE _id = $2 RETURNING _id`,
+        [new Date(), userId]
+      );
+      invalidateUserCacheDep(userId);
+      return result.rows.length > 0;
+    }
+
+    const updated = await usersAsyncDep.update(
+      { _id: userId },
+      isAdmin
+        ? { $set: { role: 'admin', adminGrantedAt: new Date() } }
+        : { $unset: { role: true, adminGrantedAt: true } }
+    );
+    invalidateUserCacheDep(userId);
+    return updated > 0;
+  }
+
+  async function deleteUser(userId) {
+    if (db) {
+      const deleted = await db.withTransaction(async (client) => {
+        const result = await client.query(
+          'DELETE FROM users WHERE _id = $1 RETURNING _id',
+          [userId]
+        );
+        return result.rows.length > 0;
+      });
+      if (deleted) {
+        invalidateUserCacheDep(userId);
+      }
+      return deleted;
+    }
+
+    return new Promise((resolve, reject) => {
+      usersDep.remove({ _id: userId }, {}, (err, numRemoved) => {
+        if (err) return reject(err);
+        if (numRemoved > 0) {
+          invalidateUserCacheDep(userId);
+        }
+        resolve(numRemoved > 0);
+      });
+    });
+  }
+
+  async function getUserLists(userId) {
+    if (!db) {
+      throw new Error('getUserLists requires db');
+    }
+
+    const result = await db.raw(
+      `SELECT l.name,
+              COUNT(li._id)::int AS album_count,
+              l.created_at,
+              l.updated_at
+       FROM lists l
+       LEFT JOIN list_items li ON li.list_id = l._id
+       WHERE l.user_id = $1
+       GROUP BY l.id
+       ORDER BY l.sort_order, l.name`,
+      [userId],
+      { name: 'user-service-user-lists', retryable: true }
+    );
+
+    return result.rows.map((row) => ({
+      name: row.name,
+      albumCount: row.album_count,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
   }
 
   // ── Validation helpers ─────────────────────────────────────────────────
@@ -201,6 +328,10 @@ function createUserService(deps = {}) {
     updateSetting,
     updateUniqueField,
     updateLastSelectedList,
+    updatePasswordHash,
+    setAdminRole,
+    deleteUser,
+    getUserLists,
     validateSetting,
   };
 }
@@ -209,6 +340,21 @@ function createUserService(deps = {}) {
 
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function camelToSnake(field) {
+  const fieldMap = {
+    accentColor: 'accent_color',
+    timeFormat: 'time_format',
+    dateFormat: 'date_format',
+    musicService: 'music_service',
+    columnVisibility: 'column_visibility',
+    lastSelectedList: 'last_selected_list',
+    email: 'email',
+    username: 'username',
+  };
+
+  return fieldMap[field] || field;
 }
 
 module.exports = {
