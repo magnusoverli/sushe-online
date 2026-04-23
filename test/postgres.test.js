@@ -1450,3 +1450,264 @@ describe('PgDatastore.withTransaction', () => {
     assert.strictEqual(bodyAttempts, 1);
   });
 });
+
+// ============================================================================
+// _buildWhere extended operators ($in/$nin/$lt/$lte/$gte/$ne/$and/$or +
+// pseudo-keys $orderBy/$limit/$offset)
+// ============================================================================
+
+describe('_buildWhere extended operators', () => {
+  let datastore;
+  beforeEach(() => {
+    const mockPool = { query: mock.fn() };
+    datastore = new PgDatastore(mockPool, 'lists', {
+      userId: 'user_id',
+      name: 'name',
+      createdAt: 'created_at',
+    });
+  });
+
+  describe('comparison operators', () => {
+    it('$lt emits col < $N', () => {
+      const r = datastore._buildWhere({ createdAt: { $lt: 42 } });
+      assert.strictEqual(r.text, 'WHERE created_at < $1');
+      assert.deepStrictEqual(r.values, [42]);
+    });
+
+    it('$lte emits col <= $N', () => {
+      const r = datastore._buildWhere({ createdAt: { $lte: 42 } });
+      assert.strictEqual(r.text, 'WHERE created_at <= $1');
+    });
+
+    it('$gte emits col >= $N', () => {
+      const r = datastore._buildWhere({ createdAt: { $gte: 42 } });
+      assert.strictEqual(r.text, 'WHERE created_at >= $1');
+    });
+
+    it('$ne with value emits col <> $N', () => {
+      const r = datastore._buildWhere({ userId: { $ne: 'u1' } });
+      assert.strictEqual(r.text, 'WHERE user_id <> $1');
+      assert.deepStrictEqual(r.values, ['u1']);
+    });
+
+    it('$ne with null emits IS NOT NULL and consumes no placeholder', () => {
+      const r = datastore._buildWhere({ name: { $ne: null } });
+      assert.strictEqual(r.text, 'WHERE name IS NOT NULL');
+      assert.deepStrictEqual(r.values, []);
+    });
+
+    it('$eq with null emits IS NULL', () => {
+      const r = datastore._buildWhere({ name: { $eq: null } });
+      assert.strictEqual(r.text, 'WHERE name IS NULL');
+    });
+
+    it('$eq with value is equivalent to equality', () => {
+      const r = datastore._buildWhere({ userId: { $eq: 'u1' } });
+      assert.strictEqual(r.text, 'WHERE user_id = $1');
+    });
+  });
+
+  describe('$in / $nin', () => {
+    it('$in emits IN with placeholders', () => {
+      const r = datastore._buildWhere({ userId: { $in: ['a', 'b', 'c'] } });
+      assert.strictEqual(r.text, 'WHERE user_id IN ($1,$2,$3)');
+      assert.deepStrictEqual(r.values, ['a', 'b', 'c']);
+    });
+
+    it('empty $in emits FALSE (matches nothing)', () => {
+      const r = datastore._buildWhere({ userId: { $in: [] } });
+      assert.strictEqual(r.text, 'WHERE FALSE');
+      assert.deepStrictEqual(r.values, []);
+    });
+
+    it('$nin emits NOT IN', () => {
+      const r = datastore._buildWhere({ userId: { $nin: ['x', 'y'] } });
+      assert.strictEqual(r.text, 'WHERE user_id NOT IN ($1,$2)');
+    });
+
+    it('empty $nin emits TRUE (matches everything)', () => {
+      const r = datastore._buildWhere({ userId: { $nin: [] } });
+      assert.strictEqual(r.text, 'WHERE TRUE');
+    });
+  });
+
+  describe('$and / $or combinators', () => {
+    it('$or joins sub-clauses with OR and parens', () => {
+      const r = datastore._buildWhere({
+        $or: [{ userId: 'u1' }, { userId: 'u2' }],
+      });
+      assert.strictEqual(r.text, 'WHERE (user_id = $1) OR (user_id = $2)');
+      assert.deepStrictEqual(r.values, ['u1', 'u2']);
+    });
+
+    it('$and is explicit AND', () => {
+      const r = datastore._buildWhere({
+        $and: [{ userId: 'u1' }, { name: 'foo' }],
+      });
+      assert.strictEqual(r.text, 'WHERE (user_id = $1) AND (name = $2)');
+    });
+
+    it('$or nested inside top-level equality adds both', () => {
+      const r = datastore._buildWhere({
+        userId: 'u1',
+        $or: [{ name: 'a' }, { name: 'b' }],
+      });
+      // Top-level clauses join with AND; $or is one such clause
+      assert.ok(r.text.includes('user_id = $1'));
+      assert.ok(r.text.includes('(name = $2) OR (name = $3)'));
+    });
+
+    it('empty $or array is ignored', () => {
+      const r = datastore._buildWhere({ $or: [] });
+      assert.strictEqual(r.text, '');
+    });
+  });
+
+  describe('pseudo-keys $orderBy / $limit / $offset', () => {
+    it('$orderBy string maps fields and defaults to ASC', () => {
+      const r = datastore._buildWhere({ $orderBy: 'userId' });
+      assert.strictEqual(r.text, '');
+      assert.strictEqual(r.suffix, ' ORDER BY user_id ASC');
+    });
+
+    it('$orderBy with explicit direction is honored', () => {
+      const r = datastore._buildWhere({ $orderBy: 'createdAt DESC' });
+      assert.strictEqual(r.suffix, ' ORDER BY created_at DESC');
+    });
+
+    it('$orderBy array composes multiple clauses', () => {
+      const r = datastore._buildWhere({
+        $orderBy: ['userId ASC', 'createdAt DESC'],
+      });
+      assert.strictEqual(r.suffix, ' ORDER BY user_id ASC, created_at DESC');
+    });
+
+    it('$orderBy object form is supported', () => {
+      const r = datastore._buildWhere({
+        $orderBy: { userId: 'ASC', createdAt: 'DESC' },
+      });
+      assert.strictEqual(r.suffix, ' ORDER BY user_id ASC, created_at DESC');
+    });
+
+    it('invalid $orderBy direction throws', () => {
+      assert.throws(
+        () => datastore._buildWhere({ $orderBy: 'userId SIDEWAYS' }),
+        /Invalid \$orderBy/
+      );
+    });
+
+    it('$limit + $offset compose with ORDER BY', () => {
+      const r = datastore._buildWhere({
+        userId: 'u1',
+        $orderBy: 'createdAt DESC',
+        $limit: 10,
+        $offset: 20,
+      });
+      assert.strictEqual(r.text, 'WHERE user_id = $1');
+      assert.strictEqual(
+        r.suffix,
+        ' ORDER BY created_at DESC LIMIT 10 OFFSET 20'
+      );
+    });
+
+    it('invalid $limit throws', () => {
+      assert.throws(
+        () => datastore._buildWhere({ $limit: -1 }),
+        /Invalid \$limit/
+      );
+    });
+
+    it('pseudo-keys do not leak into WHERE', () => {
+      const r = datastore._buildWhere({ $orderBy: 'userId', $limit: 5 });
+      assert.strictEqual(r.text, ''); // no pseudo-key became a condition
+    });
+  });
+
+  describe('find() composition', () => {
+    it('injects suffix into the SELECT', async () => {
+      const mockPool = {
+        query: mock.fn(() =>
+          Promise.resolve({ rows: [{ _id: '1', user_id: 'u1' }] })
+        ),
+      };
+      const ds = new PgDatastore(mockPool, 'lists', { userId: 'user_id' });
+      await ds.find({ userId: 'u1', $orderBy: 'userId DESC', $limit: 3 });
+      const [firstArg] = mockPool.query.mock.calls[0].arguments;
+      const sql = firstArg.text || firstArg; // prepared vs raw
+      assert.ok(sql.includes('WHERE user_id = $1'));
+      assert.ok(sql.includes('ORDER BY user_id DESC'));
+      assert.ok(sql.includes('LIMIT 3'));
+    });
+  });
+});
+
+// ============================================================================
+// Tableless PgDatastore — the canonical `db` shape
+// ============================================================================
+
+describe('tableless PgDatastore', () => {
+  let mockPool;
+  beforeEach(() => {
+    mockPool = { query: mock.fn(() => Promise.resolve({ rows: [] })) };
+  });
+
+  it('constructs without table or fieldMap', () => {
+    const db = new PgDatastore(mockPool);
+    assert.strictEqual(db.table, null);
+    assert.deepStrictEqual(db.fieldMap, {});
+    assert.deepStrictEqual(db.inverseMap, {});
+  });
+
+  it('raw() works without a table', async () => {
+    const db = new PgDatastore(mockPool);
+    await db.raw('SELECT 1', []);
+    assert.strictEqual(mockPool.query.mock.calls.length, 1);
+  });
+
+  it('findOne/find/insert/update/remove/count throw with a clear message', () => {
+    const db = new PgDatastore(mockPool);
+    for (const method of [
+      'findOne',
+      'find',
+      'insert',
+      'update',
+      'remove',
+      'count',
+      'updateFieldById',
+    ]) {
+      assert.throws(
+        () => db[method]({}, {}, {}),
+        new RegExp(`${method}\\(\\) requires a tabled PgDatastore`)
+      );
+    }
+  });
+
+  it('withClient and withTransaction work without a table', async () => {
+    const client = {
+      query: mock.fn(() => Promise.resolve({ rows: [] })),
+      release: mock.fn(),
+    };
+    const pool = { connect: mock.fn(() => Promise.resolve(client)) };
+    const db = new PgDatastore(pool);
+    await db.withClient(async (c) => {
+      await c.query('SELECT 1');
+    });
+    assert.strictEqual(client.release.mock.calls.length, 1);
+
+    // withTransaction: BEGIN/COMMIT
+    await db.withTransaction(async (c) => {
+      await c.query('UPDATE t SET x = 1');
+    });
+    const allSql = client.query.mock.calls.map((c) => c.arguments[0]);
+    assert.ok(allSql.includes('BEGIN'));
+    assert.ok(allSql.includes('COMMIT'));
+  });
+
+  it('raw() with retryable labels tx:db when tableless', async () => {
+    // Smoke: that the label fallback doesn't crash. Retry-specific behavior
+    // is covered by the retry-helper tests.
+    const db = new PgDatastore(mockPool);
+    await db.raw('SELECT 1', [], { retryable: true });
+    assert.strictEqual(mockPool.query.mock.calls.length, 1);
+  });
+});

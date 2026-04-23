@@ -73,17 +73,34 @@ async function warmConnections(pool) {
 }
 
 class PgDatastore {
-  constructor(pool, table, fieldMap) {
+  /**
+   * @param {import('pg').Pool} pool
+   * @param {string|null} [table]    - Pass null for a tableless datastore that
+   *   exposes only raw/withClient/withTransaction; tabled methods will throw.
+   * @param {Object|null} [fieldMap] - camelCase→snake_case map; required iff
+   *   table is non-null.
+   */
+  constructor(pool, table = null, fieldMap = null) {
     this.pool = pool;
     this.table = table;
-    this.fieldMap = fieldMap;
+    this.fieldMap = fieldMap || {};
     this.logQueries = process.env.LOG_SQL === 'true';
-    this.inverseMap = Object.fromEntries(
-      Object.entries(fieldMap).map(([k, v]) => [v, k])
-    );
+    this.inverseMap = fieldMap
+      ? Object.fromEntries(Object.entries(fieldMap).map(([k, v]) => [v, k]))
+      : {};
     this.cache = new Map();
     this.cacheTimeout = 60000; // 1 minute cache for static data
     this.maxCacheSize = 500; // Maximum cache entries to prevent unbounded growth
+  }
+
+  /** @private Throws when a tabled method is called on a tableless datastore. */
+  _requireTable(method) {
+    if (!this.table) {
+      throw new Error(
+        `${method}() requires a tabled PgDatastore; ` +
+          `this instance was constructed without a table.`
+      );
+    }
   }
 
   _prepareValue(val) {
@@ -192,38 +209,198 @@ class PgDatastore {
     return this.fieldMap[field] || field;
   }
 
+  /**
+   * Build a parameterized WHERE clause from a MongoDB-style query object.
+   *
+   * Supported per-field operators:
+   *   $eq, $ne, $gt, $gte, $lt, $lte, $in, $nin, $exists
+   * Supported top-level combiners:
+   *   $and: [ ... ], $or: [ ... ]  — each element is a sub-query object
+   * Supported pseudo-keys (extracted before WHERE — consumed by `find` via suffix):
+   *   $orderBy: 'col ASC' | string[] | { col: 'ASC' | 'DESC' }
+   *   $limit: number, $offset: number
+   *
+   * Backward-compatible shape: returns { text, values } as before, plus a
+   * new `suffix` string ('' | ' ORDER BY ... LIMIT ... OFFSET ...'). Existing
+   * callers that ignore `suffix` keep working.
+   *
+   * @param {Object} query
+   * @param {number} [startIndex=1]
+   * @returns {{ text: string, suffix: string, values: Array }}
+   */
   _buildWhere(query, startIndex = 1) {
-    const conditions = [];
-    const values = [];
-    let idx = startIndex;
-    for (const [field, val] of Object.entries(query)) {
-      const col = this._mapField(field);
-      if (val && typeof val === 'object' && !Array.isArray(val)) {
-        if ('$gt' in val) {
-          conditions.push(`${col} > $${idx}`);
-          values.push(this._prepareValue(val['$gt']));
-          idx++;
-        } else if ('$exists' in val) {
-          if (val['$exists']) {
-            conditions.push(`${col} IS NOT NULL`);
-          } else {
-            conditions.push(`${col} IS NULL`);
-          }
-        } else {
-          conditions.push(`${col} = $${idx}`);
-          values.push(this._prepareValue(val));
-          idx++;
-        }
-      } else {
-        conditions.push(`${col} = $${idx}`);
-        values.push(this._prepareValue(val));
-        idx++;
-      }
-    }
-    return {
-      text: conditions.length ? 'WHERE ' + conditions.join(' AND ') : '',
-      values,
+    const state = { values: [], idx: startIndex };
+    const suffixParts = {
+      orderBy: query.$orderBy,
+      limit: query.$limit,
+      offset: query.$offset,
     };
+    // Clone without pseudo-keys so they don't become WHERE conditions.
+    const filter = {};
+    for (const [k, v] of Object.entries(query)) {
+      if (k === '$orderBy' || k === '$limit' || k === '$offset') continue;
+      filter[k] = v;
+    }
+
+    const text = this._buildWhereExpr(filter, state);
+    const suffix = this._buildSuffix(suffixParts);
+    return {
+      text: text ? 'WHERE ' + text : '',
+      suffix,
+      values: state.values,
+    };
+  }
+
+  /**
+   * @private Build a WHERE expression (no WHERE keyword) from a filter object.
+   * Mutates `state.values` and `state.idx`. Returns '' when filter is empty.
+   */
+  _buildWhereExpr(filter, state) {
+    const clauses = [];
+    for (const [field, val] of Object.entries(filter)) {
+      if (field === '$and' || field === '$or') {
+        if (!Array.isArray(val) || val.length === 0) continue;
+        const joined = val
+          .map((sub) => this._buildWhereExpr(sub, state))
+          .filter(Boolean)
+          .map((c) => `(${c})`)
+          .join(field === '$and' ? ' AND ' : ' OR ');
+        if (joined) clauses.push(joined);
+        continue;
+      }
+      const col = this._mapField(field);
+      clauses.push(this._buildFieldClause(col, val, state));
+    }
+    return clauses.filter(Boolean).join(' AND ');
+  }
+
+  /**
+   * @private Build a single-field clause. Returns a string like `col = $3` or
+   * `col IN ($4,$5)`. Mutates state.
+   */
+  _buildFieldClause(col, val, state) {
+    // Operator object
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      if ('$eq' in val) {
+        if (val.$eq === null) return `${col} IS NULL`;
+        return this._opEq(col, val.$eq, state);
+      }
+      if ('$ne' in val) {
+        if (val.$ne === null) return `${col} IS NOT NULL`;
+        state.values.push(this._prepareValue(val.$ne));
+        return `${col} <> $${state.idx++}`;
+      }
+      if ('$gt' in val) {
+        state.values.push(this._prepareValue(val.$gt));
+        return `${col} > $${state.idx++}`;
+      }
+      if ('$gte' in val) {
+        state.values.push(this._prepareValue(val.$gte));
+        return `${col} >= $${state.idx++}`;
+      }
+      if ('$lt' in val) {
+        state.values.push(this._prepareValue(val.$lt));
+        return `${col} < $${state.idx++}`;
+      }
+      if ('$lte' in val) {
+        state.values.push(this._prepareValue(val.$lte));
+        return `${col} <= $${state.idx++}`;
+      }
+      if ('$in' in val) {
+        if (!Array.isArray(val.$in) || val.$in.length === 0) return 'FALSE';
+        const placeholders = val.$in.map((item) => {
+          state.values.push(this._prepareValue(item));
+          return `$${state.idx++}`;
+        });
+        return `${col} IN (${placeholders.join(',')})`;
+      }
+      if ('$nin' in val) {
+        if (!Array.isArray(val.$nin) || val.$nin.length === 0) return 'TRUE';
+        const placeholders = val.$nin.map((item) => {
+          state.values.push(this._prepareValue(item));
+          return `$${state.idx++}`;
+        });
+        return `${col} NOT IN (${placeholders.join(',')})`;
+      }
+      if ('$exists' in val) {
+        return val.$exists ? `${col} IS NOT NULL` : `${col} IS NULL`;
+      }
+      // Unknown operator object — fall through to equality with the object
+      return this._opEq(col, val, state);
+    }
+    // Scalar / null / array → equality (legacy behavior preserved)
+    return this._opEq(col, val, state);
+  }
+
+  /**
+   * @private Equality clause. Plain `field: null` keeps the legacy
+   * `col = $N` emission for backward compatibility; callers wanting
+   * SQL NULL semantics should use `$exists: false` or `$eq: null`.
+   */
+  _opEq(col, v, state) {
+    state.values.push(this._prepareValue(v));
+    return `${col} = $${state.idx++}`;
+  }
+
+  /**
+   * @private Build an ORDER BY / LIMIT / OFFSET suffix.
+   * orderBy accepts:
+   *   'col ASC'
+   *   ['col1 ASC', 'col2 DESC']
+   *   { col1: 'ASC', col2: 'DESC' }
+   * Direction is validated (ASC|DESC); column names pass through _mapField.
+   */
+  _buildSuffix({ orderBy, limit, offset }) {
+    const parts = [];
+    if (orderBy !== undefined) {
+      const clauses = this._normalizeOrderBy(orderBy);
+      if (clauses.length) parts.push('ORDER BY ' + clauses.join(', '));
+    }
+    if (limit !== undefined) {
+      const n = Number(limit);
+      if (!Number.isInteger(n) || n < 0) {
+        throw new Error(`Invalid $limit: ${limit}`);
+      }
+      parts.push(`LIMIT ${n}`);
+    }
+    if (offset !== undefined) {
+      const n = Number(offset);
+      if (!Number.isInteger(n) || n < 0) {
+        throw new Error(`Invalid $offset: ${offset}`);
+      }
+      parts.push(`OFFSET ${n}`);
+    }
+    return parts.length ? ' ' + parts.join(' ') : '';
+  }
+
+  /** @private */
+  _normalizeOrderBy(orderBy) {
+    const toClause = (spec) => {
+      // Accept 'col' or 'col ASC' / 'col DESC'. Split on whitespace instead of
+      // a regex to avoid any backtracking/catastrophic-match risk.
+      const parts = String(spec).trim().split(/\s+/);
+      if (parts.length === 0 || parts.length > 2) {
+        throw new Error(`Invalid $orderBy spec: ${spec}`);
+      }
+      const col = parts[0];
+      const rawDir = parts[1] ? parts[1].toUpperCase() : 'ASC';
+      if (rawDir !== 'ASC' && rawDir !== 'DESC') {
+        throw new Error(`Invalid $orderBy direction: ${parts[1]}`);
+      }
+      return `${this._mapField(col)} ${rawDir}`;
+    };
+    if (typeof orderBy === 'string') return [toClause(orderBy)];
+    if (Array.isArray(orderBy)) return orderBy.map(toClause);
+    if (orderBy && typeof orderBy === 'object') {
+      return Object.entries(orderBy).map(([col, dir]) => {
+        const d = String(dir).toUpperCase();
+        if (d !== 'ASC' && d !== 'DESC') {
+          throw new Error(`Invalid $orderBy direction for ${col}: ${dir}`);
+        }
+        return `${this._mapField(col)} ${d}`;
+      });
+    }
+    return [];
   }
 
   _mapRow(row) {
@@ -235,6 +412,7 @@ class PgDatastore {
   }
 
   findOne(query, cb) {
+    this._requireTable('findOne');
     const promise = (async () => {
       const { text, values } = this._buildWhere(query);
       const queryText = `SELECT * FROM ${this.table} ${text} LIMIT 1`;
@@ -246,10 +424,16 @@ class PgDatastore {
   }
 
   find(query, cb) {
+    this._requireTable('find');
     const promise = (async () => {
-      const { text, values } = this._buildWhere(query);
-      const queryText = `SELECT * FROM ${this.table} ${text}`;
-      const queryName = `find_${this.table}_${Object.keys(query).join('_')}`;
+      const { text, suffix, values } = this._buildWhere(query);
+      const queryText = `SELECT * FROM ${this.table} ${text}${suffix}`;
+      // Exclude pseudo-keys from the prepared-statement name — their SQL text
+      // is part of the query, but they shouldn't balloon the name cache.
+      const filterKeys = Object.keys(query).filter(
+        (k) => k !== '$orderBy' && k !== '$limit' && k !== '$offset'
+      );
+      const queryName = `find_${this.table}_${filterKeys.join('_')}`;
       const res = await this._preparedQuery(queryName, queryText, values);
       return res.rows.map((r) => this._mapRow(r));
     })();
@@ -257,6 +441,7 @@ class PgDatastore {
   }
 
   count(query, cb) {
+    this._requireTable('count');
     const promise = (async () => {
       const { text, values } = this._buildWhere(query);
       const res = await this._query(
@@ -269,6 +454,7 @@ class PgDatastore {
   }
 
   insert(doc, cb) {
+    this._requireTable('insert');
     const promise = (async () => {
       if (!('_id' in doc)) {
         doc._id = crypto.randomBytes(12).toString('hex');
@@ -294,6 +480,7 @@ class PgDatastore {
   }
 
   update(query, update, options = {}, cb) {
+    this._requireTable('update');
     if (typeof options === 'function') {
       cb = options;
     }
@@ -322,6 +509,7 @@ class PgDatastore {
   }
 
   remove(query, options = {}, cb) {
+    this._requireTable('remove');
     if (typeof options === 'function') {
       cb = options;
     }
@@ -347,6 +535,7 @@ class PgDatastore {
    * @returns {Promise<number>} - Number of rows updated
    */
   updateFieldById(id, field, value, cb) {
+    this._requireTable('updateFieldById');
     const promise = (async () => {
       const col = this._mapField(field);
       const queryName = `updateField_${this.table}_${col}`;
@@ -725,7 +914,7 @@ class PgDatastore {
     }
     return withRetry(run, {
       idempotent: true,
-      label: name ? `raw:${name}` : `raw:${this.table}`,
+      label: name ? `raw:${name}` : `raw:${this.table || 'db'}`,
     });
   }
 
@@ -760,7 +949,7 @@ class PgDatastore {
     const client = retryable
       ? await withRetry(() => this.pool.connect(), {
           idempotent: true,
-          label: `withClient:${this.table}:connect`,
+          label: `withClient:${this.table || 'db'}:connect`,
         })
       : await this.pool.connect();
 
@@ -818,7 +1007,7 @@ class PgDatastore {
     }
     return withRetry(run, {
       idempotent: true,
-      label: `tx:${this.table}`,
+      label: `tx:${this.table || 'db'}`,
     });
   }
 }

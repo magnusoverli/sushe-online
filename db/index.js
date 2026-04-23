@@ -170,6 +170,7 @@ let users,
   listItemsAsync,
   albumsAsync,
   listGroupsAsync,
+  db,
   pool;
 let ready;
 
@@ -275,6 +276,11 @@ if (process.env.DATABASE_URL) {
   listItemsAsync = listItems;
   albumsAsync = albums;
   listGroupsAsync = listGroups;
+  // Canonical tableless datastore. Exposes only raw/withClient/withTransaction;
+  // all services that don't need tabled helpers (findOne/insert/update/...)
+  // should receive this via deps.db. Shares the pool with the tabled instances,
+  // so logging, metrics, drain-check, and retry apply uniformly.
+  db = new PgDatastore(pool);
   async function migrateUsers() {
     try {
       // Run user migrations in parallel for better performance
@@ -432,6 +438,7 @@ module.exports = {
   listItemsAsync,
   albumsAsync,
   listGroupsAsync,
+  db,
   dataDir,
   ready,
   pool,
