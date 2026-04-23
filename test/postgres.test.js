@@ -1638,6 +1638,86 @@ describe('_buildWhere extended operators', () => {
       assert.ok(sql.includes('ORDER BY user_id DESC'));
       assert.ok(sql.includes('LIMIT 3'));
     });
+
+    it('uses different prepared statement names when SQL text changes', async () => {
+      const mockPool = {
+        query: mock.fn(() => Promise.resolve({ rows: [] })),
+      };
+      const ds = new PgDatastore(mockPool, 'lists', {
+        userId: 'user_id',
+        createdAt: 'created_at',
+      });
+
+      await ds.find({ userId: 'u1', $limit: 3 });
+      await ds.find({ userId: 'u1', $limit: 10 });
+
+      const firstCall = mockPool.query.mock.calls[0].arguments[0];
+      const secondCall = mockPool.query.mock.calls[1].arguments[0];
+
+      assert.notStrictEqual(firstCall.name, secondCall.name);
+      assert.notStrictEqual(firstCall.text, secondCall.text);
+    });
+
+    it('uses different prepared statement names for different operator shapes', async () => {
+      const mockPool = {
+        query: mock.fn(() => Promise.resolve({ rows: [] })),
+      };
+      const ds = new PgDatastore(mockPool, 'lists', {
+        userId: 'user_id',
+      });
+
+      await ds.find({ userId: 'u1' });
+      await ds.find({ userId: { $in: ['u1', 'u2'] } });
+
+      const firstCall = mockPool.query.mock.calls[0].arguments[0];
+      const secondCall = mockPool.query.mock.calls[1].arguments[0];
+
+      assert.notStrictEqual(firstCall.name, secondCall.name);
+      assert.notStrictEqual(firstCall.text, secondCall.text);
+    });
+  });
+});
+
+describe('PgDatastore.findWithCounts', () => {
+  let mockPool;
+  let datastore;
+
+  beforeEach(() => {
+    mockPool = {
+      query: mock.fn(() => Promise.resolve({ rows: [], rowCount: 0 })),
+    };
+    datastore = new PgDatastore(mockPool, 'lists', {
+      userId: 'user_id',
+      name: 'name',
+      groupId: 'group_id',
+      sortOrder: 'sort_order',
+    });
+  });
+
+  it('qualifies all list columns in the WHERE clause', async () => {
+    await datastore.findWithCounts({ userId: 'u1', name: 'Favorites' });
+
+    const queryCall = mockPool.query.mock.calls[0].arguments[0];
+    assert.ok(queryCall.text.includes('WHERE l.user_id = $1 AND l.name = $2'));
+  });
+
+  it('uses different prepared statement names when operator shape changes', async () => {
+    await datastore.findWithCounts({ userId: 'u1' });
+    await datastore.findWithCounts({ userId: { $in: ['u1', 'u2'] } });
+
+    const firstCall = mockPool.query.mock.calls[0].arguments[0];
+    const secondCall = mockPool.query.mock.calls[1].arguments[0];
+
+    assert.notStrictEqual(firstCall.name, secondCall.name);
+    assert.notStrictEqual(firstCall.text, secondCall.text);
+  });
+
+  it('rejects pseudo-keys that would change the SQL text', async () => {
+    await assert.rejects(
+      () => datastore.findWithCounts({ userId: 'u1', $limit: 5 }),
+      /does not support \$orderBy, \$limit, or \$offset/
+    );
+    assert.strictEqual(mockPool.query.mock.calls.length, 0);
   });
 });
 

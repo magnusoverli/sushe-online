@@ -186,6 +186,15 @@ class PgDatastore {
     return promise;
   }
 
+  _statementName(prefix, queryText) {
+    const digest = crypto
+      .createHash('sha1')
+      .update(String(queryText))
+      .digest('hex')
+      .slice(0, 16);
+    return `${String(prefix).slice(0, 40)}_${digest}`;
+  }
+
   _sanitizeParams(params) {
     if (!params || !Array.isArray(params)) return params;
     return params.map((param) => {
@@ -467,6 +476,19 @@ class PgDatastore {
     return [];
   }
 
+  _qualifyIdentifiers(text, alias) {
+    if (!text) return text;
+
+    const knownColumns = new Set([
+      ...Object.values(this.fieldMap),
+      ...Object.keys(this.inverseMap),
+    ]);
+
+    return text.replace(/\b([a-z_][a-z0-9_]*)\b/gi, (token) => {
+      return knownColumns.has(token) ? `${alias}.${token}` : token;
+    });
+  }
+
   _mapRow(row) {
     const mapped = {};
     for (const [col, val] of Object.entries(row)) {
@@ -480,7 +502,7 @@ class PgDatastore {
     const promise = (async () => {
       const { text, values } = this._buildWhere(query);
       const queryText = `SELECT * FROM ${this.table} ${text} LIMIT 1`;
-      const queryName = `findOne_${this.table}_${Object.keys(query).join('_')}`;
+      const queryName = this._statementName(`findOne_${this.table}`, queryText);
       const res = await this._preparedQuery(queryName, queryText, values);
       return res.rows[0] ? this._mapRow(res.rows[0]) : null;
     })();
@@ -492,12 +514,7 @@ class PgDatastore {
     const promise = (async () => {
       const { text, suffix, values } = this._buildWhere(query);
       const queryText = `SELECT * FROM ${this.table} ${text}${suffix}`;
-      // Exclude pseudo-keys from the prepared-statement name — their SQL text
-      // is part of the query, but they shouldn't balloon the name cache.
-      const filterKeys = Object.keys(query).filter(
-        (k) => k !== '$orderBy' && k !== '$limit' && k !== '$offset'
-      );
-      const queryName = `find_${this.table}_${filterKeys.join('_')}`;
+      const queryName = this._statementName(`find_${this.table}`, queryText);
       const res = await this._preparedQuery(queryName, queryText, values);
       return res.rows.map((r) => this._mapRow(r));
     })();
@@ -630,10 +647,18 @@ class PgDatastore {
       throw new Error('findWithCounts only available for lists table');
     }
 
+    if (
+      query.$orderBy !== undefined ||
+      query.$limit !== undefined ||
+      query.$offset !== undefined
+    ) {
+      throw new Error(
+        'findWithCounts does not support $orderBy, $limit, or $offset'
+      );
+    }
+
     const { text, values } = this._buildWhere(query);
-    // Prefix column references with 'l.' to disambiguate from joined tables
-    const prefixedText = text.replace(/WHERE /i, 'WHERE l.');
-    const queryName = `findWithCounts_lists_v3_${Object.keys(query).join('_')}`;
+    const prefixedText = this._qualifyIdentifiers(text, 'l');
     const queryText = `
       SELECT l.*, COUNT(li._id) as item_count,
              g._id as group_external_id, g.name as group_name, g.year as group_year, g.sort_order as group_sort_order
@@ -641,10 +666,11 @@ class PgDatastore {
       LEFT JOIN list_items li ON li.list_id = l._id
       LEFT JOIN list_groups g ON l.group_id = g.id
       ${prefixedText}
-      GROUP BY l.id, g.id
-      ORDER BY l.sort_order, l.name
-    `;
+       GROUP BY l.id, g.id
+       ORDER BY l.sort_order, l.name
+     `;
 
+    const queryName = this._statementName('findWithCounts_lists_v3', queryText);
     const res = await this._preparedQuery(queryName, queryText, values);
     return res.rows.map((row) => {
       const mapped = this._mapRow(row);
