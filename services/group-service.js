@@ -16,7 +16,7 @@ const {
   acquireTransactionLocks,
 } = require('../db/advisory-locks');
 const { ensureDb } = require('../db/postgres');
-const { acquireYearLocks, isYearLocked } = require('../utils/year-lock');
+const { acquireYearLocks, isYearLocked } = require('./year-lock-service');
 const { TransactionAbort } = require('../db/transaction');
 const { buildPartialUpdate } = require('../utils/query-builder');
 

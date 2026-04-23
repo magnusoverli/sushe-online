@@ -4,7 +4,9 @@
 const logger = require('../utils/logger');
 const { createAsyncHandler } = require('../middleware/async-handler');
 const { createPreferenceSyncService } = require('../services/preference-sync');
-const { createUserPreferences } = require('../utils/user-preferences');
+const {
+  createUserPreferences,
+} = require('../services/user-preferences-service');
 const {
   LASTFM_VALID_PERIODS,
   SPOTIFY_VALID_RANGES,

@@ -5,7 +5,7 @@ const logger = require('../utils/logger');
 const { ensureDb } = require('../db/postgres');
 const { createSpotifyAuth } = require('../utils/spotify-auth');
 const { createLastfmAuth } = require('../utils/lastfm-auth');
-const { createUserPreferences } = require('../utils/user-preferences');
+const { createUserPreferences } = require('./user-preferences-service');
 const { createMusicBrainz } = require('../utils/musicbrainz');
 
 // Default intervals

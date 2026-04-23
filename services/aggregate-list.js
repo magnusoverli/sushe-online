@@ -5,7 +5,7 @@ const { POSITION_POINTS, getPositionPoints } = require('../utils/scoring');
 const {
   acquireYearLocks,
   validateYearNotLocked,
-} = require('../utils/year-lock');
+} = require('./year-lock-service');
 
 // ============================================
 // AGGREGATION HELPER FUNCTIONS

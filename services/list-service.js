@@ -21,7 +21,7 @@ const {
   validateYearNotLocked,
   validateMainListNotLocked,
   isYearLocked,
-} = require('../utils/year-lock');
+} = require('./year-lock-service');
 
 // eslint-disable-next-line max-lines-per-function
 function createListService(deps = {}) {
