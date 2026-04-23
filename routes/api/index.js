@@ -107,6 +107,7 @@ module.exports = (app, deps) => {
   // Create helper functions
   const helpers = createHelpers({
     pool,
+    listsAsync,
     logger,
     responseCache,
     app,

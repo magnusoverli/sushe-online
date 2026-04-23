@@ -357,6 +357,11 @@ function createPreferenceSyncService(deps = {}) {
     throw new Error('Database pool is required for preference sync service');
   }
 
+  // Adapter around the pool so this file uses the unified .raw() path.
+  // pool is kept in scope because nested helpers (createUserPreferences,
+  // syncSpotifyDataForUser, etc.) still expect a raw pool in their signatures.
+  const db = { raw: (sql, params) => pool.query(sql, params) };
+
   const spotifyAuth = deps.spotifyAuth || createSpotifyAuth({ logger: log });
   const lastfmAuth = deps.lastfmAuth || createLastfmAuth({ logger: log });
   const userPrefs =
@@ -397,7 +402,10 @@ function createPreferenceSyncService(deps = {}) {
       LIMIT $1
     `;
 
-    const result = await pool.query(query, [limit, staleIntervalSeconds]);
+    const result = await db.raw(query, [limit, staleIntervalSeconds], {
+      name: 'preference-sync-users-needing-sync',
+      retryable: true,
+    });
     return result.rows;
   }
 

@@ -137,6 +137,9 @@ function createTestApp(options = {}) {
       }),
     insert: mock.fn(() => Promise.resolve({ _id: 'new-user' })),
     update: mock.fn(() => Promise.resolve(1)),
+    // Extension-token SQL now runs through usersAsync.raw; delegate to
+    // the existing mockPool.query so SQL text matchers keep working.
+    raw: mock.fn((sql, params) => mockPool.query(sql, params)),
   };
 
   // Mock auth-utils for token operations

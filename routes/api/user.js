@@ -12,7 +12,7 @@ const { createAsyncHandler } = require('../../middleware/async-handler');
  * @param {Object} deps - Dependencies
  */
 module.exports = (app, deps) => {
-  const { ensureAuthAPI, pool, logger } = deps;
+  const { ensureAuthAPI, listsAsync, logger } = deps;
   const asyncHandler = createAsyncHandler(logger);
 
   // GET /api/user/lists-summary - Get list names for the current user (for "Add to..." dropdown)
@@ -20,9 +20,10 @@ module.exports = (app, deps) => {
     '/api/user/lists-summary',
     ensureAuthAPI,
     asyncHandler(async (req, res) => {
-      const result = await pool.query(
+      const result = await listsAsync.raw(
         `SELECT _id, name, year FROM lists WHERE user_id = $1 ORDER BY name`,
-        [req.user._id]
+        [req.user._id],
+        { name: 'user-lists-summary', retryable: true }
       );
 
       res.json({

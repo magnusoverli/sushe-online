@@ -42,19 +42,19 @@ function buildAggregateLists({ years, statusByYear, recByYear }) {
   });
 }
 
-async function getAggregateStatuses(pool, years) {
+async function getAggregateStatuses(db, years) {
   if (!Array.isArray(years) || years.length === 0) {
     return new Map();
   }
 
   const [masterListsResult, confirmationsResult] = await Promise.all([
-    pool.query(
+    db.raw(
       `SELECT year, revealed, revealed_at, computed_at, COALESCE(locked, FALSE) AS locked, stats
        FROM master_lists
        WHERE year = ANY($1::int[])`,
       [years]
     ),
-    pool.query(
+    db.raw(
       `SELECT c.year, c.confirmed_at, u.username
        FROM master_list_confirmations c
        JOIN users u ON c.admin_user_id = u._id
@@ -99,34 +99,34 @@ async function getAggregateStatuses(pool, years) {
   return statusByYear;
 }
 
-async function getRecommendationStatuses(pool, years, userId) {
+async function getRecommendationStatuses(db, years, userId) {
   if (!Array.isArray(years) || years.length === 0) {
     return new Map();
   }
 
   const [settingsResult, accessCountResult, userAccessResult, recCountResult] =
     await Promise.all([
-      pool.query(
+      db.raw(
         `SELECT year, locked
          FROM recommendation_settings
          WHERE year = ANY($1::int[])`,
         [years]
       ),
-      pool.query(
+      db.raw(
         `SELECT year, COUNT(*)::int AS count
          FROM recommendation_access
          WHERE year = ANY($1::int[])
          GROUP BY year`,
         [years]
       ),
-      pool.query(
+      db.raw(
         `SELECT year
          FROM recommendation_access
          WHERE year = ANY($1::int[])
            AND user_id = $2`,
         [years, userId]
       ),
-      pool.query(
+      db.raw(
         `SELECT year, COUNT(*)::int AS count
          FROM recommendations
          WHERE year = ANY($1::int[])
@@ -196,8 +196,8 @@ module.exports = (app, deps) => {
 
       const [statusByYear, recByYear, summaryStats, imageStats] =
         await Promise.all([
-          getAggregateStatuses(pool, years),
-          getRecommendationStatuses(pool, years, req.user._id),
+          getAggregateStatuses(listsAsync, years),
+          getRecommendationStatuses(listsAsync, years, req.user._id),
           albumSummaryService ? albumSummaryService.getStats() : null,
           imageRefetchService ? imageRefetchService.getStats() : null,
         ]);

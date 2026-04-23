@@ -21,7 +21,11 @@ const { TransactionAbort } = require('../../db/transaction');
  * @returns {Object} - Helper functions
  */
 function createHelpers(deps) {
-  const { pool, logger, responseCache, app, crypto } = deps;
+  const { pool, logger, responseCache, app, crypto, listsAsync } = deps;
+  // Prefer the datastore for standalone queries; fall back to a pool adapter.
+  const db =
+    listsAsync ||
+    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
 
   // Create aggregate list instance for recomputation triggers
   const aggregateList = createAggregateList({ pool, logger });
@@ -197,12 +201,13 @@ function createHelpers(deps) {
 
     try {
       // Find all users who have this album in any of their lists
-      const result = await pool.query(
-        `SELECT DISTINCT l.user_id 
-         FROM lists l 
-         JOIN list_items li ON li.list_id = l._id 
+      const result = await db.raw(
+        `SELECT DISTINCT l.user_id
+         FROM lists l
+         JOIN list_items li ON li.list_id = l._id
          WHERE li.album_id = $1`,
-        [albumId]
+        [albumId],
+        { name: 'helpers-find-users-with-album', retryable: true }
       );
 
       // Invalidate list caches for each affected user

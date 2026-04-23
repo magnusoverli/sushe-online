@@ -273,20 +273,31 @@ function createAuthService(deps = {}) {
 
   /**
    * Generate and store a new extension token for a user.
-   * @param {Object} pool - Database pool
-   * @param {string} userId - User ID
+   *
+   * Historical signature accepted a pool as the first argument; it is now
+   * optional and ignored (usersAsync.raw is used internally so logging,
+   * metrics, and the shutdown drain flag apply).
+   *
+   * @param {Object} [_legacyPoolIgnored]
+   * @param {string} userId
    * @param {string} userAgent - Request User-Agent string
    * @param {Function} generateToken - Token generation function
    * @returns {Promise<{ token: string, expiresAt: string }>}
    */
-  async function createExtensionToken(pool, userId, userAgent, generateToken) {
+  async function createExtensionToken(
+    _legacyPoolIgnored,
+    userId,
+    userAgent,
+    generateToken
+  ) {
     const token = generateToken();
     const expiresAt = new Date(Date.now() + EXTENSION_TOKEN_EXPIRY_MS);
 
-    await pool.query(
+    await usersAsyncDep.raw(
       `INSERT INTO extension_tokens (user_id, token, expires_at, user_agent)
        VALUES ($1, $2, $3, $4)`,
-      [userId, token, expiresAt, userAgent]
+      [userId, token, expiresAt, userAgent],
+      { name: 'extension-tokens-insert' }
     );
 
     return { token, expiresAt: expiresAt.toISOString() };
@@ -294,34 +305,38 @@ function createAuthService(deps = {}) {
 
   /**
    * Revoke an extension token owned by a specific user.
-   * @param {Object} pool - Database pool
-   * @param {string} token - Token to revoke
-   * @param {string} userId - Owner user ID
+   *
+   * @param {Object} [_legacyPoolIgnored]
+   * @param {string} token
+   * @param {string} userId
    * @returns {Promise<{ revoked: boolean }>}
    */
-  async function revokeExtensionToken(pool, token, userId) {
-    const result = await pool.query(
+  async function revokeExtensionToken(_legacyPoolIgnored, token, userId) {
+    const result = await usersAsyncDep.raw(
       `UPDATE extension_tokens
        SET is_revoked = TRUE
        WHERE token = $1 AND user_id = $2`,
-      [token, userId]
+      [token, userId],
+      { name: 'extension-tokens-revoke' }
     );
     return { revoked: result.rowCount > 0 };
   }
 
   /**
    * List all extension tokens for a user.
-   * @param {Object} pool - Database pool
-   * @param {string} userId - User ID
-   * @returns {Promise<Array>} Token metadata (excludes actual token values)
+   *
+   * @param {Object} [_legacyPoolIgnored]
+   * @param {string} userId
+   * @returns {Promise<Array>}
    */
-  async function listExtensionTokens(pool, userId) {
-    const result = await pool.query(
+  async function listExtensionTokens(_legacyPoolIgnored, userId) {
+    const result = await usersAsyncDep.raw(
       `SELECT id, created_at, last_used_at, expires_at, user_agent, is_revoked
        FROM extension_tokens
        WHERE user_id = $1
        ORDER BY created_at DESC`,
-      [userId]
+      [userId],
+      { name: 'extension-tokens-list', retryable: true }
     );
     return result.rows;
   }
