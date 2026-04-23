@@ -12,10 +12,10 @@ function createMockPoolWithQuery(handler) {
 }
 
 describe('external-identity-service', () => {
-  it('throws when pool is missing', () => {
+  it('throws when db/pool is missing', () => {
     assert.throws(
       () => createExternalIdentityService({ logger: createMockLogger() }),
-      /Database pool is required/
+      /db datastore or pool is required/
     );
   });
 

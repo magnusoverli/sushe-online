@@ -165,8 +165,11 @@ function createPlaycountService(deps = {}) {
           lastfmUsername,
         });
 
+        // refreshAlbumPlaycount now expects a datastore (with .raw()); the
+        // callers of this service still pass a raw pool, so adapt.
+        const db = { raw: (sql, params) => pool.query(sql, params) };
         const result = await refreshAlbumPlaycount(
-          pool,
+          db,
           logger,
           userId,
           lastfmUsername,
@@ -235,8 +238,10 @@ function createPlaycountService(deps = {}) {
     logger,
     normalizeAlbumKey,
   }) {
+    // Adapter: route queries through the unified .raw() interface.
+    const db = { raw: (sql, params) => pool.query(sql, params) };
     // Verify list exists
-    const list = await pool.query(
+    const list = await db.raw(
       `SELECT _id FROM lists WHERE _id = $1 AND user_id = $2`,
       [listId, userId]
     );
@@ -245,7 +250,7 @@ function createPlaycountService(deps = {}) {
     }
 
     // Get all albums in the list
-    const listItemsResult = await pool.query(
+    const listItemsResult = await db.raw(
       `SELECT li._id, li.album_id, a.artist, a.album
        FROM list_items li
        LEFT JOIN albums a ON li.album_id = a.album_id
@@ -283,7 +288,7 @@ function createPlaycountService(deps = {}) {
     }
 
     if (statsPredicates.length > 0) {
-      const statsResult = await pool.query(
+      const statsResult = await db.raw(
         `SELECT artist, album_name, album_id, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at
          FROM user_album_stats
          WHERE user_id = $1

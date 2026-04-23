@@ -37,7 +37,7 @@ const BATCH_DELAY_MS = 1100; // 1.1 seconds between batches
  * @param {number} limit - Maximum users to return
  * @returns {Promise<Array>} Users needing sync
  */
-async function getUsersNeedingSync(pool, staleThresholdMs, limit = 50) {
+async function getUsersNeedingSync(db, staleThresholdMs, limit = 50) {
   const staleIntervalSeconds = Math.floor(staleThresholdMs / 1000);
 
   const query = `
@@ -74,7 +74,7 @@ async function getUsersNeedingSync(pool, staleThresholdMs, limit = 50) {
     LIMIT $1
   `;
 
-  const result = await pool.query(query, [limit, staleIntervalSeconds]);
+  const result = await db.raw(query, [limit, staleIntervalSeconds]);
   return result.rows;
 }
 
@@ -84,7 +84,7 @@ async function getUsersNeedingSync(pool, staleThresholdMs, limit = 50) {
  * @param {string} userId - User ID
  * @returns {Promise<Array>} Albums with artist, album name, and album_id
  */
-async function getUserAlbums(pool, userId) {
+async function getUserAlbums(db, userId) {
   const query = `
     SELECT DISTINCT
       a.album_id,
@@ -98,7 +98,7 @@ async function getUserAlbums(pool, userId) {
       AND a.album IS NOT NULL
   `;
 
-  const result = await pool.query(query, [userId]);
+  const result = await db.raw(query, [userId]);
   return result.rows;
 }
 
@@ -114,13 +114,13 @@ async function getUserAlbums(pool, userId) {
  * @param {number|null} playcount - Playcount value (null for not_found)
  * @param {string} status - 'success' or 'not_found'
  */
-async function upsertPlaycount(pool, userId, album, playcount, status) {
+async function upsertPlaycount(db, userId, album, playcount, status) {
   const canonicalArtist = normalizeForLastfm(album.artist).toLowerCase().trim();
   const canonicalAlbum = normalizeForLastfm(album.album).toLowerCase().trim();
   const normalizedKey = normalizeAlbumKey(canonicalArtist, canonicalAlbum);
   const albumId = album.album_id || null;
 
-  await pool.query(
+  await db.raw(
     `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
      ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
@@ -143,7 +143,7 @@ async function upsertPlaycount(pool, userId, album, playcount, status) {
   );
 }
 
-async function getLastfmArtistCandidates(pool, log, album) {
+async function getLastfmArtistCandidates(db, log, album) {
   const canonicalArtist = album?.artist;
   const albumId = album?.album_id || null;
 
@@ -155,7 +155,7 @@ async function getLastfmArtistCandidates(pool, log, album) {
 
   try {
     const externalIdentityService = createExternalIdentityService({
-      pool,
+      db,
       logger: log,
     });
 
@@ -202,10 +202,10 @@ async function getLastfmArtistCandidates(pool, log, album) {
  * @param {Object} album - Album object with artist, album, album_id
  * @returns {Promise<{playcount: number|null, status: string}|null>} Result or null on failure
  */
-async function refreshAlbumPlaycount(pool, log, userId, lastfmUsername, album) {
+async function refreshAlbumPlaycount(db, log, userId, lastfmUsername, album) {
   try {
     const albumId = album.album_id || null;
-    const artistCandidates = await getLastfmArtistCandidates(pool, log, album);
+    const artistCandidates = await getLastfmArtistCandidates(db, log, album);
 
     let info = null;
     let matchedArtist = album.artist;
@@ -241,7 +241,7 @@ async function refreshAlbumPlaycount(pool, log, userId, lastfmUsername, album) {
     if (matchedArtist !== album.artist) {
       try {
         const externalIdentityService = createExternalIdentityService({
-          pool,
+          db,
           logger: log,
         });
 
@@ -277,12 +277,12 @@ async function refreshAlbumPlaycount(pool, log, userId, lastfmUsername, album) {
         artist: album.artist,
         album: album.album,
       });
-      await upsertPlaycount(pool, userId, album, null, 'not_found');
+      await upsertPlaycount(db, userId, album, null, 'not_found');
       return { playcount: null, status: 'not_found' };
     }
 
     const playcount = parseInt(info.userplaycount || 0);
-    await upsertPlaycount(pool, userId, album, playcount, 'success');
+    await upsertPlaycount(db, userId, album, playcount, 'success');
     return { playcount, status: 'success' };
   } catch (err) {
     log.warn('Failed to fetch playcount for album', {
@@ -293,7 +293,7 @@ async function refreshAlbumPlaycount(pool, log, userId, lastfmUsername, album) {
 
     // Store as error state so we retry later
     try {
-      await upsertPlaycount(pool, userId, album, null, 'error');
+      await upsertPlaycount(db, userId, album, null, 'error');
     } catch (dbErr) {
       log.error('Failed to store error status', {
         error: dbErr.message,
@@ -311,7 +311,7 @@ async function refreshAlbumPlaycount(pool, log, userId, lastfmUsername, album) {
  * @param {Object} user - User object with _id, lastfm_username
  * @returns {Promise<Object>} Sync result
  */
-async function syncUserPlaycounts(pool, log, user) {
+async function syncUserPlaycounts(db, log, user) {
   const userId = user._id;
   const lastfmUsername = user.lastfm_username;
   const startTime = Date.now();
@@ -322,7 +322,7 @@ async function syncUserPlaycounts(pool, log, user) {
     lastfmUsername,
   });
 
-  const albums = await getUserAlbums(pool, userId);
+  const albums = await getUserAlbums(db, userId);
 
   if (albums.length === 0) {
     log.info('No albums to sync for user', { userId });
@@ -338,7 +338,7 @@ async function syncUserPlaycounts(pool, log, user) {
 
     const batchPromises = batch.map(async (album) => {
       const result = await refreshAlbumPlaycount(
-        pool,
+        db,
         log,
         userId,
         lastfmUsername,
@@ -388,6 +388,9 @@ async function syncUserPlaycounts(pool, log, user) {
 function createPlaycountSyncService(deps = {}) {
   const log = deps.logger || logger;
   const pool = deps.pool;
+  const db =
+    deps.db ||
+    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
 
   if (!pool) {
     throw new Error('Database pool is required for playcount sync service');
@@ -422,7 +425,7 @@ function createPlaycountSyncService(deps = {}) {
       album: album.album,
     });
 
-    return refreshAlbumPlaycount(pool, log, userId, lastfmUsername, album);
+    return refreshAlbumPlaycount(db, log, userId, lastfmUsername, album);
   }
 
   /**
@@ -448,14 +451,14 @@ function createPlaycountSyncService(deps = {}) {
     };
 
     try {
-      const users = await getUsersNeedingSync(pool, staleThresholdMs);
+      const users = await getUsersNeedingSync(db, staleThresholdMs);
       results.total = users.length;
 
       log.info(`Found ${users.length} users needing playcount sync`);
 
       for (const user of users) {
         try {
-          const result = await syncUserPlaycounts(pool, log, user);
+          const result = await syncUserPlaycounts(db, log, user);
           results.totalAlbums += result.synced + result.failed;
 
           if (result.success) {
@@ -560,10 +563,10 @@ function createPlaycountSyncService(deps = {}) {
     isStarted,
     isSyncing,
     runSyncCycle,
-    syncUserPlaycounts: (user) => syncUserPlaycounts(pool, log, user),
+    syncUserPlaycounts: (user) => syncUserPlaycounts(db, log, user),
     getUsersNeedingSync: (limit) =>
-      getUsersNeedingSync(pool, staleThresholdMs, limit),
-    getUserAlbums: (userId) => getUserAlbums(pool, userId),
+      getUsersNeedingSync(db, staleThresholdMs, limit),
+    getUserAlbums: (userId) => getUserAlbums(db, userId),
     refreshSingleAlbum,
   };
 }

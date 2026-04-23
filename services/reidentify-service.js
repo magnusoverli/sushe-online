@@ -25,6 +25,9 @@ const {
  */
 function createReidentifyService(deps = {}) {
   const pool = deps.pool;
+  const db =
+    deps.db ||
+    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
   const logger = deps.logger || defaultLogger;
   const fetchFn = deps.fetchFn || fetch;
 
@@ -245,7 +248,7 @@ function createReidentifyService(deps = {}) {
     }
 
     // Update the albums table
-    const updateResult = await pool.query(
+    const updateResult = await db.raw(
       `UPDATE albums 
        SET album_id = $1, tracks = $2, updated_at = NOW() 
        WHERE LOWER(artist) = LOWER($3) AND LOWER(album) = LOWER($4)
@@ -264,7 +267,7 @@ function createReidentifyService(deps = {}) {
     // Cascade album_id change to list_items
     let listItemsUpdated = 0;
     if (currentAlbumId && currentAlbumId !== newAlbumId) {
-      const listItemsResult = await pool.query(
+      const listItemsResult = await db.raw(
         `UPDATE list_items 
          SET album_id = $1, updated_at = NOW() 
          WHERE album_id = $2`,

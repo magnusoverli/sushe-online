@@ -73,6 +73,9 @@ function toRowCount(value) {
 
 function createCatalogCleanupService(deps = {}) {
   const pool = deps.pool;
+  const db =
+    deps.db ||
+    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
   const log = deps.logger || logger;
 
   if (!pool) {
@@ -91,7 +94,7 @@ function createCatalogCleanupService(deps = {}) {
     const orphanReferenceClause = buildOrphanReferenceClause(existingTables);
     const orphanWhereClause = buildOrphanWhereClause(orphanReferenceClause, 1);
 
-    const coverageResult = await pool.query(
+    const coverageResult = await db.raw(
       `SELECT
          COUNT(*)::int AS total_albums,
          COUNT(*) FILTER (WHERE ${orphanReferenceClause})::int AS orphan_albums_total,
@@ -107,7 +110,7 @@ function createCatalogCleanupService(deps = {}) {
 
     let userAlbumStatsReferences = 0;
     if (existingTables.has('user_album_stats')) {
-      const statsRefResult = await pool.query(
+      const statsRefResult = await db.raw(
         `SELECT COUNT(*)::int AS count
          FROM user_album_stats uas
          WHERE uas.album_id IS NOT NULL
@@ -124,7 +127,7 @@ function createCatalogCleanupService(deps = {}) {
 
     let distinctPairReferences = 0;
     if (existingTables.has('album_distinct_pairs')) {
-      const pairRefResult = await pool.query(
+      const pairRefResult = await db.raw(
         `SELECT COUNT(*)::int AS count
          FROM album_distinct_pairs adp
          WHERE EXISTS (
@@ -139,7 +142,7 @@ function createCatalogCleanupService(deps = {}) {
       distinctPairReferences = toRowCount(pairRefResult.rows[0]?.count);
     }
 
-    const sampleResult = await pool.query(
+    const sampleResult = await db.raw(
       `SELECT a.album_id, a.artist, a.album, a.created_at
        FROM albums a
        WHERE ${orphanWhereClause}

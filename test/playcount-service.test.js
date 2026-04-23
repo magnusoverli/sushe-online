@@ -95,7 +95,11 @@ describe('playcount-service', () => {
       );
 
       const callArgs = mockRefresh.mock.calls[0].arguments;
-      assert.strictEqual(callArgs[0], mockPool);
+      // Arg 0 is a datastore adapter (wraps the pool). Verify it exposes .raw
+      // and that calling .raw forwards to mockPool.query.
+      assert.strictEqual(typeof callArgs[0].raw, 'function');
+      callArgs[0].raw('SELECT 1', []);
+      assert.ok(mockPool.query.mock.calls.length >= 1);
       assert.strictEqual(callArgs[1], mockLogger);
       assert.strictEqual(callArgs[2], 'user42');
       assert.strictEqual(callArgs[3], 'lfm_user');

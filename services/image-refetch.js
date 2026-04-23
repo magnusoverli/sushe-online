@@ -217,6 +217,9 @@ async function fetchCoverArt(artist, album) {
 // eslint-disable-next-line max-lines-per-function -- Factory function with multiple internal methods
 function createImageRefetchService(deps = {}) {
   const pool = deps.pool;
+  const db =
+    deps.db ||
+    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
   const log = deps.logger || logger;
 
   if (!pool) {
@@ -233,7 +236,7 @@ function createImageRefetchService(deps = {}) {
    * @returns {Promise<Object>} - Image statistics
    */
   async function getStats() {
-    const result = await pool.query(`
+    const result = await db.raw(`
       SELECT 
         COUNT(*) as total_albums,
         COUNT(cover_image) as with_image,
@@ -308,7 +311,7 @@ function createImageRefetchService(deps = {}) {
 
     // Has image but under size threshold - check dimensions
     try {
-      const imageResult = await pool.query(
+      const imageResult = await db.raw(
         'SELECT cover_image FROM albums WHERE album_id = $1',
         [albumId]
       );
@@ -373,12 +376,10 @@ function createImageRefetchService(deps = {}) {
       );
       const skipSizeThresholdBytes = SKIP_SIZE_THRESHOLD_KB * 1024;
 
-      const totalResult = await pool.query(
-        'SELECT COUNT(*) AS total FROM albums'
-      );
+      const totalResult = await db.raw('SELECT COUNT(*) AS total FROM albums');
       const totalAlbums = parseInt(totalResult.rows[0]?.total, 10) || 0;
 
-      const candidateResult = await pool.query(
+      const candidateResult = await db.raw(
         `SELECT COUNT(*) AS total
          FROM albums
          WHERE COALESCE(OCTET_LENGTH(cover_image), 0) < $1`,
@@ -423,7 +424,7 @@ function createImageRefetchService(deps = {}) {
         params.push(pageSize);
         const limitParam = `$${params.length}`;
 
-        const albumsResult = await pool.query(
+        const albumsResult = await db.raw(
           `SELECT album_id, artist, album,
                   COALESCE(OCTET_LENGTH(cover_image), 0) as image_size_bytes
            FROM albums
@@ -471,7 +472,7 @@ function createImageRefetchService(deps = {}) {
 
             if (imageBuffer) {
               // Update the album with new image
-              await pool.query(
+              await db.raw(
                 `UPDATE albums 
                  SET cover_image = $1, cover_image_format = 'JPEG', updated_at = NOW()
                  WHERE album_id = $2`,

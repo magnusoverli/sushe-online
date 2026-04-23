@@ -25,6 +25,9 @@ const { normalizeImageBuffer } = require('../utils/image-processing');
 // eslint-disable-next-line max-lines-per-function -- Cohesive service module with related recommendation operations
 function createRecommendationService(deps = {}) {
   const pool = deps.pool;
+  const db =
+    deps.db ||
+    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
   const logger = deps.logger || defaultLogger;
   const crypto = deps.crypto || require('crypto');
   const { upsertAlbumRecord } = deps;
@@ -32,7 +35,7 @@ function createRecommendationService(deps = {}) {
   // ============ Internal helpers ============
 
   async function isLocked(year) {
-    const result = await pool.query(
+    const result = await db.raw(
       'SELECT locked FROM recommendation_settings WHERE year = $1',
       [year]
     );
@@ -40,7 +43,7 @@ function createRecommendationService(deps = {}) {
   }
 
   async function hasAccess(year, userId) {
-    const accessCount = await pool.query(
+    const accessCount = await db.raw(
       'SELECT COUNT(*) as count FROM recommendation_access WHERE year = $1',
       [year]
     );
@@ -49,7 +52,7 @@ function createRecommendationService(deps = {}) {
       return true;
     }
 
-    const userAccess = await pool.query(
+    const userAccess = await db.raw(
       'SELECT 1 FROM recommendation_access WHERE year = $1 AND user_id = $2',
       [year, userId]
     );
@@ -77,7 +80,7 @@ function createRecommendationService(deps = {}) {
    * @returns {Promise<Array<number>>}
    */
   async function getYears() {
-    const result = await pool.query(`
+    const result = await db.raw(`
       SELECT DISTINCT year FROM recommendations
       ORDER BY year DESC
     `);
@@ -100,7 +103,7 @@ function createRecommendationService(deps = {}) {
 
     const locked = await isLocked(year);
 
-    const result = await pool.query(
+    const result = await db.raw(
       `SELECT 
         r._id,
         r.year,
@@ -240,7 +243,7 @@ function createRecommendationService(deps = {}) {
     const delayMs = options.delayMs ?? 2000;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const coverResult = await pool.query(
+      const coverResult = await db.raw(
         'SELECT cover_image, cover_image_format FROM albums WHERE album_id = $1',
         [albumId]
       );
@@ -273,7 +276,7 @@ function createRecommendationService(deps = {}) {
       throw new TransactionAbort(400, { error: 'Album ID required' });
     }
 
-    const result = await pool.query(
+    const result = await db.raw(
       'DELETE FROM recommendations WHERE year = $1 AND album_id = $2 RETURNING _id',
       [year, albumId]
     );
@@ -301,7 +304,7 @@ function createRecommendationService(deps = {}) {
 
     const trimmedReasoning = validateReasoning(reasoning);
 
-    const existing = await pool.query(
+    const existing = await db.raw(
       'SELECT recommended_by FROM recommendations WHERE year = $1 AND album_id = $2',
       [year, albumId]
     );
@@ -316,7 +319,7 @@ function createRecommendationService(deps = {}) {
       });
     }
 
-    await pool.query(
+    await db.raw(
       'UPDATE recommendations SET reasoning = $1 WHERE year = $2 AND album_id = $3',
       [trimmedReasoning, year, albumId]
     );
@@ -334,7 +337,7 @@ function createRecommendationService(deps = {}) {
     const locked = await isLocked(year);
     const userHasAccess = await hasAccess(year, userId);
 
-    const countResult = await pool.query(
+    const countResult = await db.raw(
       'SELECT COUNT(*) as count FROM recommendations WHERE year = $1',
       [year]
     );
@@ -352,7 +355,7 @@ function createRecommendationService(deps = {}) {
    * @param {number} year
    */
   async function lock(year) {
-    await pool.query(
+    await db.raw(
       `INSERT INTO recommendation_settings (year, locked, created_at, updated_at)
        VALUES ($1, TRUE, NOW(), NOW())
        ON CONFLICT (year) DO UPDATE SET locked = TRUE, updated_at = NOW()`,
@@ -365,7 +368,7 @@ function createRecommendationService(deps = {}) {
    * @param {number} year
    */
   async function unlock(year) {
-    await pool.query(
+    await db.raw(
       `INSERT INTO recommendation_settings (year, locked, created_at, updated_at)
        VALUES ($1, FALSE, NOW(), NOW())
        ON CONFLICT (year) DO UPDATE SET locked = FALSE, updated_at = NOW()`,
@@ -378,7 +381,7 @@ function createRecommendationService(deps = {}) {
    * @returns {Promise<Array<number>>}
    */
   async function getLockedYears() {
-    const result = await pool.query(
+    const result = await db.raw(
       `SELECT year FROM recommendation_settings WHERE locked = TRUE ORDER BY year DESC`
     );
     return result.rows.map((r) => r.year);
@@ -390,7 +393,7 @@ function createRecommendationService(deps = {}) {
    * @returns {Promise<Object>} { year, isRestricted, users }
    */
   async function getAccess(year) {
-    const result = await pool.query(
+    const result = await db.raw(
       `SELECT 
         ra.user_id,
         ra.added_at,
@@ -461,7 +464,7 @@ function createRecommendationService(deps = {}) {
    * @returns {Promise<Object>} { year, users }
    */
   async function getEligibleUsers(year) {
-    const result = await pool.query(
+    const result = await db.raw(
       `SELECT 
         u._id as user_id,
         u.username,

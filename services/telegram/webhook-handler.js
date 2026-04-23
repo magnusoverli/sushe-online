@@ -1,4 +1,6 @@
 function createWebhookHandler(pool, configManager, log) {
+  const db = pool ? { raw: (sql, params) => pool.query(sql, params) } : null;
+
   async function verifyWebhookSecret(secret) {
     const config = await configManager.getConfig();
     return config?.webhookSecret === secret;
@@ -28,21 +30,21 @@ function createWebhookHandler(pool, configManager, log) {
     }
 
     try {
-      const countResult = await pool.query(
+      const countResult = await db.raw(
         'SELECT COUNT(*) as count FROM telegram_admins'
       );
       log.warn('[DEBUG-TELEGRAM-LINK] telegram_admins table count', {
         count: countResult.rows[0]?.count,
       });
 
-      const allAdmins = await pool.query(
+      const allAdmins = await db.raw(
         'SELECT telegram_user_id, telegram_username, user_id FROM telegram_admins'
       );
       log.warn('[DEBUG-TELEGRAM-LINK] all telegram_admins entries', {
         entries: allAdmins.rows,
       });
 
-      const result = await pool.query(
+      const result = await db.raw(
         `SELECT u.* FROM users u
          JOIN telegram_admins ta ON u._id = ta.user_id
          WHERE ta.telegram_user_id = $1`,
@@ -68,7 +70,7 @@ function createWebhookHandler(pool, configManager, log) {
     if (!pool) return false;
 
     try {
-      await pool.query(
+      await db.raw(
         `INSERT INTO telegram_admins (telegram_user_id, telegram_username, user_id)
          VALUES ($1, $2, $3)
          ON CONFLICT (telegram_user_id) 

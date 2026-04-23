@@ -5,6 +5,7 @@ function createConfigManager(pool, encryptionKey, log, setupHelpers, baseUrl) {
   let configCache = null;
   let configCacheTime = 0;
   const CONFIG_CACHE_TTL = 60000;
+  const db = pool ? { raw: (sql, params) => pool.query(sql, params) } : null;
 
   async function saveConfig(config) {
     if (!pool) {
@@ -14,9 +15,9 @@ function createConfigManager(pool, encryptionKey, log, setupHelpers, baseUrl) {
     const encryptedToken = encrypt(config.botToken, encryptionKey);
     const webhookSecret = crypto.randomUUID();
 
-    await pool.query('DELETE FROM telegram_config');
+    await db.raw('DELETE FROM telegram_config');
 
-    const result = await pool.query(
+    const result = await db.raw(
       `INSERT INTO telegram_config 
        (bot_token_encrypted, chat_id, thread_id, chat_title, topic_name, 
         webhook_secret, enabled, configured_at, configured_by)
@@ -67,7 +68,7 @@ function createConfigManager(pool, encryptionKey, log, setupHelpers, baseUrl) {
       return configCache;
     }
 
-    const result = await pool.query('SELECT * FROM telegram_config LIMIT 1');
+    const result = await db.raw('SELECT * FROM telegram_config LIMIT 1');
     if (result.rows.length === 0) return null;
 
     const config = result.rows[0];
@@ -112,7 +113,7 @@ function createConfigManager(pool, encryptionKey, log, setupHelpers, baseUrl) {
       }
     }
 
-    await pool.query('DELETE FROM telegram_config');
+    await db.raw('DELETE FROM telegram_config');
     configCache = null;
     log.info('Telegram disconnected');
 
@@ -122,10 +123,9 @@ function createConfigManager(pool, encryptionKey, log, setupHelpers, baseUrl) {
   async function setRecommendationsEnabled(enabled) {
     if (!pool) return false;
 
-    await pool.query(
-      'UPDATE telegram_config SET recommendations_enabled = $1',
-      [enabled]
-    );
+    await db.raw('UPDATE telegram_config SET recommendations_enabled = $1', [
+      enabled,
+    ]);
     configCache = null;
 
     return true;

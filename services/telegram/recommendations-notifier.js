@@ -5,10 +5,12 @@ function createRecommendationsNotifier(
   configManager,
   log
 ) {
+  const db = pool ? { raw: (sql, params) => pool.query(sql, params) } : null;
+
   async function getThreads() {
     if (!pool) return [];
 
-    const result = await pool.query(
+    const result = await db.raw(
       'SELECT year, thread_id, topic_name, created_at FROM telegram_recommendation_threads ORDER BY year DESC'
     );
 
@@ -23,7 +25,7 @@ function createRecommendationsNotifier(
   async function getOrCreateThread(year, botToken, chatId) {
     if (!pool) return null;
 
-    const existing = await pool.query(
+    const existing = await db.raw(
       'SELECT thread_id FROM telegram_recommendation_threads WHERE year = $1',
       [year]
     );
@@ -42,7 +44,7 @@ function createRecommendationsNotifier(
 
       const threadId = result.message_thread_id;
 
-      await pool.query(
+      await db.raw(
         `INSERT INTO telegram_recommendation_threads (year, thread_id, topic_name, created_at)
          VALUES ($1, $2, $3, NOW())`,
         [year, threadId, topicName]

@@ -22,10 +22,15 @@ function isSupportedService(service) {
 
 function createExternalIdentityService(deps = {}) {
   const pool = deps.pool;
+  const db =
+    deps.db ||
+    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
   const logger = deps.logger || defaultLogger;
 
-  if (!pool) {
-    throw new Error('Database pool is required for external identity service');
+  if (!db) {
+    throw new Error(
+      'A db datastore or pool is required for external identity service'
+    );
   }
 
   async function getAlbumServiceMapping(service, albumId) {
@@ -34,7 +39,7 @@ function createExternalIdentityService(deps = {}) {
       return null;
     }
 
-    const result = await pool.query(
+    const result = await db.raw(
       `SELECT external_album_id, external_artist, external_album, confidence, strategy
        FROM album_service_mappings
        WHERE album_id = $1 AND service = $2
@@ -46,7 +51,7 @@ function createExternalIdentityService(deps = {}) {
       return null;
     }
 
-    await pool.query(
+    await db.raw(
       `UPDATE album_service_mappings
        SET last_used_at = NOW(), updated_at = NOW()
        WHERE album_id = $1 AND service = $2`,
@@ -64,7 +69,7 @@ function createExternalIdentityService(deps = {}) {
       return;
     }
 
-    await pool.query(
+    await db.raw(
       `INSERT INTO album_service_mappings (
          album_id, service, external_album_id, external_artist, external_album,
          confidence, strategy, created_at, updated_at, last_used_at
@@ -102,7 +107,7 @@ function createExternalIdentityService(deps = {}) {
       return null;
     }
 
-    const result = await pool.query(
+    const result = await db.raw(
       `SELECT service_artist
        FROM artist_service_aliases
        WHERE service = $1 AND canonical_artist_key = $2
@@ -114,7 +119,7 @@ function createExternalIdentityService(deps = {}) {
       return null;
     }
 
-    await pool.query(
+    await db.raw(
       `UPDATE artist_service_aliases
        SET last_used_at = NOW(), updated_at = NOW()
        WHERE service = $1 AND canonical_artist_key = $2`,
@@ -140,7 +145,7 @@ function createExternalIdentityService(deps = {}) {
 
     let result;
     if (includeCrossService) {
-      result = await pool.query(
+      result = await db.raw(
         `SELECT service, service_artist
          FROM artist_service_aliases
          WHERE canonical_artist_key = $1
@@ -156,7 +161,7 @@ function createExternalIdentityService(deps = {}) {
         [canonicalArtistKey, normalizedService]
       );
     } else {
-      result = await pool.query(
+      result = await db.raw(
         `SELECT service, service_artist
          FROM artist_service_aliases
          WHERE canonical_artist_key = $1 AND service = $2
@@ -197,7 +202,7 @@ function createExternalIdentityService(deps = {}) {
       return;
     }
 
-    await pool.query(
+    await db.raw(
       `INSERT INTO artist_service_aliases (
          canonical_artist_key, canonical_artist, service,
          service_artist_key, service_artist, confidence,
