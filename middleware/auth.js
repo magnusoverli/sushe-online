@@ -43,7 +43,7 @@ function sanitizeUser(user) {
 const ACTIVITY_UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 function recordActivity(req, queryable) {
-  if (!req.user) return;
+  if (!req.user || !queryable) return;
 
   const now = Date.now();
   const lastUpdate = req.session?.lastActivityUpdatedAt || 0;
@@ -60,7 +60,7 @@ function recordActivity(req, queryable) {
 
     // Fire-and-forget DB update using prepared statement (non-blocking)
     // Use updateFieldById if available (prepared statement), fallback to update
-    if (typeof queryable.updateFieldById === 'function') {
+    if (queryable.table && typeof queryable.updateFieldById === 'function') {
       queryable.updateFieldById(
         req.user._id,
         'lastActivity',

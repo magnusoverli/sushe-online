@@ -517,5 +517,39 @@ describe('playcount-service', () => {
       assert.strictEqual(mockRefresh.mock.calls[0].arguments[0], fakeDb);
       assert.deepStrictEqual(results.a, { playcount: 1, status: 'success' });
     });
+
+    it('should adapt a query-only pool into a datastore', async () => {
+      const mockLogger = createMockLogger();
+      const queryOnlyPool = {
+        query: mock.fn(async () => ({ rows: [], rowCount: 0 })),
+      };
+      const mockRefresh = mock.fn(async (dbArg) => {
+        await dbArg.raw('SELECT 1', []);
+        return {
+          playcount: 2,
+          status: 'success',
+        };
+      });
+
+      const { refreshPlaycountsInBackground } = createPlaycountService({
+        refreshAlbumPlaycount: mockRefresh,
+      });
+
+      const results = await refreshPlaycountsInBackground(
+        'user1',
+        'lfm',
+        [createAlbum('b')],
+        queryOnlyPool,
+        mockLogger
+      );
+
+      assert.strictEqual(mockRefresh.mock.calls.length, 1);
+      assert.strictEqual(
+        typeof mockRefresh.mock.calls[0].arguments[0].raw,
+        'function'
+      );
+      assert.strictEqual(queryOnlyPool.query.mock.calls.length, 1);
+      assert.deepStrictEqual(results.b, { playcount: 2, status: 'success' });
+    });
   });
 });
