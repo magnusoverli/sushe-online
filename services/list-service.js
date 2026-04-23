@@ -1,6 +1,12 @@
 const logger = require('../utils/logger');
 const { ensureDb } = require('../db/postgres');
 const { TransactionAbort } = require('../db/transaction');
+const {
+  createListsRepository,
+} = require('../db/repositories/lists-repository');
+const {
+  createListItemsRepository,
+} = require('../db/repositories/list-items-repository');
 const { buildPartialUpdate } = require('../utils/query-builder');
 const { createItemComments } = require('./list/item-comments');
 const { createListFetchers } = require('./list/fetchers');
@@ -20,6 +26,9 @@ const {
 // eslint-disable-next-line max-lines-per-function
 function createListService(deps = {}) {
   const db = ensureDb(deps.db, 'list-service');
+  const listsRepository = deps.listsRepository || createListsRepository({ db });
+  const listItemsRepository =
+    deps.listItemsRepository || createListItemsRepository({ db });
 
   const log = deps.logger || logger;
   const { crypto, validateYear, helpers } = deps;
@@ -275,6 +284,74 @@ function createListService(deps = {}) {
     return managementOperations.deleteList(listId, userId);
   }
 
+  async function getUserListSummaries(userId) {
+    return listsRepository.listSummariesByUser(userId);
+  }
+
+  async function getPlaylistSourceData(listId, userId) {
+    const list = await listsRepository.findByUserAndExternalId(userId, listId);
+    if (!list) return null;
+
+    const items = await listItemsRepository.findWithAlbumData(list._id);
+    return { list, items };
+  }
+
+  async function setTrackPick(
+    userId,
+    listItemId,
+    trackIdentifier,
+    targetPriority
+  ) {
+    const owner = await listItemsRepository.findItemWithOwner(listItemId);
+    if (!owner) {
+      return { status: 'not_found' };
+    }
+    if (owner.user_id !== userId) {
+      return { status: 'forbidden' };
+    }
+
+    const result = await listItemsRepository.setTrackPick(
+      listItemId,
+      trackIdentifier,
+      targetPriority
+    );
+    if (!result) {
+      return { status: 'not_found' };
+    }
+
+    return {
+      status: 'ok',
+      listId: owner.list_id,
+      primary: result.primary,
+      secondary: result.secondary,
+    };
+  }
+
+  async function removeTrackPick(userId, listItemId, trackIdentifier = null) {
+    const owner = await listItemsRepository.findItemWithOwner(listItemId);
+    if (!owner) {
+      return { status: 'not_found' };
+    }
+    if (owner.user_id !== userId) {
+      return { status: 'forbidden' };
+    }
+
+    const result = await listItemsRepository.removeTrackPick(
+      listItemId,
+      trackIdentifier
+    );
+    if (!result) {
+      return { status: 'not_found' };
+    }
+
+    return {
+      status: 'ok',
+      listId: owner.list_id,
+      primary: result.primary,
+      secondary: result.secondary,
+    };
+  }
+
   return {
     findListById,
     getAllLists,
@@ -291,6 +368,10 @@ function createListService(deps = {}) {
     incrementalUpdate,
     toggleMainStatus,
     deleteList,
+    getUserListSummaries,
+    getPlaylistSourceData,
+    setTrackPick,
+    removeTrackPick,
   };
 }
 

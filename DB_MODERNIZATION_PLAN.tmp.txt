@@ -36,6 +36,8 @@ Commit Log
 - in progress: Added first repository seam (`db/repositories/users-repository.js`),
   migrated auth/password-reset/oauth flows to prefer service/repository methods,
   and updated composition to inject `usersRepository`/`userService` as token stores.
+- in progress: Added list/list-item repository seams and moved playlist/track-pick/
+  list-summary API routes to list service methods backed by repositories.
 
 Legend
 - [ ] pending

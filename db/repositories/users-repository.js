@@ -197,6 +197,18 @@ function createUsersRepository(deps = {}) {
     return result.rowCount;
   }
 
+  async function setTidalCountry(userId, countryCode) {
+    const result = await db.raw(
+      `UPDATE users
+       SET tidal_country = $1,
+           updated_at = NOW()
+       WHERE _id = $2`,
+      [countryCode, userId],
+      { name: 'users-repo-set-tidal-country' }
+    );
+    return result.rowCount;
+  }
+
   async function setLastfmAuth(userId, auth, username) {
     const result = await db.raw(
       `UPDATE users
@@ -235,6 +247,7 @@ function createUsersRepository(deps = {}) {
     clearSpotifyAuth,
     setTidalAuth,
     clearTidalAuth,
+    setTidalCountry,
     setLastfmAuth,
     clearLastfmAuth,
   };

@@ -17,8 +17,7 @@ module.exports = (app, deps) => {
     userService,
     users,
     logger,
-    listsAsync,
-    listItemsAsync,
+    listService,
     playlistService,
     ensureValidSpotifyToken,
     ensureValidTidalToken,
@@ -109,15 +108,16 @@ module.exports = (app, deps) => {
           auth = tokenResult.tidalAuth;
         }
 
-        // Get the list first to get its name
-        const list = await listsAsync.findOne({
-          userId: req.user._id,
-          _id: listId,
-        });
+        const sourceData = await listService.getPlaylistSourceData(
+          listId,
+          req.user._id
+        );
 
-        if (!list) {
+        if (!sourceData) {
           return res.status(404).json({ error: 'List not found' });
         }
+
+        const { list, items } = sourceData;
 
         const listName = list.name;
 
@@ -136,12 +136,6 @@ module.exports = (app, deps) => {
           logger.info('Playlist check result:', { listName, exists });
           return res.json({ exists, playlistName: listName });
         }
-
-        // Pass userId to get track picks from normalized table
-        const items = await listItemsAsync.findWithAlbumData(
-          list._id,
-          req.user._id
-        );
 
         logger.debug('Playlist creation items loaded', {
           listId: list._id,

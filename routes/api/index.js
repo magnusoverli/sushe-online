@@ -92,9 +92,6 @@ module.exports = (app, deps) => {
     users,
     usersAsync,
     lists,
-    listsAsync,
-    listItemsAsync,
-    albumsAsync,
     bcrypt,
     crypto,
     nodemailer,
@@ -187,9 +184,6 @@ module.exports = (app, deps) => {
     users,
     usersAsync,
     lists,
-    listsAsync,
-    listItemsAsync,
-    albumsAsync,
 
     // Middleware
     ensureAuthAPI,

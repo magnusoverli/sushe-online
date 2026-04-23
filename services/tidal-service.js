@@ -19,12 +19,14 @@ const {
 /**
  * @param {Object} deps
  * @param {Object} deps.fetch - Fetch implementation
- * @param {Object} deps.usersAsync - Async user datastore
+ * @param {Object} [deps.userService] - User service for persistence
+ * @param {Object} [deps.usersAsync] - Async user datastore (legacy fallback)
  * @param {Object} [deps.logger] - Logger instance
  * @returns {Object} Tidal service methods
  */
 function createTidalService(deps = {}) {
   const fetch = deps.fetch || globalThis.fetch;
+  const userService = deps.userService;
   const usersAsync = deps.usersAsync;
   const logger = deps.logger || require('../utils/logger');
 
@@ -65,7 +67,14 @@ function createTidalService(deps = {}) {
         const countryCode = profileData?.data?.attributes?.country || 'US';
 
         // Save for future requests (fire-and-forget)
-        if (usersAsync) {
+        if (typeof userService?.setTidalCountry === 'function') {
+          userService.setTidalCountry(user._id, countryCode).catch((err) =>
+            logger.error('Failed to save Tidal country', {
+              error: err.message,
+              userId: user._id,
+            })
+          );
+        } else if (usersAsync) {
           usersAsync
             .update(
               { _id: user._id },

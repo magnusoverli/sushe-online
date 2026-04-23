@@ -297,6 +297,33 @@ function createUserService(deps = {}) {
     return updated > 0;
   }
 
+  async function setTidalCountry(userId, countryCode) {
+    if (usersRepository) {
+      const updated = await usersRepository.setTidalCountry(
+        userId,
+        countryCode
+      );
+      invalidateUserCacheDep(userId);
+      return updated > 0;
+    }
+
+    if (db) {
+      const result = await db.raw(
+        `UPDATE users SET tidal_country = $1, updated_at = NOW() WHERE _id = $2`,
+        [countryCode, userId]
+      );
+      invalidateUserCacheDep(userId);
+      return result.rowCount > 0;
+    }
+
+    const updated = await usersAsyncDep.update(
+      { _id: userId },
+      { $set: { tidalCountry: countryCode, updatedAt: new Date() } }
+    );
+    invalidateUserCacheDep(userId);
+    return updated > 0;
+  }
+
   async function setLastfmAuth(userId, auth, username) {
     if (usersRepository) {
       const updated = await usersRepository.setLastfmAuth(
@@ -546,6 +573,7 @@ function createUserService(deps = {}) {
     clearSpotifyAuth,
     setTidalAuth,
     clearTidalAuth,
+    setTidalCountry,
     setLastfmAuth,
     clearLastfmAuth,
     saveOAuthToken,

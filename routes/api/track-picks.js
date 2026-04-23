@@ -19,8 +19,7 @@ module.exports = (app, deps) => {
   const {
     ensureAuthAPI,
     logger,
-    listItemsAsync,
-    listsAsync,
+    listService,
     helpers: { invalidateListCaches },
   } = deps;
   const asyncHandler = createAsyncHandler(logger);
@@ -48,25 +47,22 @@ module.exports = (app, deps) => {
       // Priority must be 1 (primary) or 2 (secondary)
       const targetPriority = priority === 1 ? 1 : 2;
 
-      // Verify the list item belongs to the user
-      const listItem = await listItemsAsync.findOne({ _id: listItemId });
-      if (!listItem) {
-        return res.status(404).json({ error: 'List item not found' });
-      }
-
-      const list = await listsAsync.findOne({ _id: listItem.listId });
-      if (!list || list.userId !== req.user._id) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
-
-      const result = await listItemsAsync.setTrackPick(
+      const result = await listService.setTrackPick(
+        req.user._id,
         listItemId,
         trackIdentifier.trim(),
         targetPriority
       );
 
+      if (result.status === 'not_found') {
+        return res.status(404).json({ error: 'List item not found' });
+      }
+      if (result.status === 'forbidden') {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
       // Invalidate cache for this list so refreshes show updated track picks
-      invalidateListCaches(req.user._id, list._id);
+      invalidateListCaches(req.user._id, result.listId);
 
       logger.debug('Track pick updated', {
         userId: req.user._id,
@@ -101,24 +97,21 @@ module.exports = (app, deps) => {
         return res.status(400).json({ error: 'List item ID is required' });
       }
 
-      // Verify the list item belongs to the user
-      const listItem = await listItemsAsync.findOne({ _id: listItemId });
-      if (!listItem) {
-        return res.status(404).json({ error: 'List item not found' });
-      }
-
-      const list = await listsAsync.findOne({ _id: listItem.listId });
-      if (!list || list.userId !== req.user._id) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
-
-      const result = await listItemsAsync.removeTrackPick(
+      const result = await listService.removeTrackPick(
+        req.user._id,
         listItemId,
         trackIdentifier || null
       );
 
+      if (result.status === 'not_found') {
+        return res.status(404).json({ error: 'List item not found' });
+      }
+      if (result.status === 'forbidden') {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
       // Invalidate cache for this list so refreshes show updated track picks
-      invalidateListCaches(req.user._id, list._id);
+      invalidateListCaches(req.user._id, result.listId);
 
       logger.debug('Track pick removed', {
         userId: req.user._id,

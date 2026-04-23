@@ -16,10 +16,22 @@ const { createTidalService } = require('../../services/tidal-service');
  * @param {Object} deps - Dependencies
  */
 module.exports = (app, deps) => {
-  const { ensureAuthAPI, usersAsync, logger, fetch, requireTidalAuth } = deps;
+  const {
+    ensureAuthAPI,
+    userService,
+    usersAsync,
+    logger,
+    fetch,
+    requireTidalAuth,
+  } = deps;
   const asyncHandler = createAsyncHandler(logger);
 
-  const tidalService = createTidalService({ fetch, usersAsync, logger });
+  const tidalService = createTidalService({
+    fetch,
+    userService,
+    usersAsync,
+    logger,
+  });
 
   // Search Tidal for an album and return the ID
   app.get(
