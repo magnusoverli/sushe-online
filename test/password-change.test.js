@@ -172,7 +172,62 @@ function createTestApp(options = {}) {
 
   // Mock pool
   const mockPool = {
-    query: mock.fn(() => Promise.resolve({ rows: [], rowCount: 0 })),
+    query:
+      options.poolQuery ||
+      mock.fn((sql, params = []) => {
+        if (sql.includes('SET hash = $1')) {
+          return Promise.resolve(
+            mockUsersAsync.update(
+              { _id: params[2] },
+              { $set: { hash: params[0], updatedAt: params[1] } },
+              {}
+            )
+          ).then((updated) => ({
+            rows: updated > 0 ? [{ _id: params[2] }] : [],
+            rowCount: typeof updated === 'number' ? updated : 1,
+          }));
+        }
+
+        if (sql.includes("SET role = 'admin'")) {
+          return Promise.resolve(
+            mockUsersAsync.update(
+              { _id: params[1] },
+              {
+                $set: {
+                  role: 'admin',
+                  adminGrantedAt: params[0],
+                  updatedAt: params[0],
+                },
+              },
+              {}
+            )
+          ).then((updated) => ({
+            rows: updated > 0 ? [{ _id: params[1] }] : [],
+            rowCount: typeof updated === 'number' ? updated : 1,
+          }));
+        }
+
+        if (sql.includes('SET role = NULL')) {
+          return Promise.resolve(
+            mockUsersAsync.update(
+              { _id: params[1] },
+              {
+                $set: {
+                  role: null,
+                  adminGrantedAt: null,
+                  updatedAt: params[0],
+                },
+              },
+              {}
+            )
+          ).then((updated) => ({
+            rows: updated > 0 ? [{ _id: params[1] }] : [],
+            rowCount: typeof updated === 'number' ? updated : 1,
+          }));
+        }
+
+        return Promise.resolve({ rows: [], rowCount: 0 });
+      }),
   };
 
   // Create service instances with test mocks
@@ -180,13 +235,12 @@ function createTestApp(options = {}) {
   const { createUserService } = require('../services/user-service');
 
   const authService = createAuthService({
-    usersAsync: mockUsersAsync,
+    db: mockPool,
     bcrypt: mockBcrypt,
     logger: mockLogger,
   });
   const userService = createUserService({
-    users: mockUsers,
-    usersAsync: mockUsersAsync,
+    db: mockPool,
     logger: mockLogger,
   });
 

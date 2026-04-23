@@ -117,6 +117,45 @@ function createTestApp(options = {}) {
         if (sql.includes('SELECT') && sql.includes('FROM extension_tokens')) {
           return Promise.resolve({ rows: tokenRows });
         }
+        // Handle user lookup during token validation
+        if (sql.includes('SELECT') && sql.includes('FROM users')) {
+          const userId = _params[0];
+          const findOne = options.usersAsyncFindOne;
+
+          if (typeof findOne === 'function') {
+            return Promise.resolve(findOne({ _id: userId })).then((user) => ({
+              rows: user
+                ? [
+                    {
+                      _id: user._id,
+                      email: user.email,
+                      username: user.username,
+                      hash: user.hash || 'existing-hash',
+                      role: user.role || null,
+                    },
+                  ]
+                : [],
+              rowCount: user ? 1 : 0,
+            }));
+          }
+
+          if (userId === mockUser._id) {
+            return Promise.resolve({
+              rows: [
+                {
+                  _id: mockUser._id,
+                  email: mockUser.email,
+                  username: mockUser.username,
+                  hash: 'existing-hash',
+                  role: mockUser.role || null,
+                },
+              ],
+              rowCount: 1,
+            });
+          }
+
+          return Promise.resolve({ rows: [], rowCount: 0 });
+        }
         // Handle DELETE (cleanup)
         if (sql.includes('DELETE FROM extension_tokens')) {
           return Promise.resolve({ rowCount: options.deletedCount || 0 });
@@ -222,13 +261,12 @@ function createTestApp(options = {}) {
   const { createUserService } = require('../services/user-service');
 
   const authService = createAuthService({
-    usersAsync: mockUsersAsync,
+    db: mockPool,
     bcrypt: mockBcrypt,
     logger: mockLogger,
   });
   const userService = createUserService({
-    users: mockUsers,
-    usersAsync: mockUsersAsync,
+    db: mockPool,
     logger: mockLogger,
   });
 

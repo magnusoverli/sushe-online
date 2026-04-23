@@ -83,19 +83,21 @@ function createTestApp() {
     insert: mock.fn(async () => ({ _id: 'new-user' })),
   };
   const mockBcrypt = { hash: mock.fn(), compare: mock.fn() };
+  const mockDb = {
+    query: mock.fn(async () => ({ rows: [], rowCount: 1 })),
+  };
 
   // Create service instances
   const { createAuthService } = require('../services/auth-service');
   const { createUserService } = require('../services/user-service');
 
   const authService = createAuthService({
-    usersAsync: mockUsersAsync,
+    db: mockDb,
     bcrypt: mockBcrypt,
     logger: mockLogger,
   });
   const userService = createUserService({
-    users: mockUsers,
-    usersAsync: mockUsersAsync,
+    db: mockDb,
     logger: mockLogger,
   });
 

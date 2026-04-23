@@ -37,29 +37,18 @@ const HEX_COLOR_REGEX = /^#[0-9A-F]{6}$/i;
  * Create a user service instance with injected dependencies.
  *
  * @param {Object} deps
- * @param {Object} deps.users       - Callback-style user datastore (required)
- * @param {Object} deps.usersAsync  - Promise-style user datastore (required)
+ * @param {import('../db/types').DbFacade} deps.db - Canonical datastore (required)
  * @param {Object} [deps.logger]    - Logger instance
  * @returns {Object} User service methods
  */
 // eslint-disable-next-line max-lines-per-function -- User service keeps closely related settings/admin mutations in one injected module
 function createUserService(deps = {}) {
-  const usersDep = deps.users;
-  const usersAsyncDep = deps.usersAsync;
-  const db = deps.db ? ensureDb(deps.db, 'UserService') : null;
-  const usersRepository =
-    deps.usersRepository || (db ? createUsersRepository({ db }) : null);
+  const db = ensureDb(deps.db, 'UserService');
+  const usersRepository = deps.usersRepository || createUsersRepository({ db });
   const invalidateUserCacheDep =
     typeof deps.invalidateUserCache === 'function'
       ? deps.invalidateUserCache
       : () => {};
-
-  if (!db && !usersDep) {
-    throw new Error('users (callback-style) is required for UserService');
-  }
-  if (!db && !usersAsyncDep) {
-    throw new Error('usersAsync is required for UserService');
-  }
 
   const log = deps.logger || logger;
 
@@ -74,17 +63,10 @@ function createUserService(deps = {}) {
    * @returns {Promise<void>}
    */
   async function updateSetting(userId, field, value) {
-    if (db) {
-      await db.raw(
-        `UPDATE users SET ${camelToSnake(field)} = $1, updated_at = $2 WHERE _id = $3`,
-        [value, new Date(), userId]
-      );
-    } else {
-      await usersAsyncDep.update(
-        { _id: userId },
-        { $set: { [field]: value, updatedAt: new Date() } }
-      );
-    }
+    await db.raw(
+      `UPDATE users SET ${camelToSnake(field)} = $1, updated_at = $2 WHERE _id = $3`,
+      [value, new Date(), userId]
+    );
     invalidateUserCacheDep(userId);
     log.info(`User setting updated`, { userId, field, value });
   }
@@ -102,20 +84,12 @@ function createUserService(deps = {}) {
     const trimmed = value.trim();
 
     // Check uniqueness
-    let existing;
-    if (db) {
-      const result = await db.raw(
-        `SELECT _id FROM users WHERE ${camelToSnake(field)} = $1 AND _id <> $2 LIMIT 1`,
-        [trimmed, userId],
-        { name: `user-service-check-${field}`, retryable: true }
-      );
-      existing = result.rows[0] || null;
-    } else {
-      existing = await usersAsyncDep.findOne({
-        [field]: trimmed,
-        _id: { $ne: userId },
-      });
-    }
+    const result = await db.raw(
+      `SELECT _id FROM users WHERE ${camelToSnake(field)} = $1 AND _id <> $2 LIMIT 1`,
+      [trimmed, userId],
+      { name: `user-service-check-${field}`, retryable: true }
+    );
+    const existing = result.rows[0] || null;
 
     if (existing) {
       const label =
@@ -125,17 +99,10 @@ function createUserService(deps = {}) {
       return { success: false, error: label };
     }
 
-    if (db) {
-      await db.raw(
-        `UPDATE users SET ${camelToSnake(field)} = $1, updated_at = $2 WHERE _id = $3`,
-        [trimmed, new Date(), userId]
-      );
-    } else {
-      await usersAsyncDep.update(
-        { _id: userId },
-        { $set: { [field]: trimmed, updatedAt: new Date() } }
-      );
-    }
+    await db.raw(
+      `UPDATE users SET ${camelToSnake(field)} = $1, updated_at = $2 WHERE _id = $3`,
+      [trimmed, new Date(), userId]
+    );
 
     invalidateUserCacheDep(userId);
     log.info(`User ${field} updated`, { userId, field });
@@ -150,237 +117,61 @@ function createUserService(deps = {}) {
    * @returns {Promise<void>}
    */
   async function updateLastSelectedList(userId, listId) {
-    if (db) {
-      await db.raw(
-        `UPDATE users SET last_selected_list = $1, updated_at = $2 WHERE _id = $3`,
-        [listId, new Date(), userId]
-      );
-    } else {
-      await usersAsyncDep.update(
-        { _id: userId },
-        { $set: { lastSelectedList: listId, updatedAt: new Date() } }
-      );
-    }
+    await db.raw(
+      `UPDATE users SET last_selected_list = $1, updated_at = $2 WHERE _id = $3`,
+      [listId, new Date(), userId]
+    );
     invalidateUserCacheDep(userId);
   }
 
   async function updateLastActivity(userId, timestamp = new Date()) {
-    if (usersRepository) {
-      const updated = await usersRepository.updateLastActivity(
-        userId,
-        timestamp
-      );
-      invalidateUserCacheDep(userId);
-      return updated > 0;
-    }
-
-    if (db) {
-      const result = await db.raw(
-        `UPDATE users SET last_activity = $1 WHERE _id = $2`,
-        [timestamp, userId]
-      );
-      invalidateUserCacheDep(userId);
-      return result.rowCount > 0;
-    }
-
-    await usersAsyncDep.update(
-      { _id: userId },
-      { $set: { lastActivity: timestamp } }
-    );
+    const updated = await usersRepository.updateLastActivity(userId, timestamp);
     invalidateUserCacheDep(userId);
-    return true;
+    return updated > 0;
   }
 
   async function setSpotifyAuth(userId, token) {
-    if (usersRepository) {
-      const updated = await usersRepository.setSpotifyAuth(userId, token);
-      invalidateUserCacheDep(userId);
-      return updated > 0;
-    }
-
-    if (db) {
-      const result = await db.raw(
-        `UPDATE users SET spotify_auth = $1, updated_at = NOW() WHERE _id = $2`,
-        [token, userId]
-      );
-      invalidateUserCacheDep(userId);
-      return result.rowCount > 0;
-    }
-
-    const updated = await usersAsyncDep.update(
-      { _id: userId },
-      { $set: { spotifyAuth: token, updatedAt: new Date() } }
-    );
+    const updated = await usersRepository.setSpotifyAuth(userId, token);
     invalidateUserCacheDep(userId);
     return updated > 0;
   }
 
   async function clearSpotifyAuth(userId) {
-    if (usersRepository) {
-      const updated = await usersRepository.clearSpotifyAuth(userId);
-      invalidateUserCacheDep(userId);
-      return updated > 0;
-    }
-
-    if (db) {
-      const result = await db.raw(
-        `UPDATE users SET spotify_auth = NULL, updated_at = NOW() WHERE _id = $1`,
-        [userId]
-      );
-      invalidateUserCacheDep(userId);
-      return result.rowCount > 0;
-    }
-
-    const updated = await usersAsyncDep.update(
-      { _id: userId },
-      { $unset: { spotifyAuth: true }, $set: { updatedAt: new Date() } }
-    );
+    const updated = await usersRepository.clearSpotifyAuth(userId);
     invalidateUserCacheDep(userId);
     return updated > 0;
   }
 
   async function setTidalAuth(userId, token, countryCode = null) {
-    if (usersRepository) {
-      const updated = await usersRepository.setTidalAuth(
-        userId,
-        token,
-        countryCode
-      );
-      invalidateUserCacheDep(userId);
-      return updated > 0;
-    }
-
-    if (db) {
-      const result = await db.raw(
-        `UPDATE users SET tidal_auth = $1, tidal_country = $2, updated_at = NOW() WHERE _id = $3`,
-        [token, countryCode, userId]
-      );
-      invalidateUserCacheDep(userId);
-      return result.rowCount > 0;
-    }
-
-    const updated = await usersAsyncDep.update(
-      { _id: userId },
-      {
-        $set: {
-          tidalAuth: token,
-          tidalCountry: countryCode,
-          updatedAt: new Date(),
-        },
-      }
+    const updated = await usersRepository.setTidalAuth(
+      userId,
+      token,
+      countryCode
     );
     invalidateUserCacheDep(userId);
     return updated > 0;
   }
 
   async function clearTidalAuth(userId) {
-    if (usersRepository) {
-      const updated = await usersRepository.clearTidalAuth(userId);
-      invalidateUserCacheDep(userId);
-      return updated > 0;
-    }
-
-    if (db) {
-      const result = await db.raw(
-        `UPDATE users SET tidal_auth = NULL, updated_at = NOW() WHERE _id = $1`,
-        [userId]
-      );
-      invalidateUserCacheDep(userId);
-      return result.rowCount > 0;
-    }
-
-    const updated = await usersAsyncDep.update(
-      { _id: userId },
-      { $unset: { tidalAuth: true }, $set: { updatedAt: new Date() } }
-    );
+    const updated = await usersRepository.clearTidalAuth(userId);
     invalidateUserCacheDep(userId);
     return updated > 0;
   }
 
   async function setTidalCountry(userId, countryCode) {
-    if (usersRepository) {
-      const updated = await usersRepository.setTidalCountry(
-        userId,
-        countryCode
-      );
-      invalidateUserCacheDep(userId);
-      return updated > 0;
-    }
-
-    if (db) {
-      const result = await db.raw(
-        `UPDATE users SET tidal_country = $1, updated_at = NOW() WHERE _id = $2`,
-        [countryCode, userId]
-      );
-      invalidateUserCacheDep(userId);
-      return result.rowCount > 0;
-    }
-
-    const updated = await usersAsyncDep.update(
-      { _id: userId },
-      { $set: { tidalCountry: countryCode, updatedAt: new Date() } }
-    );
+    const updated = await usersRepository.setTidalCountry(userId, countryCode);
     invalidateUserCacheDep(userId);
     return updated > 0;
   }
 
   async function setLastfmAuth(userId, auth, username) {
-    if (usersRepository) {
-      const updated = await usersRepository.setLastfmAuth(
-        userId,
-        auth,
-        username
-      );
-      invalidateUserCacheDep(userId);
-      return updated > 0;
-    }
-
-    if (db) {
-      const result = await db.raw(
-        `UPDATE users SET lastfm_auth = $1, lastfm_username = $2, updated_at = NOW() WHERE _id = $3`,
-        [auth, username, userId]
-      );
-      invalidateUserCacheDep(userId);
-      return result.rowCount > 0;
-    }
-
-    const updated = await usersAsyncDep.update(
-      { _id: userId },
-      {
-        $set: {
-          lastfmAuth: auth,
-          lastfmUsername: username,
-          updatedAt: new Date(),
-        },
-      }
-    );
+    const updated = await usersRepository.setLastfmAuth(userId, auth, username);
     invalidateUserCacheDep(userId);
     return updated > 0;
   }
 
   async function clearLastfmAuth(userId) {
-    if (usersRepository) {
-      const updated = await usersRepository.clearLastfmAuth(userId);
-      invalidateUserCacheDep(userId);
-      return updated > 0;
-    }
-
-    if (db) {
-      const result = await db.raw(
-        `UPDATE users SET lastfm_auth = NULL, lastfm_username = NULL, updated_at = NOW() WHERE _id = $1`,
-        [userId]
-      );
-      invalidateUserCacheDep(userId);
-      return result.rowCount > 0;
-    }
-
-    const updated = await usersAsyncDep.update(
-      { _id: userId },
-      {
-        $unset: { lastfmAuth: true, lastfmUsername: true },
-        $set: { updatedAt: new Date() },
-      }
-    );
+    const updated = await usersRepository.clearLastfmAuth(userId);
     invalidateUserCacheDep(userId);
     return updated > 0;
   }
@@ -396,76 +187,42 @@ function createUserService(deps = {}) {
   }
 
   async function updatePasswordHash(userId, newHash) {
-    if (db) {
-      const result = await db.raw(
-        `UPDATE users SET hash = $1, updated_at = $2 WHERE _id = $3 RETURNING _id`,
-        [newHash, new Date(), userId]
-      );
-      invalidateUserCacheDep(userId);
-      return result.rows.length > 0;
-    }
-
-    const updated = await usersAsyncDep.update(
-      { _id: userId },
-      { $set: { hash: newHash, updatedAt: new Date() } }
+    const result = await db.raw(
+      `UPDATE users SET hash = $1, updated_at = $2 WHERE _id = $3 RETURNING _id`,
+      [newHash, new Date(), userId]
     );
     invalidateUserCacheDep(userId);
-    return updated > 0;
+    return result.rows.length > 0;
   }
 
   async function setAdminRole(userId, isAdmin) {
-    if (db) {
-      const result = await db.raw(
-        isAdmin
-          ? `UPDATE users SET role = 'admin', admin_granted_at = $1, updated_at = $1 WHERE _id = $2 RETURNING _id`
-          : `UPDATE users SET role = NULL, admin_granted_at = NULL, updated_at = $1 WHERE _id = $2 RETURNING _id`,
-        [new Date(), userId]
-      );
-      invalidateUserCacheDep(userId);
-      return result.rows.length > 0;
-    }
-
-    const updated = await usersAsyncDep.update(
-      { _id: userId },
+    const result = await db.raw(
       isAdmin
-        ? { $set: { role: 'admin', adminGrantedAt: new Date() } }
-        : { $unset: { role: true, adminGrantedAt: true } }
+        ? `UPDATE users SET role = 'admin', admin_granted_at = $1, updated_at = $1 WHERE _id = $2 RETURNING _id`
+        : `UPDATE users SET role = NULL, admin_granted_at = NULL, updated_at = $1 WHERE _id = $2 RETURNING _id`,
+      [new Date(), userId]
     );
     invalidateUserCacheDep(userId);
-    return updated > 0;
+    return result.rows.length > 0;
   }
 
   async function deleteUser(userId) {
-    if (db) {
-      const deleted = await db.withTransaction(async (client) => {
-        const result = await client.query(
-          'DELETE FROM users WHERE _id = $1 RETURNING _id',
-          [userId]
-        );
-        return result.rows.length > 0;
-      });
-      if (deleted) {
-        invalidateUserCacheDep(userId);
-      }
-      return deleted;
+    const deleted = await db.withTransaction(async (client) => {
+      const result = await client.query(
+        'DELETE FROM users WHERE _id = $1 RETURNING _id',
+        [userId]
+      );
+      return result.rows.length > 0;
+    });
+
+    if (deleted) {
+      invalidateUserCacheDep(userId);
     }
 
-    return new Promise((resolve, reject) => {
-      usersDep.remove({ _id: userId }, {}, (err, numRemoved) => {
-        if (err) return reject(err);
-        if (numRemoved > 0) {
-          invalidateUserCacheDep(userId);
-        }
-        resolve(numRemoved > 0);
-      });
-    });
+    return deleted;
   }
 
   async function getUserLists(userId) {
-    if (!db) {
-      throw new Error('getUserLists requires db');
-    }
-
     const result = await db.raw(
       `SELECT l.name,
               COUNT(li._id)::int AS album_count,

@@ -94,18 +94,20 @@ function createTestApp() {
     hash: mock.fn(async (password) => `hashed-${password}`),
     compare: mock.fn(async () => true),
   };
+  const mockPool = {
+    query: mock.fn(async () => ({ rows: [], rowCount: 1 })),
+  };
 
   const { createAuthService } = require('../services/auth-service');
   const { createUserService } = require('../services/user-service');
 
   const authService = createAuthService({
-    usersAsync: mockUsersAsync,
+    db: mockPool,
     bcrypt: mockBcrypt,
     logger: mockLogger,
   });
   const userService = createUserService({
-    users: mockUsers,
-    usersAsync: mockUsersAsync,
+    db: mockPool,
     logger: mockLogger,
   });
 
@@ -134,7 +136,7 @@ function createTestApp() {
     listItemsAsync: {
       count: mock.fn(async () => 0),
     },
-    pool: { query: mock.fn(async () => ({ rows: [], rowCount: 0 })) },
+    pool: mockPool,
     passport: {
       authenticate: (_strategy, callback) => (req, _res, _next) => {
         const { email, password } = req.body;

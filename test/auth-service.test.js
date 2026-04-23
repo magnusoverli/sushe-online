@@ -14,11 +14,9 @@ const { createMockLogger } = require('./helpers');
 // Helpers
 // =============================================================================
 
-function createMockUsersAsync() {
+function createMockDb() {
   return {
-    findOne: mock.fn(() => Promise.resolve(null)),
-    insert: mock.fn((data) => Promise.resolve({ _id: 'user123', ...data })),
-    update: mock.fn(() => Promise.resolve(1)),
+    raw: mock.fn(() => Promise.resolve({ rows: [], rowCount: 0 })),
   };
 }
 
@@ -78,13 +76,13 @@ describe('auth-service constants', () => {
 // =============================================================================
 
 describe('createAuthService', () => {
-  it('should throw if usersAsync is not provided', () => {
-    assert.throws(() => createAuthService({}), /usersAsync is required/);
+  it('should throw if db is not provided', () => {
+    assert.throws(() => createAuthService({}), /AuthService requires deps\.db/);
   });
 
   it('should create service with valid dependencies', () => {
     const service = createAuthService({
-      usersAsync: createMockUsersAsync(),
+      db: createMockDb(),
     });
     assert.ok(service.registerUser);
     assert.ok(service.createApprovalEvent);
@@ -101,16 +99,16 @@ describe('createAuthService', () => {
 
 describe('authService.registerUser', () => {
   let service;
-  let mockUsersAsync;
+  let mockDb;
   let mockBcrypt;
   let validators;
 
   beforeEach(() => {
-    mockUsersAsync = createMockUsersAsync();
+    mockDb = createMockDb();
     mockBcrypt = createMockBcrypt();
     validators = createValidators();
     service = createAuthService({
-      usersAsync: mockUsersAsync,
+      db: mockDb,
       bcrypt: mockBcrypt,
       logger: createMockLogger(),
     });
@@ -183,9 +181,14 @@ describe('authService.registerUser', () => {
   });
 
   it('should reject duplicate email', async () => {
-    mockUsersAsync.findOne = mock.fn(async (query) => {
-      if (query.email) return { _id: 'existing', email: query.email };
-      return null;
+    mockDb.raw = mock.fn((sql) => {
+      if (sql.includes('FROM users') && sql.includes('OR username')) {
+        return Promise.resolve({
+          rows: [{ email: 'taken@example.com', username: 'someone' }],
+          rowCount: 1,
+        });
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 });
     });
 
     const { user, validation } = await service.registerUser(
@@ -202,9 +205,14 @@ describe('authService.registerUser', () => {
   });
 
   it('should reject duplicate username', async () => {
-    mockUsersAsync.findOne = mock.fn(async (query) => {
-      if (query.username) return { _id: 'existing', username: query.username };
-      return null;
+    mockDb.raw = mock.fn((sql) => {
+      if (sql.includes('FROM users') && sql.includes('OR username')) {
+        return Promise.resolve({
+          rows: [{ email: 'someone@example.com', username: 'taken_user' }],
+          rowCount: 1,
+        });
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 });
     });
 
     const { user, validation } = await service.registerUser(
@@ -221,6 +229,35 @@ describe('authService.registerUser', () => {
   });
 
   it('should successfully register a valid user', async () => {
+    mockDb.raw = mock.fn((sql, params) => {
+      if (sql.includes('FROM users') && sql.includes('OR username')) {
+        return Promise.resolve({ rows: [], rowCount: 0 });
+      }
+      if (sql.includes('INSERT INTO users')) {
+        return Promise.resolve({
+          rows: [
+            {
+              _id: params[0],
+              email: params[1],
+              username: params[2],
+              hash: params[3],
+              spotify_auth: params[4],
+              tidal_auth: params[5],
+              tidal_country: params[6],
+              accent_color: params[7],
+              time_format: params[8],
+              date_format: params[9],
+              approval_status: params[10],
+              created_at: params[11],
+              updated_at: params[12],
+            },
+          ],
+          rowCount: 1,
+        });
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 });
+    });
+
     const { user, validation } = await service.registerUser(
       {
         email: 'new@example.com',
@@ -240,13 +277,16 @@ describe('authService.registerUser', () => {
     assert.strictEqual(mockBcrypt.hash.mock.calls.length, 1);
     assert.strictEqual(mockBcrypt.hash.mock.calls[0].arguments[1], 12);
 
-    // Verify user was inserted with defaults
-    assert.strictEqual(mockUsersAsync.insert.mock.calls.length, 1);
-    const insertedData = mockUsersAsync.insert.mock.calls[0].arguments[0];
-    assert.strictEqual(insertedData.accentColor, '#dc2626');
-    assert.strictEqual(insertedData.timeFormat, '24h');
-    assert.strictEqual(insertedData.dateFormat, 'MM/DD/YYYY');
-    assert.strictEqual(insertedData.approvalStatus, 'pending');
+    // Verify DB insert was called with defaults
+    assert.ok(
+      mockDb.raw.mock.calls.some((call) =>
+        call.arguments[0].includes('INSERT INTO users')
+      )
+    );
+    assert.strictEqual(user.accentColor, '#dc2626');
+    assert.strictEqual(user.timeFormat, '24h');
+    assert.strictEqual(user.dateFormat, 'MM/DD/YYYY');
+    assert.strictEqual(user.approvalStatus, 'pending');
   });
 });
 
@@ -261,7 +301,7 @@ describe('authService.createApprovalEvent', () => {
   beforeEach(() => {
     mockLogger = createMockLogger();
     service = createAuthService({
-      usersAsync: createMockUsersAsync(),
+      db: createMockDb(),
       logger: mockLogger,
     });
   });
@@ -316,7 +356,7 @@ describe('authService.changePassword', () => {
   beforeEach(() => {
     mockBcrypt = createMockBcrypt();
     service = createAuthService({
-      usersAsync: createMockUsersAsync(),
+      db: createMockDb(),
       bcrypt: mockBcrypt,
       logger: createMockLogger(),
     });
@@ -407,7 +447,7 @@ describe('authService.validateAdminCode', () => {
 
   beforeEach(() => {
     service = createAuthService({
-      usersAsync: createMockUsersAsync(),
+      db: createMockDb(),
       logger: createMockLogger(),
     });
   });
@@ -457,7 +497,7 @@ describe('authService.validateAdminCode', () => {
 describe('authService.finalizeAdminCodeUsage', () => {
   it('should track usage and regenerate code', () => {
     const service = createAuthService({
-      usersAsync: createMockUsersAsync(),
+      db: createMockDb(),
       logger: createMockLogger(),
     });
 
@@ -484,7 +524,7 @@ describe('authService.getSessionMaxAge', () => {
 
   beforeEach(() => {
     service = createAuthService({
-      usersAsync: createMockUsersAsync(),
+      db: createMockDb(),
       logger: createMockLogger(),
     });
   });

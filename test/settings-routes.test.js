@@ -120,16 +120,39 @@ function createTestApp(options = {}) {
       }),
   };
 
-  // Mock pool for async operations
-  const mockPool = {
-    query: mock.fn(() => Promise.resolve({ rows: [], rowCount: 0 })),
-  };
-
   // Mock async datastores
   const mockUsersAsync = {
     findOne: options.usersAsyncFindOne || mock.fn(() => Promise.resolve(null)),
     insert: mock.fn(() => Promise.resolve({ _id: 'new-user' })),
     update: options.usersAsyncUpdate || mock.fn(() => Promise.resolve(1)),
+  };
+
+  // Mock pool for async operations
+  const mockPool = {
+    query:
+      options.poolQuery ||
+      mock.fn((sql, params = []) => {
+        if (sql.includes('SELECT _id FROM users WHERE')) {
+          const field = sql.includes('WHERE email =') ? 'email' : 'username';
+          return Promise.resolve(
+            mockUsersAsync.findOne({ [field]: params[0] })
+          ).then((existing) => ({
+            rows: existing ? [{ _id: existing._id || 'existing-user' }] : [],
+            rowCount: existing ? 1 : 0,
+          }));
+        }
+
+        if (sql.includes('UPDATE users SET')) {
+          return Promise.resolve(
+            mockUsersAsync.update({ _id: params[2] }, { $set: {} }, {})
+          ).then((updated) => ({
+            rows: [],
+            rowCount: typeof updated === 'number' ? updated : 1,
+          }));
+        }
+
+        return Promise.resolve({ rows: [], rowCount: 0 });
+      }),
   };
 
   const mockListsAsync = {
@@ -178,13 +201,12 @@ function createTestApp(options = {}) {
   const { createUserService } = require('../services/user-service');
 
   const authService = createAuthService({
-    usersAsync: mockUsersAsync,
+    db: mockPool,
     bcrypt: mockBcrypt,
     logger: mockLogger,
   });
   const userService = createUserService({
-    users: mockUsers,
-    usersAsync: mockUsersAsync,
+    db: mockPool,
     logger: mockLogger,
   });
 

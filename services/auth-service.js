@@ -40,81 +40,38 @@ const USER_DEFAULTS = {
  * Create an auth service instance with injected dependencies.
  *
  * @param {Object} deps
- * @param {Object} deps.usersAsync   - Async user datastore (required)
+ * @param {import('../db/types').DbFacade} deps.db - Canonical datastore (required)
  * @param {Object} [deps.bcrypt]     - bcrypt/bcryptjs library
  * @param {Object} [deps.logger]     - Logger instance
  * @returns {Object} Auth service methods
  */
 // eslint-disable-next-line max-lines-per-function -- Auth service intentionally groups registration, password, session, and extension-token flows
 function createAuthService(deps = {}) {
-  const usersAsyncDep = deps.usersAsync;
-  const db = deps.db ? ensureDb(deps.db, 'AuthService') : null;
-  const usersRepository =
-    deps.usersRepository || (db ? createUsersRepository({ db }) : null);
-  if (!db && !usersAsyncDep) {
-    throw new Error('db or usersAsync is required for AuthService');
-  }
+  const db = ensureDb(deps.db, 'AuthService');
+  const usersRepository = deps.usersRepository || createUsersRepository({ db });
 
   const bcryptDep = deps.bcrypt || require('bcryptjs');
   const log = deps.logger || logger;
   const crypto = deps.crypto || require('crypto');
 
   async function getUserById(userId) {
-    if (usersRepository) {
-      return usersRepository.findById(userId);
-    }
-
-    return usersAsyncDep.findOne({ _id: userId });
+    return usersRepository.findById(userId);
   }
 
   async function getUserByEmail(email) {
-    if (usersRepository) {
-      return usersRepository.findByEmail(email);
-    }
-
-    return usersAsyncDep.findOne({ email });
+    return usersRepository.findByEmail(email);
   }
 
   async function getUserByResetToken(token, nowMs = Date.now()) {
-    if (usersRepository) {
-      return usersRepository.findByResetToken(token, nowMs);
-    }
-
-    return usersAsyncDep.findOne({
-      resetToken: token,
-      resetExpires: { $gt: nowMs },
-    });
+    return usersRepository.findByResetToken(token, nowMs);
   }
 
   async function issuePasswordResetToken(userId, token, expiresMs) {
-    if (usersRepository) {
-      return usersRepository.setResetToken(userId, token, expiresMs);
-    }
-
-    return usersAsyncDep.update(
-      { _id: userId },
-      { $set: { resetToken: token, resetExpires: expiresMs } }
-    );
+    return usersRepository.setResetToken(userId, token, expiresMs);
   }
 
   async function resetPasswordByToken(token, nowMs, newHash) {
-    if (usersRepository) {
-      return usersRepository.resetPasswordByToken(token, nowMs, newHash);
-    }
-
-    const user = await usersAsyncDep.findOne({
-      resetToken: token,
-      resetExpires: { $gt: nowMs },
-    });
-    if (!user) return 0;
-
-    return usersAsyncDep.update(
-      { _id: user._id },
-      {
-        $set: { hash: newHash },
-        $unset: { resetToken: true, resetExpires: true },
-      }
-    );
+    return usersRepository.resetPasswordByToken(token, nowMs, newHash);
   }
 
   // ── Registration ─────────────────────────────────────────────────────────
@@ -176,101 +133,73 @@ function createAuthService(deps = {}) {
       throw new Error('Password hashing failed');
     }
 
-    let newUser;
-    if (db) {
-      const existingResult = await db.raw(
-        `SELECT email, username
-         FROM users
-         WHERE email = $1 OR username = $2`,
-        [email, username],
-        { name: 'auth-service-registration-duplicates', retryable: true }
-      );
+    const existingResult = await db.raw(
+      `SELECT email, username
+       FROM users
+       WHERE email = $1 OR username = $2`,
+      [email, username],
+      { name: 'auth-service-registration-duplicates', retryable: true }
+    );
 
-      if (existingResult.rows.some((row) => row.email === email)) {
-        return {
-          user: null,
-          validation: { valid: false, error: 'Email already registered' },
-        };
-      }
-
-      if (existingResult.rows.some((row) => row.username === username)) {
-        return {
-          user: null,
-          validation: { valid: false, error: 'Username already taken' },
-        };
-      }
-
-      const timestamp = new Date();
-      const userId = crypto.randomBytes(12).toString('hex');
-      const insertResult = await db.raw(
-        `INSERT INTO users (
-           _id, email, username, hash, spotify_auth, tidal_auth, tidal_country,
-           accent_color, time_format, date_format, approval_status, created_at, updated_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-         RETURNING _id, email, username, hash,
-                   accent_color, time_format, date_format,
-                   spotify_auth, tidal_auth, tidal_country,
-                   approval_status, created_at, updated_at`,
-        [
-          userId,
-          email,
-          username,
-          hash,
-          USER_DEFAULTS.spotifyAuth,
-          USER_DEFAULTS.tidalAuth,
-          USER_DEFAULTS.tidalCountry,
-          USER_DEFAULTS.accentColor,
-          USER_DEFAULTS.timeFormat,
-          USER_DEFAULTS.dateFormat,
-          USER_DEFAULTS.approvalStatus,
-          timestamp,
-          timestamp,
-        ],
-        { name: 'auth-service-register-user' }
-      );
-
-      const row = insertResult.rows[0];
-      newUser = {
-        _id: row._id,
-        email: row.email,
-        username: row.username,
-        hash: row.hash,
-        accentColor: row.accent_color,
-        timeFormat: row.time_format,
-        dateFormat: row.date_format,
-        spotifyAuth: row.spotify_auth,
-        tidalAuth: row.tidal_auth,
-        tidalCountry: row.tidal_country,
-        approvalStatus: row.approval_status,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
+    if (existingResult.rows.some((row) => row.email === email)) {
+      return {
+        user: null,
+        validation: { valid: false, error: 'Email already registered' },
       };
-    } else {
-      const existingEmail = await usersAsyncDep.findOne({ email });
-      if (existingEmail) {
-        return {
-          user: null,
-          validation: { valid: false, error: 'Email already registered' },
-        };
-      }
+    }
 
-      const existingUsername = await usersAsyncDep.findOne({ username });
-      if (existingUsername) {
-        return {
-          user: null,
-          validation: { valid: false, error: 'Username already taken' },
-        };
-      }
+    if (existingResult.rows.some((row) => row.username === username)) {
+      return {
+        user: null,
+        validation: { valid: false, error: 'Username already taken' },
+      };
+    }
 
-      newUser = await usersAsyncDep.insert({
+    const timestamp = new Date();
+    const userId = crypto.randomBytes(12).toString('hex');
+    const insertResult = await db.raw(
+      `INSERT INTO users (
+         _id, email, username, hash, spotify_auth, tidal_auth, tidal_country,
+         accent_color, time_format, date_format, approval_status, created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       RETURNING _id, email, username, hash,
+                 accent_color, time_format, date_format,
+                 spotify_auth, tidal_auth, tidal_country,
+                 approval_status, created_at, updated_at`,
+      [
+        userId,
         email,
         username,
         hash,
-        ...USER_DEFAULTS,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    }
+        USER_DEFAULTS.spotifyAuth,
+        USER_DEFAULTS.tidalAuth,
+        USER_DEFAULTS.tidalCountry,
+        USER_DEFAULTS.accentColor,
+        USER_DEFAULTS.timeFormat,
+        USER_DEFAULTS.dateFormat,
+        USER_DEFAULTS.approvalStatus,
+        timestamp,
+        timestamp,
+      ],
+      { name: 'auth-service-register-user' }
+    );
+
+    const row = insertResult.rows[0];
+    const newUser = {
+      _id: row._id,
+      email: row.email,
+      username: row.username,
+      hash: row.hash,
+      accentColor: row.accent_color,
+      timeFormat: row.time_format,
+      dateFormat: row.date_format,
+      spotifyAuth: row.spotify_auth,
+      tidalAuth: row.tidal_auth,
+      tidalCountry: row.tidal_country,
+      approvalStatus: row.approval_status,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
 
     log.info('New user registered (pending approval)', { email, username });
     return { user: newUser, validation: { valid: true } };
@@ -425,8 +354,7 @@ function createAuthService(deps = {}) {
     const token = generateToken();
     const expiresAt = new Date(Date.now() + EXTENSION_TOKEN_EXPIRY_MS);
 
-    const queryable = db || usersAsyncDep;
-    await queryable.raw(
+    await db.raw(
       `INSERT INTO extension_tokens (user_id, token, expires_at, user_agent)
        VALUES ($1, $2, $3, $4)`,
       [userId, token, expiresAt, userAgent],
@@ -445,8 +373,7 @@ function createAuthService(deps = {}) {
    * @returns {Promise<{ revoked: boolean }>}
    */
   async function revokeExtensionToken(_unusedPoolArg, token, userId) {
-    const queryable = db || usersAsyncDep;
-    const result = await queryable.raw(
+    const result = await db.raw(
       `UPDATE extension_tokens
        SET is_revoked = TRUE
        WHERE token = $1 AND user_id = $2`,
@@ -464,8 +391,7 @@ function createAuthService(deps = {}) {
    * @returns {Promise<Array>}
    */
   async function listExtensionTokens(_unusedPoolArg, userId) {
-    const queryable = db || usersAsyncDep;
-    const result = await queryable.raw(
+    const result = await db.raw(
       `SELECT id, created_at, last_used_at, expires_at, user_agent, is_revoked
        FROM extension_tokens
        WHERE user_id = $1

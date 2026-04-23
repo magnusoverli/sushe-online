@@ -14,17 +14,17 @@ const { createMockLogger } = require('./helpers');
 // Helpers
 // =============================================================================
 
-function createMockUsers() {
+function createMockDb(overrides = {}) {
+  const raw =
+    overrides.raw || mock.fn(() => Promise.resolve({ rows: [], rowCount: 1 }));
   return {
-    update: mock.fn((_query, _update, _opts, cb) => cb(null, 1)),
-    findOne: mock.fn((_query, cb) => cb(null, null)),
-  };
-}
-
-function createMockUsersAsync() {
-  return {
-    findOne: mock.fn(() => Promise.resolve(null)),
-    update: mock.fn(() => Promise.resolve(1)),
+    raw,
+    withTransaction:
+      overrides.withTransaction ||
+      (async (callback) => {
+        const client = { query: raw };
+        return callback(client);
+      }),
   };
 }
 
@@ -75,24 +75,13 @@ describe('user-service constants', () => {
 // =============================================================================
 
 describe('createUserService', () => {
-  it('should throw if users is not provided', () => {
-    assert.throws(
-      () => createUserService({ usersAsync: createMockUsersAsync() }),
-      /users \(callback-style\) is required/
-    );
-  });
-
-  it('should throw if usersAsync is not provided', () => {
-    assert.throws(
-      () => createUserService({ users: createMockUsers() }),
-      /usersAsync is required/
-    );
+  it('should throw if db is not provided', () => {
+    assert.throws(() => createUserService({}), /UserService requires deps\.db/);
   });
 
   it('should create service with valid dependencies', () => {
     const service = createUserService({
-      users: createMockUsers(),
-      usersAsync: createMockUsersAsync(),
+      db: createMockDb(),
     });
     assert.ok(service.updateSetting);
     assert.ok(service.updateUniqueField);
@@ -110,8 +99,7 @@ describe('userService.validateSetting', () => {
 
   beforeEach(() => {
     service = createUserService({
-      users: createMockUsers(),
-      usersAsync: createMockUsersAsync(),
+      db: createMockDb(),
       logger: createMockLogger(),
     });
   });
@@ -279,23 +267,23 @@ describe('userService.validateSetting', () => {
 // =============================================================================
 
 describe('userService.updateSetting', () => {
-  it('should call usersAsync.update with correct parameters', async () => {
-    const mockUsersAsync = createMockUsersAsync();
+  it('should call db.raw with correct parameters', async () => {
+    const mockDb = createMockDb();
     const invalidateUserCache = mock.fn();
     const service = createUserService({
-      users: createMockUsers(),
-      usersAsync: mockUsersAsync,
+      db: mockDb,
       logger: createMockLogger(),
       invalidateUserCache,
     });
 
     await service.updateSetting('user123', 'accentColor', '#ff0000');
 
-    assert.strictEqual(mockUsersAsync.update.mock.calls.length, 1);
-    const [query, update] = mockUsersAsync.update.mock.calls[0].arguments;
-    assert.strictEqual(query._id, 'user123');
-    assert.strictEqual(update.$set.accentColor, '#ff0000');
-    assert.ok(update.$set.updatedAt instanceof Date);
+    assert.strictEqual(mockDb.raw.mock.calls.length, 1);
+    const [sql, params] = mockDb.raw.mock.calls[0].arguments;
+    assert.match(sql, /UPDATE users SET accent_color/);
+    assert.strictEqual(params[0], '#ff0000');
+    assert.ok(params[1] instanceof Date);
+    assert.strictEqual(params[2], 'user123');
     assert.strictEqual(invalidateUserCache.mock.calls.length, 1);
     assert.strictEqual(
       invalidateUserCache.mock.calls[0].arguments[0],
@@ -310,13 +298,19 @@ describe('userService.updateSetting', () => {
 
 describe('userService.updateUniqueField', () => {
   let service;
-  let mockUsersAsync;
+  let mockDb;
 
   beforeEach(() => {
-    mockUsersAsync = createMockUsersAsync();
+    mockDb = createMockDb({
+      raw: mock.fn((sql) => {
+        if (sql.includes('SELECT _id FROM users')) {
+          return Promise.resolve({ rows: [], rowCount: 0 });
+        }
+        return Promise.resolve({ rows: [], rowCount: 1 });
+      }),
+    });
     service = createUserService({
-      users: createMockUsers(),
-      usersAsync: mockUsersAsync,
+      db: mockDb,
       logger: createMockLogger(),
     });
   });
@@ -324,8 +318,7 @@ describe('userService.updateUniqueField', () => {
   it('should succeed when value is unique', async () => {
     const invalidateUserCache = mock.fn();
     service = createUserService({
-      users: createMockUsers(),
-      usersAsync: mockUsersAsync,
+      db: mockDb,
       logger: createMockLogger(),
       invalidateUserCache,
     });
@@ -337,14 +330,14 @@ describe('userService.updateUniqueField', () => {
     );
     assert.strictEqual(result.success, true);
 
-    // Verify uniqueness check
-    assert.strictEqual(mockUsersAsync.findOne.mock.calls.length, 1);
-    const query = mockUsersAsync.findOne.mock.calls[0].arguments[0];
-    assert.strictEqual(query.email, 'new@example.com');
-    assert.deepStrictEqual(query._id, { $ne: 'user123' });
+    assert.strictEqual(mockDb.raw.mock.calls.length, 2);
+    const [checkSql, checkParams] = mockDb.raw.mock.calls[0].arguments;
+    assert.match(checkSql, /SELECT _id FROM users/);
+    assert.strictEqual(checkParams[0], 'new@example.com');
+    assert.strictEqual(checkParams[1], 'user123');
 
-    // Verify update
-    assert.strictEqual(mockUsersAsync.update.mock.calls.length, 1);
+    const [updateSql] = mockDb.raw.mock.calls[1].arguments;
+    assert.match(updateSql, /UPDATE users SET email/);
     assert.strictEqual(invalidateUserCache.mock.calls.length, 1);
     assert.strictEqual(
       invalidateUserCache.mock.calls[0].arguments[0],
@@ -353,9 +346,13 @@ describe('userService.updateUniqueField', () => {
   });
 
   it('should fail when email is already taken', async () => {
-    mockUsersAsync.findOne = mock.fn(() =>
-      Promise.resolve({ _id: 'other', email: 'taken@example.com' })
-    );
+    mockDb.raw = mock.fn((sql) => {
+      if (sql.includes('SELECT _id FROM users')) {
+        return Promise.resolve({ rows: [{ _id: 'other' }], rowCount: 1 });
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 });
+    });
+    service = createUserService({ db: mockDb, logger: createMockLogger() });
 
     const result = await service.updateUniqueField(
       'user123',
@@ -366,13 +363,17 @@ describe('userService.updateUniqueField', () => {
     assert.strictEqual(result.error, 'Email already in use');
 
     // Should not attempt update
-    assert.strictEqual(mockUsersAsync.update.mock.calls.length, 0);
+    assert.strictEqual(mockDb.raw.mock.calls.length, 1);
   });
 
   it('should fail when username is already taken', async () => {
-    mockUsersAsync.findOne = mock.fn(() =>
-      Promise.resolve({ _id: 'other', username: 'taken' })
-    );
+    mockDb.raw = mock.fn((sql) => {
+      if (sql.includes('SELECT _id FROM users')) {
+        return Promise.resolve({ rows: [{ _id: 'other' }], rowCount: 1 });
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 });
+    });
+    service = createUserService({ db: mockDb, logger: createMockLogger() });
 
     const result = await service.updateUniqueField(
       'user123',
@@ -391,8 +392,8 @@ describe('userService.updateUniqueField', () => {
     );
     assert.strictEqual(result.success, true);
 
-    const updateArgs = mockUsersAsync.update.mock.calls[0].arguments;
-    assert.strictEqual(updateArgs[1].$set.email, 'test@example.com');
+    const [, updateParams] = mockDb.raw.mock.calls[1].arguments;
+    assert.strictEqual(updateParams[0], 'test@example.com');
   });
 });
 
@@ -401,23 +402,23 @@ describe('userService.updateUniqueField', () => {
 // =============================================================================
 
 describe('userService.updateLastSelectedList', () => {
-  it('should call usersAsync.update with correct parameters', async () => {
-    const mockUsersAsync = createMockUsersAsync();
+  it('should call db.raw with correct parameters', async () => {
+    const mockDb = createMockDb();
     const invalidateUserCache = mock.fn();
     const service = createUserService({
-      users: createMockUsers(),
-      usersAsync: mockUsersAsync,
+      db: mockDb,
       logger: createMockLogger(),
       invalidateUserCache,
     });
 
     await service.updateLastSelectedList('user123', 'list456');
 
-    assert.strictEqual(mockUsersAsync.update.mock.calls.length, 1);
-    const [query, update] = mockUsersAsync.update.mock.calls[0].arguments;
-    assert.strictEqual(query._id, 'user123');
-    assert.strictEqual(update.$set.lastSelectedList, 'list456');
-    assert.ok(update.$set.updatedAt instanceof Date);
+    assert.strictEqual(mockDb.raw.mock.calls.length, 1);
+    const [sql, params] = mockDb.raw.mock.calls[0].arguments;
+    assert.match(sql, /UPDATE users SET last_selected_list/);
+    assert.strictEqual(params[0], 'list456');
+    assert.ok(params[1] instanceof Date);
+    assert.strictEqual(params[2], 'user123');
     assert.strictEqual(invalidateUserCache.mock.calls.length, 1);
     assert.strictEqual(
       invalidateUserCache.mock.calls[0].arguments[0],
