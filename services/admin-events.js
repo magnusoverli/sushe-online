@@ -143,10 +143,7 @@ async function notifyTelegramForUpdate(
  * Create admin event service with injected dependencies.
  *
  * @param {Object} deps
- * @param {Object} deps.db - A PgDatastore (any table) used for its .raw()
- *   method to run admin_events SQL. All datastores share the same pool,
- *   so which one is passed in is cosmetic; by convention pass the
- *   datastore most closely related to the caller (e.g. usersAsync).
+ * @param {Object} deps.db - Canonical DbFacade used for admin_events SQL.
  * @param {Object} [deps.logger]
  * @param {Function} [deps.telegramNotifier]
  */

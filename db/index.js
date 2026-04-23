@@ -26,18 +26,7 @@ if (!fs.existsSync(dataDir)) {
 }
 logger.info('Initializing database layer');
 
-let users,
-  lists,
-  listItems,
-  albums,
-  listGroups,
-  usersAsync,
-  listsAsync,
-  listItemsAsync,
-  albumsAsync,
-  listGroupsAsync,
-  db,
-  pool;
+let users, lists, listItems, albums, listGroups, db, pool;
 let ready;
 
 if (process.env.DATABASE_URL) {
@@ -63,11 +52,6 @@ if (process.env.DATABASE_URL) {
   listItems = new PgDatastore(pool, 'list_items', LIST_ITEMS_FIELD_MAP);
   albums = new PgDatastore(pool, 'albums', ALBUMS_FIELD_MAP);
   listGroups = new PgDatastore(pool, 'list_groups', LIST_GROUPS_FIELD_MAP);
-  usersAsync = users;
-  listsAsync = lists;
-  listItemsAsync = listItems;
-  albumsAsync = albums;
-  listGroupsAsync = listGroups;
   // Canonical tableless datastore. Exposes only raw/withClient/withTransaction;
   // all services that don't need tabled helpers (findOne/insert/update/...)
   // should receive this via deps.db. Shares the pool with the tabled instances,
@@ -124,11 +108,6 @@ module.exports = {
   listItems,
   albums,
   listGroups,
-  usersAsync,
-  listsAsync,
-  listItemsAsync,
-  albumsAsync,
-  listGroupsAsync,
   db,
   dataDir,
   ready,

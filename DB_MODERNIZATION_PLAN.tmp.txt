@@ -45,6 +45,9 @@ Commit Log
 - in progress: Removed `users`/`usersAsync` compatibility branches from
   `services/auth-service.js` and `services/user-service.js`, and migrated
   affected auth/settings/mobile/extension-token tests to canonical DB mocks.
+- in progress: Removed legacy async datastore aliases from `db/index.js`
+  (`usersAsync`, `listsAsync`, `listItemsAsync`, `albumsAsync`,
+  `listGroupsAsync`) and updated stale service docs to reference `deps.db`.
 
 Legend
 - [ ] pending
