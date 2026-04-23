@@ -314,6 +314,30 @@ function createTestApp(options = {}) {
       },
     },
     crypto: mockCrypto,
+    // Canonical db: duck-typed datastore that delegates .raw() to the mockPool
+    // so existing poolQuery SQL matchers keep working.
+    db: {
+      raw: (sql, params) => mockPool.query(sql, params),
+      withClient: async (cb) => {
+        const client = await mockPool.connect();
+        try {
+          return await cb(client);
+        } finally {
+          if (client.release) client.release();
+        }
+      },
+      withTransaction: async (cb) => {
+        const client = await mockPool.connect();
+        try {
+          await client.query('BEGIN');
+          const r = await cb(client);
+          await client.query('COMMIT');
+          return r;
+        } finally {
+          if (client.release) client.release();
+        }
+      },
+    },
     pool: mockPool,
     duplicateService: mockDuplicateService,
     invalidateUserCache: mockInvalidateUserCache,

@@ -392,8 +392,10 @@ function createPlaycountSyncService(deps = {}) {
     deps.db ||
     (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
 
-  if (!pool) {
-    throw new Error('Database pool is required for playcount sync service');
+  if (!db) {
+    throw new Error(
+      'playcount-sync-service requires deps.db (or legacy deps.pool)'
+    );
   }
 
   const syncIntervalMs = deps.syncIntervalMs || DEFAULT_SYNC_INTERVAL_MS;

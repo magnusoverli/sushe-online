@@ -160,6 +160,8 @@ function createTrackFetchQueue(deps = {}) {
     if (!pool) {
       throw new Error('Database pool not initialized');
     }
+    // Prefer canonical db; wrap the pool so .raw() drives logging/metrics.
+    const db = deps.db || { raw: (sql, params) => pool.query(sql, params) };
 
     const artistClean = sanitizeQuery(artist);
     const albumClean = sanitizeQuery(album);
@@ -199,9 +201,10 @@ function createTrackFetchQueue(deps = {}) {
       source: result.source,
     });
 
-    const dbResult = await pool.query(
+    const dbResult = await db.raw(
       'UPDATE albums SET tracks = $1, updated_at = NOW() WHERE album_id = $2',
-      [JSON.stringify(result.tracks), albumId]
+      [JSON.stringify(result.tracks), albumId],
+      { name: 'track-fetch-update-tracks' }
     );
 
     if (dbResult.rowCount === 0) {

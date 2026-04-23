@@ -78,8 +78,8 @@ function createCatalogCleanupService(deps = {}) {
     (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
   const log = deps.logger || logger;
 
-  if (!pool) {
-    throw new Error('Database pool is required');
+  if (!db) {
+    throw new Error('catalog-cleanup requires deps.db (or legacy deps.pool)');
   }
 
   async function getPreview(options = {}) {

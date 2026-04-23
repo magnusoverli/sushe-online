@@ -366,7 +366,10 @@ function createMessenger(apiRequest, configManager, log) {
  */
 function createTelegramNotifier(deps = {}) {
   const log = deps.logger || logger;
-  const pool = deps.pool;
+  // Accept canonical db or legacy pool; internal sub-services are duck-typed
+  // and accept either.
+  const poolOrDb = deps.db || deps.pool;
+  const pool = poolOrDb;
   const fetchFn = deps.fetch || global.fetch;
   const encryptionKey = deps.encryptionKey || process.env.SESSION_SECRET;
   const baseUrl = deps.baseUrl || process.env.BASE_URL;

@@ -10,6 +10,21 @@
 const crypto = require('crypto');
 
 /**
+ * Coerce either a canonical datastore (with .raw) or a legacy pg Pool
+ * (with .query) into a shape exposing .raw(sql, params, opts).
+ * Internal helper — keeps callsites free of duck-type noise.
+ * @param {{ raw: Function } | { query: Function }} dbOrPool
+ * @returns {{ raw: Function }}
+ */
+function asDb(dbOrPool) {
+  if (dbOrPool && typeof dbOrPool.raw === 'function') return dbOrPool;
+  if (dbOrPool && typeof dbOrPool.query === 'function') {
+    return { raw: (sql, params) => dbOrPool.query(sql, params) };
+  }
+  throw new Error('asDb(): expected a datastore with .raw() or a pg Pool');
+}
+
+/**
  * Factory that creates auth utility functions with injectable dependencies.
  *
  * @param {Object} deps - Dependencies
@@ -62,18 +77,25 @@ function createAuthUtils(deps = {}) {
     return true;
   }
 
-  // Find and validate extension token from database
-  async function validateExtensionToken(token, pool) {
+  /**
+   * Find and validate an extension token.
+   * @param {string} token
+   * @param {{ raw: Function } | import('pg').Pool} dbOrPool - Canonical db (preferred)
+   *   or a legacy pg Pool. Duck-typed: if `.raw` exists we use it, else `.query`.
+   */
+  async function validateExtensionToken(token, dbOrPool) {
     if (!isValidExtensionToken(token)) {
       return null;
     }
+    const db = asDb(dbOrPool);
 
     try {
-      const result = await pool.query(
-        `SELECT user_id, expires_at, is_revoked 
-         FROM extension_tokens 
+      const result = await db.raw(
+        `SELECT user_id, expires_at, is_revoked
+         FROM extension_tokens
          WHERE token = $1`,
-        [token]
+        [token],
+        { name: 'auth-utils-validate-extension-token', retryable: true }
       );
 
       if (result.rows.length === 0) {
@@ -93,11 +115,12 @@ function createAuthUtils(deps = {}) {
       }
 
       // Update last_used_at timestamp
-      await pool.query(
-        `UPDATE extension_tokens 
-         SET last_used_at = NOW() 
+      await db.raw(
+        `UPDATE extension_tokens
+         SET last_used_at = NOW()
          WHERE token = $1`,
-        [token]
+        [token],
+        { name: 'auth-utils-touch-extension-token' }
       );
 
       return tokenData.user_id;
@@ -109,13 +132,19 @@ function createAuthUtils(deps = {}) {
     }
   }
 
-  // Clean up expired tokens (can be called periodically)
-  async function cleanupExpiredTokens(pool) {
+  /**
+   * Clean up expired tokens (can be called periodically).
+   * @param {{ raw: Function } | import('pg').Pool} dbOrPool
+   */
+  async function cleanupExpiredTokens(dbOrPool) {
+    const db = asDb(dbOrPool);
     try {
-      const result = await pool.query(
-        `DELETE FROM extension_tokens 
-         WHERE expires_at < NOW() 
-         OR is_revoked = TRUE`
+      const result = await db.raw(
+        `DELETE FROM extension_tokens
+         WHERE expires_at < NOW()
+         OR is_revoked = TRUE`,
+        [],
+        { name: 'auth-utils-cleanup-expired' }
       );
       return result.rowCount;
     } catch (error) {

@@ -67,7 +67,12 @@ const SAVE_PREFERENCES_QUERY = `
  */
 function createUserPreferences(deps = {}) {
   const log = deps.logger || logger;
-  const pool = deps.pool;
+  // Prefer canonical db; fall back to pg Pool adapter for legacy callers.
+  const db =
+    deps.db ||
+    (deps.pool ? { raw: (sql, params) => deps.pool.query(sql, params) } : null);
+  // Keep `pool` as truthy-check alias for existing `if (!pool)` guards below.
+  const pool = db;
 
   /**
    * Aggregate user's music preferences from their lists
@@ -107,7 +112,10 @@ function createUserPreferences(deps = {}) {
       ORDER BY l.year DESC, l.name, li.position
     `;
 
-    const result = await pool.query(query, [userId]);
+    const result = await db.raw(query, [userId], {
+      name: 'user-prefs-aggregate-from-lists',
+      retryable: true,
+    });
     const rows = result.rows;
 
     if (rows.length === 0) {
@@ -216,7 +224,9 @@ function createUserPreferences(deps = {}) {
     }
 
     const params = buildSavePreferencesParams(userId, data);
-    const result = await pool.query(SAVE_PREFERENCES_QUERY, params);
+    const result = await db.raw(SAVE_PREFERENCES_QUERY, params, {
+      name: 'user-prefs-save',
+    });
 
     log.info('Saved preferences for user:', userId);
     return result.rows[0];
@@ -232,9 +242,10 @@ function createUserPreferences(deps = {}) {
       throw new Error('Database pool not provided');
     }
 
-    const result = await pool.query(
+    const result = await db.raw(
       'SELECT * FROM user_preferences WHERE user_id = $1',
-      [userId]
+      [userId],
+      { name: 'user-prefs-get', retryable: true }
     );
 
     return result.rows[0] || null;

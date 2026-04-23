@@ -58,17 +58,14 @@ describe('createImageRefetchService', () => {
     ({ createImageRefetchService } = require('../services/image-refetch.js'));
   });
 
-  it('should throw if pool is not provided', () => {
-    assert.throws(
-      () => createImageRefetchService(),
-      /PostgreSQL pool is required/
-    );
+  it('should throw if neither db nor pool is provided', () => {
+    assert.throws(() => createImageRefetchService(), /requires deps\.db/);
   });
 
   it('should throw if pool is null', () => {
     assert.throws(
       () => createImageRefetchService({ pool: null }),
-      /PostgreSQL pool is required/
+      /requires deps\.db/
     );
   });
 

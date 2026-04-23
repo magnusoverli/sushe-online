@@ -149,6 +149,9 @@ function createAdminEventService(deps = {}) {
   const db =
     deps.db ||
     (deps.pool ? { raw: (sql, params) => deps.pool.query(sql, params) } : null);
+  if (!db) {
+    throw new Error('admin-events requires deps.db (or legacy deps.pool)');
+  }
   let telegramNotifier = deps.telegramNotifier || null;
 
   const actionHandlers = new Map();

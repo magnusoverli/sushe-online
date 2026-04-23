@@ -33,15 +33,15 @@ function createAlbumService(deps = {}) {
   const logger = deps.logger || defaultLogger;
   const { upsertAlbumRecord, invalidateCachesForAlbumUsers } = deps;
 
-  // Unified DB facade: prefer an injected datastore, fall back to a pool adapter.
+  // Unified DB facade: prefer the canonical `db`, fall back to a pool adapter.
   // All SQL in this file goes through db.raw for logging, metrics, and the
   // shutdown drain flag. withTransaction imports elsewhere are kept in place.
   const db =
-    deps.albumsAsync ||
-    deps.listsAsync ||
-    deps.usersAsync ||
+    deps.db ||
     (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
-  if (!db) throw new Error('album-service requires a datastore or pool');
+  if (!db) {
+    throw new Error('album-service requires deps.db (or legacy deps.pool)');
+  }
 
   function validateOptionalTextField(value, errorMessage) {
     if (value !== null && value !== undefined && typeof value !== 'string') {

@@ -100,14 +100,15 @@ module.exports = (app, deps) => {
     nodemailer,
     composeForgotPasswordEmail,
     csrfProtection,
+    db,
     pool,
     isValidPassword,
   } = deps;
 
   // Create helper functions
   const helpers = createHelpers({
+    db,
     pool,
-    listsAsync,
     logger,
     responseCache,
     app,
@@ -132,6 +133,7 @@ module.exports = (app, deps) => {
 
   // Create list service
   const listService = createListService({
+    db,
     pool,
     logger,
     listsAsync,
@@ -145,6 +147,7 @@ module.exports = (app, deps) => {
 
   // Create group service
   const groupService = createGroupService({
+    db,
     pool,
     logger,
     crypto,
@@ -155,6 +158,7 @@ module.exports = (app, deps) => {
 
   // Create album service
   const albumService = createAlbumService({
+    db,
     pool,
     logger,
     upsertAlbumRecord: helpers.upsertAlbumRecord,
@@ -162,12 +166,14 @@ module.exports = (app, deps) => {
   });
 
   const externalIdentityService = createExternalIdentityService({
+    db,
     pool,
     logger,
   });
 
   // Create recommendation service
   const recommendationService = createRecommendationService({
+    db,
     pool,
     logger,
     crypto,
@@ -178,6 +184,7 @@ module.exports = (app, deps) => {
   const sharedDeps = {
     // Core dependencies
     app,
+    db,
     pool,
     logger,
     crypto,

@@ -27,19 +27,30 @@ function createYearLock(deps = {}) {
   const TransactionAbort =
     deps.TransactionAbort || require('../db/transaction').TransactionAbort;
 
+  /** Accept a canonical datastore (.raw) or a legacy pg Pool (.query). */
+  function asDb(dbOrPool) {
+    if (dbOrPool && typeof dbOrPool.raw === 'function') return dbOrPool;
+    if (dbOrPool && typeof dbOrPool.query === 'function') {
+      return { raw: (sql, params) => dbOrPool.query(sql, params) };
+    }
+    throw new Error('year-lock: expected a datastore with .raw() or a pg Pool');
+  }
+
   /**
-   * Check if a year is locked
-   * @param {object} pool - PostgreSQL connection pool
-   * @param {number|null} year - Year to check
-   * @returns {Promise<boolean>} - True if year is locked, false otherwise
+   * Check if a year is locked.
+   * @param {{ raw: Function } | import('pg').Pool} dbOrPool
+   * @param {number|null} year
+   * @returns {Promise<boolean>}
    */
-  async function isYearLocked(pool, year) {
+  async function isYearLocked(dbOrPool, year) {
     if (!year) return false; // null/undefined years can't be locked
 
     try {
-      const result = await pool.query(
+      const db = asDb(dbOrPool);
+      const result = await db.raw(
         'SELECT locked FROM master_lists WHERE year = $1',
-        [year]
+        [year],
+        { name: 'year-lock-check', retryable: true }
       );
 
       return result.rows.length > 0 && result.rows[0].locked === true;

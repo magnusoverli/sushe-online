@@ -1,11 +1,20 @@
+/**
+ * @param {object} poolOrDb - pg Pool (legacy) or datastore with .raw().
+ */
 function createRecommendationsNotifier(
-  pool,
+  poolOrDb,
   apiRequest,
   uploadPhoto,
   configManager,
   log
 ) {
-  const db = pool ? { raw: (sql, params) => pool.query(sql, params) } : null;
+  const db =
+    poolOrDb && typeof poolOrDb.raw === 'function'
+      ? poolOrDb
+      : poolOrDb
+        ? { raw: (sql, params) => poolOrDb.query(sql, params) }
+        : null;
+  const pool = db; // legacy name used for null-check in bodies
 
   async function getThreads() {
     if (!pool) return [];

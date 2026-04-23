@@ -38,11 +38,11 @@ function createGroupService(deps = {}) {
 
   // Unified DB facade. pool kept in scope for withTransaction callers.
   const db =
-    deps.listGroupsAsync ||
-    deps.listsAsync ||
-    deps.usersAsync ||
+    deps.db ||
     (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
-  if (!db) throw new Error('group-service requires a datastore or pool');
+  if (!db) {
+    throw new Error('group-service requires deps.db (or legacy deps.pool)');
+  }
 
   /**
    * Get all groups for a user (with list counts).

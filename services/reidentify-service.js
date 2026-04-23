@@ -23,11 +23,17 @@ const {
  * @param {Object} deps.logger - Logger instance
  * @param {Function} deps.fetchFn - Fetch function (for testability)
  */
+// eslint-disable-next-line max-lines-per-function -- Cohesive reidentification service with related internal helpers
 function createReidentifyService(deps = {}) {
   const pool = deps.pool;
   const db =
     deps.db ||
     (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
+  if (!db) {
+    throw new Error(
+      'reidentify-service requires deps.db (or legacy deps.pool)'
+    );
+  }
   const logger = deps.logger || defaultLogger;
   const fetchFn = deps.fetchFn || fetch;
 

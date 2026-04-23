@@ -37,6 +37,8 @@ function initializeQueues(pool) {
  * @returns {Function} stopSyncServices cleanup function
  */
 function startSyncServices(pool) {
+  // Canonical datastore for services that use .raw() instead of pool.query.
+  const { db } = require('../db');
   const cleanupTasks = [];
 
   // Start preference sync service (only in production or if explicitly enabled)
@@ -45,7 +47,7 @@ function startSyncServices(pool) {
     process.env.ENABLE_PREFERENCE_SYNC === 'true'
   ) {
     try {
-      const syncService = createPreferenceSyncService({ pool, logger });
+      const syncService = createPreferenceSyncService({ db, pool, logger });
       syncService.start();
 
       cleanupTasks.push(async () => {
@@ -70,6 +72,7 @@ function startSyncServices(pool) {
   ) {
     try {
       const playcountSyncService = createPlaycountSyncService({
+        db,
         pool,
         logger,
       });

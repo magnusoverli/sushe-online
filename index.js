@@ -64,6 +64,7 @@ const {
   listsAsync,
   listItemsAsync,
   albumsAsync,
+  db,
   dataDir,
   ready,
   pool,
@@ -253,8 +254,8 @@ const userService = createUserService({
   logger,
   invalidateUserCache,
 });
-const duplicateService = createDuplicateService({ pool, logger });
-const reidentifyService = createReidentifyService({ pool, logger });
+const duplicateService = createDuplicateService({ db, pool, logger });
+const reidentifyService = createReidentifyService({ db, pool, logger });
 
 const deps = {
   htmlTemplate,
@@ -291,6 +292,7 @@ const deps = {
   sanitizeUser,
   adminCodeState,
   dataDir,
+  db,
   pool,
   passport,
   invalidateUserCache,

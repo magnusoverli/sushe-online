@@ -343,9 +343,7 @@ function createAlbumSummaryService(deps = {}) {
 
   // Unified DB facade. Uses pool directly (still needed for pool.connect()
   // in the advisory-lock path) but routes all one-shot queries through .raw().
-  const db = deps.albumsAsync ||
-    deps.listsAsync ||
-    deps.usersAsync || { raw: (sql, params) => pool.query(sql, params) };
+  const db = deps.db || { raw: (sql, params) => pool.query(sql, params) };
 
   // Batch job state
   let batchJob = null;

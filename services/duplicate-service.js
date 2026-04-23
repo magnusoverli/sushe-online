@@ -244,11 +244,11 @@ function createDuplicateService(deps = {}) {
   const logger = deps.logger || defaultLogger;
   // Unified DB facade. pool is retained for helpers that still use pool.connect().
   const db =
-    deps.albumsAsync ||
-    deps.listsAsync ||
-    deps.usersAsync ||
+    deps.db ||
     (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
-  if (!db) throw new Error('duplicate-service requires a datastore or pool');
+  if (!db) {
+    throw new Error('duplicate-service requires deps.db (or legacy deps.pool)');
+  }
 
   function getBlockingKeys(album) {
     const normalizedArtist = normalizeForComparison(album.artist || '');

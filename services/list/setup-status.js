@@ -1,11 +1,13 @@
 function createSetupStatus(deps = {}) {
-  const { listsAsync, pool } = deps;
-  // Prefer datastore; fall back to pool adapter for legacy callers.
+  const { pool } = deps;
+  // Prefer the canonical db; fall back to a pool adapter for legacy callers.
   const db =
-    listsAsync ||
+    deps.db ||
+    deps.listsAsync || // long-standing dep name honored for callers mid-migration
     (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
-
-  if (!db) throw new Error('listsAsync (or legacy pool) is required');
+  if (!db) {
+    throw new Error('setup-status requires deps.db (or legacy deps.pool)');
+  }
 
   async function getSetupStatus(userId, user) {
     const result = await db.raw(

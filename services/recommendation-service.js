@@ -28,6 +28,11 @@ function createRecommendationService(deps = {}) {
   const db =
     deps.db ||
     (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
+  if (!db) {
+    throw new Error(
+      'recommendation-service requires deps.db (or legacy deps.pool)'
+    );
+  }
   const logger = deps.logger || defaultLogger;
   const crypto = deps.crypto || require('crypto');
   const { upsertAlbumRecord } = deps;

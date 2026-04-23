@@ -146,19 +146,9 @@ test('createEvent should default to normal priority', async () => {
   assert.strictEqual(event.priority, 'normal');
 });
 
-test('createEvent should throw without db', async () => {
+test('createAdminEventService should throw at construction without db/pool', () => {
   const logger = createMockLogger();
-  const service = createAdminEventService({ logger });
-
-  await assert.rejects(
-    async () => {
-      await service.createEvent({
-        type: 'test',
-        title: 'Test',
-      });
-    },
-    { message: 'Database datastore not configured' }
-  );
+  assert.throws(() => createAdminEventService({ logger }), /requires deps\.db/);
 });
 
 // =============================================================================
@@ -388,14 +378,9 @@ test('getPendingCount should return count of pending events', async () => {
   assert.strictEqual(count, 2);
 });
 
-test('getPendingCount should return 0 without pool', async () => {
-  const logger = createMockLogger();
-  const service = createAdminEventService({ logger });
-
-  const count = await service.getPendingCount();
-
-  assert.strictEqual(count, 0);
-});
+// NOTE: was "return 0 without pool" — the factory now refuses to build without
+// a db/pool, so the equivalent contract is enforced at construction time and
+// covered by 'createAdminEventService should throw at construction ...' above.
 
 // =============================================================================
 // getPendingCountsByPriority tests

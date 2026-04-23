@@ -222,8 +222,8 @@ function createImageRefetchService(deps = {}) {
     (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
   const log = deps.logger || logger;
 
-  if (!pool) {
-    throw new Error('PostgreSQL pool is required');
+  if (!db) {
+    throw new Error('image-refetch requires deps.db (or legacy deps.pool)');
   }
 
   // Job state

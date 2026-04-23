@@ -12,7 +12,7 @@ const { createAsyncHandler } = require('../../middleware/async-handler');
  * @param {Object} deps - Dependencies
  */
 module.exports = (app, deps) => {
-  const { pool, logger, usersAsync } = deps;
+  const { db, pool, logger, usersAsync } = deps;
   const asyncHandler = createAsyncHandler(logger);
 
   const { createTelegramNotifier } = require('../../services/telegram');
@@ -26,7 +26,7 @@ module.exports = (app, deps) => {
       // If not available, create a temporary one for verification
       let telegramNotifier = app.locals.telegramNotifier;
       if (!telegramNotifier) {
-        telegramNotifier = createTelegramNotifier({ pool, logger });
+        telegramNotifier = createTelegramNotifier({ db, pool, logger });
       }
 
       // Verify the webhook secret
@@ -87,7 +87,7 @@ module.exports = (app, deps) => {
           let adminEventService = app.locals.adminEventService;
           if (!adminEventService) {
             adminEventService = createAdminEventService({
-              db: usersAsync,
+              db: db || usersAsync,
               logger,
               telegramNotifier,
             });

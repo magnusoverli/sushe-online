@@ -15,11 +15,11 @@ const logger = require('../../utils/logger');
 const { createAdminEventService } = require('../../services/admin-events');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin, usersAsync } = deps;
+  const { ensureAuth, ensureAdmin, db, usersAsync } = deps;
 
   // Create admin event service instance
   const adminEventService = createAdminEventService({
-    db: usersAsync,
+    db: db || usersAsync, // canonical db preferred, usersAsync as legacy fallback
     logger,
   });
 

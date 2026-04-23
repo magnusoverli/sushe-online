@@ -21,16 +21,19 @@ const { TransactionAbort } = require('../../db/transaction');
  * @returns {Object} - Helper functions
  */
 function createHelpers(deps) {
-  const { pool, logger, responseCache, app, crypto, listsAsync } = deps;
-  // Prefer the datastore for standalone queries; fall back to a pool adapter.
+  const { pool, logger, responseCache, app, crypto } = deps;
+  // Prefer canonical db; fall back to a pool adapter for legacy callers.
   const db =
-    listsAsync ||
+    deps.db ||
     (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
 
   // Create aggregate list instance for recomputation triggers
-  const aggregateList = createAggregateList({ pool, logger });
+  const aggregateList = createAggregateList({ db, pool, logger });
 
-  // Create album canonical instance for deduplication
+  // Create album canonical instance for deduplication.
+  // album-canonical speaks pg-native (pool.query / client.query) because it
+  // accepts a transaction client interchangeably — it is not consolidated
+  // onto .raw() in this pass. Passing `pool` is correct.
   const albumCanonical = createAlbumCanonical({ pool, logger });
 
   /**
