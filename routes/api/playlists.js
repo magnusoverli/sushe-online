@@ -15,7 +15,6 @@ module.exports = (app, deps) => {
   const {
     ensureAuthAPI,
     userService,
-    users,
     logger,
     listService,
     playlistService,
@@ -24,7 +23,6 @@ module.exports = (app, deps) => {
   } = deps;
 
   const asyncHandler = createAsyncHandler(logger);
-  const tokenStore = userService || users;
 
   // Playlist management endpoint (by list ID)
   app.post(
@@ -80,7 +78,7 @@ module.exports = (app, deps) => {
         if (targetService === 'spotify') {
           const tokenResult = await ensureValidSpotifyToken(
             req.user,
-            tokenStore
+            userService
           );
           if (!tokenResult.success) {
             logger.warn('Spotify auth check failed', {
@@ -94,7 +92,10 @@ module.exports = (app, deps) => {
           }
           auth = tokenResult.spotifyAuth;
         } else {
-          const tokenResult = await ensureValidTidalToken(req.user, tokenStore);
+          const tokenResult = await ensureValidTidalToken(
+            req.user,
+            userService
+          );
           if (!tokenResult.success) {
             logger.warn('Tidal auth check failed', {
               error: tokenResult.error,

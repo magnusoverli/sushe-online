@@ -244,7 +244,7 @@ describe('ensureAuth', () => {
 // =============================================================================
 
 describe('createEnsureAuthAPI', () => {
-  let mockUsersAsync;
+  let mockAuthService;
   let mockPool;
   let mockValidateExtensionToken;
   let mockRecordActivity;
@@ -252,10 +252,11 @@ describe('createEnsureAuthAPI', () => {
   let ensureAuthAPI;
 
   beforeEach(() => {
-    mockUsersAsync = {
-      findOne: mock.fn(() =>
+    mockAuthService = {
+      getUserById: mock.fn(() =>
         Promise.resolve({ _id: 'user123', email: 'test@example.com' })
       ),
+      updateLastActivity: mock.fn(() => Promise.resolve(true)),
     };
     mockPool = {};
     mockValidateExtensionToken = mock.fn(() => Promise.resolve('user123'));
@@ -267,8 +268,8 @@ describe('createEnsureAuthAPI', () => {
     };
 
     ensureAuthAPI = createEnsureAuthAPI({
-      usersAsync: mockUsersAsync,
-      pool: mockPool,
+      authService: mockAuthService,
+      db: mockPool,
       validateExtensionToken: mockValidateExtensionToken,
       recordActivity: mockRecordActivity,
       logger: mockLogger,
@@ -287,6 +288,10 @@ describe('createEnsureAuthAPI', () => {
 
     assert.strictEqual(next.mock.calls.length, 1);
     assert.strictEqual(mockRecordActivity.mock.calls.length, 1);
+    assert.strictEqual(
+      mockRecordActivity.mock.calls[0].arguments[1],
+      mockAuthService
+    );
   });
 
   it('should validate bearer token and load user', async () => {
@@ -315,8 +320,8 @@ describe('createEnsureAuthAPI', () => {
   it('should return 401 for invalid token', async () => {
     mockValidateExtensionToken = mock.fn(() => Promise.resolve(null));
     ensureAuthAPI = createEnsureAuthAPI({
-      usersAsync: mockUsersAsync,
-      pool: mockPool,
+      authService: mockAuthService,
+      db: mockPool,
       validateExtensionToken: mockValidateExtensionToken,
       recordActivity: mockRecordActivity,
       logger: mockLogger,
@@ -344,7 +349,7 @@ describe('createEnsureAuthAPI', () => {
   });
 
   it('should return 401 when user not found for valid token', async () => {
-    mockUsersAsync.findOne = mock.fn(() => Promise.resolve(null));
+    mockAuthService.getUserById = mock.fn(() => Promise.resolve(null));
 
     const jsonMock = mock.fn();
     const req = {
@@ -401,8 +406,8 @@ describe('createEnsureAuthAPI', () => {
       Promise.reject(new Error('Validation failed'))
     );
     ensureAuthAPI = createEnsureAuthAPI({
-      usersAsync: mockUsersAsync,
-      pool: mockPool,
+      authService: mockAuthService,
+      db: mockPool,
       validateExtensionToken: mockValidateExtensionToken,
       recordActivity: mockRecordActivity,
       logger: mockLogger,

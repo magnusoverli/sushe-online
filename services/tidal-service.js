@@ -19,16 +19,18 @@ const {
 /**
  * @param {Object} deps
  * @param {Object} deps.fetch - Fetch implementation
- * @param {Object} [deps.userService] - User service for persistence
- * @param {Object} [deps.usersAsync] - Async user datastore (legacy fallback)
+ * @param {Object} deps.userService - User service for persistence
  * @param {Object} [deps.logger] - Logger instance
  * @returns {Object} Tidal service methods
  */
 function createTidalService(deps = {}) {
   const fetch = deps.fetch || globalThis.fetch;
   const userService = deps.userService;
-  const usersAsync = deps.usersAsync;
   const logger = deps.logger || require('../utils/logger');
+
+  if (!userService) {
+    throw new Error('tidal-service requires deps.userService');
+  }
 
   /**
    * Build common Tidal API request headers.
@@ -67,26 +69,12 @@ function createTidalService(deps = {}) {
         const countryCode = profileData?.data?.attributes?.country || 'US';
 
         // Save for future requests (fire-and-forget)
-        if (typeof userService?.setTidalCountry === 'function') {
-          userService.setTidalCountry(user._id, countryCode).catch((err) =>
-            logger.error('Failed to save Tidal country', {
-              error: err.message,
-              userId: user._id,
-            })
-          );
-        } else if (usersAsync) {
-          usersAsync
-            .update(
-              { _id: user._id },
-              { $set: { tidalCountry: countryCode, updatedAt: new Date() } }
-            )
-            .catch((err) =>
-              logger.error('Failed to save Tidal country', {
-                error: err.message,
-                userId: user._id,
-              })
-            );
-        }
+        userService.setTidalCountry(user._id, countryCode).catch((err) =>
+          logger.error('Failed to save Tidal country', {
+            error: err.message,
+            userId: user._id,
+          })
+        );
 
         return countryCode;
       }

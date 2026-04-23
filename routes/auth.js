@@ -38,7 +38,6 @@ module.exports = (app, deps) => {
     ensureAuth,
     ensureAuthAPI,
     rateLimitAdminRequest,
-    usersAsync,
     isValidEmail,
     isValidUsername,
     isValidPassword,
@@ -195,19 +194,7 @@ module.exports = (app, deps) => {
       const timestamp = new Date();
       req.user.lastActivity = timestamp;
       req.session.lastActivityUpdatedAt = Date.now();
-      if (typeof userService?.updateLastActivity === 'function') {
-        await userService.updateLastActivity(req.user._id, timestamp);
-      } else if (db) {
-        await db.raw('UPDATE users SET last_activity = $1 WHERE _id = $2', [
-          timestamp,
-          req.user._id,
-        ]);
-      } else {
-        await usersAsync.update(
-          { _id: req.user._id },
-          { $set: { lastActivity: timestamp } }
-        );
-      }
+      await userService.updateLastActivity(req.user._id, timestamp);
 
       try {
         await saveSessionAsync(req);

@@ -23,13 +23,21 @@ function createTestApp(overrides = {}) {
     next();
   });
 
-  const usersAsync = {
-    findOne:
-      overrides.findOne ||
+  const authService = {
+    getUserByEmail:
+      overrides.getUserByEmail ||
       mock.fn(() =>
         Promise.resolve({ _id: 'user-1', email: 'user@example.com' })
       ),
-    update: overrides.update || mock.fn(() => Promise.resolve(1)),
+    issuePasswordResetToken:
+      overrides.issuePasswordResetToken || mock.fn(() => Promise.resolve(1)),
+    getUserByResetToken:
+      overrides.getUserByResetToken ||
+      mock.fn(() =>
+        Promise.resolve({ _id: 'user-1', email: 'user@example.com' })
+      ),
+    resetPasswordByToken:
+      overrides.resetPasswordByToken || mock.fn(() => Promise.resolve(1)),
   };
 
   const bcrypt = {
@@ -37,13 +45,10 @@ function createTestApp(overrides = {}) {
   };
 
   const deps = {
-    users: {
-      findOne: mock.fn((_query, callback) => callback(null, null)),
-    },
-    usersAsync,
     logger: { info() {}, warn() {}, error() {}, debug() {} },
     crypto: require('crypto'),
     bcrypt,
+    authService,
     nodemailer: {
       createTransport: () => ({ sendMail: () => Promise.resolve() }),
     },
@@ -62,12 +67,12 @@ function createTestApp(overrides = {}) {
 
   require('../routes/api/password-reset')(app, deps);
 
-  return { app, usersAsync, bcrypt };
+  return { app, authService, bcrypt };
 }
 
 describe('password-reset routes', () => {
   it('rejects weak password before hashing on reset', async () => {
-    const { app, bcrypt, usersAsync } = createTestApp({
+    const { app, bcrypt, authService } = createTestApp({
       isValidPassword: () => false,
     });
 
@@ -78,11 +83,11 @@ describe('password-reset routes', () => {
     assert.strictEqual(response.status, 302);
     assert.strictEqual(response.headers.location, '/reset/test-token');
     assert.strictEqual(bcrypt.hash.mock.calls.length, 0);
-    assert.strictEqual(usersAsync.update.mock.calls.length, 0);
+    assert.strictEqual(authService.resetPasswordByToken.mock.calls.length, 0);
   });
 
   it('hashes and updates when password is valid', async () => {
-    const { app, bcrypt, usersAsync } = createTestApp();
+    const { app, bcrypt, authService } = createTestApp();
 
     const response = await request(app)
       .post('/reset/test-token')
@@ -91,6 +96,6 @@ describe('password-reset routes', () => {
     assert.strictEqual(response.status, 302);
     assert.strictEqual(response.headers.location, '/login');
     assert.strictEqual(bcrypt.hash.mock.calls.length, 1);
-    assert.strictEqual(usersAsync.update.mock.calls.length, 1);
+    assert.strictEqual(authService.resetPasswordByToken.mock.calls.length, 1);
   });
 });

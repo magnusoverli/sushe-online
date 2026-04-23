@@ -15,33 +15,11 @@
 const logger = require('../../utils/logger');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, userService, usersAsync } = deps;
-  const setLastfmAuth =
-    typeof userService?.setLastfmAuth === 'function'
-      ? (userId, auth, username) =>
-          userService.setLastfmAuth(userId, auth, username)
-      : (userId, auth, username) =>
-          usersAsync.update(
-            { _id: userId },
-            {
-              $set: {
-                lastfmAuth: auth,
-                lastfmUsername: username,
-                updatedAt: new Date(),
-              },
-            }
-          );
-  const clearLastfmAuth =
-    typeof userService?.clearLastfmAuth === 'function'
-      ? (userId) => userService.clearLastfmAuth(userId)
-      : (userId) =>
-          usersAsync.update(
-            { _id: userId },
-            {
-              $unset: { lastfmAuth: true, lastfmUsername: true },
-              $set: { updatedAt: new Date() },
-            }
-          );
+  const { ensureAuth, userService } = deps;
+
+  if (!userService) {
+    throw new Error('lastfm oauth routes require userService');
+  }
 
   // Initiate Last.fm auth flow
   app.get('/auth/lastfm', ensureAuth, (req, res) => {
@@ -90,7 +68,11 @@ module.exports = (app, deps) => {
       // Await the database update to ensure it completes before redirect
       // This prevents a race condition where the settings page loads before
       // the database has been updated
-      await setLastfmAuth(req.user._id, lastfmAuth, sessionData.username);
+      await userService.setLastfmAuth(
+        req.user._id,
+        lastfmAuth,
+        sessionData.username
+      );
 
       logger.info('Last.fm connected', {
         email: req.user.email,
@@ -118,7 +100,7 @@ module.exports = (app, deps) => {
 
     try {
       // Await the database update to ensure it completes before redirect
-      await clearLastfmAuth(req.user._id);
+      await userService.clearLastfmAuth(req.user._id);
 
       req.flash('success', 'Disconnected from Last.fm');
     } catch (err) {

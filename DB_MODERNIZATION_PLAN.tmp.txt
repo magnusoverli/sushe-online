@@ -38,6 +38,9 @@ Commit Log
   and updated composition to inject `usersRepository`/`userService` as token stores.
 - in progress: Added list/list-item repository seams and moved playlist/track-pick/
   list-summary API routes to list service methods backed by repositories.
+- in progress: Removed remaining route-level `usersAsync` fallbacks (auth, admin,
+  API/OAuth seams), tightened service-auth + tidal-service + auth middleware to
+  require service-level contracts, and aligned focused regression tests.
 
 Legend
 - [ ] pending

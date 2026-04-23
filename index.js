@@ -222,13 +222,6 @@ app.use((req, res, next) => {
 // ============ AUTH MIDDLEWARE ============
 
 const { validateExtensionToken } = require('./utils/auth-utils');
-const ensureAuthAPI = createEnsureAuthAPI({
-  db,
-  usersRepository,
-  validateExtensionToken,
-  recordActivity: (req, _queryable) => recordActivityBase(req, usersRepository),
-  logger,
-});
 
 const rateLimitAdminRequest = createRateLimitAdminRequest({
   adminCodeAttempts: adminCodeState.adminCodeAttempts,
@@ -267,6 +260,14 @@ const userService = createUserService({
 });
 const duplicateService = createDuplicateService({ db, logger });
 const reidentifyService = createReidentifyService({ db, logger });
+
+const ensureAuthAPI = createEnsureAuthAPI({
+  authService,
+  db,
+  validateExtensionToken,
+  recordActivity: (req, queryable) => recordActivityBase(req, queryable),
+  logger,
+});
 
 const deps = {
   htmlTemplate,

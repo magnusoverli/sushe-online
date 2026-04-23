@@ -298,10 +298,50 @@ function createTestApp(options = {}) {
   const mockInvalidateUserCache =
     options.invalidateUserCache || mock.fn(() => {});
 
+  const mockUserService = options.userService || {
+    deleteUser:
+      options.userServiceDeleteUser ||
+      ((userId) =>
+        new Promise((resolve, reject) => {
+          mockLists.remove({ userId }, { multi: true }, (listErr) => {
+            if (listErr) {
+              listErr.userFacingMessage = 'Error deleting user data';
+              return reject(listErr);
+            }
+
+            mockUsers.remove({ _id: userId }, {}, (userErr, numRemoved) => {
+              if (userErr) return reject(userErr);
+              resolve(numRemoved > 0);
+            });
+          });
+        })),
+    setAdminRole:
+      options.userServiceSetAdminRole ||
+      ((userId, isAdmin) =>
+        mockUsersAsync.update(
+          { _id: userId },
+          isAdmin
+            ? { $set: { role: 'admin', adminGrantedAt: new Date() } }
+            : { $unset: { role: true, adminGrantedAt: true } }
+        )),
+    getUserLists:
+      options.userServiceGetUserLists ||
+      (async (userId) => {
+        const userLists = await mockListsAsync.findWithCounts({ userId });
+        return userLists.map((list) => ({
+          name: list.name,
+          albumCount: list.itemCount,
+          createdAt: list.createdAt,
+          updatedAt: list.updatedAt,
+        }));
+      }),
+  };
+
   // Create deps object
   const deps = {
     ensureAuth,
     ensureAdmin,
+    userService: mockUserService,
     users: mockUsers,
     usersAsync: mockUsersAsync,
     lists: mockLists,

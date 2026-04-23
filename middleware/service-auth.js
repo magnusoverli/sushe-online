@@ -12,8 +12,7 @@
  * @param {Object} deps - Dependencies
  * @param {Function} deps.ensureValidSpotifyToken - Spotify token validation function
  * @param {Function} deps.ensureValidTidalToken - Tidal token validation function
- * @param {Object} [deps.userService] - User service with saveOAuthToken()
- * @param {Object} [deps.users] - Legacy users database instance
+ * @param {Object} deps.userService - User service with saveOAuthToken()
  * @param {Object} deps.logger - Logger instance
  * @returns {Object} - Middleware functions
  */
@@ -22,10 +21,11 @@ function createServiceAuthMiddleware(deps) {
     ensureValidSpotifyToken,
     ensureValidTidalToken,
     userService,
-    users,
     logger,
   } = deps;
-  const tokenStore = userService || users;
+  if (!userService) {
+    throw new Error('service-auth middleware requires deps.userService');
+  }
 
   /**
    * Factory to create token validation middleware for an external service.
@@ -46,7 +46,7 @@ function createServiceAuthMiddleware(deps) {
   }) {
     return async (req, res, next) => {
       try {
-        const tokenResult = await ensureValidToken(req.user, tokenStore);
+        const tokenResult = await ensureValidToken(req.user, userService);
         if (!tokenResult.success) {
           logger.warn(`${service} auth check failed`, {
             error: tokenResult.error,

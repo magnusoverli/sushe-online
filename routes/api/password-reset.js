@@ -14,7 +14,6 @@
  */
 module.exports = (app, deps) => {
   const {
-    usersAsync,
     logger,
     crypto,
     bcrypt,
@@ -36,48 +35,16 @@ module.exports = (app, deps) => {
       ? isValidPassword
       : (password) => typeof password === 'string' && password.length >= 8;
 
-  const getUserByEmail =
-    typeof authService?.getUserByEmail === 'function'
-      ? (email) => authService.getUserByEmail(email)
-      : (email) => usersAsync.findOne({ email });
+  if (!authService) {
+    throw new Error('password-reset routes require authService');
+  }
 
+  const getUserByEmail = authService.getUserByEmail.bind(authService);
   const issuePasswordResetToken =
-    typeof authService?.issuePasswordResetToken === 'function'
-      ? (userId, token, expiresMs) =>
-          authService.issuePasswordResetToken(userId, token, expiresMs)
-      : (userId, token, expiresMs) =>
-          usersAsync.update(
-            { _id: userId },
-            { $set: { resetToken: token, resetExpires: expiresMs } }
-          );
-
-  const getUserByResetToken =
-    typeof authService?.getUserByResetToken === 'function'
-      ? (token) => authService.getUserByResetToken(token)
-      : (token) =>
-          usersAsync.findOne({
-            resetToken: token,
-            resetExpires: { $gt: Date.now() },
-          });
-
+    authService.issuePasswordResetToken.bind(authService);
+  const getUserByResetToken = authService.getUserByResetToken.bind(authService);
   const resetPasswordByToken =
-    typeof authService?.resetPasswordByToken === 'function'
-      ? (token, nowMs, hash) =>
-          authService.resetPasswordByToken(token, nowMs, hash)
-      : async (token, nowMs, hash) => {
-          const user = await usersAsync.findOne({
-            resetToken: token,
-            resetExpires: { $gt: nowMs },
-          });
-          if (!user) return 0;
-          return usersAsync.update(
-            { _id: user._id },
-            {
-              $set: { hash },
-              $unset: { resetToken: true, resetExpires: true },
-            }
-          );
-        };
+    authService.resetPasswordByToken.bind(authService);
 
   // Forgot password page
   app.get('/forgot', csrfProtection, (req, res) => {

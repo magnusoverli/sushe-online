@@ -52,7 +52,7 @@ test('Service Auth Middleware', async (t) => {
         const { requireSpotifyAuth } = createServiceAuthMiddleware({
           ensureValidSpotifyToken,
           ensureValidTidalToken: async () => ({}),
-          users: {},
+          userService: {},
           logger: mockLogger,
         });
 
@@ -84,7 +84,7 @@ test('Service Auth Middleware', async (t) => {
       const { requireSpotifyAuth } = createServiceAuthMiddleware({
         ensureValidSpotifyToken,
         ensureValidTidalToken: async () => ({}),
-        users: {},
+        userService: {},
         logger: mockLogger,
       });
 
@@ -115,7 +115,7 @@ test('Service Auth Middleware', async (t) => {
         const { requireSpotifyAuth } = createServiceAuthMiddleware({
           ensureValidSpotifyToken,
           ensureValidTidalToken: async () => ({}),
-          users: {},
+          userService: {},
           logger: mockLogger,
         });
 
@@ -147,7 +147,7 @@ test('Service Auth Middleware', async (t) => {
         const { requireSpotifyAuth } = createServiceAuthMiddleware({
           ensureValidSpotifyToken,
           ensureValidTidalToken: async () => ({}),
-          users: {},
+          userService: {},
           logger: mockLogger,
         });
 
@@ -177,7 +177,7 @@ test('Service Auth Middleware', async (t) => {
         const { requireTidalAuth } = createServiceAuthMiddleware({
           ensureValidSpotifyToken: async () => ({}),
           ensureValidTidalToken,
-          users: {},
+          userService: {},
           logger: mockLogger,
         });
 
@@ -209,7 +209,7 @@ test('Service Auth Middleware', async (t) => {
       const { requireTidalAuth } = createServiceAuthMiddleware({
         ensureValidSpotifyToken: async () => ({}),
         ensureValidTidalToken,
-        users: {},
+        userService: {},
         logger: mockLogger,
       });
 
@@ -240,7 +240,7 @@ test('Service Auth Middleware', async (t) => {
         const { requireTidalAuth } = createServiceAuthMiddleware({
           ensureValidSpotifyToken: async () => ({}),
           ensureValidTidalToken,
-          users: {},
+          userService: {},
           logger: mockLogger,
         });
 
@@ -272,7 +272,7 @@ test('Service Auth Middleware', async (t) => {
         const { requireTidalAuth } = createServiceAuthMiddleware({
           ensureValidSpotifyToken: async () => ({}),
           ensureValidTidalToken,
-          users: {},
+          userService: {},
           logger: mockLogger,
         });
 
@@ -293,7 +293,7 @@ test('Service Auth Middleware', async (t) => {
         const { requireLastfmAuth } = createServiceAuthMiddleware({
           ensureValidSpotifyToken: async () => ({}),
           ensureValidTidalToken: async () => ({}),
-          users: {},
+          userService: {},
           logger: mockLogger,
         });
 
@@ -319,7 +319,7 @@ test('Service Auth Middleware', async (t) => {
         const { requireLastfmAuth } = createServiceAuthMiddleware({
           ensureValidSpotifyToken: async () => ({}),
           ensureValidTidalToken: async () => ({}),
-          users: {},
+          userService: {},
           logger: mockLogger,
         });
 
@@ -347,7 +347,7 @@ test('Service Auth Middleware', async (t) => {
         const { requireLastfmAuth } = createServiceAuthMiddleware({
           ensureValidSpotifyToken: async () => ({}),
           ensureValidTidalToken: async () => ({}),
-          users: {},
+          userService: {},
           logger: mockLogger,
         });
 
@@ -375,7 +375,7 @@ test('Service Auth Middleware', async (t) => {
         const { requireLastfmSessionKey } = createServiceAuthMiddleware({
           ensureValidSpotifyToken: async () => ({}),
           ensureValidTidalToken: async () => ({}),
-          users: {},
+          userService: {},
           logger: mockLogger,
         });
 
@@ -399,7 +399,7 @@ test('Service Auth Middleware', async (t) => {
       const { requireLastfmSessionKey } = createServiceAuthMiddleware({
         ensureValidSpotifyToken: async () => ({}),
         ensureValidTidalToken: async () => ({}),
-        users: {},
+        userService: {},
         logger: mockLogger,
       });
 
@@ -426,7 +426,7 @@ test('Service Auth Middleware', async (t) => {
         const { requireLastfmSessionKey } = createServiceAuthMiddleware({
           ensureValidSpotifyToken: async () => ({}),
           ensureValidTidalToken: async () => ({}),
-          users: {},
+          userService: {},
           logger: mockLogger,
         });
 

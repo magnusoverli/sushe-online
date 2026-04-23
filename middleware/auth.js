@@ -106,7 +106,7 @@ function ensureAuth(req, res, next) {
  * Supports both session and bearer token authentication
  *
  * @param {Object} deps - Dependencies
- * @param {Object} [deps.usersAsync] - Optional users datastore used in tests
+ * @param {Object} deps.authService - Auth service with getUserById/updateLastActivity
  * @param {import('../db/types').DbFacade} deps.db - Canonical datastore
  * @param {Function} deps.validateExtensionToken - Token validation function
  * @param {Function} deps.recordActivity - Activity recording function
@@ -115,8 +115,6 @@ function ensureAuth(req, res, next) {
  */
 function createEnsureAuthAPI(deps) {
   const {
-    usersAsync,
-    usersRepository,
     authService,
     db,
     validateExtensionToken,
@@ -124,10 +122,14 @@ function createEnsureAuthAPI(deps) {
     logger,
   } = deps;
 
+  if (!authService) {
+    throw new Error('createEnsureAuthAPI requires deps.authService');
+  }
+
   return async function ensureAuthAPI(req, res, next) {
     // First check if authenticated via session
     if (req.isAuthenticated && req.isAuthenticated()) {
-      recordActivityFn(req, db || usersAsync);
+      recordActivityFn(req, authService);
       return next();
     }
 
@@ -141,44 +143,7 @@ function createEnsureAuthAPI(deps) {
 
         if (userId) {
           // Load user and attach to request
-          const user = authService?.getUserById
-            ? await authService.getUserById(userId)
-            : usersRepository?.findById
-              ? await usersRepository.findById(userId)
-              : usersAsync
-                ? await usersAsync.findOne({ _id: userId })
-                : await (async () => {
-                    const userResult = await db.raw(
-                      `SELECT _id, email, username, hash, accent_color, time_format, date_format,
-                          last_selected_list, role, spotify_auth, tidal_auth, music_service,
-                          lastfm_username, column_visibility, approval_status, last_activity
-                   FROM users
-                   WHERE _id = $1`,
-                      [userId],
-                      { name: 'ensure-auth-api-user-by-id', retryable: true }
-                    );
-                    const row = userResult.rows[0];
-                    return row
-                      ? {
-                          _id: row._id,
-                          email: row.email,
-                          username: row.username,
-                          hash: row.hash,
-                          accentColor: row.accent_color,
-                          timeFormat: row.time_format,
-                          dateFormat: row.date_format,
-                          lastSelectedList: row.last_selected_list,
-                          role: row.role,
-                          spotifyAuth: row.spotify_auth,
-                          tidalAuth: row.tidal_auth,
-                          musicService: row.music_service,
-                          lastfmUsername: row.lastfm_username,
-                          columnVisibility: row.column_visibility,
-                          approvalStatus: row.approval_status,
-                          lastActivity: row.last_activity,
-                        }
-                      : null;
-                  })();
+          const user = await authService.getUserById(userId);
           if (user) {
             req.user = user;
             // Mark this as token-based auth for logging
