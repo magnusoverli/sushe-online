@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Database retry + health utilities.
  *
@@ -70,7 +71,7 @@ function sleep(ms) {
  * @param {() => boolean} [opts.beforeFirstQuery] - If provided, return true iff
  *   the current failure occurred before any observable side effect (safe to retry
  *   even when not idempotent).
- * @param {(err: Error) => {kind: string}} [opts.classify=classify]
+ * @param {(err: *) => {kind: string, code?: string}} [opts.classify=classify]
  * @param {(ms: number) => Promise<void>} [opts.sleep=sleep]
  * @param {{ debug: Function, warn: Function }} [opts.logger]
  * @param {string} [opts.label] - Optional label for log context.

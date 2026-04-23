@@ -1,3 +1,4 @@
+// @ts-check
 const MigrationManager = require('./migrations');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
@@ -182,7 +183,9 @@ if (process.env.DATABASE_URL) {
     min: 2, // Keep fewer connections warm to reduce idle resource usage
     idleTimeoutMillis: 300000, // 5 minutes - release idle connections sooner
     connectionTimeoutMillis: 5000, // 5 seconds - more reasonable for production
-    acquireTimeoutMillis: 5000, // 5 seconds - prevent cascade failures
+    // Note: acquireTimeoutMillis was previously here but is not a valid pg
+    // PoolConfig option — pg uses connectionTimeoutMillis for both connect
+    // and acquire. Silently ignored by node-pg, removed for correctness.
     keepAlive: true, // Enable TCP keep-alive
     keepAliveInitialDelayMillis: 60000, // 60 seconds - less aggressive keep-alive probing
     statement_timeout: 60000, // 60 seconds for complex queries

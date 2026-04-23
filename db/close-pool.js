@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Graceful database pool shutdown.
  *

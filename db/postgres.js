@@ -1,3 +1,4 @@
+// @ts-check
 const { Pool } = require('pg');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
@@ -448,7 +449,11 @@ class PgDatastore {
         `SELECT COUNT(*) AS cnt FROM ${this.table} ${text}`,
         values
       );
-      return parseInt(res.rows[0].cnt, 10);
+      // rows[0] has shape { cnt: string } from the COUNT(*) AS cnt projection.
+      const row = /** @type {{ cnt: string }} */ (
+        /** @type {unknown} */ (res.rows[0])
+      );
+      return parseInt(row.cnt, 10);
     })();
     return this._callbackify(promise, cb);
   }
@@ -774,7 +779,10 @@ class PgDatastore {
       throw new Error('List item not found');
     }
 
-    const { primary_track, secondary_track } = current.rows[0];
+    const { primary_track, secondary_track } =
+      /** @type {{ primary_track: string|null, secondary_track: string|null }} */ (
+        /** @type {unknown} */ (current.rows[0])
+      );
     let newPrimary = primary_track;
     let newSecondary = secondary_track;
 
@@ -844,7 +852,10 @@ class PgDatastore {
         throw new Error('List item not found');
       }
 
-      const { primary_track, secondary_track } = current.rows[0];
+      const { primary_track, secondary_track } =
+        /** @type {{ primary_track: string|null, secondary_track: string|null }} */ (
+          /** @type {unknown} */ (current.rows[0])
+        );
       let newPrimary = primary_track;
       let newSecondary = secondary_track;
 

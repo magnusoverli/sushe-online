@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * PostgreSQL error classification.
  *
