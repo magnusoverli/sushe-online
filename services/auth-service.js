@@ -412,12 +412,12 @@ function createAuthService(deps = {}) {
   /**
    * Revoke an extension token owned by a specific user.
    *
-   * @param {Object} [_legacyPoolIgnored]
+   * @param {Object} [_unusedPoolArg]
    * @param {string} token
    * @param {string} userId
    * @returns {Promise<{ revoked: boolean }>}
    */
-  async function revokeExtensionToken(_legacyPoolIgnored, token, userId) {
+  async function revokeExtensionToken(_unusedPoolArg, token, userId) {
     const queryable = db || usersAsyncDep;
     const result = await queryable.raw(
       `UPDATE extension_tokens
@@ -432,11 +432,11 @@ function createAuthService(deps = {}) {
   /**
    * List all extension tokens for a user.
    *
-   * @param {Object} [_legacyPoolIgnored]
+   * @param {Object} [_unusedPoolArg]
    * @param {string} userId
    * @returns {Promise<Array>}
    */
-  async function listExtensionTokens(_legacyPoolIgnored, userId) {
+  async function listExtensionTokens(_unusedPoolArg, userId) {
     const queryable = db || usersAsyncDep;
     const result = await queryable.raw(
       `SELECT id, created_at, last_used_at, expires_at, user_agent, is_revoked
