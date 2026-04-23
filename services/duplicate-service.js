@@ -242,6 +242,13 @@ function compareCanonicalAlbums(a, b) {
 function createDuplicateService(deps = {}) {
   const pool = deps.pool;
   const logger = deps.logger || defaultLogger;
+  // Unified DB facade. pool is retained for helpers that still use pool.connect().
+  const db =
+    deps.albumsAsync ||
+    deps.listsAsync ||
+    deps.usersAsync ||
+    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
+  if (!db) throw new Error('duplicate-service requires a datastore or pool');
 
   function getBlockingKeys(album) {
     const normalizedArtist = normalizeForComparison(album.artist || '');
@@ -1123,7 +1130,7 @@ function createDuplicateService(deps = {}) {
       DEFAULT_CLUSTER_PAGE_SIZE
     );
 
-    const albumsResult = await pool.query(`
+    const albumsResult = await db.raw(`
       SELECT
         album_id,
         artist,
@@ -1144,7 +1151,7 @@ function createDuplicateService(deps = {}) {
       ORDER BY artist, album
     `);
 
-    const excludedPairsResult = await pool.query(
+    const excludedPairsResult = await db.raw(
       `SELECT album_id_1, album_id_2 FROM album_distinct_pairs`
     );
 
@@ -1172,7 +1179,7 @@ function createDuplicateService(deps = {}) {
 
     if (albums.length > 0) {
       const albumIds = albums.map((album) => album.album_id);
-      const refsResult = await pool.query(
+      const refsResult = await db.raw(
         `SELECT album_id, COUNT(*)::int AS list_refs
          FROM list_items
          WHERE album_id = ANY($1::text[])
@@ -1322,7 +1329,7 @@ function createDuplicateService(deps = {}) {
     const allIds = [canonicalId, ...retireIds];
     const existingTables = await getExistingDependentMergeTables(pool);
 
-    const albumsResult = await pool.query(
+    const albumsResult = await db.raw(
       `SELECT album_id, artist, album, release_date, country,
               genre_1, genre_2, tracks, cover_image, cover_image_format,
               summary, summary_source, summary_fetched_at
@@ -1343,7 +1350,7 @@ function createDuplicateService(deps = {}) {
     const existingRetireIds = retireIds.filter((id) => albumsById.has(id));
     const missingRetireIds = retireIds.filter((id) => !albumsById.has(id));
 
-    const impactedRowsResult = await pool.query(
+    const impactedRowsResult = await db.raw(
       `SELECT li.list_id, li.album_id,
               l.name AS list_name, l.year,
               l.user_id, u.username

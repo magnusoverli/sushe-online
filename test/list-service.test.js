@@ -13,6 +13,9 @@ function createServiceDeps(pool) {
       find: mock.fn(async () => []),
       findWithCounts: mock.fn(async () => []),
       findAllUserListsWithItems: mock.fn(async () => []),
+      // raw() now used by list-service for fetchRecommendationMaps, findListById,
+      // and dismissSetup; delegate to the test's pool mock.
+      raw: mock.fn((sql, params) => pool.query(sql, params)),
     },
     listItemsAsync: {
       count: mock.fn(async () => 0),

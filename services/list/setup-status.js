@@ -1,15 +1,20 @@
 function createSetupStatus(deps = {}) {
-  const { pool } = deps;
+  const { listsAsync, pool } = deps;
+  // Prefer datastore; fall back to pool adapter for legacy callers.
+  const db =
+    listsAsync ||
+    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
 
-  if (!pool) throw new Error('pool is required');
+  if (!db) throw new Error('listsAsync (or legacy pool) is required');
 
   async function getSetupStatus(userId, user) {
-    const result = await pool.query(
+    const result = await db.raw(
       `SELECT l._id, l.name, l.year, l.is_main, l.group_id, g.year as group_year
        FROM lists l
        LEFT JOIN list_groups g ON l.group_id = g.id
        WHERE l.user_id = $1`,
-      [userId]
+      [userId],
+      { name: 'setup-status-user-lists', retryable: true }
     );
 
     const listRows = result.rows;

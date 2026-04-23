@@ -130,17 +130,16 @@ function parseStatsRow(row) {
 
 /**
  * Invalidate caches for all users who have a specific album in their lists
- * @param {Object} params - Parameters
- * @param {Object} params.pool - PostgreSQL pool
- * @param {Object} params.responseCache - Response cache instance
- * @param {Object} params.logger - Logger instance
- * @param {string} params.albumId - Album ID to invalidate caches for
+ * @param {Object} db - Datastore with .raw() (any PgDatastore)
+ * @param {Object} responseCache - Response cache instance
+ * @param {Object} logger - Logger instance
+ * @param {string} albumId - Album ID to invalidate caches for
  */
-async function invalidateCachesForAlbum(pool, responseCache, logger, albumId) {
+async function invalidateCachesForAlbum(db, responseCache, logger, albumId) {
   if (!responseCache) return;
 
   try {
-    const result = await pool.query(
+    const result = await db.raw(
       `SELECT DISTINCT l.user_id 
        FROM lists l 
        JOIN list_items li ON li.list_id = l._id 
@@ -173,7 +172,7 @@ async function invalidateCachesForAlbum(pool, responseCache, logger, albumId) {
  * @param {Function} fetchNextPage - Function that returns next page of albums
  * @param {Function} fetchAndStoreSummary - Function to fetch and store summary
  * @param {Object} log - Logger instance
- * @param {Object} pool - Database pool (for batch cache invalidation)
+ * @param {Object} db - Datastore with .raw() (for batch cache invalidation)
  * @param {Object} responseCache - Response cache instance (for batch cache invalidation)
  */
 async function processBatchAlbumsPaged(
@@ -181,7 +180,7 @@ async function processBatchAlbumsPaged(
   fetchNextPage,
   fetchAndStoreSummary,
   log,
-  pool,
+  db,
   responseCache
 ) {
   // Concurrent processing configuration
@@ -296,10 +295,10 @@ async function processBatchAlbumsPaged(
     });
 
     // Batch cache invalidation: invalidate caches once at the end
-    if (responseCache && pool && processedAlbumIds.length > 0) {
+    if (responseCache && db && processedAlbumIds.length > 0) {
       try {
         // Use explicit album IDs instead of timestamps to avoid race conditions
-        const affectedUsers = await pool.query(
+        const affectedUsers = await db.raw(
           `SELECT DISTINCT l.user_id 
            FROM lists l 
            JOIN list_items li ON li.list_id = l._id 
@@ -342,6 +341,12 @@ function createAlbumSummaryService(deps = {}) {
     throw new Error('Database pool is required');
   }
 
+  // Unified DB facade. Uses pool directly (still needed for pool.connect()
+  // in the advisory-lock path) but routes all one-shot queries through .raw().
+  const db = deps.albumsAsync ||
+    deps.listsAsync ||
+    deps.usersAsync || { raw: (sql, params) => pool.query(sql, params) };
+
   // Batch job state
   let batchJob = null;
 
@@ -358,7 +363,7 @@ function createAlbumSummaryService(deps = {}) {
     const { skipCacheInvalidation = false, skipBroadcast = false } = options;
 
     try {
-      const albumResult = await pool.query(
+      const albumResult = await db.raw(
         'SELECT album_id, artist, album FROM albums WHERE album_id = $1',
         [albumId]
       );
@@ -389,7 +394,7 @@ function createAlbumSummaryService(deps = {}) {
         });
 
         // Mark as attempted to prevent retries
-        await pool.query(
+        await db.raw(
           `UPDATE albums SET summary_fetched_at = NOW() WHERE album_id = $1`,
           [albumId]
         );
@@ -407,7 +412,7 @@ function createAlbumSummaryService(deps = {}) {
         albumRecord.album.trim()
       );
 
-      await pool.query(
+      await db.raw(
         `UPDATE albums SET summary = $1, summary_source = $2, summary_fetched_at = NOW() WHERE album_id = $3`,
         [summary, source, albumId]
       );
@@ -415,14 +420,14 @@ function createAlbumSummaryService(deps = {}) {
       // Invalidate caches for all users who have this album in their lists
       // Skip during batch processing (will be done at the end for efficiency)
       if (!skipCacheInvalidation) {
-        await invalidateCachesForAlbum(pool, responseCache, log, albumId);
+        await invalidateCachesForAlbum(db, responseCache, log, albumId);
       }
 
       // Broadcast summary update to all users who have this album in their lists
       // Skip during batch processing to avoid flooding WebSocket clients
       if (summary && broadcast && !skipBroadcast) {
         try {
-          const usersResult = await pool.query(
+          const usersResult = await db.raw(
             `SELECT DISTINCT l.user_id 
              FROM lists l 
              JOIN list_items li ON li.list_id = l._id 
@@ -584,7 +589,7 @@ function createAlbumSummaryService(deps = {}) {
 
   /** Get summary statistics across the full albums dataset */
   async function getStats() {
-    const result = await pool.query(`
+    const result = await db.raw(`
       SELECT COUNT(*) AS total_albums,
         COUNT(*) FILTER (WHERE summary IS NOT NULL) AS with_summary,
         COUNT(*) FILTER (WHERE summary_fetched_at IS NOT NULL AND summary IS NULL) AS attempted_no_summary,
@@ -613,7 +618,7 @@ function createAlbumSummaryService(deps = {}) {
     const snapshotBoundaryClause =
       '(a.created_at IS NULL OR a.created_at <= $1::timestamptz)';
 
-    const countResult = await pool.query(
+    const countResult = await db.raw(
       `SELECT COUNT(*) AS total
        FROM albums a
        WHERE ${whereClause}
@@ -664,7 +669,7 @@ function createAlbumSummaryService(deps = {}) {
         ORDER BY a.id
         LIMIT ${limitParam}`;
 
-      const result = await pool.query(query, params);
+      const result = await db.raw(query, params);
       if (result.rows.length > 0) {
         lastAlbumRowId = result.rows[result.rows.length - 1].id;
       }
@@ -676,7 +681,7 @@ function createAlbumSummaryService(deps = {}) {
       fetchNextPage,
       fetchAndStoreSummary,
       log,
-      pool,
+      db,
       responseCache
     );
   }

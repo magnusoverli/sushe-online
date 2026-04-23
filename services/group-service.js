@@ -36,6 +36,14 @@ function createGroupService(deps = {}) {
     deleteGroupIfEmptyAutoGroup,
   } = deps;
 
+  // Unified DB facade. pool kept in scope for withTransaction callers.
+  const db =
+    deps.listGroupsAsync ||
+    deps.listsAsync ||
+    deps.usersAsync ||
+    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
+  if (!db) throw new Error('group-service requires a datastore or pool');
+
   /**
    * Get all groups for a user (with list counts).
    * Filters out empty "Uncategorized" groups.
@@ -43,7 +51,7 @@ function createGroupService(deps = {}) {
    * @returns {Promise<Array>}
    */
   async function getGroups(userId) {
-    const result = await pool.query(
+    const result = await db.raw(
       `SELECT 
         g._id,
         g.name,
@@ -102,7 +110,7 @@ function createGroupService(deps = {}) {
     }
 
     // Check for duplicate name
-    const existing = await pool.query(
+    const existing = await db.raw(
       `SELECT 1 FROM list_groups WHERE user_id = $1 AND name = $2`,
       [userId, trimmedName]
     );
@@ -114,7 +122,7 @@ function createGroupService(deps = {}) {
     }
 
     // Get max sort_order to append at the end
-    const maxOrder = await pool.query(
+    const maxOrder = await db.raw(
       `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
       [userId]
     );
@@ -122,7 +130,7 @@ function createGroupService(deps = {}) {
     const groupId = crypto.randomBytes(12).toString('hex');
     const timestamp = new Date();
 
-    await pool.query(
+    await db.raw(
       `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
        VALUES ($1, $2, $3, NULL, $4, $5, $6)`,
       [
@@ -157,7 +165,7 @@ function createGroupService(deps = {}) {
   async function updateGroup(userId, groupExternalId, updates) {
     const { name, sortOrder } = updates;
 
-    const groupResult = await pool.query(
+    const groupResult = await db.raw(
       `SELECT id, name, year, sort_order FROM list_groups WHERE _id = $1 AND user_id = $2`,
       [groupExternalId, userId]
     );
@@ -185,7 +193,7 @@ function createGroupService(deps = {}) {
           error: 'Collection name cannot be a year',
         });
       }
-      const existing = await pool.query(
+      const existing = await db.raw(
         `SELECT 1 FROM list_groups WHERE user_id = $1 AND name = $2 AND _id != $3`,
         [userId, name.trim(), groupExternalId]
       );
@@ -212,7 +220,7 @@ function createGroupService(deps = {}) {
     }
 
     const update = buildPartialUpdate('list_groups', 'id', group.id, fields);
-    await pool.query(update.query, update.values);
+    await db.raw(update.query, update.values);
   }
 
   /**

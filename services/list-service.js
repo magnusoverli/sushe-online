@@ -37,12 +37,13 @@ function createListService(deps = {}) {
     if (!years || years.length === 0) return result;
 
     try {
-      const recResult = await pool.query(
+      const recResult = await listsAsync.raw(
         `SELECT r.year, r.album_id, r.created_at, u.username as recommended_by
          FROM recommendations r
          JOIN users u ON r.recommended_by = u._id
          WHERE r.year = ANY($1::int[])`,
-        [years]
+        [years],
+        { name: 'list-service-recommendation-maps', retryable: true }
       );
       for (const row of recResult.rows) {
         if (!result.has(row.year)) {
@@ -65,12 +66,13 @@ function createListService(deps = {}) {
   }
 
   async function findListById(listId, userId) {
-    const result = await pool.query(
+    const result = await listsAsync.raw(
       `SELECT l.*, g._id as group_external_id, g.name as group_name, g.year as group_year
        FROM lists l
        LEFT JOIN list_groups g ON l.group_id = g.id
        WHERE l._id = $1 AND l.user_id = $2`,
-      [listId, userId]
+      [listId, userId],
+      { name: 'list-service-find-by-id', retryable: true }
     );
     if (result.rows.length === 0) return null;
     const row = result.rows[0];
@@ -167,9 +169,10 @@ function createListService(deps = {}) {
 
   async function dismissSetup(userId) {
     const dismissedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    await pool.query(
+    await listsAsync.raw(
       `UPDATE users SET list_setup_dismissed_until = $1 WHERE _id = $2`,
-      [dismissedUntil, userId]
+      [dismissedUntil, userId],
+      { name: 'list-service-dismiss-setup' }
     );
     return dismissedUntil;
   }

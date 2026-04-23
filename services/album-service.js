@@ -33,6 +33,16 @@ function createAlbumService(deps = {}) {
   const logger = deps.logger || defaultLogger;
   const { upsertAlbumRecord, invalidateCachesForAlbumUsers } = deps;
 
+  // Unified DB facade: prefer an injected datastore, fall back to a pool adapter.
+  // All SQL in this file goes through db.raw for logging, metrics, and the
+  // shutdown drain flag. withTransaction imports elsewhere are kept in place.
+  const db =
+    deps.albumsAsync ||
+    deps.listsAsync ||
+    deps.usersAsync ||
+    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
+  if (!db) throw new Error('album-service requires a datastore or pool');
+
   function validateOptionalTextField(value, errorMessage) {
     if (value !== null && value !== undefined && typeof value !== 'string') {
       throw new TransactionAbort(400, { error: errorMessage });
@@ -82,7 +92,7 @@ function createAlbumService(deps = {}) {
       }
     }
 
-    const lookupResult = await pool.query(
+    const lookupResult = await db.raw(
       'SELECT id FROM users WHERE _id = $1 LIMIT 1',
       [normalizedUserId]
     );
@@ -97,7 +107,7 @@ function createAlbumService(deps = {}) {
    * @returns {Promise<Object>} { imageBuffer, contentType } or throws
    */
   async function getCoverImage(albumId) {
-    const result = await pool.query(
+    const result = await db.raw(
       'SELECT cover_image, cover_image_format, artist, album FROM albums WHERE album_id = $1',
       [albumId]
     );
@@ -148,7 +158,7 @@ function createAlbumService(deps = {}) {
    * @returns {Promise<Object>} { summary, summarySource }
    */
   async function getSummary(albumId) {
-    const result = await pool.query(
+    const result = await db.raw(
       `SELECT summary, summary_source FROM albums WHERE album_id = $1`,
       [albumId]
     );
@@ -170,7 +180,7 @@ function createAlbumService(deps = {}) {
    * @param {string} summarySource
    */
   async function updateSummary(albumId, summary, summarySource) {
-    const checkResult = await pool.query(
+    const checkResult = await db.raw(
       `SELECT album_id FROM albums WHERE album_id = $1`,
       [albumId]
     );
@@ -179,7 +189,7 @@ function createAlbumService(deps = {}) {
       throw new TransactionAbort(404, { error: 'Album not found' });
     }
 
-    await pool.query(
+    await db.raw(
       `UPDATE albums 
        SET summary = COALESCE($1, summary),
            summary_source = COALESCE($2, summary_source),
@@ -198,7 +208,7 @@ function createAlbumService(deps = {}) {
   async function updateCountry(albumId, country, userId) {
     validateOptionalTextField(country, 'Invalid country value');
 
-    const checkResult = await pool.query(
+    const checkResult = await db.raw(
       'SELECT album_id FROM albums WHERE album_id = $1',
       [albumId]
     );
@@ -209,7 +219,7 @@ function createAlbumService(deps = {}) {
 
     const trimmedCountry = normalizeOptionalText(country);
 
-    await pool.query(
+    await db.raw(
       'UPDATE albums SET country = $1, updated_at = $2 WHERE album_id = $3',
       [trimmedCountry, new Date(), albumId]
     );
@@ -235,7 +245,7 @@ function createAlbumService(deps = {}) {
     validateOptionalTextField(genre_1, 'Invalid genre values');
     validateOptionalTextField(genre_2, 'Invalid genre values');
 
-    const checkResult = await pool.query(
+    const checkResult = await db.raw(
       'SELECT album_id FROM albums WHERE album_id = $1',
       [albumId]
     );
@@ -253,7 +263,7 @@ function createAlbumService(deps = {}) {
     }
 
     const update = buildPartialUpdate('albums', 'album_id', albumId, fields);
-    await pool.query(update.query, update.values);
+    await db.raw(update.query, update.values);
 
     await invalidateCachesForAlbumUsers(albumId);
 
@@ -340,14 +350,14 @@ function createAlbumService(deps = {}) {
       });
     }
 
-    const albumsResult = await pool.query(`
+    const albumsResult = await db.raw(`
       SELECT album_id, artist, album, cover_image IS NOT NULL as has_cover
       FROM albums
       WHERE artist IS NOT NULL AND artist != ''
         AND album IS NOT NULL AND album != ''
     `);
 
-    const excludedPairsResult = await pool.query(`
+    const excludedPairsResult = await db.raw(`
       SELECT album_id_1, album_id_2 FROM album_distinct_pairs
     `);
 
@@ -416,7 +426,7 @@ function createAlbumService(deps = {}) {
 
     const createdBy = await resolveAuditUserId(userId);
 
-    await pool.query(
+    await db.raw(
       `INSERT INTO album_distinct_pairs (album_id_1, album_id_2, created_by)
        VALUES ($1, $2, $3)
        ON CONFLICT (album_id_1, album_id_2) DO NOTHING`,
