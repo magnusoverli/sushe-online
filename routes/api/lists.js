@@ -112,7 +112,7 @@ module.exports = (app, deps) => {
           updates
         );
 
-        invalidateListCaches(req.user._id, null, { full: false });
+        invalidateListCaches(req.user._id);
 
         for (const y of yearsToRecompute) {
           triggerAggregateListRecompute(y);
@@ -157,7 +157,7 @@ module.exports = (app, deps) => {
         albums,
       });
 
-      invalidateListCaches(req.user._id, null, { full: false });
+      invalidateListCaches(req.user._id);
 
       if (result.year) {
         triggerAggregateListRecompute(result.year);
@@ -188,7 +188,7 @@ module.exports = (app, deps) => {
         groupId: newGroupId,
       });
 
-      invalidateListCaches(req.user._id, id, { full: false });
+      invalidateListCaches(req.user._id, id);
 
       if (result.list.year !== null) {
         triggerAggregateListRecompute(result.list.year);
@@ -261,7 +261,7 @@ module.exports = (app, deps) => {
 
       const { list } = await listService.reorderItems(id, req.user._id, order);
 
-      invalidateListCaches(req.user._id, id, { full: false });
+      invalidateListCaches(req.user._id, id);
 
       const broadcast = req.app.locals.broadcast;
       if (broadcast) {
@@ -298,7 +298,7 @@ module.exports = (app, deps) => {
         comment
       );
 
-      invalidateListCaches(req.user._id, id, { full: false });
+      invalidateListCaches(req.user._id, id);
 
       res.json({ success: true });
     }, 'updating comment')
@@ -327,7 +327,7 @@ module.exports = (app, deps) => {
         comment
       );
 
-      invalidateListCaches(req.user._id, id, { full: false });
+      invalidateListCaches(req.user._id, id);
 
       res.json({ success: true });
     }, 'updating comment 2')
@@ -398,7 +398,7 @@ module.exports = (app, deps) => {
           isMain
         );
 
-        invalidateListCaches(req.user._id, null, { full: false });
+        invalidateListCaches(req.user._id);
 
         if (result.year) {
           triggerAggregateListRecompute(result.year);
