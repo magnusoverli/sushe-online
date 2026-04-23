@@ -16,17 +16,10 @@ export function createAppStartupUi(deps = {}) {
     doc.body.classList.add('js-enabled');
     const flashMessages = doc.querySelectorAll('[data-flash]');
 
-    logger.log('Flash messages found:', flashMessages.length);
     flashMessages.forEach((element) => {
       const type = element.dataset.flash;
       const message =
         element.dataset.flashContent || element.textContent.trim();
-
-      logger.log('Processing flash:', {
-        type,
-        message,
-        hasContent: !!message,
-      });
 
       if (message) {
         showToast(message, type);

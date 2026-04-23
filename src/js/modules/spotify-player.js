@@ -1540,7 +1540,6 @@ export function initMiniplayer() {
   document.addEventListener('visibilitychange', handleVisibilityChange);
 
   // Start polling for playback state immediately
-  console.log('Spotify miniplayer: Starting enhanced API polling mode');
   startPolling();
 }
 

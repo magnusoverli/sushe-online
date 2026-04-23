@@ -58,7 +58,6 @@ function initSidebarWidget(isMobile) {
       spotifyMiniplayer.classList.add('hidden');
     }
     initTidalWidget();
-    console.log('Sidebar widget: Tidal (user preference)');
   } else {
     // Hide Tidal widget, show Spotify miniplayer
     const tidalWidget = document.getElementById('tidalWidget');
@@ -72,7 +71,6 @@ function initSidebarWidget(isMobile) {
       // Desktop: full miniplayer UI + polling
       initMiniplayer();
     }
-    console.log('Sidebar widget: Spotify');
   }
 }
 

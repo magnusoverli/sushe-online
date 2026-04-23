@@ -35,7 +35,6 @@ describe('app-startup-ui module', () => {
 
   it('converts flash elements to toasts and marks body as js-enabled', () => {
     const toasts = [];
-    const logs = [];
 
     const flashA = {
       dataset: { flash: 'error', flashContent: 'Invalid login' },
@@ -68,7 +67,7 @@ describe('app-startup-ui module', () => {
     const ui = createAppStartupUi({
       doc,
       showToast: (...args) => toasts.push(args),
-      logger: { log: (...args) => logs.push(args), warn: () => {} },
+      logger: { log: () => {}, warn: () => {} },
       storage: null,
       win: null,
     });
@@ -80,7 +79,6 @@ describe('app-startup-ui module', () => {
       ['Invalid login', 'error'],
       ['Saved successfully', 'success'],
     ]);
-    assert.strictEqual(logs[0][0], 'Flash messages found:');
   });
 
   it('initializes sidebar collapse and toggles persisted state', () => {
