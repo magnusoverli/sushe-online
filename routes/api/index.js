@@ -102,6 +102,8 @@ module.exports = (app, deps) => {
     csrfProtection,
     db,
     isValidPassword,
+    authService,
+    userService,
   } = deps;
 
   // Create helper functions
@@ -122,7 +124,7 @@ module.exports = (app, deps) => {
   } = createServiceAuthMiddleware({
     ensureValidSpotifyToken,
     ensureValidTidalToken,
-    users,
+    userService,
     logger,
   });
 
@@ -212,6 +214,8 @@ module.exports = (app, deps) => {
     albumService,
     recommendationService,
     externalIdentityService,
+    authService,
+    userService,
     refreshPlaycountsInBackground,
 
     // Helpers

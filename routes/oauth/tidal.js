@@ -12,7 +12,30 @@ const logger = require('../../utils/logger');
 const { sanitizeReturnPath } = require('../../utils/redirect-path');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, usersAsync, crypto } = deps;
+  const { ensureAuth, userService, usersAsync, crypto } = deps;
+  const setTidalAuth =
+    typeof userService?.setTidalAuth === 'function'
+      ? (userId, token, countryCode) =>
+          userService.setTidalAuth(userId, token, countryCode)
+      : (userId, token, countryCode) =>
+          usersAsync.update(
+            { _id: userId },
+            {
+              $set: {
+                tidalAuth: token,
+                tidalCountry: countryCode,
+                updatedAt: new Date(),
+              },
+            }
+          );
+  const clearTidalAuth =
+    typeof userService?.clearTidalAuth === 'function'
+      ? (userId) => userService.clearTidalAuth(userId)
+      : (userId) =>
+          usersAsync.update(
+            { _id: userId },
+            { $unset: { tidalAuth: true }, $set: { updatedAt: new Date() } }
+          );
 
   // Initiate Tidal OAuth flow
   app.get('/auth/tidal', ensureAuth, (req, res) => {
@@ -123,16 +146,7 @@ module.exports = (app, deps) => {
         });
       }
 
-      await usersAsync.update(
-        { _id: req.user._id },
-        {
-          $set: {
-            tidalAuth: token,
-            tidalCountry: countryCode,
-            updatedAt: new Date(),
-          },
-        }
-      );
+      await setTidalAuth(req.user._id, token, countryCode);
       req.user.tidalAuth = token;
       req.user.tidalCountry = countryCode;
       req.flash('success', 'Tidal connected');
@@ -153,10 +167,7 @@ module.exports = (app, deps) => {
   // Disconnect Tidal account
   app.get('/auth/tidal/disconnect', ensureAuth, async (req, res) => {
     try {
-      await usersAsync.update(
-        { _id: req.user._id },
-        { $unset: { tidalAuth: true }, $set: { updatedAt: new Date() } }
-      );
+      await clearTidalAuth(req.user._id);
       delete req.user.tidalAuth;
       req.flash('success', 'Tidal disconnected');
     } catch (e) {

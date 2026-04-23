@@ -10,6 +10,9 @@
 
 const logger = require('../utils/logger');
 const { ensureDb } = require('../db/postgres');
+const {
+  createUsersRepository,
+} = require('../db/repositories/users-repository');
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -46,6 +49,8 @@ const USER_DEFAULTS = {
 function createAuthService(deps = {}) {
   const usersAsyncDep = deps.usersAsync;
   const db = deps.db ? ensureDb(deps.db, 'AuthService') : null;
+  const usersRepository =
+    deps.usersRepository || (db ? createUsersRepository({ db }) : null);
   if (!db && !usersAsyncDep) {
     throw new Error('db or usersAsync is required for AuthService');
   }
@@ -55,39 +60,61 @@ function createAuthService(deps = {}) {
   const crypto = deps.crypto || require('crypto');
 
   async function getUserById(userId) {
-    if (db) {
-      const result = await db.raw(
-        `SELECT _id, email, username, hash, accent_color, time_format, date_format,
-                last_selected_list, role, spotify_auth, tidal_auth, music_service,
-                lastfm_username, column_visibility, approval_status, last_activity
-         FROM users
-         WHERE _id = $1`,
-        [userId],
-        { name: 'auth-service-get-user-by-id', retryable: true }
-      );
-      if (!result.rows[0]) return null;
-      const row = result.rows[0];
-      return {
-        _id: row._id,
-        email: row.email,
-        username: row.username,
-        hash: row.hash,
-        accentColor: row.accent_color,
-        timeFormat: row.time_format,
-        dateFormat: row.date_format,
-        lastSelectedList: row.last_selected_list,
-        role: row.role,
-        spotifyAuth: row.spotify_auth,
-        tidalAuth: row.tidal_auth,
-        musicService: row.music_service,
-        lastfmUsername: row.lastfm_username,
-        columnVisibility: row.column_visibility,
-        approvalStatus: row.approval_status,
-        lastActivity: row.last_activity,
-      };
+    if (usersRepository) {
+      return usersRepository.findById(userId);
     }
 
     return usersAsyncDep.findOne({ _id: userId });
+  }
+
+  async function getUserByEmail(email) {
+    if (usersRepository) {
+      return usersRepository.findByEmail(email);
+    }
+
+    return usersAsyncDep.findOne({ email });
+  }
+
+  async function getUserByResetToken(token, nowMs = Date.now()) {
+    if (usersRepository) {
+      return usersRepository.findByResetToken(token, nowMs);
+    }
+
+    return usersAsyncDep.findOne({
+      resetToken: token,
+      resetExpires: { $gt: nowMs },
+    });
+  }
+
+  async function issuePasswordResetToken(userId, token, expiresMs) {
+    if (usersRepository) {
+      return usersRepository.setResetToken(userId, token, expiresMs);
+    }
+
+    return usersAsyncDep.update(
+      { _id: userId },
+      { $set: { resetToken: token, resetExpires: expiresMs } }
+    );
+  }
+
+  async function resetPasswordByToken(token, nowMs, newHash) {
+    if (usersRepository) {
+      return usersRepository.resetPasswordByToken(token, nowMs, newHash);
+    }
+
+    const user = await usersAsyncDep.findOne({
+      resetToken: token,
+      resetExpires: { $gt: nowMs },
+    });
+    if (!user) return 0;
+
+    return usersAsyncDep.update(
+      { _id: user._id },
+      {
+        $set: { hash: newHash },
+        $unset: { resetToken: true, resetExpires: true },
+      }
+    );
   }
 
   // ── Registration ─────────────────────────────────────────────────────────
@@ -462,6 +489,10 @@ function createAuthService(deps = {}) {
     revokeExtensionToken,
     listExtensionTokens,
     getUserById,
+    getUserByEmail,
+    getUserByResetToken,
+    issuePasswordResetToken,
+    resetPasswordByToken,
   };
 }
 

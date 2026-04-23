@@ -10,6 +10,9 @@
 
 const logger = require('../utils/logger');
 const { ensureDb } = require('../db/postgres');
+const {
+  createUsersRepository,
+} = require('../db/repositories/users-repository');
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -44,6 +47,8 @@ function createUserService(deps = {}) {
   const usersDep = deps.users;
   const usersAsyncDep = deps.usersAsync;
   const db = deps.db ? ensureDb(deps.db, 'UserService') : null;
+  const usersRepository =
+    deps.usersRepository || (db ? createUsersRepository({ db }) : null);
   const invalidateUserCacheDep =
     typeof deps.invalidateUserCache === 'function'
       ? deps.invalidateUserCache
@@ -157,6 +162,210 @@ function createUserService(deps = {}) {
       );
     }
     invalidateUserCacheDep(userId);
+  }
+
+  async function updateLastActivity(userId, timestamp = new Date()) {
+    if (usersRepository) {
+      const updated = await usersRepository.updateLastActivity(
+        userId,
+        timestamp
+      );
+      invalidateUserCacheDep(userId);
+      return updated > 0;
+    }
+
+    if (db) {
+      const result = await db.raw(
+        `UPDATE users SET last_activity = $1 WHERE _id = $2`,
+        [timestamp, userId]
+      );
+      invalidateUserCacheDep(userId);
+      return result.rowCount > 0;
+    }
+
+    await usersAsyncDep.update(
+      { _id: userId },
+      { $set: { lastActivity: timestamp } }
+    );
+    invalidateUserCacheDep(userId);
+    return true;
+  }
+
+  async function setSpotifyAuth(userId, token) {
+    if (usersRepository) {
+      const updated = await usersRepository.setSpotifyAuth(userId, token);
+      invalidateUserCacheDep(userId);
+      return updated > 0;
+    }
+
+    if (db) {
+      const result = await db.raw(
+        `UPDATE users SET spotify_auth = $1, updated_at = NOW() WHERE _id = $2`,
+        [token, userId]
+      );
+      invalidateUserCacheDep(userId);
+      return result.rowCount > 0;
+    }
+
+    const updated = await usersAsyncDep.update(
+      { _id: userId },
+      { $set: { spotifyAuth: token, updatedAt: new Date() } }
+    );
+    invalidateUserCacheDep(userId);
+    return updated > 0;
+  }
+
+  async function clearSpotifyAuth(userId) {
+    if (usersRepository) {
+      const updated = await usersRepository.clearSpotifyAuth(userId);
+      invalidateUserCacheDep(userId);
+      return updated > 0;
+    }
+
+    if (db) {
+      const result = await db.raw(
+        `UPDATE users SET spotify_auth = NULL, updated_at = NOW() WHERE _id = $1`,
+        [userId]
+      );
+      invalidateUserCacheDep(userId);
+      return result.rowCount > 0;
+    }
+
+    const updated = await usersAsyncDep.update(
+      { _id: userId },
+      { $unset: { spotifyAuth: true }, $set: { updatedAt: new Date() } }
+    );
+    invalidateUserCacheDep(userId);
+    return updated > 0;
+  }
+
+  async function setTidalAuth(userId, token, countryCode = null) {
+    if (usersRepository) {
+      const updated = await usersRepository.setTidalAuth(
+        userId,
+        token,
+        countryCode
+      );
+      invalidateUserCacheDep(userId);
+      return updated > 0;
+    }
+
+    if (db) {
+      const result = await db.raw(
+        `UPDATE users SET tidal_auth = $1, tidal_country = $2, updated_at = NOW() WHERE _id = $3`,
+        [token, countryCode, userId]
+      );
+      invalidateUserCacheDep(userId);
+      return result.rowCount > 0;
+    }
+
+    const updated = await usersAsyncDep.update(
+      { _id: userId },
+      {
+        $set: {
+          tidalAuth: token,
+          tidalCountry: countryCode,
+          updatedAt: new Date(),
+        },
+      }
+    );
+    invalidateUserCacheDep(userId);
+    return updated > 0;
+  }
+
+  async function clearTidalAuth(userId) {
+    if (usersRepository) {
+      const updated = await usersRepository.clearTidalAuth(userId);
+      invalidateUserCacheDep(userId);
+      return updated > 0;
+    }
+
+    if (db) {
+      const result = await db.raw(
+        `UPDATE users SET tidal_auth = NULL, updated_at = NOW() WHERE _id = $1`,
+        [userId]
+      );
+      invalidateUserCacheDep(userId);
+      return result.rowCount > 0;
+    }
+
+    const updated = await usersAsyncDep.update(
+      { _id: userId },
+      { $unset: { tidalAuth: true }, $set: { updatedAt: new Date() } }
+    );
+    invalidateUserCacheDep(userId);
+    return updated > 0;
+  }
+
+  async function setLastfmAuth(userId, auth, username) {
+    if (usersRepository) {
+      const updated = await usersRepository.setLastfmAuth(
+        userId,
+        auth,
+        username
+      );
+      invalidateUserCacheDep(userId);
+      return updated > 0;
+    }
+
+    if (db) {
+      const result = await db.raw(
+        `UPDATE users SET lastfm_auth = $1, lastfm_username = $2, updated_at = NOW() WHERE _id = $3`,
+        [auth, username, userId]
+      );
+      invalidateUserCacheDep(userId);
+      return result.rowCount > 0;
+    }
+
+    const updated = await usersAsyncDep.update(
+      { _id: userId },
+      {
+        $set: {
+          lastfmAuth: auth,
+          lastfmUsername: username,
+          updatedAt: new Date(),
+        },
+      }
+    );
+    invalidateUserCacheDep(userId);
+    return updated > 0;
+  }
+
+  async function clearLastfmAuth(userId) {
+    if (usersRepository) {
+      const updated = await usersRepository.clearLastfmAuth(userId);
+      invalidateUserCacheDep(userId);
+      return updated > 0;
+    }
+
+    if (db) {
+      const result = await db.raw(
+        `UPDATE users SET lastfm_auth = NULL, lastfm_username = NULL, updated_at = NOW() WHERE _id = $1`,
+        [userId]
+      );
+      invalidateUserCacheDep(userId);
+      return result.rowCount > 0;
+    }
+
+    const updated = await usersAsyncDep.update(
+      { _id: userId },
+      {
+        $unset: { lastfmAuth: true, lastfmUsername: true },
+        $set: { updatedAt: new Date() },
+      }
+    );
+    invalidateUserCacheDep(userId);
+    return updated > 0;
+  }
+
+  async function saveOAuthToken(userId, authField, token) {
+    if (authField === 'spotifyAuth') {
+      return setSpotifyAuth(userId, token);
+    }
+    if (authField === 'tidalAuth') {
+      return setTidalAuth(userId, token, null);
+    }
+    throw new Error(`Unsupported auth field: ${authField}`);
   }
 
   async function updatePasswordHash(userId, newHash) {
@@ -332,6 +541,14 @@ function createUserService(deps = {}) {
     setAdminRole,
     deleteUser,
     getUserLists,
+    updateLastActivity,
+    setSpotifyAuth,
+    clearSpotifyAuth,
+    setTidalAuth,
+    clearTidalAuth,
+    setLastfmAuth,
+    clearLastfmAuth,
+    saveOAuthToken,
     validateSetting,
   };
 }

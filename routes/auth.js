@@ -195,12 +195,13 @@ module.exports = (app, deps) => {
       const timestamp = new Date();
       req.user.lastActivity = timestamp;
       req.session.lastActivityUpdatedAt = Date.now();
-      if (db) {
-        await db.raw(
-          'UPDATE users SET last_activity = $1 WHERE _id = $2',
-          [timestamp, req.user._id],
-          { name: 'auth-login-last-activity' }
-        );
+      if (typeof userService?.updateLastActivity === 'function') {
+        await userService.updateLastActivity(req.user._id, timestamp);
+      } else if (db) {
+        await db.raw('UPDATE users SET last_activity = $1 WHERE _id = $2', [
+          timestamp,
+          req.user._id,
+        ]);
       } else {
         await usersAsync.update(
           { _id: req.user._id },

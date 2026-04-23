@@ -14,11 +14,11 @@
  */
 module.exports = (app, deps) => {
   const {
-    users,
     usersAsync,
     logger,
     crypto,
     bcrypt,
+    authService,
     nodemailer,
     csrfProtection,
     forgotPasswordRateLimit,
@@ -35,6 +35,49 @@ module.exports = (app, deps) => {
     typeof isValidPassword === 'function'
       ? isValidPassword
       : (password) => typeof password === 'string' && password.length >= 8;
+
+  const getUserByEmail =
+    typeof authService?.getUserByEmail === 'function'
+      ? (email) => authService.getUserByEmail(email)
+      : (email) => usersAsync.findOne({ email });
+
+  const issuePasswordResetToken =
+    typeof authService?.issuePasswordResetToken === 'function'
+      ? (userId, token, expiresMs) =>
+          authService.issuePasswordResetToken(userId, token, expiresMs)
+      : (userId, token, expiresMs) =>
+          usersAsync.update(
+            { _id: userId },
+            { $set: { resetToken: token, resetExpires: expiresMs } }
+          );
+
+  const getUserByResetToken =
+    typeof authService?.getUserByResetToken === 'function'
+      ? (token) => authService.getUserByResetToken(token)
+      : (token) =>
+          usersAsync.findOne({
+            resetToken: token,
+            resetExpires: { $gt: Date.now() },
+          });
+
+  const resetPasswordByToken =
+    typeof authService?.resetPasswordByToken === 'function'
+      ? (token, nowMs, hash) =>
+          authService.resetPasswordByToken(token, nowMs, hash)
+      : async (token, nowMs, hash) => {
+          const user = await usersAsync.findOne({
+            resetToken: token,
+            resetExpires: { $gt: nowMs },
+          });
+          if (!user) return 0;
+          return usersAsync.update(
+            { _id: user._id },
+            {
+              $set: { hash },
+              $unset: { resetToken: true, resetExpires: true },
+            }
+          );
+        };
 
   // Forgot password page
   app.get('/forgot', csrfProtection, (req, res) => {
@@ -60,7 +103,7 @@ module.exports = (app, deps) => {
       }
 
       try {
-        const user = await usersAsync.findOne({ email });
+        const user = await getUserByEmail(email);
 
         // Always show the same message for security reasons
         req.flash(
@@ -76,9 +119,10 @@ module.exports = (app, deps) => {
         const token = crypto.randomBytes(20).toString('hex');
         const expires = Date.now() + 3600000; // 1 hour
 
-        const numReplaced = await usersAsync.update(
-          { _id: user._id },
-          { $set: { resetToken: token, resetExpires: expires } }
+        const numReplaced = await issuePasswordResetToken(
+          user._id,
+          token,
+          expires
         );
 
         if (numReplaced === 0) {
@@ -143,26 +187,30 @@ module.exports = (app, deps) => {
   );
 
   // Reset password page
-  app.get('/reset/:token', csrfProtection, (req, res) => {
-    users.findOne(
-      { resetToken: req.params.token, resetExpires: { $gt: Date.now() } },
-      (err, user) => {
-        if (!user) {
-          return res.send(
-            htmlTemplate(
-              invalidTokenTemplate(),
-              'Invalid Token - Black Metal Auth'
-            )
-          );
-        }
-        res.send(
+  app.get('/reset/:token', csrfProtection, async (req, res) => {
+    try {
+      const user = await getUserByResetToken(req.params.token);
+      if (!user) {
+        return res.send(
           htmlTemplate(
-            resetPasswordTemplate(req.params.token, req.csrfToken()),
-            'Reset Password - Black Metal Auth'
+            invalidTokenTemplate(),
+            'Invalid Token - Black Metal Auth'
           )
         );
       }
-    );
+
+      res.send(
+        htmlTemplate(
+          resetPasswordTemplate(req.params.token, req.csrfToken()),
+          'Reset Password - Black Metal Auth'
+        )
+      );
+    } catch (err) {
+      logger.error('Reset page token lookup failed', { error: err.message });
+      return res.send(
+        htmlTemplate(invalidTokenTemplate(), 'Invalid Token - Black Metal Auth')
+      );
+    }
   });
 
   // Handle password reset
@@ -172,10 +220,7 @@ module.exports = (app, deps) => {
     csrfProtection,
     async (req, res) => {
       try {
-        const user = await usersAsync.findOne({
-          resetToken: req.params.token,
-          resetExpires: { $gt: Date.now() },
-        });
+        const user = await getUserByResetToken(req.params.token);
 
         if (!user) {
           return res.send(
@@ -193,12 +238,10 @@ module.exports = (app, deps) => {
 
         const hash = await bcrypt.hash(req.body.password, 12);
 
-        const numReplaced = await usersAsync.update(
-          { _id: user._id },
-          {
-            $set: { hash },
-            $unset: { resetToken: true, resetExpires: true },
-          }
+        const numReplaced = await resetPasswordByToken(
+          req.params.token,
+          Date.now(),
+          hash
         );
 
         if (numReplaced === 0) {

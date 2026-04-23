@@ -70,6 +70,7 @@ const {
   pool,
   closePool,
 } = require('./db');
+const { createUsersRepository } = require('./db/repositories/users-repository');
 const {
   sanitizeUser,
   recordActivity: recordActivityBase,
@@ -99,11 +100,13 @@ const adminCodeState = getAdminCodeState();
 
 // Wrapper to use with the users datastore from this module
 function recordActivity(req) {
-  recordActivityBase(req, db);
+  recordActivityBase(req, usersRepository);
 }
 
+const usersRepository = createUsersRepository({ db });
+
 // Configure Passport authentication
-configurePassport(passport, { usersAsync, bcrypt });
+configurePassport(passport, { usersRepository, bcrypt });
 
 // ============ EXPRESS APP SETUP ============
 
@@ -221,8 +224,9 @@ app.use((req, res, next) => {
 const { validateExtensionToken } = require('./utils/auth-utils');
 const ensureAuthAPI = createEnsureAuthAPI({
   db,
+  usersRepository,
   validateExtensionToken,
-  recordActivity: recordActivityBase,
+  recordActivity: (req, _queryable) => recordActivityBase(req, usersRepository),
   logger,
 });
 
@@ -246,9 +250,16 @@ const { createUserService } = require('./services/user-service');
 const { createDuplicateService } = require('./services/duplicate-service');
 const { createReidentifyService } = require('./services/reidentify-service');
 
-const authService = createAuthService({ db, usersAsync, bcrypt, logger });
+const authService = createAuthService({
+  db,
+  usersRepository,
+  usersAsync,
+  bcrypt,
+  logger,
+});
 const userService = createUserService({
   db,
+  usersRepository,
   users,
   usersAsync,
   logger,
@@ -297,6 +308,7 @@ const deps = {
   invalidateUserCache,
   authService,
   userService,
+  usersRepository,
   duplicateService,
   reidentifyService,
 };

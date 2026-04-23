@@ -44,10 +44,35 @@ function invalidateUserCache(userId) {
  * Configure Passport with LocalStrategy and serialization.
  * @param {Object} passport - Passport instance
  * @param {Object} deps - Dependencies
- * @param {Object} deps.usersAsync - Async user datastore
+ * @param {Object} [deps.authService] - Auth service with user lookup helpers
+ * @param {Object} [deps.usersRepository] - Users repository
+ * @param {Object} [deps.usersAsync] - Async user datastore (legacy fallback)
  * @param {Object} deps.bcrypt - bcrypt module
  */
-function configurePassport(passport, { usersAsync, bcrypt }) {
+function configurePassport(
+  passport,
+  { authService, usersRepository, usersAsync, bcrypt }
+) {
+  const findByEmail = async (email) => {
+    if (typeof authService?.getUserByEmail === 'function') {
+      return authService.getUserByEmail(email);
+    }
+    if (typeof usersRepository?.findByEmail === 'function') {
+      return usersRepository.findByEmail(email);
+    }
+    return usersAsync.findOne({ email });
+  };
+
+  const findById = async (id) => {
+    if (typeof authService?.getUserById === 'function') {
+      return authService.getUserById(id);
+    }
+    if (typeof usersRepository?.findById === 'function') {
+      return usersRepository.findById(id);
+    }
+    return usersAsync.findOne({ _id: id });
+  };
+
   passport.use(
     new LocalStrategy(
       { usernameField: 'email' },
@@ -55,7 +80,7 @@ function configurePassport(passport, { usersAsync, bcrypt }) {
         logger.info('Login attempt', { email });
 
         try {
-          const user = await usersAsync.findOne({ email });
+          const user = await findByEmail(email);
 
           // TIMING ATTACK MITIGATION:
           // Always perform bcrypt comparison, even for non-existent users.
@@ -119,7 +144,7 @@ function configurePassport(passport, { usersAsync, bcrypt }) {
       // Check user cache first to avoid database query on every request
       let user = getCachedUser(id);
       if (!user) {
-        user = await usersAsync.findOne({ _id: id });
+        user = await findById(id);
         if (user) {
           setCachedUser(id, user);
         }

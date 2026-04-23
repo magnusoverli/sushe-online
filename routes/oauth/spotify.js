@@ -12,7 +12,23 @@ const logger = require('../../utils/logger');
 const { sanitizeReturnPath } = require('../../utils/redirect-path');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, usersAsync, crypto } = deps;
+  const { ensureAuth, userService, usersAsync, crypto } = deps;
+  const setSpotifyAuth =
+    typeof userService?.setSpotifyAuth === 'function'
+      ? (userId, token) => userService.setSpotifyAuth(userId, token)
+      : (userId, token) =>
+          usersAsync.update(
+            { _id: userId },
+            { $set: { spotifyAuth: token, updatedAt: new Date() } }
+          );
+  const clearSpotifyAuth =
+    typeof userService?.clearSpotifyAuth === 'function'
+      ? (userId) => userService.clearSpotifyAuth(userId)
+      : (userId) =>
+          usersAsync.update(
+            { _id: userId },
+            { $unset: { spotifyAuth: true }, $set: { updatedAt: new Date() } }
+          );
 
   // Initiate Spotify OAuth flow
   app.get('/auth/spotify', ensureAuth, (req, res) => {
@@ -85,12 +101,9 @@ module.exports = (app, deps) => {
       if (token && token.expires_in) {
         token.expires_at = Date.now() + token.expires_in * 1000;
       }
-      const numUpdated = await usersAsync.update(
-        { _id: req.user._id },
-        { $set: { spotifyAuth: token, updatedAt: new Date() } }
-      );
+      const numUpdated = await setSpotifyAuth(req.user._id, token);
 
-      if (numUpdated === 0) {
+      if (!numUpdated) {
         throw new Error('Failed to persist Spotify credentials');
       }
 
@@ -118,12 +131,9 @@ module.exports = (app, deps) => {
         userId: req.user._id,
       });
 
-      const numUpdated = await usersAsync.update(
-        { _id: req.user._id },
-        { $unset: { spotifyAuth: true }, $set: { updatedAt: new Date() } }
-      );
+      const numUpdated = await clearSpotifyAuth(req.user._id);
 
-      if (numUpdated === 0) {
+      if (!numUpdated) {
         throw new Error('User not found during Spotify disconnect');
       }
 

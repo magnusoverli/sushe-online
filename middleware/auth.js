@@ -59,8 +59,10 @@ function recordActivity(req, queryable) {
     }
 
     // Fire-and-forget DB update using prepared statement (non-blocking)
-    // Use updateFieldById if available (prepared statement), fallback to update
-    if (typeof queryable.updateFieldById === 'function') {
+    // Prefer explicit user service/repository contract when available.
+    if (typeof queryable.updateLastActivity === 'function') {
+      queryable.updateLastActivity(req.user._id, new Date(now)).catch(() => {});
+    } else if (typeof queryable.updateFieldById === 'function') {
       queryable.updateFieldById(
         req.user._id,
         'lastActivity',
@@ -114,6 +116,8 @@ function ensureAuth(req, res, next) {
 function createEnsureAuthAPI(deps) {
   const {
     usersAsync,
+    usersRepository,
+    authService,
     db,
     validateExtensionToken,
     recordActivity: recordActivityFn,
@@ -137,40 +141,44 @@ function createEnsureAuthAPI(deps) {
 
         if (userId) {
           // Load user and attach to request
-          const user = usersAsync
-            ? await usersAsync.findOne({ _id: userId })
-            : await (async () => {
-                const userResult = await db.raw(
-                  `SELECT _id, email, username, hash, accent_color, time_format, date_format,
+          const user = authService?.getUserById
+            ? await authService.getUserById(userId)
+            : usersRepository?.findById
+              ? await usersRepository.findById(userId)
+              : usersAsync
+                ? await usersAsync.findOne({ _id: userId })
+                : await (async () => {
+                    const userResult = await db.raw(
+                      `SELECT _id, email, username, hash, accent_color, time_format, date_format,
                           last_selected_list, role, spotify_auth, tidal_auth, music_service,
                           lastfm_username, column_visibility, approval_status, last_activity
                    FROM users
                    WHERE _id = $1`,
-                  [userId],
-                  { name: 'ensure-auth-api-user-by-id', retryable: true }
-                );
-                const row = userResult.rows[0];
-                return row
-                  ? {
-                      _id: row._id,
-                      email: row.email,
-                      username: row.username,
-                      hash: row.hash,
-                      accentColor: row.accent_color,
-                      timeFormat: row.time_format,
-                      dateFormat: row.date_format,
-                      lastSelectedList: row.last_selected_list,
-                      role: row.role,
-                      spotifyAuth: row.spotify_auth,
-                      tidalAuth: row.tidal_auth,
-                      musicService: row.music_service,
-                      lastfmUsername: row.lastfm_username,
-                      columnVisibility: row.column_visibility,
-                      approvalStatus: row.approval_status,
-                      lastActivity: row.last_activity,
-                    }
-                  : null;
-              })();
+                      [userId],
+                      { name: 'ensure-auth-api-user-by-id', retryable: true }
+                    );
+                    const row = userResult.rows[0];
+                    return row
+                      ? {
+                          _id: row._id,
+                          email: row.email,
+                          username: row.username,
+                          hash: row.hash,
+                          accentColor: row.accent_color,
+                          timeFormat: row.time_format,
+                          dateFormat: row.date_format,
+                          lastSelectedList: row.last_selected_list,
+                          role: row.role,
+                          spotifyAuth: row.spotify_auth,
+                          tidalAuth: row.tidal_auth,
+                          musicService: row.music_service,
+                          lastfmUsername: row.lastfm_username,
+                          columnVisibility: row.column_visibility,
+                          approvalStatus: row.approval_status,
+                          lastActivity: row.last_activity,
+                        }
+                      : null;
+                  })();
           if (user) {
             req.user = user;
             // Mark this as token-based auth for logging
