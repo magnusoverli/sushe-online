@@ -1,0 +1,36 @@
+Database Modernization Execution Plan (Temporary Tracker)
+Owner: OpenCode
+Date: 2026-04-23
+
+Decision Defaults (locked)
+- Repositories are internal composition details and primarily injected into services.
+- Routes and middleware consume services only (no direct DB surface).
+- Canonical low-level contract is DbFacade: raw(), withClient(), withTransaction().
+- Raw pool stays only for infra integrations (session store, health/pool metrics, migrations/scripts).
+- Compatibility layers are removed progressively by seam once migration is complete for that seam.
+
+Global Constraints
+- Every commit must keep production behavior intact.
+- Every commit is CI-gated before continuing.
+- No new legacy surfaces may be introduced.
+
+Phases
+[ ] P0 Freeze contract and add guardrails
+[ ] P1 Split DB engine room responsibilities
+[ ] P2 Extract repositories and move table/domain SQL
+[ ] P3 Centralize schema and row mapping
+[ ] P4 Migrate auth/user stack to canonical surface
+[ ] P5 Remove DB access from routes/middleware
+[ ] P6 Move DB-backed utilities out of utils/
+[ ] P7 Clean composition root and dependency surface
+[ ] P8 Standardize test harness on canonical DB contract
+[ ] P9 Remove compatibility layers and dead code
+[ ] P10 Final consistency sweep
+
+Execution Notes
+- Work in small, safe commits.
+- Prefer additive refactors with temporary adapters, then delete adapters when consumers are migrated.
+- Keep this file updated after each successful CI-gated commit.
+
+Commit Log
+- (pending)
