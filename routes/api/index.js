@@ -89,7 +89,6 @@ module.exports = (app, deps) => {
 
   const {
     ensureAuthAPI,
-    lists,
     bcrypt,
     crypto,
     nodemailer,
@@ -177,9 +176,6 @@ module.exports = (app, deps) => {
     crypto,
     bcrypt,
     nodemailer,
-
-    // Database accessors
-    lists,
 
     // Middleware
     ensureAuthAPI,

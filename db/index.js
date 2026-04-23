@@ -9,6 +9,14 @@ const {
   warmConnections,
 } = require('./postgres');
 const { drainPool } = require('./close-pool');
+const { createEnsureAdminUser } = require('./bootstrap-admin');
+const {
+  USERS_FIELD_MAP,
+  LISTS_FIELD_MAP,
+  LIST_ITEMS_FIELD_MAP,
+  ALBUMS_FIELD_MAP,
+  LIST_GROUPS_FIELD_MAP,
+} = require('./schema/table-maps');
 const logger = require('../utils/logger');
 const { setPoolReference } = require('../utils/metrics');
 
@@ -50,88 +58,11 @@ if (process.env.DATABASE_URL) {
     allowExitOnIdle: false, // Don't exit when idle
     application_name: process.env.PG_APP_NAME || 'sushe-online',
   });
-  const usersMap = {
-    _id: '_id',
-    email: 'email',
-    username: 'username',
-    hash: 'hash',
-    accentColor: 'accent_color',
-    timeFormat: 'time_format',
-    dateFormat: 'date_format',
-    lastSelectedList: 'last_selected_list',
-    role: 'role',
-    adminGrantedAt: 'admin_granted_at',
-    spotifyAuth: 'spotify_auth',
-    tidalAuth: 'tidal_auth',
-    tidalCountry: 'tidal_country',
-    musicService: 'music_service',
-    resetToken: 'reset_token',
-    resetExpires: 'reset_expires',
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-    lastActivity: 'last_activity',
-    lastfmAuth: 'lastfm_auth',
-    listSetupDismissedUntil: 'list_setup_dismissed_until',
-    lastfmUsername: 'lastfm_username',
-    approvalStatus: 'approval_status',
-    columnVisibility: 'column_visibility',
-  };
-  const listsMap = {
-    _id: '_id',
-    userId: 'user_id',
-    name: 'name',
-    data: 'data',
-    year: 'year',
-    isMain: 'is_main',
-    groupId: 'group_id',
-    sortOrder: 'sort_order',
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-  };
-  // Simplified list_items: junction table + user-specific data (comments, track picks)
-  // All album metadata comes from canonical albums table
-  const listItemsMap = {
-    _id: '_id',
-    listId: 'list_id',
-    position: 'position',
-    albumId: 'album_id',
-    comments: 'comments',
-    comments2: 'comments_2',
-    primaryTrack: 'primary_track',
-    secondaryTrack: 'secondary_track',
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-  };
-  const albumsMap = {
-    _id: 'id',
-    albumId: 'album_id',
-    artist: 'artist',
-    album: 'album',
-    releaseDate: 'release_date',
-    country: 'country',
-    genre1: 'genre_1',
-    genre2: 'genre_2',
-    tracks: 'tracks',
-    coverImage: 'cover_image',
-    coverImageFormat: 'cover_image_format',
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-  };
-  // track_picks table removed - track picks now stored in list_items
-  const listGroupsMap = {
-    _id: '_id',
-    userId: 'user_id',
-    name: 'name',
-    year: 'year',
-    sortOrder: 'sort_order',
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-  };
-  users = new PgDatastore(pool, 'users', usersMap);
-  lists = new PgDatastore(pool, 'lists', listsMap);
-  listItems = new PgDatastore(pool, 'list_items', listItemsMap);
-  albums = new PgDatastore(pool, 'albums', albumsMap);
-  listGroups = new PgDatastore(pool, 'list_groups', listGroupsMap);
+  users = new PgDatastore(pool, 'users', USERS_FIELD_MAP);
+  lists = new PgDatastore(pool, 'lists', LISTS_FIELD_MAP);
+  listItems = new PgDatastore(pool, 'list_items', LIST_ITEMS_FIELD_MAP);
+  albums = new PgDatastore(pool, 'albums', ALBUMS_FIELD_MAP);
+  listGroups = new PgDatastore(pool, 'list_groups', LIST_GROUPS_FIELD_MAP);
   usersAsync = users;
   listsAsync = lists;
   listItemsAsync = listItems;
@@ -142,52 +73,7 @@ if (process.env.DATABASE_URL) {
   // should receive this via deps.db. Shares the pool with the tabled instances,
   // so logging, metrics, drain-check, and retry apply uniformly.
   db = new PgDatastore(pool);
-  async function ensureAdminUser() {
-    try {
-      logger.info('Checking for admin user...');
-      const existingAdmin = await users.findOne({ role: 'admin' });
-      logger.info('Existing admin user check', { exists: !!existingAdmin });
-
-      if (!existingAdmin) {
-        logger.info('Creating admin user...');
-        const hash = await bcrypt.hash('admin', 12);
-        const newUser = await users.insert({
-          username: 'admin',
-          email: 'admin@localhost.com',
-          hash: hash,
-          accent_color: '#dc2626',
-          time_format: '24h',
-          date_format: 'MM/DD/YYYY',
-          role: 'admin',
-          admin_granted_at: new Date(),
-          music_service: null,
-          created_at: new Date(),
-          updated_at: new Date(),
-          last_activity: new Date(),
-        });
-        logger.info('Created admin user successfully', { userId: newUser._id });
-        logger.info('Admin login: email=admin@localhost.com, password=admin');
-
-        // Verify we can find the user by email
-        const verifyUser = await users.findOne({
-          email: 'admin@localhost.com',
-        });
-        logger.debug('Verification - can find admin by email', {
-          found: !!verifyUser,
-        });
-      } else {
-        logger.debug('Admin user already exists', {
-          email: existingAdmin.email,
-          username: existingAdmin.username,
-        });
-      }
-    } catch (err) {
-      logger.error('Error creating admin user', {
-        error: err.message,
-        stack: err.stack,
-      });
-    }
-  }
+  const ensureAdminUser = createEnsureAdminUser({ users, logger, bcrypt });
 
   ready = waitForPostgres(pool)
     .then(async () => {

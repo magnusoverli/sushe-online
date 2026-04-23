@@ -55,22 +55,12 @@ const {
   extensionAuthTemplate,
 } = require('./templates');
 const { isTokenValid, isTokenUsable } = require('./utils/auth-utils');
-const {
-  users,
-  lists,
-  listItems,
-  albums,
-  usersAsync,
-  listsAsync,
-  listItemsAsync,
-  albumsAsync,
-  db,
-  dataDir,
-  ready,
-  pool,
-  closePool,
-} = require('./db');
+const { db, dataDir, ready, pool, closePool } = require('./db');
 const { createUsersRepository } = require('./db/repositories/users-repository');
+const { createAuthService } = require('./services/auth-service');
+const { createUserService } = require('./services/user-service');
+const { createDuplicateService } = require('./services/duplicate-service');
+const { createReidentifyService } = require('./services/reidentify-service');
 const {
   sanitizeUser,
   recordActivity: recordActivityBase,
@@ -98,15 +88,29 @@ const upload = multer({
 startAdminCodeRotation();
 const adminCodeState = getAdminCodeState();
 
-// Wrapper to use with the users datastore from this module
+// Wrapper to record activity through the users repository
 function recordActivity(req) {
   recordActivityBase(req, usersRepository);
 }
 
 const usersRepository = createUsersRepository({ db });
+const authService = createAuthService({
+  db,
+  usersRepository,
+  bcrypt,
+  logger,
+});
+const userService = createUserService({
+  db,
+  usersRepository,
+  logger,
+  invalidateUserCache,
+});
+const duplicateService = createDuplicateService({ db, logger });
+const reidentifyService = createReidentifyService({ db, logger });
 
 // Configure Passport authentication
-configurePassport(passport, { usersRepository, bcrypt });
+configurePassport(passport, { authService, bcrypt });
 
 // ============ EXPRESS APP SETUP ============
 
@@ -237,30 +241,6 @@ const apiRoutes = require('./routes/api/index');
 const preferencesRoutes = require('./routes/preferences');
 const aggregateListRoutes = require('./routes/aggregate-list');
 
-// Create service instances for auth routes
-const { createAuthService } = require('./services/auth-service');
-const { createUserService } = require('./services/user-service');
-const { createDuplicateService } = require('./services/duplicate-service');
-const { createReidentifyService } = require('./services/reidentify-service');
-
-const authService = createAuthService({
-  db,
-  usersRepository,
-  usersAsync,
-  bcrypt,
-  logger,
-});
-const userService = createUserService({
-  db,
-  usersRepository,
-  users,
-  usersAsync,
-  logger,
-  invalidateUserCache,
-});
-const duplicateService = createDuplicateService({ db, logger });
-const reidentifyService = createReidentifyService({ db, logger });
-
 const ensureAuthAPI = createEnsureAuthAPI({
   authService,
   db,
@@ -285,14 +265,6 @@ const deps = {
   ensureAuthAPI,
   ensureAdmin,
   rateLimitAdminRequest,
-  users,
-  lists,
-  listItems,
-  albums,
-  usersAsync,
-  listsAsync,
-  listItemsAsync,
-  albumsAsync,
   upload,
   bcrypt,
   crypto,

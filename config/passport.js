@@ -44,34 +44,13 @@ function invalidateUserCache(userId) {
  * Configure Passport with LocalStrategy and serialization.
  * @param {Object} passport - Passport instance
  * @param {Object} deps - Dependencies
- * @param {Object} [deps.authService] - Auth service with user lookup helpers
- * @param {Object} [deps.usersRepository] - Users repository
- * @param {Object} [deps.usersAsync] - Async user datastore (legacy fallback)
+ * @param {Object} deps.authService - Auth service with user lookup helpers
  * @param {Object} deps.bcrypt - bcrypt module
  */
-function configurePassport(
-  passport,
-  { authService, usersRepository, usersAsync, bcrypt }
-) {
-  const findByEmail = async (email) => {
-    if (typeof authService?.getUserByEmail === 'function') {
-      return authService.getUserByEmail(email);
-    }
-    if (typeof usersRepository?.findByEmail === 'function') {
-      return usersRepository.findByEmail(email);
-    }
-    return usersAsync.findOne({ email });
-  };
-
-  const findById = async (id) => {
-    if (typeof authService?.getUserById === 'function') {
-      return authService.getUserById(id);
-    }
-    if (typeof usersRepository?.findById === 'function') {
-      return usersRepository.findById(id);
-    }
-    return usersAsync.findOne({ _id: id });
-  };
+function configurePassport(passport, { authService, bcrypt }) {
+  if (!authService) {
+    throw new Error('configurePassport requires deps.authService');
+  }
 
   passport.use(
     new LocalStrategy(
@@ -80,7 +59,7 @@ function configurePassport(
         logger.info('Login attempt', { email });
 
         try {
-          const user = await findByEmail(email);
+          const user = await authService.getUserByEmail(email);
 
           // TIMING ATTACK MITIGATION:
           // Always perform bcrypt comparison, even for non-existent users.
@@ -144,7 +123,7 @@ function configurePassport(
       // Check user cache first to avoid database query on every request
       let user = getCachedUser(id);
       if (!user) {
-        user = await findById(id);
+        user = await authService.getUserById(id);
         if (user) {
           setCachedUser(id, user);
         }
