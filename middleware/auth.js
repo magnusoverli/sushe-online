@@ -104,7 +104,7 @@ function ensureAuth(req, res, next) {
  * Supports both session and bearer token authentication
  *
  * @param {Object} deps - Dependencies
- * @param {Object} [deps.usersAsync] - Legacy users datastore for compatibility
+ * @param {Object} [deps.usersAsync] - Optional users datastore used in tests
  * @param {import('../db/types').DbFacade} deps.db - Canonical datastore
  * @param {Function} deps.validateExtensionToken - Token validation function
  * @param {Function} deps.recordActivity - Activity recording function
