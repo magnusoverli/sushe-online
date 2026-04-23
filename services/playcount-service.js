@@ -138,7 +138,7 @@ function createPlaycountService(deps = {}) {
    * @param {string} userId - User ID
    * @param {string} lastfmUsername - User's Last.fm username
    * @param {Array} albums - Array of album objects with itemId, artist, album, album_id
-   * @param {Object} pool - Database connection pool
+   * @param {import('../db/types').DbFacade} db - Canonical datastore
    * @param {Object} logger - Logger instance
    * @returns {Promise<Object>} - Map of itemId -> { playcount, status }
    */
@@ -146,7 +146,7 @@ function createPlaycountService(deps = {}) {
     userId,
     lastfmUsername,
     albums,
-    pool,
+    db,
     logger
   ) {
     const results = {};
@@ -165,9 +165,6 @@ function createPlaycountService(deps = {}) {
           lastfmUsername,
         });
 
-        // refreshAlbumPlaycount now expects a datastore (with .raw()); the
-        // callers of this service still pass a raw pool, so adapt.
-        const db = { raw: (sql, params) => pool.query(sql, params) };
         const result = await refreshAlbumPlaycount(
           db,
           logger,
@@ -225,7 +222,7 @@ function createPlaycountService(deps = {}) {
    * @param {string} params.listId - List ID
    * @param {string} params.userId - User ID
    * @param {string} params.lastfmUsername - Last.fm username
-   * @param {Object} params.pool - Database pool
+   * @param {import('../db/types').DbFacade} params.db - Canonical datastore
    * @param {Object} params.logger - Logger instance
    * @param {Function} params.normalizeAlbumKey - Normalization function
    * @returns {Promise<{ playcounts: Object, refreshing: number } | { error: Object }>}
@@ -234,12 +231,10 @@ function createPlaycountService(deps = {}) {
     listId,
     userId,
     lastfmUsername,
-    pool,
+    db,
     logger,
     normalizeAlbumKey,
   }) {
-    // Adapter: route queries through the unified .raw() interface.
-    const db = { raw: (sql, params) => pool.query(sql, params) };
     // Verify list exists
     const list = await db.raw(
       `SELECT _id FROM lists WHERE _id = $1 AND user_id = $2`,
@@ -315,7 +310,7 @@ function createPlaycountService(deps = {}) {
         userId,
         lastfmUsername,
         albumsToRefresh,
-        pool,
+        db,
         logger
       ).catch((err) => {
         logger.error('Background playcount refresh failed:', err);

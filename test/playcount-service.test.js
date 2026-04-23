@@ -7,7 +7,7 @@
 
 const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
-const { createMockLogger, createMockPool } = require('./helpers');
+const { createMockLogger, createMockPool, createMockDb } = require('./helpers');
 const { createPlaycountService } = require('../services/playcount-service');
 
 // Helper to create a mock album object
@@ -95,8 +95,8 @@ describe('playcount-service', () => {
       );
 
       const callArgs = mockRefresh.mock.calls[0].arguments;
-      // Arg 0 is a datastore adapter (wraps the pool). Verify it exposes .raw
-      // and that calling .raw forwards to mockPool.query.
+      // Arg 0 is the canonical datastore forwarded from the caller.
+      // Verify .raw is callable and backed by the mock pool.
       assert.strictEqual(typeof callArgs[0].raw, 'function');
       callArgs[0].raw('SELECT 1', []);
       assert.ok(mockPool.query.mock.calls.length >= 1);
@@ -330,7 +330,7 @@ describe('playcount-service', () => {
         listId: 'list1',
         userId: 'user1',
         lastfmUsername: 'lfm-user',
-        pool: mockPool,
+        db: mockPool,
         logger: createMockLogger(),
         normalizeAlbumKey: (artist, album) => `${artist}::${album}`,
       });
@@ -394,7 +394,7 @@ describe('playcount-service', () => {
         listId: 'list1',
         userId: 'user1',
         lastfmUsername: 'lfm-user',
-        pool: mockPool,
+        db: mockPool,
         logger: mockLogger,
         normalizeAlbumKey,
       });
@@ -440,13 +440,82 @@ describe('playcount-service', () => {
         listId: 'list1',
         userId: 'user1',
         lastfmUsername: 'lfm-user',
-        pool: mockPool,
+        db: mockPool,
         logger: mockLogger,
         normalizeAlbumKey: (artist, album) => `${artist}::${album}`,
       });
 
       assert.deepStrictEqual(result, { playcounts: {}, refreshing: 0 });
       assert.strictEqual(mockPool.query.mock.calls.length, 2);
+    });
+
+    // Regression guard: earlier versions of this file wrapped a pool with
+    // `{ raw: (sql, p) => pool.query(sql, p) }` internally. That silently
+    // broke when callers started passing a canonical datastore (`.raw` only,
+    // no `.query`). This test passes a db that ONLY exposes `.raw` — if a
+    // future change reintroduces the shim, it will throw here.
+    it('should work with a canonical datastore (no .query)', async () => {
+      const rawCalls = [];
+      const fakeDb = createMockDb(
+        mock.fn(async (sql, params) => {
+          rawCalls.push({ sql, params });
+          if (sql.includes('FROM lists WHERE _id')) {
+            return { rows: [{ _id: 'list1' }] };
+          }
+          if (sql.includes('FROM list_items')) {
+            return { rows: [] };
+          }
+          return { rows: [] };
+        })
+      );
+
+      const { getListPlaycounts } = createPlaycountService({
+        refreshAlbumPlaycount: mock.fn(async () => null),
+      });
+
+      const result = await getListPlaycounts({
+        listId: 'list1',
+        userId: 'user1',
+        lastfmUsername: 'lfm-user',
+        db: fakeDb,
+        logger: createMockLogger(),
+        normalizeAlbumKey: (artist, album) => `${artist}::${album}`,
+      });
+
+      assert.deepStrictEqual(result, { playcounts: {}, refreshing: 0 });
+      assert.ok(rawCalls.length >= 1, '.raw must be invoked');
+    });
+  });
+
+  // Regression guard for refreshPlaycountsInBackground (same rationale):
+  // the 4th positional argument must be treated as a canonical datastore,
+  // not unwrapped as `pool.query`.
+  describe('refreshPlaycountsInBackground with canonical datastore', () => {
+    it('should accept a db with only .raw (no .query)', async () => {
+      const mockLogger = createMockLogger();
+      const fakeDb = createMockDb();
+      const mockRefresh = mock.fn(async () => ({
+        playcount: 1,
+        status: 'success',
+      }));
+
+      const { refreshPlaycountsInBackground } = createPlaycountService({
+        refreshAlbumPlaycount: mockRefresh,
+      });
+
+      const results = await refreshPlaycountsInBackground(
+        'user1',
+        'lfm',
+        [createAlbum('a')],
+        fakeDb,
+        mockLogger
+      );
+
+      assert.strictEqual(mockRefresh.mock.calls.length, 1);
+      // The db forwarded to refreshAlbumPlaycount should be exactly the one
+      // passed in, not an adapter.
+      assert.strictEqual(mockRefresh.mock.calls[0].arguments[0], fakeDb);
+      assert.deepStrictEqual(results.a, { playcount: 1, status: 'success' });
     });
   });
 });
