@@ -11,7 +11,7 @@ async function columnExists(pool, tableName, columnName) {
 }
 
 async function up(pool) {
-  logger.info('Relaxing legacy albums._id requirement...');
+  logger.info('Relaxing albums._id requirement when present...');
 
   const hasLegacyId = await columnExists(pool, 'albums', '_id');
   if (!hasLegacyId) {
@@ -32,11 +32,11 @@ async function up(pool) {
 }
 
 async function down(pool) {
-  logger.info('Restoring legacy albums._id requirement...');
+  logger.info('Restoring albums._id requirement when present...');
 
   const hasLegacyId = await columnExists(pool, 'albums', '_id');
   if (!hasLegacyId) {
-    logger.info('albums._id does not exist; skipping legacy restore');
+    logger.info('albums._id does not exist; skipping restore');
     return;
   }
 
