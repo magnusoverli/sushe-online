@@ -9,6 +9,7 @@ function createListManagementOperations(deps = {}) {
   const ctx = {
     db: deps.db,
     TransactionAbort: deps.TransactionAbort,
+    acquireYearLocks: deps.acquireYearLocks,
     validateYear: deps.validateYear,
     validateMainListNotLocked: deps.validateMainListNotLocked,
     validateYearNotLocked: deps.validateYearNotLocked,
@@ -19,6 +20,9 @@ function createListManagementOperations(deps = {}) {
 
   if (!ctx.db) throw new Error('db is required');
   if (!ctx.TransactionAbort) throw new Error('TransactionAbort is required');
+  if (typeof ctx.acquireYearLocks !== 'function') {
+    throw new Error('acquireYearLocks is required');
+  }
   if (typeof ctx.validateYear !== 'function') {
     throw new Error('validateYear is required');
   }

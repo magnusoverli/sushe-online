@@ -7,6 +7,10 @@
 // Import shared utilities
 const { createAggregateList } = require('../../services/aggregate-list');
 const { createAlbumCanonical } = require('../../utils/album-canonical');
+const {
+  LOCK_NAMESPACES,
+  acquireTransactionLocks,
+} = require('../../db/advisory-locks');
 const { validateYear } = require('../../utils/validators');
 const { TransactionAbort } = require('../../db/transaction');
 
@@ -255,6 +259,14 @@ function createHelpers(deps) {
     }
   }
 
+  function assertTransactionalQueryable(queryable, helperName) {
+    if (!queryable || typeof queryable.query !== 'function') {
+      throw new Error(
+        `${helperName} requires a transaction client with query()`
+      );
+    }
+  }
+
   /**
    * Find or create a year-group for a user.
    * Validates the year, looks up an existing group, or creates one.
@@ -266,37 +278,40 @@ function createHelpers(deps) {
    * @throws {TransactionAbort} If year validation fails
    */
   async function findOrCreateYearGroup(queryable, userId, year) {
+    assertTransactionalQueryable(queryable, 'findOrCreateYearGroup');
+
     const yearValidation = validateYear(year);
     if (!yearValidation.valid) {
       throw new TransactionAbort(400, { error: yearValidation.error });
     }
     const validYear = yearValidation.value;
 
-    let result = await queryable.query(
-      `SELECT id FROM list_groups WHERE user_id = $1 AND year = $2`,
-      [userId, validYear]
+    await acquireTransactionLocks(queryable, LOCK_NAMESPACES.LIST_GROUPS_USER, [
+      userId,
+    ]);
+
+    const result = await queryable.query(
+      `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
+       VALUES (
+         $1,
+         $2,
+         $3,
+         $4,
+         COALESCE((SELECT MAX(sort_order) + 1 FROM list_groups WHERE user_id = $2), 0),
+         NOW(),
+         NOW()
+       )
+       ON CONFLICT (user_id, year)
+       WHERE year IS NOT NULL
+       DO UPDATE SET name = list_groups.name
+       RETURNING id`,
+      [
+        crypto.randomBytes(12).toString('hex'),
+        userId,
+        String(validYear),
+        validYear,
+      ]
     );
-
-    if (result.rows.length === 0) {
-      const newGroupId = crypto.randomBytes(12).toString('hex');
-      const maxOrder = await queryable.query(
-        `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
-        [userId]
-      );
-
-      result = await queryable.query(
-        `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-         RETURNING id`,
-        [
-          newGroupId,
-          userId,
-          String(validYear),
-          validYear,
-          maxOrder.rows[0].next_order,
-        ]
-      );
-    }
 
     return { groupId: result.rows[0].id, year: validYear };
   }
@@ -309,25 +324,28 @@ function createHelpers(deps) {
    * @returns {Promise<number>} The serial group id
    */
   async function findOrCreateUncategorizedGroup(queryable, userId) {
-    let result = await queryable.query(
-      `SELECT id FROM list_groups WHERE user_id = $1 AND name = 'Uncategorized' AND year IS NULL`,
-      [userId]
+    assertTransactionalQueryable(queryable, 'findOrCreateUncategorizedGroup');
+
+    await acquireTransactionLocks(queryable, LOCK_NAMESPACES.LIST_GROUPS_USER, [
+      userId,
+    ]);
+
+    const result = await queryable.query(
+      `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
+       VALUES (
+         $1,
+         $2,
+         'Uncategorized',
+         NULL,
+         COALESCE((SELECT MAX(sort_order) + 1 FROM list_groups WHERE user_id = $2), 0),
+         NOW(),
+         NOW()
+       )
+       ON CONFLICT (user_id, name)
+       DO UPDATE SET name = list_groups.name
+       RETURNING id`,
+      [crypto.randomBytes(12).toString('hex'), userId]
     );
-
-    if (result.rows.length === 0) {
-      const newGroupId = crypto.randomBytes(12).toString('hex');
-      const maxOrder = await queryable.query(
-        `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
-        [userId]
-      );
-
-      result = await queryable.query(
-        `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
-         VALUES ($1, $2, 'Uncategorized', NULL, $3, NOW(), NOW())
-         RETURNING id`,
-        [newGroupId, userId, maxOrder.rows[0].next_order]
-      );
-    }
 
     return result.rows[0].id;
   }

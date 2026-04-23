@@ -8,7 +8,8 @@ async function updateListMetadata(ctx, listId, userId, updates) {
       `SELECT l.id, l._id, l.name, l.year, l.group_id, l.is_main, g.year as group_year
        FROM lists l
        LEFT JOIN list_groups g ON l.group_id = g.id
-       WHERE l._id = $1 AND l.user_id = $2`,
+       WHERE l._id = $1 AND l.user_id = $2
+       FOR UPDATE`,
       [listId, userId]
     );
 
@@ -50,16 +51,21 @@ async function updateListMetadata(ctx, listId, userId, updates) {
       fields.push({ column: 'year', value: targetYear });
     }
 
+    const currentYear = list.year || list.group_year;
+    if (list.is_main) {
+      await ctx.acquireYearLocks(client, [currentYear, targetYear]);
+    }
+
     try {
       await ctx.validateMainListNotLocked(
-        ctx.db,
-        list.year,
+        client,
+        currentYear,
         list.is_main,
         'update list'
       );
-      if (targetYear !== list.year) {
+      if (targetYear !== currentYear) {
         await ctx.validateMainListNotLocked(
-          ctx.db,
+          client,
           targetYear,
           list.is_main,
           'update list'

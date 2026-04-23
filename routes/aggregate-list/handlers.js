@@ -1,11 +1,5 @@
 function createAggregateListHandlers(deps = {}) {
-  const {
-    aggregateList,
-    logger,
-    db,
-    validateYearNotLocked,
-    scheduleAggregateRecompute,
-  } = deps;
+  const { aggregateList, logger, scheduleAggregateRecompute } = deps;
 
   function renderPage(req, res, aggregateListTemplate) {
     res.send(aggregateListTemplate(req.user, req.validatedYear));
@@ -166,16 +160,6 @@ function createAggregateListHandlers(deps = {}) {
   async function addContributor(req, res) {
     const year = req.validatedYear;
 
-    try {
-      await validateYearNotLocked(db, year, 'manage contributors');
-    } catch (err) {
-      return res.status(403).json({
-        error: err.message,
-        yearLocked: true,
-        year,
-      });
-    }
-
     const { userId } = req.body;
     if (!userId) {
       return res.status(400).json({ error: 'userId is required' });
@@ -193,16 +177,6 @@ function createAggregateListHandlers(deps = {}) {
 
   async function removeContributor(req, res) {
     const year = req.validatedYear;
-
-    try {
-      await validateYearNotLocked(db, year, 'manage contributors');
-    } catch (err) {
-      return res.status(403).json({
-        error: err.message,
-        yearLocked: true,
-        year,
-      });
-    }
 
     const { userId } = req.params;
     if (!userId) {

@@ -43,7 +43,7 @@ function createMockPool(queryResults = [], overrides = {}) {
     return result;
   });
   const defaultConnect = mock.fn(async () => ({
-    query: mock.fn(async () => ({ rows: [], rowCount: 0 })),
+    query: mock.fn(async (sql, params) => defaultQuery(sql, params)),
     release: mock.fn(),
   }));
   // Overrides can swap out query or connect — raw always tracks the
@@ -166,11 +166,45 @@ function createMockRes() {
  */
 function asMockDb(pool) {
   if (!pool.raw) pool.raw = pool.query;
+
+  const createTransactionalClient = async () => {
+    const baseClient = pool.connect
+      ? await pool.connect()
+      : { query: pool.query, release: () => {} };
+
+    return {
+      ...baseClient,
+      query: async (sql, params) => {
+        if (
+          typeof sql === 'string' &&
+          (sql.includes('pg_advisory_xact_lock') ||
+            sql.startsWith('SET CONSTRAINTS '))
+        ) {
+          return { rows: [], rowCount: 0 };
+        }
+
+        try {
+          return await baseClient.query(sql, params);
+        } catch (err) {
+          const isUnexpectedQueryError =
+            typeof err?.message === 'string' &&
+            /^Unexpected (pool )?query:/.test(err.message);
+          if (
+            isUnexpectedQueryError &&
+            pool.query &&
+            pool.query !== baseClient.query
+          ) {
+            return pool.query(sql, params);
+          }
+          throw err;
+        }
+      },
+    };
+  };
+
   if (!pool.withClient) {
     pool.withClient = async (cb) => {
-      const c = pool.connect
-        ? await pool.connect()
-        : { query: pool.query, release: () => {} };
+      const c = await createTransactionalClient();
       try {
         return await cb(c);
       } finally {
@@ -180,9 +214,7 @@ function asMockDb(pool) {
   }
   if (!pool.withTransaction) {
     pool.withTransaction = async (cb) => {
-      const c = pool.connect
-        ? await pool.connect()
-        : { query: pool.query, release: () => {} };
+      const c = await createTransactionalClient();
       try {
         await c.query('BEGIN');
         const r = await cb(c);

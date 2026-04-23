@@ -11,8 +11,12 @@
  */
 
 const defaultLogger = require('../utils/logger');
+const {
+  LOCK_NAMESPACES,
+  acquireTransactionLocks,
+} = require('../db/advisory-locks');
 const { ensureDb } = require('../db/postgres');
-const { isYearLocked } = require('../utils/year-lock');
+const { acquireYearLocks, isYearLocked } = require('../utils/year-lock');
 const { TransactionAbort } = require('../db/transaction');
 const { buildPartialUpdate } = require('../utils/query-builder');
 
@@ -103,45 +107,45 @@ function createGroupService(deps = {}) {
       });
     }
 
-    // Check for duplicate name
-    const existing = await db.raw(
-      `SELECT 1 FROM list_groups WHERE user_id = $1 AND name = $2`,
-      [userId, trimmedName]
-    );
-
-    if (existing.rows.length > 0) {
-      throw new TransactionAbort(409, {
-        error: 'A group with this name already exists',
-      });
-    }
-
-    // Get max sort_order to append at the end
-    const maxOrder = await db.raw(
-      `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
-      [userId]
-    );
-
     const groupId = crypto.randomBytes(12).toString('hex');
     const timestamp = new Date();
 
-    await db.raw(
-      `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
-       VALUES ($1, $2, $3, NULL, $4, $5, $6)`,
-      [
-        groupId,
+    let sortOrder = 0;
+    await db.withTransaction(async (client) => {
+      await acquireTransactionLocks(client, LOCK_NAMESPACES.LIST_GROUPS_USER, [
         userId,
-        trimmedName,
-        maxOrder.rows[0].next_order,
-        timestamp,
-        timestamp,
-      ]
-    );
+      ]);
+
+      const result = await client.query(
+        `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
+         VALUES (
+           $1,
+           $2,
+           $3,
+           NULL,
+           COALESCE((SELECT MAX(sort_order) + 1 FROM list_groups WHERE user_id = $2), 0),
+           $4,
+           $5
+         )
+         ON CONFLICT (user_id, name) DO NOTHING
+         RETURNING sort_order`,
+        [groupId, userId, trimmedName, timestamp, timestamp]
+      );
+
+      if (result.rows.length === 0) {
+        throw new TransactionAbort(409, {
+          error: 'A group with this name already exists',
+        });
+      }
+
+      sortOrder = result.rows[0].sort_order;
+    });
 
     return {
       _id: groupId,
       name: trimmedName,
       year: null,
-      sortOrder: maxOrder.rows[0].next_order,
+      sortOrder,
       listCount: 0,
       isYearGroup: false,
       createdAt: timestamp,
@@ -381,6 +385,9 @@ function createGroupService(deps = {}) {
 
       if (order.length > 0) {
         await client.query(
+          'SET CONSTRAINTS list_groups_user_sort_order_unique DEFERRED'
+        );
+        await client.query(
           `UPDATE list_groups AS g
            SET sort_order = o.position, updated_at = NOW()
            FROM UNNEST($1::text[], $2::int[]) AS o(group_id, position)
@@ -417,7 +424,8 @@ function createGroupService(deps = {}) {
         `SELECT l.id, l._id, l.name, l.year, l.is_main, l.group_id, g.year as current_group_year
          FROM lists l
          LEFT JOIN list_groups g ON l.group_id = g.id
-         WHERE l.user_id = $1 AND l._id = $2`,
+         WHERE l.user_id = $1 AND l._id = $2
+         FOR UPDATE`,
         [userId, listExternalId]
       );
 
@@ -452,12 +460,14 @@ function createGroupService(deps = {}) {
 
       // Check year locks for main lists
       if (list.is_main) {
+        await acquireYearLocks(client, [oldYear, targetYear]);
+
         const sourceYearLocked = oldYear
-          ? await isYearLocked(db, oldYear)
+          ? await isYearLocked(client, oldYear)
           : false;
         const targetYearLocked =
           targetYear && targetYear !== oldYear
-            ? await isYearLocked(db, targetYear)
+            ? await isYearLocked(client, targetYear)
             : false;
 
         if (sourceYearLocked) {
@@ -480,6 +490,10 @@ function createGroupService(deps = {}) {
           list.id,
         ]);
       }
+
+      await acquireTransactionLocks(client, LOCK_NAMESPACES.LISTS_GROUP, [
+        targetGroupId,
+      ]);
 
       // Get max sort_order in target group
       const maxOrder = await client.query(
@@ -555,6 +569,9 @@ function createGroupService(deps = {}) {
       }
 
       if (order.length > 0) {
+        await client.query(
+          'SET CONSTRAINTS lists_group_sort_order_unique DEFERRED'
+        );
         await client.query(
           `UPDATE lists AS l
            SET sort_order = o.position, updated_at = NOW()

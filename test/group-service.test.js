@@ -26,6 +26,60 @@ function createTransactionPool(queryHandler) {
 }
 
 describe('group-service', () => {
+  it('createGroup should insert once and return the allocated sort order', async () => {
+    const { pool, client } = createTransactionPool(async (sql, params) => {
+      if (sql.includes('INSERT INTO list_groups')) {
+        assert.strictEqual(params[1], 'user1');
+        assert.strictEqual(params[2], 'Favorites');
+        return { rows: [{ sort_order: 4 }], rowCount: 1 };
+      }
+
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+
+    const service = createGroupService({
+      db: pool,
+      logger: createMockLogger(),
+    });
+
+    const result = await service.createGroup('user1', 'Favorites');
+
+    assert.strictEqual(result.name, 'Favorites');
+    assert.strictEqual(result.sortOrder, 4);
+    const insertCalls = client.query.mock.calls.filter((call) =>
+      call.arguments[0].includes('INSERT INTO list_groups')
+    );
+    assert.strictEqual(insertCalls.length, 1);
+  });
+
+  it('createGroup should throw 409 when the name already exists', async () => {
+    const { pool } = createTransactionPool(async (sql) => {
+      if (sql.includes('INSERT INTO list_groups')) {
+        return { rows: [], rowCount: 0 };
+      }
+
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+
+    const service = createGroupService({
+      db: pool,
+      logger: createMockLogger(),
+    });
+
+    await assert.rejects(
+      () => service.createGroup('user1', 'Favorites'),
+      (err) => {
+        assert.ok(err instanceof TransactionAbort);
+        assert.strictEqual(err.statusCode, 409);
+        assert.strictEqual(
+          err.body.error,
+          'A group with this name already exists'
+        );
+        return true;
+      }
+    );
+  });
+
   it('reorderGroups should bulk update with one UNNEST query', async () => {
     const { pool, client } = createTransactionPool(async (sql) => {
       if (

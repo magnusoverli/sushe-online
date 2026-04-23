@@ -1,6 +1,5 @@
 const { createAggregateList } = require('../services/aggregate-list');
 const { aggregateListTemplate } = require('../templates');
-const { validateYearNotLocked } = require('../utils/year-lock');
 const { validateYearParam } = require('../middleware/validate-params');
 const { createAggregateListHandlers } = require('./aggregate-list/handlers');
 
@@ -28,7 +27,6 @@ module.exports = (app, deps) => {
     aggregateList,
     logger,
     db,
-    validateYearNotLocked,
     scheduleAggregateRecompute,
   });
 

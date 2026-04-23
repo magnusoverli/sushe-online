@@ -2,6 +2,10 @@ const logger = require('../utils/logger');
 const { ensureDb } = require('../db/postgres');
 const { normalizeAlbumKey } = require('../utils/fuzzy-match');
 const { POSITION_POINTS, getPositionPoints } = require('../utils/scoring');
+const {
+  acquireYearLocks,
+  validateYearNotLocked,
+} = require('../utils/year-lock');
 
 // ============================================
 // AGGREGATION HELPER FUNCTIONS
@@ -392,6 +396,9 @@ async function queryEligibleUsers(db, year) {
 async function setContributorsTransaction(db, year, userIds, addedBy, log) {
   try {
     await db.withTransaction(async (client) => {
+      await acquireYearLocks(client, [year]);
+      await validateYearNotLocked(client, year, 'manage contributors');
+
       await client.query(
         'DELETE FROM aggregate_list_contributors WHERE year = $1',
         [year]
@@ -484,24 +491,32 @@ async function queryViewedYears(db, userId) {
 
 /** Lock a year to prevent list modifications */
 async function lockYearOp(db, year) {
-  await db.raw(
-    `INSERT INTO master_lists (year, locked, created_at, updated_at)
-     VALUES ($1, TRUE, NOW(), NOW())
-     ON CONFLICT (year) DO UPDATE SET
-       locked = TRUE,
-       updated_at = NOW()`,
-    [year]
-  );
+  await db.withTransaction(async (client) => {
+    await acquireYearLocks(client, [year]);
+    await client.query(
+      `INSERT INTO master_lists (year, locked, created_at, updated_at)
+       VALUES ($1, TRUE, NOW(), NOW())
+       ON CONFLICT (year) DO UPDATE SET
+         locked = TRUE,
+         updated_at = NOW()`,
+      [year]
+    );
+  });
 }
 
 /** Unlock a year to allow list modifications */
 async function unlockYearOp(db, year) {
-  await db.raw(
-    `UPDATE master_lists
-     SET locked = FALSE, updated_at = NOW()
-     WHERE year = $1`,
-    [year]
-  );
+  await db.withTransaction(async (client) => {
+    await acquireYearLocks(client, [year]);
+    await client.query(
+      `INSERT INTO master_lists (year, locked, created_at, updated_at)
+       VALUES ($1, FALSE, NOW(), NOW())
+       ON CONFLICT (year) DO UPDATE SET
+         locked = FALSE,
+         updated_at = NOW()`,
+      [year]
+    );
+  });
 }
 
 /** Get all locked years (descending order) */
@@ -709,14 +724,19 @@ function createAggregateList(deps = {}) {
   async function addContributor(year, userId, addedBy) {
     log.info(`Adding user ${userId} as contributor for year ${year}`);
 
-    await db.raw(
-      `
-      INSERT INTO aggregate_list_contributors (year, user_id, added_by)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (year, user_id) DO NOTHING
-    `,
-      [year, userId, addedBy]
-    );
+    await db.withTransaction(async (client) => {
+      await acquireYearLocks(client, [year]);
+      await validateYearNotLocked(client, year, 'manage contributors');
+
+      await client.query(
+        `
+        INSERT INTO aggregate_list_contributors (year, user_id, added_by)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (year, user_id) DO NOTHING
+      `,
+        [year, userId, addedBy]
+      );
+    });
 
     return { success: true };
   }
@@ -727,14 +747,19 @@ function createAggregateList(deps = {}) {
   async function removeContributor(year, userId) {
     log.info(`Removing user ${userId} as contributor for year ${year}`);
 
-    const result = await db.raw(
-      `
-      DELETE FROM aggregate_list_contributors 
-      WHERE year = $1 AND user_id = $2
-      RETURNING *
-    `,
-      [year, userId]
-    );
+    const result = await db.withTransaction(async (client) => {
+      await acquireYearLocks(client, [year]);
+      await validateYearNotLocked(client, year, 'manage contributors');
+
+      return client.query(
+        `
+        DELETE FROM aggregate_list_contributors 
+        WHERE year = $1 AND user_id = $2
+        RETURNING *
+      `,
+        [year, userId]
+      );
+    });
 
     return { success: true, removed: result.rowCount > 0 };
   }

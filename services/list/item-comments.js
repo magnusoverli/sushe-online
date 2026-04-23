@@ -35,12 +35,17 @@ function createItemComments(deps = {}) {
       throw new Error(`Unsupported comment field: ${field}`);
     }
 
-    const list = await findListByIdOrThrow(listId, userId, fieldConfig.action);
-
     const trimmedComment = comment ? comment.trim() : null;
     const now = new Date();
 
     await db.withTransaction(async (client) => {
+      const list = await findListByIdOrThrow(
+        listId,
+        userId,
+        fieldConfig.action,
+        client
+      );
+
       const updateResult = await client.query(
         `UPDATE list_items SET ${field} = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4 RETURNING _id`,
         [trimmedComment, now, list._id, identifier]

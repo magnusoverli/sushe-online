@@ -26,6 +26,8 @@ function createYearLock(deps = {}) {
   const logger = deps.logger || require('./logger');
   const TransactionAbort =
     deps.TransactionAbort || require('../db/transaction').TransactionAbort;
+  const { LOCK_NAMESPACES, acquireTransactionLocks } =
+    deps.advisoryLocks || require('../db/advisory-locks');
 
   /**
    * Accept the canonical datastore (.raw). Falls back to a .query-shaped
@@ -65,6 +67,10 @@ function createYearLock(deps = {}) {
       // Fail safe: if we can't check, assume not locked to avoid blocking operations
       return false;
     }
+  }
+
+  async function acquireYearLocks(client, years) {
+    await acquireTransactionLocks(client, LOCK_NAMESPACES.YEAR, years);
   }
 
   /**
@@ -124,6 +130,7 @@ function createYearLock(deps = {}) {
   }
 
   return {
+    acquireYearLocks,
     isYearLocked,
     validateYearNotLocked,
     isMainListLocked,

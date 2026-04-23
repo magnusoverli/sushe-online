@@ -255,7 +255,7 @@ describe('list-service item comments', () => {
     await service.updateItemComment('list1', 'user1', 'album1', 'Great album');
 
     assert.ok(executedUpdateSql.includes('SET comments = $1'));
-    assert.strictEqual(client.query.mock.calls.length, 3);
+    assert.strictEqual(client.query.mock.calls.length, 4);
   });
 
   it('should reject comment 2 updates with non-album identifiers', async () => {
@@ -306,7 +306,7 @@ describe('list-service item comments', () => {
     assert.ok(
       updateQueries[0].includes('WHERE list_id = $3 AND album_id = $4')
     );
-    assert.strictEqual(client.query.mock.calls.length, 3);
+    assert.strictEqual(client.query.mock.calls.length, 4);
   });
 });
 

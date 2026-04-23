@@ -11,6 +11,7 @@ const {
 const { createSetupStatus } = require('./list/setup-status');
 const { createListWriteOperations } = require('./list/write-operations');
 const {
+  acquireYearLocks,
   validateYearNotLocked,
   validateMainListNotLocked,
   isYearLocked,
@@ -63,15 +64,29 @@ function createListService(deps = {}) {
     return result;
   }
 
-  async function findListById(listId, userId) {
-    const result = await listsAsync.raw(
-      `SELECT l.*, g._id as group_external_id, g.name as group_name, g.year as group_year
+  async function queryListById(
+    queryable,
+    listId,
+    userId,
+    { forUpdate = false } = {}
+  ) {
+    const sql = `SELECT l.*, g._id as group_external_id, g.name as group_name, g.year as group_year
        FROM lists l
        LEFT JOIN list_groups g ON l.group_id = g.id
-       WHERE l._id = $1 AND l.user_id = $2`,
-      [listId, userId],
-      { name: 'list-service-find-by-id', retryable: true }
-    );
+       WHERE l._id = $1 AND l.user_id = $2${forUpdate ? ' FOR UPDATE' : ''}`;
+
+    if (queryable && typeof queryable.query === 'function') {
+      return queryable.query(sql, [listId, userId]);
+    }
+
+    return listsAsync.raw(sql, [listId, userId], {
+      name: 'list-service-find-by-id',
+      retryable: true,
+    });
+  }
+
+  async function findListById(listId, userId, queryable = null, options = {}) {
+    const result = await queryListById(queryable, listId, userId, options);
     if (result.rows.length === 0) return null;
     const row = result.rows[0];
     return {
@@ -91,12 +106,26 @@ function createListService(deps = {}) {
     };
   }
 
-  async function findListByIdOrThrow(listId, userId, action) {
-    const list = await findListById(listId, userId);
+  async function findListByIdOrThrow(listId, userId, action, queryable = null) {
+    const list = await findListById(listId, userId, queryable, {
+      forUpdate: !!(queryable && typeof queryable.query === 'function'),
+    });
     if (!list) {
       throw new TransactionAbort(404, { error: 'List not found' });
     }
-    await validateMainListNotLocked(db, list.year, list.isMain, action);
+
+    const listYear = list.year || list.groupYear;
+
+    if (queryable && typeof queryable.query === 'function' && listYear) {
+      await acquireYearLocks(queryable, [listYear]);
+    }
+
+    await validateMainListNotLocked(
+      queryable || db,
+      listYear,
+      list.isMain,
+      action
+    );
     return list;
   }
 
@@ -126,6 +155,7 @@ function createListService(deps = {}) {
   const managementOperations = createListManagementOperations({
     db,
     TransactionAbort,
+    acquireYearLocks,
     validateYear,
     validateMainListNotLocked,
     validateYearNotLocked,

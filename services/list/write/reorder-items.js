@@ -3,15 +3,17 @@ async function reorderItems(ctx, listId, userId, order) {
     throw new ctx.TransactionAbort(400, { error: 'Invalid order array' });
   }
 
-  const list = await ctx.findListByIdOrThrow(
-    listId,
-    userId,
-    'reorder list items'
-  );
-
   let effectivePos = 0;
+  let list;
 
   await ctx.db.withTransaction(async (client) => {
+    list = await ctx.findListByIdOrThrow(
+      listId,
+      userId,
+      'reorder list items',
+      client
+    );
+
     const now = new Date();
 
     const listItemsResult = await client.query(

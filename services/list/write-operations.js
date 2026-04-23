@@ -1,5 +1,10 @@
 const { reorderItems } = require('./write/reorder-items');
+const {
+  LOCK_NAMESPACES,
+  acquireTransactionLocks,
+} = require('../../db/advisory-locks');
 
+// eslint-disable-next-line max-lines-per-function -- Coordinates list creation and item mutations around one transactional dependency set
 function createListWriteOperations(deps = {}) {
   const {
     db,
@@ -70,6 +75,10 @@ function createListWriteOperations(deps = {}) {
         groupIdInternal
       );
 
+      await acquireTransactionLocks(client, LOCK_NAMESPACES.LISTS_GROUP, [
+        groupIdInternal,
+      ]);
+
       const maxListOrder = await client.query(
         `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM lists WHERE group_id = $1`,
         [groupIdInternal]
@@ -120,10 +129,17 @@ function createListWriteOperations(deps = {}) {
   }
 
   async function replaceListItems(listId, userId, rawAlbums) {
-    const list = await findListByIdOrThrow(listId, userId, 'modify list items');
     const timestamp = new Date();
+    let list;
 
     await db.withTransaction(async (client) => {
+      list = await findListByIdOrThrow(
+        listId,
+        userId,
+        'modify list items',
+        client
+      );
+
       await client.query('DELETE FROM list_items WHERE list_id = $1', [
         list._id,
       ]);
@@ -157,14 +173,20 @@ function createListWriteOperations(deps = {}) {
     { added, removed, updated },
     user
   ) {
-    const list = await findListByIdOrThrow(listId, userId, 'modify list items');
-
     const timestamp = new Date();
     let changeCount = 0;
     const addedItems = [];
     const duplicateAlbums = [];
+    let list;
 
     await db.withTransaction(async (client) => {
+      list = await findListByIdOrThrow(
+        listId,
+        userId,
+        'modify list items',
+        client
+      );
+
       changeCount += await itemOperations.processRemovals(
         client,
         list._id,

@@ -1218,7 +1218,29 @@ describe('aggregate-list', () => {
 
   describe('addContributor', () => {
     it('should add a contributor successfully', async () => {
-      const pool = createMockPool([{ rows: [] }]);
+      const client = {
+        query: mock.fn(async (sql) => {
+          if (
+            sql === 'BEGIN' ||
+            sql === 'COMMIT' ||
+            sql === 'ROLLBACK' ||
+            sql.includes('pg_advisory_xact_lock') ||
+            sql.includes('SELECT locked FROM master_lists')
+          ) {
+            return { rows: [], rowCount: 0 };
+          }
+
+          if (sql.includes('INSERT INTO aggregate_list_contributors')) {
+            return { rows: [], rowCount: 1 };
+          }
+
+          throw new Error(`Unexpected query: ${sql}`);
+        }),
+        release: mock.fn(),
+      };
+      const pool = createMockPool([], {
+        connect: mock.fn(async () => client),
+      });
       const logger = createMockLogger();
       const aggregateList = createAggregateList({ db: pool, logger });
 
@@ -1229,11 +1251,12 @@ describe('aggregate-list', () => {
       );
 
       assert.strictEqual(result.success, true);
-      assert.strictEqual(pool.query.mock.calls.length, 1);
-      // Verify the query contains correct parameters
-      const queryCall = pool.query.mock.calls[0];
+      const insertCall = client.query.mock.calls.find((call) =>
+        call.arguments[0].includes('INSERT INTO aggregate_list_contributors')
+      );
+      assert.ok(insertCall);
       assert.ok(
-        queryCall.arguments[0].includes(
+        insertCall.arguments[0].includes(
           'INSERT INTO aggregate_list_contributors'
         )
       );
@@ -1242,9 +1265,29 @@ describe('aggregate-list', () => {
 
   describe('removeContributor', () => {
     it('should remove a contributor and return removed: true', async () => {
-      const pool = createMockPool([
-        { rows: [{ user_id: 'user1' }], rowCount: 1 },
-      ]);
+      const client = {
+        query: mock.fn(async (sql) => {
+          if (
+            sql === 'BEGIN' ||
+            sql === 'COMMIT' ||
+            sql === 'ROLLBACK' ||
+            sql.includes('pg_advisory_xact_lock') ||
+            sql.includes('SELECT locked FROM master_lists')
+          ) {
+            return { rows: [], rowCount: 0 };
+          }
+
+          if (sql.includes('DELETE FROM aggregate_list_contributors')) {
+            return { rows: [{ user_id: 'user1' }], rowCount: 1 };
+          }
+
+          throw new Error(`Unexpected query: ${sql}`);
+        }),
+        release: mock.fn(),
+      };
+      const pool = createMockPool([], {
+        connect: mock.fn(async () => client),
+      });
       const logger = createMockLogger();
       const aggregateList = createAggregateList({ db: pool, logger });
 
@@ -1270,7 +1313,27 @@ describe('aggregate-list', () => {
     it('should set contributors in bulk', async () => {
       // Create a mock client for transaction
       const mockClient = {
-        query: mock.fn(async () => ({ rows: [] })),
+        query: mock.fn(async (sql) => {
+          if (
+            sql === 'BEGIN' ||
+            sql === 'COMMIT' ||
+            sql === 'ROLLBACK' ||
+            sql.includes('pg_advisory_xact_lock') ||
+            sql.includes('SELECT locked FROM master_lists')
+          ) {
+            return { rows: [], rowCount: 0 };
+          }
+
+          if (sql.includes('DELETE FROM aggregate_list_contributors')) {
+            return { rows: [], rowCount: 0 };
+          }
+
+          if (sql.includes('INSERT INTO aggregate_list_contributors')) {
+            return { rows: [], rowCount: 3 };
+          }
+
+          throw new Error(`Unexpected query: ${sql}`);
+        }),
         release: mock.fn(),
       };
       const pool = {
@@ -1291,13 +1354,46 @@ describe('aggregate-list', () => {
       // Verify transaction was used
       assert.strictEqual(pool.connect.mock.calls.length, 1);
       assert.strictEqual(mockClient.release.mock.calls.length, 1);
-      // Verify BEGIN, DELETE, INSERT, COMMIT were called
-      assert.strictEqual(mockClient.query.mock.calls.length, 4);
+      const queries = mockClient.query.mock.calls.map(
+        (call) => call.arguments[0]
+      );
+      assert.ok(queries.includes('BEGIN'));
+      assert.ok(queries.some((sql) => sql.includes('pg_advisory_xact_lock')));
+      assert.ok(
+        queries.some((sql) => sql.includes('SELECT locked FROM master_lists'))
+      );
+      assert.ok(
+        queries.some((sql) =>
+          sql.includes('DELETE FROM aggregate_list_contributors')
+        )
+      );
+      assert.ok(
+        queries.some((sql) =>
+          sql.includes('INSERT INTO aggregate_list_contributors')
+        )
+      );
+      assert.ok(queries.includes('COMMIT'));
     });
 
     it('should handle empty userIds array', async () => {
       const mockClient = {
-        query: mock.fn(async () => ({ rows: [] })),
+        query: mock.fn(async (sql) => {
+          if (
+            sql === 'BEGIN' ||
+            sql === 'COMMIT' ||
+            sql === 'ROLLBACK' ||
+            sql.includes('pg_advisory_xact_lock') ||
+            sql.includes('SELECT locked FROM master_lists')
+          ) {
+            return { rows: [], rowCount: 0 };
+          }
+
+          if (sql.includes('DELETE FROM aggregate_list_contributors')) {
+            return { rows: [], rowCount: 0 };
+          }
+
+          throw new Error(`Unexpected query: ${sql}`);
+        }),
         release: mock.fn(),
       };
       const pool = {
@@ -1311,8 +1407,25 @@ describe('aggregate-list', () => {
 
       assert.strictEqual(result.success, true);
       assert.strictEqual(result.count, 0);
-      // Should only have BEGIN, DELETE, COMMIT (no INSERT for empty array)
-      assert.strictEqual(mockClient.query.mock.calls.length, 3);
+      const queries = mockClient.query.mock.calls.map(
+        (call) => call.arguments[0]
+      );
+      assert.ok(queries.includes('BEGIN'));
+      assert.ok(queries.some((sql) => sql.includes('pg_advisory_xact_lock')));
+      assert.ok(
+        queries.some((sql) => sql.includes('SELECT locked FROM master_lists'))
+      );
+      assert.ok(
+        queries.some((sql) =>
+          sql.includes('DELETE FROM aggregate_list_contributors')
+        )
+      );
+      assert.ok(
+        !queries.some((sql) =>
+          sql.includes('INSERT INTO aggregate_list_contributors')
+        )
+      );
+      assert.ok(queries.includes('COMMIT'));
     });
 
     it('should rollback on error', async () => {
