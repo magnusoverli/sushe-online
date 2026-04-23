@@ -255,4 +255,8 @@ module.exports = {
     await pool.query('VACUUM ANALYZE list_items');
     logger.info('Database optimization complete');
   },
+
+  // Irreversible: quality upgrade lossily re-encoded images; restore from
+  // backup if a true rollback is needed.
+  irreversible: true,
 };

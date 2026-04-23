@@ -60,10 +60,23 @@ async function main() {
         break;
     }
   } catch (error) {
-    logger.error('Migration command failed', {
-      error: error.message,
-      stack: error.stack,
-    });
+    // Specific ops-friendly messages for the two recoverable cases.
+    if (/marked irreversible/.test(error.message)) {
+      logger.error(error.message);
+      logger.error(
+        'Restore from backup or add a down() function to roll this migration back.'
+      );
+    } else if (/migrations unknown to this code version/.test(error.message)) {
+      logger.error(error.message);
+      logger.error(
+        'This usually means the DB was migrated by a newer build. Deploy the matching version or roll the DB back.'
+      );
+    } else {
+      logger.error('Migration command failed', {
+        error: error.message,
+        stack: error.stack,
+      });
+    }
     process.exit(1);
   } finally {
     await pool.end();

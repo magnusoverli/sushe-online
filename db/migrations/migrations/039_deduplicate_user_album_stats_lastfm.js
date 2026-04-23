@@ -92,4 +92,5 @@ async function down(_client) {
   );
 }
 
-module.exports = { up, down };
+// Irreversible: duplicate rows were merged; cannot restore originals.
+module.exports = { up, down, irreversible: true };

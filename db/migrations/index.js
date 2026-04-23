@@ -2,6 +2,12 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../../utils/logger');
 
+// Postgres advisory-lock key. Stable across deployments so concurrent pods
+// serialize on the same lock. Fits in JS safe-integer range.
+// Derived from the ASCII bytes of 'SuSh' — no semantic meaning beyond
+// being app-specific and reproducible.
+const MIGRATION_LOCK_KEY = 0x53755368; // 1400072552
+
 class MigrationManager {
   constructor(pool) {
     this.pool = pool;
@@ -118,13 +124,22 @@ class MigrationManager {
   async rollbackMigration(migration) {
     const { version, filePath } = migration;
 
+    const migrationModule = require(filePath);
+
+    // Irreversible migrations opt out explicitly. Surface the reason clearly
+    // instead of either silently failing or stack-tracing from a best-effort
+    // synthesized down().
+    if (migrationModule.irreversible === true) {
+      throw new Error(
+        `Migration ${version} is marked irreversible — restore from backup instead.`
+      );
+    }
+
     // Acquire a dedicated client for transaction isolation
     const client = await this.pool.connect();
 
     try {
       logger.info(`Rolling back migration: ${version}`);
-
-      const migrationModule = require(filePath);
 
       // Start transaction on dedicated client
       await client.query('BEGIN');
@@ -134,7 +149,8 @@ class MigrationManager {
         await migrationModule.down(client);
       } else {
         throw new Error(
-          `Migration ${version} does not export a 'down' function`
+          `Migration ${version} does not export a 'down' function ` +
+            `(consider adding one or marking the migration irreversible)`
         );
       }
 
@@ -161,28 +177,82 @@ class MigrationManager {
     }
   }
 
+  /**
+   * Refuse to start if the schema_migrations table references versions that
+   * this code doesn't know about. Prevents a rolled-back deployment (older
+   * code) from silently operating against a DB that was already migrated
+   * forward by a newer build — where schema assumptions may have diverged.
+   * @private
+   */
+  async _checkForwardSchemaGuard() {
+    const migrationFiles = await this.getMigrationFiles();
+    const onDisk = new Set(migrationFiles.map((m) => m.version));
+    const executed = await this.getExecutedMigrations();
+    const unknown = executed.filter((v) => !onDisk.has(v));
+    if (unknown.length > 0) {
+      const sample = unknown.slice(0, 5).join(', ');
+      throw new Error(
+        `Database has migrations unknown to this code version: ${sample}` +
+          (unknown.length > 5 ? ` (+${unknown.length - 5} more)` : '') +
+          `. Deploy a newer build that includes these migrations, or roll ` +
+          `the database back before starting this version.`
+      );
+    }
+  }
+
+  /**
+   * Run all pending migrations under a Postgres advisory lock so two app
+   * instances starting simultaneously don't race. The forward-schema guard
+   * runs before lock acquisition so a mis-versioned DB fails fast without
+   * blocking the lock holder.
+   */
   async runMigrations() {
     await this.ensureMigrationTable();
+    await this._checkForwardSchemaGuard();
 
-    const executedMigrations = await this.getExecutedMigrations();
-    const migrationFiles = await this.getMigrationFiles();
+    const lockClient = await this.pool.connect();
+    let heldLock = false;
+    try {
+      // Acquire the advisory lock — blocks if another pod holds it, then
+      // proceeds. The lock is released by pg_advisory_unlock() or on
+      // client disconnect (in finally, on release).
+      await lockClient.query('SELECT pg_advisory_lock($1)', [
+        MIGRATION_LOCK_KEY,
+      ]);
+      heldLock = true;
 
-    const pendingMigrations = migrationFiles.filter(
-      (migration) => !executedMigrations.includes(migration.version)
-    );
+      // Re-read executed migrations AFTER acquiring the lock — another pod
+      // may have just finished running migrations we thought were pending.
+      const executedMigrations = await this.getExecutedMigrations();
+      const migrationFiles = await this.getMigrationFiles();
+      const pendingMigrations = migrationFiles.filter(
+        (migration) => !executedMigrations.includes(migration.version)
+      );
 
-    if (pendingMigrations.length === 0) {
-      logger.info('No pending migrations');
-      return;
+      if (pendingMigrations.length === 0) {
+        logger.info('No pending migrations');
+        return;
+      }
+
+      logger.info(`Found ${pendingMigrations.length} pending migrations`);
+      for (const migration of pendingMigrations) {
+        await this.executeMigration(migration);
+      }
+      logger.info('All migrations completed successfully');
+    } finally {
+      if (heldLock) {
+        try {
+          await lockClient.query('SELECT pg_advisory_unlock($1)', [
+            MIGRATION_LOCK_KEY,
+          ]);
+        } catch (err) {
+          logger.warn('Failed to release migration advisory lock', {
+            error: err.message,
+          });
+        }
+      }
+      lockClient.release();
     }
-
-    logger.info(`Found ${pendingMigrations.length} pending migrations`);
-
-    for (const migration of pendingMigrations) {
-      await this.executeMigration(migration);
-    }
-
-    logger.info('All migrations completed successfully');
   }
 
   async rollbackLastMigration() {

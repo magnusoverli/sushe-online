@@ -32,4 +32,7 @@ async function down(_pool) {
   logger.info('Rollback is no-op for this fix migration');
 }
 
-module.exports = { up, down };
+// Irreversible: this migration fixes pre-existing user data. Rolling back
+// would remove columns that may have user data, so the runner refuses to
+// auto-rollback. Restore from backup if a true rollback is needed.
+module.exports = { up, down, irreversible: true };

@@ -226,4 +226,6 @@ async function down(_pool) {
   logger.info('Revert complete (no changes made - data already merged)');
 }
 
-module.exports = { up, down };
+// Irreversible: duplicate albums were merged and deleted. Restore from
+// backup if a true rollback is needed.
+module.exports = { up, down, irreversible: true };
