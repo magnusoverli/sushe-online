@@ -139,7 +139,7 @@ test('new user registration should create user with pending approval status', as
 test('registration should create account_approval admin event', async () => {
   const pool = createMockPool();
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   const event = await service.createEvent({
     type: 'account_approval',
@@ -197,7 +197,7 @@ test('approve action should update user approval status to approved', async () =
   ];
   const pool = createMockPool({ events: mockEvents });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   // Register the approve handler (simulating what admin.js does)
   service.registerActionHandler(
@@ -266,7 +266,7 @@ test('reject action should update user approval status to rejected', async () =>
   ];
   const pool = createMockPool({ events: mockEvents });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   // Register the reject handler (simulating what admin.js does)
   service.registerActionHandler(
@@ -391,7 +391,7 @@ test('approve action should fail if userId is missing from event data', async ()
   ];
   const pool = createMockPool({ events: mockEvents });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   service.registerActionHandler(
     'account_approval',
@@ -433,7 +433,7 @@ test('approve action should fail if user not found in database', async () => {
   ];
   const pool = createMockPool({ events: mockEvents });
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   service.registerActionHandler(
     'account_approval',
@@ -487,7 +487,7 @@ test('admin event should trigger Telegram notification with approve/reject butto
   };
 
   const service = createAdminEventService({
-    pool,
+    db: pool,
     logger,
     telegramNotifier: mockTelegramNotifier,
   });
@@ -521,7 +521,7 @@ test('admin event should trigger Telegram notification with approve/reject butto
 test('multiple registrations should create separate admin events', async () => {
   const pool = createMockPool();
   const logger = createMockLogger();
-  const service = createAdminEventService({ pool, logger });
+  const service = createAdminEventService({ db: pool, logger });
 
   // First registration
   await service.createEvent({

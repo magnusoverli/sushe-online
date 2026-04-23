@@ -221,7 +221,7 @@ app.use((req, res, next) => {
 const { validateExtensionToken } = require('./utils/auth-utils');
 const ensureAuthAPI = createEnsureAuthAPI({
   usersAsync,
-  pool,
+  db,
   validateExtensionToken,
   recordActivity: recordActivityBase,
   logger,
@@ -254,8 +254,8 @@ const userService = createUserService({
   logger,
   invalidateUserCache,
 });
-const duplicateService = createDuplicateService({ db, pool, logger });
-const reidentifyService = createReidentifyService({ db, pool, logger });
+const duplicateService = createDuplicateService({ db, logger });
+const reidentifyService = createReidentifyService({ db, logger });
 
 const deps = {
   htmlTemplate,
@@ -293,7 +293,6 @@ const deps = {
   adminCodeState,
   dataDir,
   db,
-  pool,
   passport,
   invalidateUserCache,
   authService,
@@ -389,7 +388,7 @@ registerProcessHandlers({
 ready
   .then(async () => {
     // Initialize background queues
-    initializeQueues(pool);
+    initializeQueues(db);
 
     // Set up WebSocket server with session middleware
     setupWebSocket(httpServer, sessionMiddleware);
@@ -404,7 +403,7 @@ ready
       });
 
       // Start background sync services
-      stopSyncServices = startSyncServices(pool);
+      stopSyncServices = startSyncServices(db);
     });
   })
   .catch((err) => {

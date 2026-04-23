@@ -105,18 +105,25 @@ function chooseBetterTracks(existing, newTracks) {
  * Factory function to create album canonical utilities with injectable dependencies
  *
  * @param {Object} deps - Dependencies
- * @param {Object} deps.pool - PostgreSQL pool instance
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Object} deps.logger - Logger instance (optional)
  * @returns {Object} - Album canonical utility functions
  */
 // eslint-disable-next-line max-lines-per-function -- Cohesive utility module with multiple related functions
 function createAlbumCanonical(deps = {}) {
   const log = deps.logger || logger;
-  const pool = deps.pool;
-
-  if (!pool) {
-    throw new Error('PostgreSQL pool is required');
+  const dbStore = deps.db;
+  if (!dbStore) {
+    throw new Error('album-canonical requires deps.db');
   }
+
+  // Inner functions follow `const db = client || pool` and call `.query(...)`.
+  // Accept either the canonical datastore (with .raw) or a pg-like object with
+  // .query directly — this keeps tests that mock a bare { query } usable.
+  const pool =
+    typeof dbStore.query === 'function'
+      ? dbStore
+      : { query: (sql, params) => dbStore.raw(sql, params) };
 
   /**
    * Find an existing canonical album by normalized artist and album name

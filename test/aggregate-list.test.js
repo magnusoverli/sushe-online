@@ -61,16 +61,16 @@ describe('aggregate-list', () => {
   // ===========================================================================
 
   describe('createAggregateList', () => {
-    it('should throw if no db or pool is provided', () => {
+    it('should throw if no db is provided', () => {
       assert.throws(
         () => createAggregateList({}),
-        /db datastore \(or legacy pool\) is required/
+        /aggregate-list requires deps\.db/
       );
     });
 
     it('should create instance with pool', () => {
       const pool = createMockPool();
-      const aggregateList = createAggregateList({ pool });
+      const aggregateList = createAggregateList({ db: pool });
       assert.ok(aggregateList);
       assert.strictEqual(typeof aggregateList.aggregateForYear, 'function');
       assert.strictEqual(typeof aggregateList.recompute, 'function');
@@ -99,7 +99,7 @@ describe('aggregate-list', () => {
         { rows: [] }, // No main lists
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.aggregateForYear(2024);
 
@@ -164,7 +164,7 @@ describe('aggregate-list', () => {
         },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.aggregateForYear(2024);
 
@@ -254,7 +254,7 @@ describe('aggregate-list', () => {
         },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.aggregateForYear(2024);
 
@@ -326,7 +326,7 @@ describe('aggregate-list', () => {
         },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.aggregateForYear(2024);
       const album = result.data.albums[0];
@@ -420,7 +420,7 @@ describe('aggregate-list', () => {
         },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.aggregateForYear(2024);
 
@@ -555,7 +555,7 @@ describe('aggregate-list', () => {
         },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.aggregateForYear(2024);
 
@@ -651,7 +651,7 @@ describe('aggregate-list', () => {
         },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.aggregateForYear(2024);
 
@@ -748,7 +748,7 @@ describe('aggregate-list', () => {
         },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.aggregateForYear(2024);
 
@@ -839,7 +839,7 @@ describe('aggregate-list', () => {
         },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.aggregateForYear(2024);
 
@@ -867,7 +867,7 @@ describe('aggregate-list', () => {
   describe('get', () => {
     it('should return null when aggregate list does not exist', async () => {
       const pool = createMockPool([{ rows: [] }]);
-      const aggregateList = createAggregateList({ pool });
+      const aggregateList = createAggregateList({ db: pool });
 
       const result = await aggregateList.get(2024);
       assert.strictEqual(result, null);
@@ -882,7 +882,7 @@ describe('aggregate-list', () => {
         stats: {},
       };
       const pool = createMockPool([{ rows: [mockRecord] }]);
-      const aggregateList = createAggregateList({ pool });
+      const aggregateList = createAggregateList({ db: pool });
 
       const result = await aggregateList.get(2024);
       assert.deepStrictEqual(result, mockRecord);
@@ -896,7 +896,7 @@ describe('aggregate-list', () => {
   describe('getStatus', () => {
     it('should return exists: false when aggregate list does not exist', async () => {
       const pool = createMockPool([{ rows: [] }]);
-      const aggregateList = createAggregateList({ pool });
+      const aggregateList = createAggregateList({ db: pool });
 
       const status = await aggregateList.getStatus(2024);
 
@@ -916,7 +916,7 @@ describe('aggregate-list', () => {
           rows: [{ username: 'admin1', confirmed_at: new Date('2024-01-01') }],
         },
       ]);
-      const aggregateList = createAggregateList({ pool });
+      const aggregateList = createAggregateList({ db: pool });
 
       const status = await aggregateList.getStatus(2024);
 
@@ -940,7 +940,7 @@ describe('aggregate-list', () => {
         { rows: [] },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.addConfirmation(2024, 'admin1');
 
@@ -961,7 +961,7 @@ describe('aggregate-list', () => {
         { rows: [{ username: 'admin1', confirmed_at: new Date() }] },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.addConfirmation(2024, 'admin1');
 
@@ -990,7 +990,7 @@ describe('aggregate-list', () => {
         },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.addConfirmation(2024, 'admin2');
 
@@ -1013,7 +1013,7 @@ describe('aggregate-list', () => {
         { rows: [] },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.removeConfirmation(2024, 'admin1');
 
@@ -1032,7 +1032,7 @@ describe('aggregate-list', () => {
         { rows: [] },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.removeConfirmation(2024, 'admin1');
 
@@ -1048,7 +1048,7 @@ describe('aggregate-list', () => {
   describe('getStats', () => {
     it('should return null when aggregate list does not exist', async () => {
       const pool = createMockPool([{ rows: [] }]);
-      const aggregateList = createAggregateList({ pool });
+      const aggregateList = createAggregateList({ db: pool });
 
       const stats = await aggregateList.getStats(2024);
       assert.strictEqual(stats, null);
@@ -1057,7 +1057,7 @@ describe('aggregate-list', () => {
     it('should return stats when aggregate list exists', async () => {
       const mockStats = { participantCount: 5, totalAlbums: 42 };
       const pool = createMockPool([{ rows: [{ stats: mockStats }] }]);
-      const aggregateList = createAggregateList({ pool });
+      const aggregateList = createAggregateList({ db: pool });
 
       const stats = await aggregateList.getStats(2024);
       assert.deepStrictEqual(stats, mockStats);
@@ -1071,7 +1071,7 @@ describe('aggregate-list', () => {
   describe('getRevealedYears', () => {
     it('should return empty array when no revealed lists', async () => {
       const pool = createMockPool([{ rows: [] }]);
-      const aggregateList = createAggregateList({ pool });
+      const aggregateList = createAggregateList({ db: pool });
 
       const years = await aggregateList.getRevealedYears();
       assert.deepStrictEqual(years, []);
@@ -1086,7 +1086,7 @@ describe('aggregate-list', () => {
           ],
         },
       ]);
-      const aggregateList = createAggregateList({ pool });
+      const aggregateList = createAggregateList({ db: pool });
 
       const years = await aggregateList.getRevealedYears();
       assert.strictEqual(years.length, 2);
@@ -1126,7 +1126,7 @@ describe('aggregate-list', () => {
         { rows: [{ year: 2024, data: {}, stats: {} }] },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.recompute(2024);
 
@@ -1143,7 +1143,7 @@ describe('aggregate-list', () => {
   describe('getContributors', () => {
     it('should return empty array when no contributors exist', async () => {
       const pool = createMockPool([{ rows: [] }]);
-      const aggregateList = createAggregateList({ pool });
+      const aggregateList = createAggregateList({ db: pool });
 
       const contributors = await aggregateList.getContributors(2024);
       assert.deepStrictEqual(contributors, []);
@@ -1167,7 +1167,7 @@ describe('aggregate-list', () => {
         },
       ];
       const pool = createMockPool([{ rows: mockContributors }]);
-      const aggregateList = createAggregateList({ pool });
+      const aggregateList = createAggregateList({ db: pool });
 
       const contributors = await aggregateList.getContributors(2024);
       assert.strictEqual(contributors.length, 2);
@@ -1179,7 +1179,7 @@ describe('aggregate-list', () => {
   describe('getEligibleUsers', () => {
     it('should return empty array when no users have main lists', async () => {
       const pool = createMockPool([{ rows: [] }]);
-      const aggregateList = createAggregateList({ pool });
+      const aggregateList = createAggregateList({ db: pool });
 
       const eligibleUsers = await aggregateList.getEligibleUsers(2024);
       assert.deepStrictEqual(eligibleUsers, []);
@@ -1207,7 +1207,7 @@ describe('aggregate-list', () => {
         },
       ];
       const pool = createMockPool([{ rows: mockUsers }]);
-      const aggregateList = createAggregateList({ pool });
+      const aggregateList = createAggregateList({ db: pool });
 
       const eligibleUsers = await aggregateList.getEligibleUsers(2024);
       assert.strictEqual(eligibleUsers.length, 2);
@@ -1220,7 +1220,7 @@ describe('aggregate-list', () => {
     it('should add a contributor successfully', async () => {
       const pool = createMockPool([{ rows: [] }]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.addContributor(
         2024,
@@ -1246,7 +1246,7 @@ describe('aggregate-list', () => {
         { rows: [{ user_id: 'user1' }], rowCount: 1 },
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.removeContributor(2024, 'user1');
 
@@ -1257,7 +1257,7 @@ describe('aggregate-list', () => {
     it('should return removed: false when contributor does not exist', async () => {
       const pool = createMockPool([{ rows: [], rowCount: 0 }]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.removeContributor(2024, 'nonexistent');
 
@@ -1278,7 +1278,7 @@ describe('aggregate-list', () => {
         connect: mock.fn(async () => mockClient),
       };
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.setContributors(
         2024,
@@ -1305,7 +1305,7 @@ describe('aggregate-list', () => {
         connect: mock.fn(async () => mockClient),
       };
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.setContributors(2024, [], 'admin1');
 
@@ -1330,7 +1330,7 @@ describe('aggregate-list', () => {
         connect: mock.fn(async () => mockClient),
       };
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       await assert.rejects(
         async () => aggregateList.setContributors(2024, ['user1'], 'admin1'),
@@ -1351,7 +1351,7 @@ describe('aggregate-list', () => {
         { rows: [] }, // No results because no one is a contributor
       ]);
       const logger = createMockLogger();
-      const aggregateList = createAggregateList({ pool, logger });
+      const aggregateList = createAggregateList({ db: pool, logger });
 
       const result = await aggregateList.aggregateForYear(2024);
 

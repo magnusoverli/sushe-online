@@ -2,6 +2,7 @@
 // Album summary fetching from Claude API
 
 const logger = require('../utils/logger');
+const { ensureDb } = require('../db/postgres');
 const {
   observeExternalApiCall,
   recordExternalApiError,
@@ -326,24 +327,16 @@ async function processBatchAlbumsPaged(
 /**
  * Create album summary service with injected dependencies
  * @param {Object} deps - Dependencies
- * @param {Object} deps.pool - PostgreSQL pool
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Object} deps.logger - Logger instance
  * @param {Object} deps.responseCache - Response cache instance (optional, for cache invalidation)
  * @param {Object} deps.broadcast - WebSocket broadcast service (optional, for real-time updates)
  */
 function createAlbumSummaryService(deps = {}) {
   const log = deps.logger || logger;
-  const pool = deps.pool;
+  const db = ensureDb(deps.db, 'album-summary');
   const responseCache = deps.responseCache;
   const broadcast = deps.broadcast;
-
-  if (!pool) {
-    throw new Error('Database pool is required');
-  }
-
-  // Unified DB facade. Uses pool directly (still needed for pool.connect()
-  // in the advisory-lock path) but routes all one-shot queries through .raw().
-  const db = deps.db || { raw: (sql, params) => pool.query(sql, params) };
 
   // Batch job state
   let batchJob = null;
@@ -503,11 +496,13 @@ function createAlbumSummaryService(deps = {}) {
     setImmediate(() => {
       Promise.resolve()
         .then(async () => {
-          // Use advisory lock based on album_id hash to prevent race conditions
+          // Use advisory lock based on album_id hash to prevent race conditions.
+          // db.withClient acquires a single client for the lifetime of the
+          // advisory lock — the lock is tied to the connection, so it must
+          // be acquired and released on the same client.
           const lockId = hashAlbumId(albumId);
-          const client = await pool.connect();
 
-          try {
+          await db.withClient(async (client) => {
             // Try to acquire lock (non-blocking)
             const lockResult = await client.query(
               'SELECT pg_try_advisory_lock($1) as acquired',
@@ -548,14 +543,7 @@ function createAlbumSummaryService(deps = {}) {
                 lockId,
               });
             }
-          } catch (err) {
-            log.warn('Async summary fetch failed', {
-              albumId,
-              error: err.message,
-            });
-          } finally {
-            client.release();
-          }
+          });
         })
         .catch((err) => {
           // Catch any unhandled rejections from the promise chain

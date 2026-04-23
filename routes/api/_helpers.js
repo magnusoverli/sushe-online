@@ -13,7 +13,7 @@ const { TransactionAbort } = require('../../db/transaction');
 /**
  * Create helper functions with injected dependencies
  * @param {Object} deps - Dependencies
- * @param {Object} deps.pool - Database connection pool
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Object} deps.logger - Logger instance
  * @param {Object} deps.responseCache - Response cache instance
  * @param {Object} deps.app - Express app instance
@@ -21,20 +21,17 @@ const { TransactionAbort } = require('../../db/transaction');
  * @returns {Object} - Helper functions
  */
 function createHelpers(deps) {
-  const { pool, logger, responseCache, app, crypto } = deps;
-  // Prefer canonical db; fall back to a pool adapter for legacy callers.
-  const db =
-    deps.db ||
-    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
+  const { logger, responseCache, app, crypto } = deps;
+  const db = deps.db;
+  if (!db) {
+    throw new Error('createHelpers requires deps.db');
+  }
 
   // Create aggregate list instance for recomputation triggers
-  const aggregateList = createAggregateList({ db, pool, logger });
+  const aggregateList = createAggregateList({ db, logger });
 
-  // Create album canonical instance for deduplication.
-  // album-canonical speaks pg-native (pool.query / client.query) because it
-  // accepts a transaction client interchangeably — it is not consolidated
-  // onto .raw() in this pass. Passing `pool` is correct.
-  const albumCanonical = createAlbumCanonical({ pool, logger });
+  // Create album canonical instance for deduplication
+  const albumCanonical = createAlbumCanonical({ db, logger });
 
   /**
    * Helper to trigger aggregate list recomputation for a year (non-blocking)

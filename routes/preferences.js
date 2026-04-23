@@ -18,13 +18,13 @@ const { createPreferencesHandlers } = require('./preferences/handlers');
 const asyncHandler = createAsyncHandler(logger);
 
 module.exports = (app, deps) => {
-  const { ensureAuthAPI, pool } = deps;
-  const userPrefs = createUserPreferences({ pool, logger });
+  const { ensureAuthAPI, db } = deps;
+  const userPrefs = createUserPreferences({ db, logger });
 
   let syncService = null;
   const getSyncService = () => {
     if (!syncService) {
-      syncService = createPreferenceSyncService({ pool, logger });
+      syncService = createPreferenceSyncService({ db, logger });
     }
     return syncService;
   };

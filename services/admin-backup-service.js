@@ -1,4 +1,5 @@
 const { spawn } = require('child_process');
+const { ensureDb } = require('../db/postgres');
 const fs = require('fs');
 const path = require('path');
 
@@ -244,16 +245,7 @@ function scheduleRestart({
 
 function createAdminBackupService(deps = {}) {
   const logger = deps.logger || require('../utils/logger');
-  // Accept either a datastore (preferred) or a legacy pool.
-  // When given a pool, adapt it to the .raw() interface for internal use.
-  const db =
-    deps.db ||
-    (deps.pool
-      ? { raw: (sql, params) => deps.pool.query(sql, params) }
-      : (() => {
-          const { usersAsync } = require('../db');
-          return usersAsync;
-        })());
+  const db = ensureDb(deps.db, 'admin-backup-service');
   const fsDep = deps.fs || fs;
   const pathDep = deps.path || path;
   const spawnDep = deps.spawn || spawn;

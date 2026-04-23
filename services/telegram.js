@@ -3,6 +3,7 @@
 // Supports forum topics (message_thread_id) for organized notification channels
 
 const crypto = require('crypto');
+const { ensureDb } = require('../db/postgres');
 const logger = require('../utils/logger');
 const { createConfigManager } = require('./telegram/config-manager');
 const { decrypt, encrypt } = require('./telegram/crypto-utils');
@@ -358,7 +359,7 @@ function createMessenger(apiRequest, configManager, log) {
 /**
  * Create Telegram notifier with injected dependencies
  * @param {Object} deps - Dependencies
- * @param {Object} deps.pool - PostgreSQL connection pool
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Object} deps.logger - Logger instance
  * @param {Function} deps.fetch - Fetch function
  * @param {string} deps.encryptionKey - Key for encrypting bot token
@@ -366,10 +367,7 @@ function createMessenger(apiRequest, configManager, log) {
  */
 function createTelegramNotifier(deps = {}) {
   const log = deps.logger || logger;
-  // Accept canonical db or legacy pool; internal sub-services are duck-typed
-  // and accept either.
-  const poolOrDb = deps.db || deps.pool;
-  const pool = poolOrDb;
+  const db = ensureDb(deps.db, 'telegram-notifier');
   const fetchFn = deps.fetch || global.fetch;
   const encryptionKey = deps.encryptionKey || process.env.SESSION_SECRET;
   const baseUrl = deps.baseUrl || process.env.BASE_URL;
@@ -471,7 +469,7 @@ function createTelegramNotifier(deps = {}) {
   // Create helper modules
   const setupHelpers = createSetupHelpers(apiRequest, log);
   const configManager = createConfigManager(
-    pool,
+    db,
     encryptionKey,
     log,
     setupHelpers,
@@ -484,9 +482,9 @@ function createTelegramNotifier(deps = {}) {
     messenger,
     log
   );
-  const webhook = createWebhookHandler(pool, configManager, log);
+  const webhook = createWebhookHandler(db, configManager, log);
   const recommendations = createRecommendationsNotifier(
-    pool,
+    db,
     apiRequest,
     uploadPhoto,
     configManager,

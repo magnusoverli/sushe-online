@@ -6,13 +6,10 @@
 const { createImageRefetchService } = require('../../services/image-refetch');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin } = deps;
+  const { ensureAuth, ensureAdmin, db } = deps;
   const logger = require('../../utils/logger');
 
-  const imageRefetchService = createImageRefetchService({
-    pool: deps.pool,
-    logger,
-  });
+  const imageRefetchService = createImageRefetchService({ db, logger });
 
   app.locals.imageRefetchService = imageRefetchService;
 

@@ -7,8 +7,7 @@ const { toggleMainStatus, deleteList } = require('./management/main-status');
 
 function createListManagementOperations(deps = {}) {
   const ctx = {
-    pool: deps.pool,
-    withTransaction: deps.withTransaction,
+    db: deps.db,
     TransactionAbort: deps.TransactionAbort,
     validateYear: deps.validateYear,
     validateMainListNotLocked: deps.validateMainListNotLocked,
@@ -18,10 +17,7 @@ function createListManagementOperations(deps = {}) {
     deleteGroupIfEmptyAutoGroup: deps.deleteGroupIfEmptyAutoGroup,
   };
 
-  if (!ctx.pool) throw new Error('pool is required');
-  if (typeof ctx.withTransaction !== 'function') {
-    throw new Error('withTransaction is required');
-  }
+  if (!ctx.db) throw new Error('db is required');
   if (!ctx.TransactionAbort) throw new Error('TransactionAbort is required');
   if (typeof ctx.validateYear !== 'function') {
     throw new Error('validateYear is required');

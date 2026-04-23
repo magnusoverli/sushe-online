@@ -63,20 +63,18 @@ describe('getPositionPoints', () => {
 // =============================================================================
 
 describe('aggregateFromLists', () => {
-  it('should throw if pool is not provided', async () => {
+  it('should throw at construction if db is not provided', () => {
     const logger = createMockLogger();
-    const { aggregateFromLists } = createUserPreferences({ logger });
-
-    await assert.rejects(
-      () => aggregateFromLists('user123'),
-      /Database pool not provided/
+    assert.throws(
+      () => createUserPreferences({ logger }),
+      /user-preferences requires deps\.db/
     );
   });
 
   it('should return empty results for user with no albums', async () => {
     const logger = createMockLogger();
     const pool = createMockPool([{ rows: [] }]);
-    const { aggregateFromLists } = createUserPreferences({ logger, pool });
+    const { aggregateFromLists } = createUserPreferences({ logger, db: pool });
 
     const result = await aggregateFromLists('user123');
 
@@ -117,7 +115,7 @@ describe('aggregateFromLists', () => {
         ],
       },
     ]);
-    const { aggregateFromLists } = createUserPreferences({ logger, pool });
+    const { aggregateFromLists } = createUserPreferences({ logger, db: pool });
 
     const result = await aggregateFromLists('user123');
 
@@ -161,7 +159,7 @@ describe('aggregateFromLists', () => {
         ],
       },
     ]);
-    const { aggregateFromLists } = createUserPreferences({ logger, pool });
+    const { aggregateFromLists } = createUserPreferences({ logger, db: pool });
 
     const result = await aggregateFromLists('user123');
 
@@ -202,7 +200,7 @@ describe('aggregateFromLists', () => {
         ],
       },
     ]);
-    const { aggregateFromLists } = createUserPreferences({ logger, pool });
+    const { aggregateFromLists } = createUserPreferences({ logger, db: pool });
 
     const result = await aggregateFromLists('user123');
 
@@ -240,7 +238,7 @@ describe('aggregateFromLists', () => {
         ],
       },
     ]);
-    const { aggregateFromLists } = createUserPreferences({ logger, pool });
+    const { aggregateFromLists } = createUserPreferences({ logger, db: pool });
 
     const result = await aggregateFromLists('user123');
 
@@ -262,7 +260,7 @@ describe('aggregateFromLists', () => {
       });
     }
     const pool = createMockPool([{ rows }]);
-    const { aggregateFromLists } = createUserPreferences({ logger, pool });
+    const { aggregateFromLists } = createUserPreferences({ logger, db: pool });
 
     const result = await aggregateFromLists('user123', { limit: 10 });
 
@@ -272,7 +270,7 @@ describe('aggregateFromLists', () => {
   it('should include mainOnly filter in query when specified', async () => {
     const logger = createMockLogger();
     const pool = createMockPool([{ rows: [] }]);
-    const { aggregateFromLists } = createUserPreferences({ logger, pool });
+    const { aggregateFromLists } = createUserPreferences({ logger, db: pool });
 
     await aggregateFromLists('user123', { mainOnly: true });
 
@@ -287,7 +285,9 @@ describe('aggregateFromLists', () => {
 
 describe('calculateAffinity', () => {
   it('should handle internal data only', () => {
-    const { calculateAffinity } = createUserPreferences({});
+    const { calculateAffinity } = createUserPreferences({
+      db: { raw: () => ({ rows: [] }) },
+    });
 
     const internalData = {
       topArtists: [
@@ -309,7 +309,9 @@ describe('calculateAffinity', () => {
   });
 
   it('should combine internal and Spotify data', () => {
-    const { calculateAffinity } = createUserPreferences({});
+    const { calculateAffinity } = createUserPreferences({
+      db: { raw: () => ({ rows: [] }) },
+    });
 
     const internalData = {
       topArtists: [{ name: 'Artist A', count: 5, points: 200 }],
@@ -334,7 +336,9 @@ describe('calculateAffinity', () => {
   });
 
   it('should combine all three data sources', () => {
-    const { calculateAffinity } = createUserPreferences({});
+    const { calculateAffinity } = createUserPreferences({
+      db: { raw: () => ({ rows: [] }) },
+    });
 
     const internalData = {
       topArtists: [{ name: 'Artist A', count: 5, points: 200 }],
@@ -361,7 +365,9 @@ describe('calculateAffinity', () => {
   });
 
   it('should normalize weights when not all sources present', () => {
-    const { calculateAffinity } = createUserPreferences({});
+    const { calculateAffinity } = createUserPreferences({
+      db: { raw: () => ({ rows: [] }) },
+    });
 
     const internalData = {
       topArtists: [{ name: 'Artist A', count: 5, points: 200 }],
@@ -376,7 +382,9 @@ describe('calculateAffinity', () => {
   });
 
   it('should extract genres from Spotify artist data', () => {
-    const { calculateAffinity } = createUserPreferences({});
+    const { calculateAffinity } = createUserPreferences({
+      db: { raw: () => ({ rows: [] }) },
+    });
 
     const spotifyData = {
       short_term: [
@@ -399,7 +407,9 @@ describe('calculateAffinity', () => {
   });
 
   it('should limit results to 100 items', () => {
-    const { calculateAffinity } = createUserPreferences({});
+    const { calculateAffinity } = createUserPreferences({
+      db: { raw: () => ({ rows: [] }) },
+    });
 
     const topArtists = [];
     for (let i = 0; i < 150; i++) {
@@ -417,20 +427,18 @@ describe('calculateAffinity', () => {
 // =============================================================================
 
 describe('savePreferences', () => {
-  it('should throw if pool is not provided', async () => {
+  it('should throw at construction if db is not provided', () => {
     const logger = createMockLogger();
-    const { savePreferences } = createUserPreferences({ logger });
-
-    await assert.rejects(
-      () => savePreferences('user123', {}),
-      /Database pool not provided/
+    assert.throws(
+      () => createUserPreferences({ logger }),
+      /user-preferences requires deps\.db/
     );
   });
 
   it('should execute upsert query with correct parameters', async () => {
     const logger = createMockLogger();
     const pool = createMockPool([{ rows: [{ id: 1, user_id: 'user123' }] }]);
-    const { savePreferences } = createUserPreferences({ logger, pool });
+    const { savePreferences } = createUserPreferences({ logger, db: pool });
 
     const data = {
       topGenres: [{ name: 'Rock', count: 10 }],
@@ -450,7 +458,7 @@ describe('savePreferences', () => {
   it('should handle Spotify data', async () => {
     const logger = createMockLogger();
     const pool = createMockPool([{ rows: [{ id: 1 }] }]);
-    const { savePreferences } = createUserPreferences({ logger, pool });
+    const { savePreferences } = createUserPreferences({ logger, db: pool });
 
     const data = {
       spotifyTopArtists: [{ name: 'Artist' }],
@@ -467,7 +475,7 @@ describe('savePreferences', () => {
   it('should handle Last.fm data', async () => {
     const logger = createMockLogger();
     const pool = createMockPool([{ rows: [{ id: 1 }] }]);
-    const { savePreferences } = createUserPreferences({ logger, pool });
+    const { savePreferences } = createUserPreferences({ logger, db: pool });
 
     const data = {
       lastfmTopArtists: [{ name: 'Artist' }],
@@ -485,7 +493,7 @@ describe('savePreferences', () => {
   it('should handle Last.fm artist tags', async () => {
     const logger = createMockLogger();
     const pool = createMockPool([{ rows: [{ id: 1 }] }]);
-    const { savePreferences } = createUserPreferences({ logger, pool });
+    const { savePreferences } = createUserPreferences({ logger, db: pool });
 
     const data = {
       lastfmArtistTags: {
@@ -502,7 +510,7 @@ describe('savePreferences', () => {
   it('should handle country affinity', async () => {
     const logger = createMockLogger();
     const pool = createMockPool([{ rows: [{ id: 1 }] }]);
-    const { savePreferences } = createUserPreferences({ logger, pool });
+    const { savePreferences } = createUserPreferences({ logger, db: pool });
 
     const data = {
       countryAffinity: [
@@ -523,13 +531,11 @@ describe('savePreferences', () => {
 // =============================================================================
 
 describe('getPreferences', () => {
-  it('should throw if pool is not provided', async () => {
+  it('should throw at construction if db is not provided', () => {
     const logger = createMockLogger();
-    const { getPreferences } = createUserPreferences({ logger });
-
-    await assert.rejects(
-      () => getPreferences('user123'),
-      /Database pool not provided/
+    assert.throws(
+      () => createUserPreferences({ logger }),
+      /user-preferences requires deps\.db/
     );
   });
 
@@ -541,7 +547,7 @@ describe('getPreferences', () => {
       total_albums: 50,
     };
     const pool = createMockPool([{ rows: [prefs] }]);
-    const { getPreferences } = createUserPreferences({ logger, pool });
+    const { getPreferences } = createUserPreferences({ logger, db: pool });
 
     const result = await getPreferences('user123');
 
@@ -551,7 +557,7 @@ describe('getPreferences', () => {
   it('should return null if not found', async () => {
     const logger = createMockLogger();
     const pool = createMockPool([{ rows: [] }]);
-    const { getPreferences } = createUserPreferences({ logger, pool });
+    const { getPreferences } = createUserPreferences({ logger, db: pool });
 
     const result = await getPreferences('user123');
 
@@ -567,7 +573,7 @@ describe('checkRefreshNeeded', () => {
   it('should return all true if no preferences exist', async () => {
     const logger = createMockLogger();
     const pool = createMockPool([{ rows: [] }]);
-    const { checkRefreshNeeded } = createUserPreferences({ logger, pool });
+    const { checkRefreshNeeded } = createUserPreferences({ logger, db: pool });
 
     const result = await checkRefreshNeeded('user123');
 
@@ -587,7 +593,7 @@ describe('checkRefreshNeeded', () => {
       lastfm_synced_at: now,
     };
     const pool = createMockPool([{ rows: [prefs] }]);
-    const { checkRefreshNeeded } = createUserPreferences({ logger, pool });
+    const { checkRefreshNeeded } = createUserPreferences({ logger, db: pool });
 
     const result = await checkRefreshNeeded('user123');
 
@@ -605,7 +611,7 @@ describe('checkRefreshNeeded', () => {
       lastfm_synced_at: oldDate,
     };
     const pool = createMockPool([{ rows: [prefs] }]);
-    const { checkRefreshNeeded } = createUserPreferences({ logger, pool });
+    const { checkRefreshNeeded } = createUserPreferences({ logger, db: pool });
 
     const result = await checkRefreshNeeded('user123');
 
@@ -623,7 +629,7 @@ describe('checkRefreshNeeded', () => {
       lastfm_synced_at: oneHourAgo,
     };
     const pool = createMockPool([{ rows: [prefs] }]);
-    const { checkRefreshNeeded } = createUserPreferences({ logger, pool });
+    const { checkRefreshNeeded } = createUserPreferences({ logger, db: pool });
 
     // With 30 minute max age, should need refresh
     const result = await checkRefreshNeeded('user123', 30 * 60 * 1000);
@@ -639,7 +645,7 @@ describe('checkRefreshNeeded', () => {
       lastfm_synced_at: null,
     };
     const pool = createMockPool([{ rows: [prefs] }]);
-    const { checkRefreshNeeded } = createUserPreferences({ logger, pool });
+    const { checkRefreshNeeded } = createUserPreferences({ logger, db: pool });
 
     const result = await checkRefreshNeeded('user123');
 
@@ -874,7 +880,9 @@ describe('GENRE_MAPPINGS', () => {
 
 describe('calculateAffinity - Last.fm genre consolidation', () => {
   it('should include Last.fm genres from artist tags', () => {
-    const { calculateAffinity } = createUserPreferences({});
+    const { calculateAffinity } = createUserPreferences({
+      db: { raw: () => ({ rows: [] }) },
+    });
 
     const internalData = {
       topArtists: [],
@@ -911,7 +919,9 @@ describe('calculateAffinity - Last.fm genre consolidation', () => {
   });
 
   it('should weight genres by artist playcount', () => {
-    const { calculateAffinity } = createUserPreferences({});
+    const { calculateAffinity } = createUserPreferences({
+      db: { raw: () => ({ rows: [] }) },
+    });
 
     const lastfmData = {
       overall: [
@@ -938,7 +948,9 @@ describe('calculateAffinity - Last.fm genre consolidation', () => {
   });
 
   it('should consolidate same genre from multiple sources', () => {
-    const { calculateAffinity } = createUserPreferences({});
+    const { calculateAffinity } = createUserPreferences({
+      db: { raw: () => ({ rows: [] }) },
+    });
 
     const internalData = {
       topArtists: [],
@@ -970,7 +982,9 @@ describe('calculateAffinity - Last.fm genre consolidation', () => {
   });
 
   it('should return country affinity from internal data', () => {
-    const { calculateAffinity } = createUserPreferences({});
+    const { calculateAffinity } = createUserPreferences({
+      db: { raw: () => ({ rows: [] }) },
+    });
 
     const internalData = {
       topArtists: [],
@@ -990,7 +1004,9 @@ describe('calculateAffinity - Last.fm genre consolidation', () => {
   });
 
   it('should handle artistTags as Map or object', () => {
-    const { calculateAffinity } = createUserPreferences({});
+    const { calculateAffinity } = createUserPreferences({
+      db: { raw: () => ({ rows: [] }) },
+    });
 
     // Test with plain object (what comes from JSON storage)
     const lastfmDataObj = {
@@ -1029,7 +1045,9 @@ describe('calculateAffinity - Last.fm genre consolidation', () => {
   });
 
   it('should use normalized artist names for tag matching', () => {
-    const { calculateAffinity } = createUserPreferences({});
+    const { calculateAffinity } = createUserPreferences({
+      db: { raw: () => ({ rows: [] }) },
+    });
 
     const lastfmData = {
       overall: [{ name: 'The Beatles', playcount: 1000 }],

@@ -2,7 +2,7 @@ async function bulkUpdate(ctx, userId, updates) {
   const results = [];
   const yearsToRecompute = new Set();
 
-  await ctx.withTransaction(ctx.pool, async (client) => {
+  await ctx.db.withTransaction(async (client) => {
     for (const update of updates) {
       const { listId, year, isMain: updateIsMain } = update;
 
@@ -34,7 +34,7 @@ async function bulkUpdate(ctx, userId, updates) {
 
       const effectiveYear = newYear || oldYear;
       if (effectiveYear) {
-        const yearLocked = await ctx.isYearLocked(ctx.pool, effectiveYear);
+        const yearLocked = await ctx.isYearLocked(ctx.db, effectiveYear);
         if (yearLocked) {
           if (updateIsMain !== undefined && updateIsMain !== oldList.is_main) {
             results.push({

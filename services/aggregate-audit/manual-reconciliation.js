@@ -1,3 +1,5 @@
+const { ensureDb } = require('../../db/postgres');
+
 function isOrphanedAlbum(album) {
   return album.artist === null && album.album === null && !album.has_cover;
 }
@@ -477,11 +479,7 @@ async function deleteOrphanedReferences(ctx, albumId, adminUserId) {
 }
 
 function createManualReconciliationService(deps = {}) {
-  // Accept either a datastore or a legacy pool (adapted to the .raw API).
-  let db = deps.db;
-  if (!db && deps.pool) {
-    db = { raw: (sql, params) => deps.pool.query(sql, params) };
-  }
+  const db = ensureDb(deps.db, 'manual-reconciliation');
 
   const context = {
     db,

@@ -8,6 +8,7 @@
  */
 
 const sharp = require('sharp');
+const { ensureDb } = require('../db/postgres');
 const logger = require('../utils/logger');
 const { normalizeForLookup } = require('../utils/normalization');
 const {
@@ -210,21 +211,14 @@ async function fetchCoverArt(artist, album) {
 /**
  * Create image refetch service
  * @param {Object} deps - Dependencies
- * @param {Object} deps.pool - PostgreSQL pool
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Object} deps.logger - Logger instance (optional)
  * @returns {Object} - Image refetch service
  */
 // eslint-disable-next-line max-lines-per-function -- Factory function with multiple internal methods
 function createImageRefetchService(deps = {}) {
-  const pool = deps.pool;
-  const db =
-    deps.db ||
-    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
+  const db = ensureDb(deps.db, 'image-refetch');
   const log = deps.logger || logger;
-
-  if (!db) {
-    throw new Error('image-refetch requires deps.db (or legacy deps.pool)');
-  }
 
   // Job state
   let isRunning = false;

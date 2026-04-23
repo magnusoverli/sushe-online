@@ -101,14 +101,12 @@ module.exports = (app, deps) => {
     composeForgotPasswordEmail,
     csrfProtection,
     db,
-    pool,
     isValidPassword,
   } = deps;
 
   // Create helper functions
   const helpers = createHelpers({
     db,
-    pool,
     logger,
     responseCache,
     app,
@@ -134,7 +132,6 @@ module.exports = (app, deps) => {
   // Create list service
   const listService = createListService({
     db,
-    pool,
     logger,
     listsAsync,
     listItemsAsync,
@@ -148,7 +145,6 @@ module.exports = (app, deps) => {
   // Create group service
   const groupService = createGroupService({
     db,
-    pool,
     logger,
     crypto,
     findOrCreateYearGroup: helpers.findOrCreateYearGroup,
@@ -159,7 +155,6 @@ module.exports = (app, deps) => {
   // Create album service
   const albumService = createAlbumService({
     db,
-    pool,
     logger,
     upsertAlbumRecord: helpers.upsertAlbumRecord,
     invalidateCachesForAlbumUsers: helpers.invalidateCachesForAlbumUsers,
@@ -167,14 +162,12 @@ module.exports = (app, deps) => {
 
   const externalIdentityService = createExternalIdentityService({
     db,
-    pool,
     logger,
   });
 
   // Create recommendation service
   const recommendationService = createRecommendationService({
     db,
-    pool,
     logger,
     crypto,
     upsertAlbumRecord: helpers.upsertAlbumRecord,
@@ -185,7 +178,6 @@ module.exports = (app, deps) => {
     // Core dependencies
     app,
     db,
-    pool,
     logger,
     crypto,
     bcrypt,

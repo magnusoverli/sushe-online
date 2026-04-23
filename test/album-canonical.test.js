@@ -228,16 +228,16 @@ describe('chooseBetterTracks', () => {
 // ============================================
 
 describe('createAlbumCanonical', () => {
-  it('should throw if pool is not provided', () => {
+  it('should throw if db is not provided', () => {
     assert.throws(
       () => createAlbumCanonical({}),
-      /PostgreSQL pool is required/
+      /album-canonical requires deps\.db/
     );
   });
 
   it('should create instance with valid pool', () => {
     const mockPool = { query: mock.fn() };
-    const canonical = createAlbumCanonical({ pool: mockPool });
+    const canonical = createAlbumCanonical({ db: mockPool });
 
     assert.ok(canonical);
     assert.strictEqual(typeof canonical.findByNormalizedName, 'function');
@@ -254,7 +254,7 @@ describe('createAlbumCanonical', () => {
 describe('findByNormalizedName', () => {
   it('should return null for empty artist and album', async () => {
     const mockPool = { query: mock.fn() };
-    const canonical = createAlbumCanonical({ pool: mockPool });
+    const canonical = createAlbumCanonical({ db: mockPool });
 
     const result = await canonical.findByNormalizedName('', '');
 
@@ -273,7 +273,7 @@ describe('findByNormalizedName', () => {
     const mockPool = {
       query: mock.fn(() => Promise.resolve({ rows: [existingAlbum] })),
     };
-    const canonical = createAlbumCanonical({ pool: mockPool });
+    const canonical = createAlbumCanonical({ db: mockPool });
 
     const result = await canonical.findByNormalizedName('  AARA  ', 'eiger');
 
@@ -290,7 +290,7 @@ describe('findByNormalizedName', () => {
     const mockPool = {
       query: mock.fn(() => Promise.resolve({ rows: [] })),
     };
-    const canonical = createAlbumCanonical({ pool: mockPool });
+    const canonical = createAlbumCanonical({ db: mockPool });
 
     const result = await canonical.findByNormalizedName(
       'New Artist',
@@ -308,7 +308,7 @@ describe('findByNormalizedName', () => {
 describe('findByAlbumId', () => {
   it('should return null for empty/null album_id', async () => {
     const mockPool = { query: mock.fn() };
-    const canonical = createAlbumCanonical({ pool: mockPool });
+    const canonical = createAlbumCanonical({ db: mockPool });
 
     assert.strictEqual(await canonical.findByAlbumId(null), null);
     assert.strictEqual(await canonical.findByAlbumId(''), null);
@@ -327,7 +327,7 @@ describe('findByAlbumId', () => {
     const mockPool = {
       query: mock.fn(() => Promise.resolve({ rows: [existingAlbum] })),
     };
-    const canonical = createAlbumCanonical({ pool: mockPool });
+    const canonical = createAlbumCanonical({ db: mockPool });
 
     const result = await canonical.findByAlbumId(
       'mb-9b8f70b0-1351-41a2-be5c-59a8445a4679'
@@ -348,7 +348,7 @@ describe('findByAlbumId', () => {
     const mockPool = {
       query: mock.fn(() => Promise.resolve({ rows: [] })),
     };
-    const canonical = createAlbumCanonical({ pool: mockPool });
+    const canonical = createAlbumCanonical({ db: mockPool });
 
     const result = await canonical.findByAlbumId('nonexistent-id');
 
@@ -365,7 +365,7 @@ describe('smartMergeMetadata', () => {
 
   beforeEach(() => {
     const mockPool = { query: mock.fn() };
-    canonical = createAlbumCanonical({ pool: mockPool });
+    canonical = createAlbumCanonical({ db: mockPool });
   });
 
   it('should prefer external album_id over internal', () => {
@@ -568,7 +568,7 @@ describe('upsertCanonical', () => {
     };
 
     const canonical = createAlbumCanonical({
-      pool: mockPool,
+      db: mockPool,
       logger: { debug: () => {} },
     });
 
@@ -613,7 +613,7 @@ describe('upsertCanonical', () => {
     };
 
     const canonical = createAlbumCanonical({
-      pool: mockPool,
+      db: mockPool,
       logger: { debug: () => {} },
     });
 
@@ -654,7 +654,7 @@ describe('upsertCanonical', () => {
     };
 
     const canonical = createAlbumCanonical({
-      pool: mockPool,
+      db: mockPool,
       logger: { debug: () => {} },
     });
 
@@ -694,7 +694,7 @@ describe('upsertCanonical', () => {
     };
 
     const canonical = createAlbumCanonical({
-      pool: mockPool,
+      db: mockPool,
       logger: { debug: () => {} },
     });
 
@@ -729,7 +729,7 @@ describe('upsertCanonical', () => {
     };
 
     const canonical = createAlbumCanonical({
-      pool: mockPool,
+      db: mockPool,
       logger: { debug: () => {} },
     });
 
@@ -764,7 +764,7 @@ describe('upsertCanonical', () => {
     };
 
     const canonical = createAlbumCanonical({
-      pool: mockPool,
+      db: mockPool,
       logger: { debug: () => {} },
     });
 
@@ -812,7 +812,7 @@ describe('upsertCanonical', () => {
     };
 
     const canonical = createAlbumCanonical({
-      pool: mockPool,
+      db: mockPool,
       logger: { debug: () => {} },
     });
 
@@ -859,7 +859,7 @@ describe('Country code auto-resolution', () => {
     };
 
     const canonical = createAlbumCanonical({
-      pool: mockPool,
+      db: mockPool,
       logger: { debug: () => {}, warn: () => {} },
     });
 
@@ -909,7 +909,7 @@ describe('Country code auto-resolution', () => {
     };
 
     const canonical = createAlbumCanonical({
-      pool: mockPool,
+      db: mockPool,
       logger: { debug: () => {}, warn: () => {} },
     });
 
@@ -958,7 +958,7 @@ describe('Country code auto-resolution', () => {
     };
 
     const canonical = createAlbumCanonical({
-      pool: mockPool,
+      db: mockPool,
       logger: { debug: () => {}, warn: () => {} },
     });
 
@@ -1007,7 +1007,7 @@ describe('Country code auto-resolution', () => {
     };
 
     const canonical = createAlbumCanonical({
-      pool: mockPool,
+      db: mockPool,
       logger: { debug: () => {}, warn: () => {} },
     });
 

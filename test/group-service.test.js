@@ -3,7 +3,7 @@ const assert = require('node:assert');
 
 const { createGroupService } = require('../services/group-service');
 const { TransactionAbort } = require('../db/transaction');
-const { createMockLogger } = require('./helpers');
+const { createMockLogger, asMockDb } = require('./helpers');
 
 function createTransactionPool(queryHandler) {
   const client = {
@@ -17,10 +17,10 @@ function createTransactionPool(queryHandler) {
   };
 
   return {
-    pool: {
+    pool: asMockDb({
       connect: mock.fn(async () => client),
       query: mock.fn(async (sql, params) => queryHandler(sql, params)),
-    },
+    }),
     client,
   };
 }
@@ -48,7 +48,7 @@ describe('group-service', () => {
     });
 
     const service = createGroupService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 
@@ -87,7 +87,7 @@ describe('group-service', () => {
     });
 
     const service = createGroupService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 
@@ -129,7 +129,7 @@ describe('group-service', () => {
     });
 
     const service = createGroupService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 
@@ -163,7 +163,7 @@ describe('group-service', () => {
     });
 
     const service = createGroupService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 
@@ -206,7 +206,7 @@ describe('group-service', () => {
     });
 
     const service = createGroupService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 
@@ -244,7 +244,7 @@ describe('group-service', () => {
       throw new Error(`Unexpected query: ${sql}`);
     });
 
-    const service = createGroupService({ pool, logger });
+    const service = createGroupService({ db: pool, logger });
 
     await assert.rejects(
       () => service.deleteGroup('user1', 'group1', false),

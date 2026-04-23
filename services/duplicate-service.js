@@ -12,7 +12,8 @@
  */
 
 const defaultLogger = require('../utils/logger');
-const { withTransaction, TransactionAbort } = require('../db/transaction');
+const { ensureDb } = require('../db/postgres');
+const { TransactionAbort } = require('../db/transaction');
 const {
   findPotentialDuplicates,
   normalizeForComparison,
@@ -235,20 +236,13 @@ function compareCanonicalAlbums(a, b) {
 /**
  * Create duplicate service with injected dependencies
  * @param {Object} deps
- * @param {Object} deps.pool - PostgreSQL pool
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Object} deps.logger - Logger instance
  */
 // eslint-disable-next-line max-lines-per-function -- Cohesive service module with related duplicate operations
 function createDuplicateService(deps = {}) {
-  const pool = deps.pool;
+  const db = ensureDb(deps.db, 'duplicate-service');
   const logger = deps.logger || defaultLogger;
-  // Unified DB facade. pool is retained for helpers that still use pool.connect().
-  const db =
-    deps.db ||
-    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
-  if (!db) {
-    throw new Error('duplicate-service requires deps.db (or legacy deps.pool)');
-  }
 
   function getBlockingKeys(album) {
     const normalizedArtist = normalizeForComparison(album.artist || '');
@@ -1297,7 +1291,7 @@ function createDuplicateService(deps = {}) {
       });
     }
 
-    return withTransaction(pool, async (client) => {
+    return db.withTransaction(async (client) => {
       return mergeAlbumsWithinTransaction(
         client,
         keepAlbumId,
@@ -1327,7 +1321,12 @@ function createDuplicateService(deps = {}) {
       retireAlbumIds
     ).sort();
     const allIds = [canonicalId, ...retireIds];
-    const existingTables = await getExistingDependentMergeTables(pool);
+    // getExistingDependentMergeTables / previewDependentReferenceImpacts
+    // use .query() on their queryable arg (so a pg client works inside a
+    // transaction). Outside a transaction we adapt the canonical .raw to
+    // the same shape.
+    const dbAsQueryable = { query: (sql, params) => db.raw(sql, params) };
+    const existingTables = await getExistingDependentMergeTables(dbAsQueryable);
 
     const albumsResult = await db.raw(
       `SELECT album_id, artist, album, release_date, country,
@@ -1415,7 +1414,7 @@ function createDuplicateService(deps = {}) {
     }
 
     const dependentImpacts = await previewDependentReferenceImpacts(
-      pool,
+      dbAsQueryable,
       existingTables,
       canonicalId,
       existingRetireIds
@@ -1454,7 +1453,7 @@ function createDuplicateService(deps = {}) {
       retireAlbumIds
     ).sort();
 
-    return withTransaction(pool, async (client) => {
+    return db.withTransaction(async (client) => {
       const aggregate = {
         canonicalAlbumId: canonicalId,
         requestedRetireIds: retireIds,

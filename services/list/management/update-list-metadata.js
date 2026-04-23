@@ -3,7 +3,7 @@ const { checkDuplicateListName } = require('./check-duplicate-list-name');
 async function updateListMetadata(ctx, listId, userId, updates) {
   const { name: newName, year, groupId: newGroupId } = updates;
 
-  return ctx.withTransaction(ctx.pool, async (client) => {
+  return ctx.db.withTransaction(async (client) => {
     const listResult = await client.query(
       `SELECT l.id, l._id, l.name, l.year, l.group_id, l.is_main, g.year as group_year
        FROM lists l
@@ -52,14 +52,14 @@ async function updateListMetadata(ctx, listId, userId, updates) {
 
     try {
       await ctx.validateMainListNotLocked(
-        ctx.pool,
+        ctx.db,
         list.year,
         list.is_main,
         'update list'
       );
       if (targetYear !== list.year) {
         await ctx.validateMainListNotLocked(
-          ctx.pool,
+          ctx.db,
           targetYear,
           list.is_main,
           'update list'

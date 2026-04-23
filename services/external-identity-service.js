@@ -1,4 +1,5 @@
 const defaultLogger = require('../utils/logger');
+const { ensureDb } = require('../db/postgres');
 const {
   normalizeArtistName,
   sanitizeForStorage,
@@ -21,17 +22,8 @@ function isSupportedService(service) {
 }
 
 function createExternalIdentityService(deps = {}) {
-  const pool = deps.pool;
-  const db =
-    deps.db ||
-    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
+  const db = ensureDb(deps.db, 'external-identity-service');
   const logger = deps.logger || defaultLogger;
-
-  if (!db) {
-    throw new Error(
-      'A db datastore or pool is required for external identity service'
-    );
-  }
 
   async function getAlbumServiceMapping(service, albumId) {
     const normalizedService = normalizeService(service);

@@ -12,6 +12,7 @@
 const { RequestQueue } = require('./request-queue');
 const logger = require('./logger');
 const { normalizeForExternalApi } = require('./normalization');
+const { ensureDb } = require('../db/postgres');
 
 /**
  * Sanitize search query string for API requests
@@ -31,7 +32,7 @@ function sanitizeQuery(str = '') {
  * Factory function to create a TrackFetchQueue with dependency injection
  *
  * @param {Object} deps - Dependencies
- * @param {Object} deps.pool - Database connection pool
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Function} deps.fetch - Fetch function (for testing)
  * @param {number} deps.maxConcurrent - Max concurrent fetches (default: 2)
  * @returns {Object} - TrackFetchQueue instance
@@ -41,6 +42,10 @@ function createTrackFetchQueue(deps = {}) {
   const queue = new RequestQueue(maxConcurrent);
   const fetchFn = deps.fetch || fetch;
   const log = deps.logger || logger;
+  const db =
+    deps.db !== undefined && deps.db !== null
+      ? ensureDb(deps.db, 'track-fetch-queue')
+      : null;
 
   /**
    * Add album to track fetch queue
@@ -156,12 +161,9 @@ function createTrackFetchQueue(deps = {}) {
    * @returns {Promise<void>}
    */
   async function fetchAndStoreTracks(albumId, artist, album) {
-    const pool = deps.pool;
-    if (!pool) {
-      throw new Error('Database pool not initialized');
+    if (!db) {
+      throw new Error('track-fetch-queue requires deps.db');
     }
-    // Prefer canonical db; wrap the pool so .raw() drives logging/metrics.
-    const db = deps.db || { raw: (sql, params) => pool.query(sql, params) };
 
     const artistClean = sanitizeQuery(artist);
     const albumClean = sanitizeQuery(album);
@@ -241,16 +243,16 @@ function createTrackFetchQueue(deps = {}) {
   };
 }
 
-// Create and export singleton instance (will be initialized with pool later)
+// Create and export singleton instance (will be initialized with db later)
 let trackFetchQueue = null;
 
 /**
  * Initialize the singleton track fetch queue
- * @param {Object} pool - Database connection pool
+ * @param {import('../db/types').DbFacade} db - Canonical datastore
  */
-function initializeTrackFetchQueue(pool) {
+function initializeTrackFetchQueue(db) {
   if (!trackFetchQueue) {
-    trackFetchQueue = createTrackFetchQueue({ pool });
+    trackFetchQueue = createTrackFetchQueue({ db });
     logger.info('Track fetch queue initialized');
   }
   return trackFetchQueue;
@@ -263,7 +265,7 @@ function initializeTrackFetchQueue(pool) {
 function getTrackFetchQueue() {
   if (!trackFetchQueue) {
     throw new Error(
-      'Track fetch queue not initialized. Call initializeTrackFetchQueue(pool) first.'
+      'Track fetch queue not initialized. Call initializeTrackFetchQueue(db) first.'
     );
   }
   return trackFetchQueue;

@@ -98,7 +98,7 @@ function ensureAuth(req, res, next) {
  *
  * @param {Object} deps - Dependencies
  * @param {Object} deps.usersAsync - Users datastore (async)
- * @param {Object} deps.pool - Database pool
+ * @param {import('../db/types').DbFacade} deps.db - Canonical datastore
  * @param {Function} deps.validateExtensionToken - Token validation function
  * @param {Function} deps.recordActivity - Activity recording function
  * @param {Object} deps.logger - Logger instance
@@ -107,7 +107,7 @@ function ensureAuth(req, res, next) {
 function createEnsureAuthAPI(deps) {
   const {
     usersAsync,
-    pool,
+    db,
     validateExtensionToken,
     recordActivity: recordActivityFn,
     logger,
@@ -126,7 +126,7 @@ function createEnsureAuthAPI(deps) {
       const token = authHeader.substring(7);
 
       try {
-        const userId = await validateExtensionToken(token, pool);
+        const userId = await validateExtensionToken(token, db);
 
         if (userId) {
           // Load user and attach to request

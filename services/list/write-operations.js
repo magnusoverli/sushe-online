@@ -2,8 +2,7 @@ const { reorderItems } = require('./write/reorder-items');
 
 function createListWriteOperations(deps = {}) {
   const {
-    pool,
-    withTransaction,
+    db,
     TransactionAbort,
     crypto,
     managementOperations,
@@ -14,10 +13,7 @@ function createListWriteOperations(deps = {}) {
     logger,
   } = deps;
 
-  if (!pool) throw new Error('pool is required');
-  if (typeof withTransaction !== 'function') {
-    throw new Error('withTransaction is required');
-  }
+  if (!db) throw new Error('db is required');
   if (!TransactionAbort) throw new Error('TransactionAbort is required');
   if (!crypto) throw new Error('crypto is required');
   if (!managementOperations)
@@ -45,7 +41,7 @@ function createListWriteOperations(deps = {}) {
     const listId = crypto.randomBytes(12).toString('hex');
     const timestamp = new Date();
 
-    const listYear = await withTransaction(pool, async (client) => {
+    const listYear = await db.withTransaction(async (client) => {
       let resultYear = null;
       let groupIdInternal;
 
@@ -127,7 +123,7 @@ function createListWriteOperations(deps = {}) {
     const list = await findListByIdOrThrow(listId, userId, 'modify list items');
     const timestamp = new Date();
 
-    await withTransaction(pool, async (client) => {
+    await db.withTransaction(async (client) => {
       await client.query('DELETE FROM list_items WHERE list_id = $1', [
         list._id,
       ]);
@@ -168,7 +164,7 @@ function createListWriteOperations(deps = {}) {
     const addedItems = [];
     const duplicateAlbums = [];
 
-    await withTransaction(pool, async (client) => {
+    await db.withTransaction(async (client) => {
       changeCount += await itemOperations.processRemovals(
         client,
         list._id,
@@ -220,8 +216,7 @@ function createListWriteOperations(deps = {}) {
     reorderItems: (listId, userId, order) =>
       reorderItems(
         {
-          pool,
-          withTransaction,
+          db,
           TransactionAbort,
           findListByIdOrThrow,
           logger,

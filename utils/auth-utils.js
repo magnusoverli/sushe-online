@@ -10,18 +10,19 @@
 const crypto = require('crypto');
 
 /**
- * Coerce either a canonical datastore (with .raw) or a legacy pg Pool
- * (with .query) into a shape exposing .raw(sql, params, opts).
- * Internal helper — keeps callsites free of duck-type noise.
- * @param {{ raw: Function } | { query: Function }} dbOrPool
+ * Accept the canonical datastore (with .raw). For compatibility with test
+ * mocks constructed as a bare pg-client-shaped { query } object, fall back
+ * to wrapping .query into a .raw-shaped adapter. Production callers always
+ * pass the canonical db; this branch exists for test ergonomics only.
+ * @param {{ raw?: Function, query?: Function }} db
  * @returns {{ raw: Function }}
  */
-function asDb(dbOrPool) {
-  if (dbOrPool && typeof dbOrPool.raw === 'function') return dbOrPool;
-  if (dbOrPool && typeof dbOrPool.query === 'function') {
-    return { raw: (sql, params) => dbOrPool.query(sql, params) };
+function asDb(db) {
+  if (db && typeof db.raw === 'function') return db;
+  if (db && typeof db.query === 'function') {
+    return { raw: (sql, params) => db.query(sql, params) };
   }
-  throw new Error('asDb(): expected a datastore with .raw() or a pg Pool');
+  throw new Error('asDb(): expected a datastore with .raw() or .query()');
 }
 
 /**

@@ -8,8 +8,8 @@ const {
 } = require('../../services/admin-backup-service');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin, upload, pool } = deps;
-  const backupService = createAdminBackupService({ pool, logger });
+  const { ensureAuth, ensureAdmin, upload, db } = deps;
+  const backupService = createAdminBackupService({ db, logger });
 
   app.get('/admin/backup', ensureAuth, ensureAdmin, async (req, res) => {
     const config = backupService.getRuntimeConfig();

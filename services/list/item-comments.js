@@ -17,16 +17,9 @@ const COMMENT_FIELD_CONFIG = {
 };
 
 function createItemComments(deps = {}) {
-  const {
-    pool,
-    withTransaction,
-    TransactionAbort,
-    findListByIdOrThrow,
-    logger,
-  } = deps;
+  const { db, TransactionAbort, findListByIdOrThrow, logger } = deps;
 
-  if (!pool) throw new Error('pool is required');
-  if (!withTransaction) throw new Error('withTransaction is required');
+  if (!db) throw new Error('db is required');
   if (!TransactionAbort) throw new Error('TransactionAbort is required');
   if (!findListByIdOrThrow) throw new Error('findListByIdOrThrow is required');
 
@@ -47,7 +40,7 @@ function createItemComments(deps = {}) {
     const trimmedComment = comment ? comment.trim() : null;
     const now = new Date();
 
-    await withTransaction(pool, async (client) => {
+    await db.withTransaction(async (client) => {
       const updateResult = await client.query(
         `UPDATE list_items SET ${field} = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4 RETURNING _id`,
         [trimmedComment, now, list._id, identifier]

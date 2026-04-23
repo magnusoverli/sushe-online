@@ -73,21 +73,21 @@ describe('TrackFetchQueue', () => {
 
   describe('createTrackFetchQueue', () => {
     it('should create queue with default maxConcurrent of 2', () => {
-      const defaultQueue = createTrackFetchQueue({ pool: mockPool });
+      const defaultQueue = createTrackFetchQueue({ db: mockPool });
       assert.ok(defaultQueue.add);
       assert.ok(defaultQueue.fetchAndStoreTracks);
     });
 
     it('should respect custom maxConcurrent', () => {
       const customQueue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         maxConcurrent: 5,
       });
       assert.ok(customQueue);
     });
 
     it('should expose internal fetch functions for testing', () => {
-      const queue = createTrackFetchQueue({ pool: mockPool });
+      const queue = createTrackFetchQueue({ db: mockPool });
       assert.ok(queue.fetchItunesTracks);
       assert.ok(queue.fetchDeezerTracks);
     });
@@ -115,7 +115,7 @@ describe('TrackFetchQueue', () => {
       });
 
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
         maxConcurrent: 2,
@@ -137,7 +137,7 @@ describe('TrackFetchQueue', () => {
     it('should skip if albumId is missing', async () => {
       const mockFetch = mock.fn();
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -153,7 +153,7 @@ describe('TrackFetchQueue', () => {
     it('should skip if artist is missing', async () => {
       const mockFetch = mock.fn();
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -169,7 +169,7 @@ describe('TrackFetchQueue', () => {
     it('should skip if album is missing', async () => {
       const mockFetch = mock.fn();
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -206,7 +206,7 @@ describe('TrackFetchQueue', () => {
       });
 
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -229,7 +229,7 @@ describe('TrackFetchQueue', () => {
       });
 
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -248,7 +248,7 @@ describe('TrackFetchQueue', () => {
       });
 
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -271,7 +271,7 @@ describe('TrackFetchQueue', () => {
       });
 
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -311,7 +311,7 @@ describe('TrackFetchQueue', () => {
       });
 
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -334,7 +334,7 @@ describe('TrackFetchQueue', () => {
       });
 
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -353,7 +353,7 @@ describe('TrackFetchQueue', () => {
       });
 
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -372,7 +372,7 @@ describe('TrackFetchQueue', () => {
       });
 
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -405,7 +405,7 @@ describe('TrackFetchQueue', () => {
       });
 
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -441,7 +441,7 @@ describe('TrackFetchQueue', () => {
       });
 
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -452,14 +452,14 @@ describe('TrackFetchQueue', () => {
       assert.strictEqual(mockPool.query.mock.calls.length, 0);
     });
 
-    it('should throw if pool is not initialized', async () => {
+    it('should throw if db is not initialized', async () => {
       const mockFetch = mock.fn();
       const nopoolQueue = createTrackFetchQueue({ fetch: mockFetch });
 
       await assert.rejects(
         () => nopoolQueue.fetchAndStoreTracks('test-id', 'Artist', 'Album'),
         {
-          message: /Database pool not initialized/,
+          message: /track-fetch-queue requires deps\.db/,
         }
       );
     });
@@ -485,7 +485,7 @@ describe('TrackFetchQueue', () => {
       };
 
       const queue = createTrackFetchQueue({
-        pool: mockPoolNoRows,
+        db: mockPoolNoRows,
         fetch: mockFetch,
         logger: mockLogger,
       });
@@ -504,7 +504,7 @@ describe('TrackFetchQueue', () => {
   describe('length getter', () => {
     it('should return 0 for empty queue', () => {
       const queue = createTrackFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         logger: mockLogger,
       });
       assert.strictEqual(queue.length, 0);

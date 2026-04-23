@@ -2,6 +2,7 @@
 // Background service for syncing user preferences from external APIs
 
 const logger = require('../utils/logger');
+const { ensureDb } = require('../db/postgres');
 const { createSpotifyAuth } = require('../utils/spotify-auth');
 const { createLastfmAuth } = require('../utils/lastfm-auth');
 const { createUserPreferences } = require('../utils/user-preferences');
@@ -18,21 +19,19 @@ const STARTUP_DELAY_MS = 30000; // 30 seconds after startup
 // ============================================
 
 /**
- * Create a mock usersDb interface for token refresh
+ * Create a mock usersDb interface for token refresh. Accepts the canonical
+ * datastore (with .raw) and exposes the .update(query, update, options, cb)
+ * shape that spotifyAuth.ensureValidSpotifyToken expects.
  */
-function createMockUsersDb(pool) {
+function createMockUsersDb(db) {
   return {
     update: (query, update, options, callback) => {
       const updateQuery = `
-        UPDATE users 
+        UPDATE users
         SET spotify_auth = $1, updated_at = NOW()
         WHERE _id = $2
       `;
-      pool
-        .query(updateQuery, [
-          JSON.stringify(update.$set.spotifyAuth),
-          query._id,
-        ])
+      db.raw(updateQuery, [JSON.stringify(update.$set.spotifyAuth), query._id])
         .then(() => callback(null))
         .catch((err) => callback(err));
     },
@@ -42,12 +41,12 @@ function createMockUsersDb(pool) {
 /**
  * Sync Spotify data for a user
  */
-async function syncSpotifyDataForUser(user, pool, spotifyAuth, log) {
+async function syncSpotifyDataForUser(user, db, spotifyAuth, log) {
   if (!user.spotify_auth?.access_token) {
     return null;
   }
 
-  const usersDb = createMockUsersDb(pool);
+  const usersDb = createMockUsersDb(db);
 
   const tokenResult = await spotifyAuth.ensureValidSpotifyToken(
     { _id: user._id, spotifyAuth: user.spotify_auth },
@@ -341,7 +340,7 @@ async function calculateAndSaveAffinity(
 /**
  * Create preference sync service with injected dependencies
  * @param {Object} deps - Dependencies
- * @param {Object} deps.pool - PostgreSQL pool instance
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Object} deps.logger - Logger instance
  * @param {Object} deps.spotifyAuth - Spotify auth utilities (optional)
  * @param {Object} deps.lastfmAuth - Last.fm auth utilities (optional)
@@ -351,21 +350,12 @@ async function calculateAndSaveAffinity(
  */
 function createPreferenceSyncService(deps = {}) {
   const log = deps.logger || logger;
-  const pool = deps.pool;
-
-  if (!pool) {
-    throw new Error('Database pool is required for preference sync service');
-  }
-
-  // Prefer the canonical `db`; pool is kept in scope because nested helpers
-  // (createUserPreferences, syncSpotifyDataForUser, etc.) still expect a raw
-  // pool in their signatures.
-  const db = deps.db || { raw: (sql, params) => pool.query(sql, params) };
+  const db = ensureDb(deps.db, 'preference-sync');
 
   const spotifyAuth = deps.spotifyAuth || createSpotifyAuth({ logger: log });
   const lastfmAuth = deps.lastfmAuth || createLastfmAuth({ logger: log });
   const userPrefs =
-    deps.userPrefs || createUserPreferences({ pool, logger: log });
+    deps.userPrefs || createUserPreferences({ db, logger: log });
   const musicBrainz = deps.musicBrainz || createMusicBrainz({ logger: log });
 
   const syncIntervalMs = deps.syncIntervalMs || DEFAULT_SYNC_INTERVAL_MS;
@@ -420,7 +410,7 @@ function createPreferenceSyncService(deps = {}) {
    * Sync Spotify data for a user
    */
   async function syncSpotifyData(user) {
-    return syncSpotifyDataForUser(user, pool, spotifyAuth, log);
+    return syncSpotifyDataForUser(user, db, spotifyAuth, log);
   }
 
   /**

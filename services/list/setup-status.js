@@ -1,13 +1,7 @@
+const { ensureDb } = require('../../db/postgres');
+
 function createSetupStatus(deps = {}) {
-  const { pool } = deps;
-  // Prefer the canonical db; fall back to a pool adapter for legacy callers.
-  const db =
-    deps.db ||
-    deps.listsAsync || // long-standing dep name honored for callers mid-migration
-    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
-  if (!db) {
-    throw new Error('setup-status requires deps.db (or legacy deps.pool)');
-  }
+  const db = ensureDb(deps.db, 'setup-status');
 
   async function getSetupStatus(userId, user) {
     const result = await db.raw(

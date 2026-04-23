@@ -1,3 +1,5 @@
+const { ensureDb } = require('../../db/postgres');
+
 function basicNormalizeAlbumKey(artist, album) {
   const normalizedArtist = String(artist || '')
     .toLowerCase()
@@ -378,20 +380,7 @@ async function getAuditReport(ctx, year) {
 }
 
 function createDuplicateAuditService(deps = {}) {
-  // Accept either a datastore (preferred) or a legacy pool + withTransaction.
-  let db = deps.db;
-  if (!db && deps.pool) {
-    const legacyTx = deps.withTransaction;
-    db = {
-      raw: (sql, params) => deps.pool.query(sql, params),
-      withTransaction: (cb) =>
-        legacyTx
-          ? legacyTx(deps.pool, cb)
-          : Promise.reject(
-              new Error('withTransaction not provided for legacy pool')
-            ),
-    };
-  }
+  const db = ensureDb(deps.db, 'duplicate-audit');
 
   const context = {
     db,

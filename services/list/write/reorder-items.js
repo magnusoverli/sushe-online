@@ -11,7 +11,7 @@ async function reorderItems(ctx, listId, userId, order) {
 
   let effectivePos = 0;
 
-  await ctx.withTransaction(ctx.pool, async (client) => {
+  await ctx.db.withTransaction(async (client) => {
     const now = new Date();
 
     const listItemsResult = await client.query(

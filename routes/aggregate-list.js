@@ -6,11 +6,11 @@ const { createAggregateListHandlers } = require('./aggregate-list/handlers');
 
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
-  const { ensureAuthAPI, ensureAuth, ensureAdmin, pool } = deps;
+  const { ensureAuthAPI, ensureAuth, ensureAdmin, db } = deps;
   const { createAsyncHandler } = require('../middleware/async-handler');
   const asyncHandler = createAsyncHandler(logger);
 
-  const aggregateList = createAggregateList({ pool, logger });
+  const aggregateList = createAggregateList({ db, logger });
 
   function scheduleAggregateRecompute(year, reason) {
     if (!year) return;
@@ -27,7 +27,7 @@ module.exports = (app, deps) => {
   const handlers = createAggregateListHandlers({
     aggregateList,
     logger,
-    pool,
+    db,
     validateYearNotLocked,
     scheduleAggregateRecompute,
   });

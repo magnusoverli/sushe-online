@@ -222,7 +222,7 @@ async function processPositionUpdates(client, listId, updated, timestamp) {
 
 function createListItemOperations(deps = {}) {
   const context = {
-    pool: deps.pool,
+    db: deps.db,
     crypto: deps.crypto,
     upsertAlbumRecord: deps.upsertAlbumRecord,
     batchUpsertAlbumRecords: deps.batchUpsertAlbumRecords,
@@ -230,7 +230,7 @@ function createListItemOperations(deps = {}) {
     logger: deps.logger,
   };
 
-  if (!context.pool) throw new Error('pool is required');
+  if (!context.db) throw new Error('db is required');
   if (!context.crypto) throw new Error('crypto is required');
   if (typeof context.upsertAlbumRecord !== 'function') {
     throw new Error('upsertAlbumRecord is required');

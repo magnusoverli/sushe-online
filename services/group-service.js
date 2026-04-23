@@ -11,23 +11,23 @@
  */
 
 const defaultLogger = require('../utils/logger');
+const { ensureDb } = require('../db/postgres');
 const { isYearLocked } = require('../utils/year-lock');
-const { withTransaction, TransactionAbort } = require('../db/transaction');
+const { TransactionAbort } = require('../db/transaction');
 const { buildPartialUpdate } = require('../utils/query-builder');
 
 /**
  * Create group service with injected dependencies
  * @param {Object} deps
- * @param {Object} deps.pool - PostgreSQL pool
- * @param {Object} deps.logger - Logger instance
- * @param {Object} deps.crypto - Node.js crypto module
- * @param {Function} deps.findOrCreateYearGroup - Helper from _helpers.js
- * @param {Function} deps.findOrCreateUncategorizedGroup - Helper from _helpers.js
- * @param {Function} deps.deleteGroupIfEmptyAutoGroup - Helper from _helpers.js
+ * @param {import('../db/types').DbFacade} deps.db - Canonical datastore
+ * @param {Object} [deps.logger] - Logger instance
+ * @param {Object} [deps.crypto] - Node.js crypto module
+ * @param {Function} [deps.findOrCreateYearGroup] - Helper from _helpers.js
+ * @param {Function} [deps.findOrCreateUncategorizedGroup] - Helper from _helpers.js
+ * @param {Function} [deps.deleteGroupIfEmptyAutoGroup] - Helper from _helpers.js
  */
 // eslint-disable-next-line max-lines-per-function -- Cohesive service module with related group operations
 function createGroupService(deps = {}) {
-  const pool = deps.pool;
   const logger = deps.logger || defaultLogger;
   const crypto = deps.crypto || require('crypto');
   const {
@@ -36,13 +36,7 @@ function createGroupService(deps = {}) {
     deleteGroupIfEmptyAutoGroup,
   } = deps;
 
-  // Unified DB facade. pool kept in scope for withTransaction callers.
-  const db =
-    deps.db ||
-    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
-  if (!db) {
-    throw new Error('group-service requires deps.db (or legacy deps.pool)');
-  }
+  const db = ensureDb(deps.db, 'group-service');
 
   /**
    * Get all groups for a user (with list counts).
@@ -233,7 +227,7 @@ function createGroupService(deps = {}) {
    * @throws {TransactionAbort} on validation failure
    */
   async function deleteGroup(userId, groupExternalId, force = false) {
-    return withTransaction(pool, async (client) => {
+    return db.withTransaction(async (client) => {
       const groupResult = await client.query(
         `SELECT id, name, year FROM list_groups WHERE _id = $1 AND user_id = $2`,
         [groupExternalId, userId]
@@ -344,7 +338,7 @@ function createGroupService(deps = {}) {
       });
     }
 
-    await withTransaction(pool, async (client) => {
+    await db.withTransaction(async (client) => {
       const groupsResult = await client.query(
         `SELECT g._id, g.name, g.year, COUNT(l.id) as list_count
          FROM list_groups g
@@ -418,7 +412,7 @@ function createGroupService(deps = {}) {
       });
     }
 
-    return await withTransaction(pool, async (client) => {
+    return await db.withTransaction(async (client) => {
       const listResult = await client.query(
         `SELECT l.id, l._id, l.name, l.year, l.is_main, l.group_id, g.year as current_group_year
          FROM lists l
@@ -459,11 +453,11 @@ function createGroupService(deps = {}) {
       // Check year locks for main lists
       if (list.is_main) {
         const sourceYearLocked = oldYear
-          ? await isYearLocked(pool, oldYear)
+          ? await isYearLocked(db, oldYear)
           : false;
         const targetYearLocked =
           targetYear && targetYear !== oldYear
-            ? await isYearLocked(pool, targetYear)
+            ? await isYearLocked(db, targetYear)
             : false;
 
         if (sourceYearLocked) {
@@ -521,7 +515,7 @@ function createGroupService(deps = {}) {
       });
     }
 
-    await withTransaction(pool, async (client) => {
+    await db.withTransaction(async (client) => {
       const groupResult = await client.query(
         `SELECT id FROM list_groups WHERE _id = $1 AND user_id = $2`,
         [groupExternalId, userId]

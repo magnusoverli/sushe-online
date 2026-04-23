@@ -6,6 +6,7 @@
 // getPreferences (DB), and checkRefreshNeeded (DB).
 
 const logger = require('./logger');
+const { ensureDb } = require('../db/postgres');
 const { getPositionPoints } = require('./scoring');
 
 // Import pure affinity functions from dedicated module
@@ -63,15 +64,13 @@ const SAVE_PREFERENCES_QUERY = `
  * Create user preferences utilities with injected dependencies
  * @param {Object} deps - Dependencies
  * @param {Object} deps.logger - Logger instance
- * @param {Object} deps.pool - PostgreSQL pool instance
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  */
 function createUserPreferences(deps = {}) {
   const log = deps.logger || logger;
-  // Prefer canonical db; fall back to pg Pool adapter for legacy callers.
-  const db =
-    deps.db ||
-    (deps.pool ? { raw: (sql, params) => deps.pool.query(sql, params) } : null);
-  // Keep `pool` as truthy-check alias for existing `if (!pool)` guards below.
+  const db = ensureDb(deps.db, 'user-preferences');
+  // `pool` is retained as an alias purely so existing `if (!pool)` guards in
+  // this file read naturally; they all mean "do we have a db configured?".
   const pool = db;
 
   /**

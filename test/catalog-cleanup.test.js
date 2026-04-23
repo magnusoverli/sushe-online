@@ -1,6 +1,7 @@
 const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
 const { createCatalogCleanupService } = require('../services/catalog-cleanup');
+const { asMockDb } = require('./helpers');
 
 function createMockLogger() {
   return {
@@ -68,7 +69,7 @@ describe('catalog cleanup service', () => {
     });
 
     const service = createCatalogCleanupService({
-      pool: { query },
+      db: asMockDb({ query }),
       logger: createMockLogger(),
     });
 
@@ -121,10 +122,10 @@ describe('catalog cleanup service', () => {
     };
 
     const service = createCatalogCleanupService({
-      pool: {
+      db: asMockDb({
         query,
         connect: async () => client,
-      },
+      }),
       logger: createMockLogger(),
     });
 

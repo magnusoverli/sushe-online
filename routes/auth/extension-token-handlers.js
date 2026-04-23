@@ -2,7 +2,7 @@ function createExtensionTokenHandlers(deps = {}) {
   const {
     asyncHandler,
     authService,
-    pool,
+    db,
     generateExtensionToken,
     validateExtensionToken,
     cleanupExpiredTokens,
@@ -29,7 +29,7 @@ function createExtensionTokenHandlers(deps = {}) {
   const createExtensionToken = asyncHandler(async (req, res) => {
     const userAgent = req.get('User-Agent') || 'Unknown';
     const result = await authService.createExtensionToken(
-      pool,
+      db,
       req.user._id,
       userAgent,
       generateExtensionToken
@@ -50,7 +50,7 @@ function createExtensionTokenHandlers(deps = {}) {
     }
 
     const token = authHeader.substring(7);
-    const userId = await validateExtensionToken(token, pool);
+    const userId = await validateExtensionToken(token, db);
 
     if (!userId) {
       return res.status(401).json({ error: 'Invalid or expired token' });
@@ -72,7 +72,7 @@ function createExtensionTokenHandlers(deps = {}) {
     }
 
     const { revoked } = await authService.revokeExtensionToken(
-      pool,
+      db,
       token,
       req.user._id
     );
@@ -90,7 +90,7 @@ function createExtensionTokenHandlers(deps = {}) {
   }, 'revoking extension token');
 
   const listExtensionTokens = asyncHandler(async (req, res) => {
-    const tokens = await authService.listExtensionTokens(pool, req.user._id);
+    const tokens = await authService.listExtensionTokens(db, req.user._id);
     res.json({ tokens });
   }, 'listing extension tokens');
 
@@ -99,7 +99,7 @@ function createExtensionTokenHandlers(deps = {}) {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
-    const deletedCount = await cleanupExpiredTokens(pool);
+    const deletedCount = await cleanupExpiredTokens(db);
     logger.info('Cleaned up expired tokens', { count: deletedCount });
     res.json({ deletedCount });
   }, 'cleaning up expired tokens');

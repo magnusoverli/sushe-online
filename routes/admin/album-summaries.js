@@ -14,11 +14,11 @@ const { createAlbumSummaryService } = require('../../services/album-summary');
 const { responseCache } = require('../../middleware/response-cache');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin, pool } = deps;
+  const { ensureAuth, ensureAdmin, db } = deps;
 
   // Create album summary service instance
   const albumSummaryService = createAlbumSummaryService({
-    pool,
+    db,
     logger,
     responseCache,
     broadcast: app.locals.broadcast,

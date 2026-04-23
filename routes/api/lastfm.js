@@ -22,7 +22,7 @@ const { createPlaycountService } = require('../../services/playcount-service');
 module.exports = (app, deps) => {
   const {
     ensureAuthAPI,
-    pool,
+    db,
     logger,
     normalizeAlbumKey,
     refreshPlaycountsInBackground,
@@ -402,7 +402,7 @@ module.exports = (app, deps) => {
         listId: req.params.listId,
         userId: req.user._id,
         lastfmUsername: req.user.lastfmUsername,
-        pool,
+        db,
         logger,
         normalizeAlbumKey,
       });
@@ -443,7 +443,7 @@ module.exports = (app, deps) => {
         req.user._id,
         req.user.lastfmUsername,
         toRefresh,
-        pool,
+        db,
         logger
       );
 

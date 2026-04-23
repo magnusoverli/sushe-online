@@ -540,15 +540,14 @@ function scheduleSpotifyPlaycountRefresh(logger, params) {
     spotifyAlbumId,
     userId,
     lastfmUsername,
-    pool,
+    db,
     refreshPlaycountsInBackground,
   } = params;
   const PLAY_REFRESH_DELAY_MS = 60000;
 
-  pool
-    .query(`SELECT album_id, artist, album FROM albums WHERE spotify_id = $1`, [
-      spotifyAlbumId,
-    ])
+  db.raw(`SELECT album_id, artist, album FROM albums WHERE spotify_id = $1`, [
+    spotifyAlbumId,
+  ])
     .then((result) => {
       if (result.rows.length > 0) {
         const albumRow = result.rows[0];
@@ -570,7 +569,7 @@ function scheduleSpotifyPlaycountRefresh(logger, params) {
                 albumId: albumRow.album_id,
               },
             ],
-            pool,
+            db,
             logger
           ).catch((err) => {
             logger.warn('Playcount refresh after play failed', {

@@ -21,10 +21,10 @@ const { createAsyncHandler } = require('../../middleware/async-handler');
 const asyncHandler = createAsyncHandler(logger);
 
 module.exports = (app, deps, adminEventService) => {
-  const { ensureAuth, ensureAdmin, pool } = deps;
+  const { ensureAuth, ensureAdmin, db } = deps;
 
   // Create telegram notifier instance
-  const telegramNotifier = createTelegramNotifier({ pool, logger });
+  const telegramNotifier = createTelegramNotifier({ db, logger });
 
   // Wire up telegram to admin events service if provided
   if (adminEventService) {

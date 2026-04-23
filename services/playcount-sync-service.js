@@ -9,6 +9,7 @@
  */
 
 const logger = require('../utils/logger');
+const { ensureDb } = require('../db/postgres');
 const {
   getAlbumInfo: getLastfmAlbumInfo,
   normalizeForLastfm,
@@ -380,23 +381,14 @@ async function syncUserPlaycounts(db, log, user) {
 /**
  * Create playcount sync service with injected dependencies
  * @param {Object} deps - Dependencies
- * @param {Object} deps.pool - PostgreSQL pool instance
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Object} deps.logger - Logger instance (optional)
  * @param {number} deps.syncIntervalMs - Sync interval in ms (optional, default 24h)
  * @param {number} deps.staleThresholdMs - Stale data threshold in ms (optional, default 24h)
  */
 function createPlaycountSyncService(deps = {}) {
   const log = deps.logger || logger;
-  const pool = deps.pool;
-  const db =
-    deps.db ||
-    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
-
-  if (!db) {
-    throw new Error(
-      'playcount-sync-service requires deps.db (or legacy deps.pool)'
-    );
-  }
+  const db = ensureDb(deps.db, 'playcount-sync-service');
 
   const syncIntervalMs = deps.syncIntervalMs || DEFAULT_SYNC_INTERVAL_MS;
   const staleThresholdMs = deps.staleThresholdMs || DEFAULT_STALE_THRESHOLD_MS;

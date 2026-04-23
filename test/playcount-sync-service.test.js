@@ -22,7 +22,7 @@ describe('playcount-sync-service', () => {
       ]);
 
       const service = createPlaycountSyncService({
-        pool,
+        db: pool,
         logger: createMockLogger(),
       });
 
@@ -41,7 +41,7 @@ describe('playcount-sync-service', () => {
       const pool = createMockPool([{ rows: [] }]);
 
       const service = createPlaycountSyncService({
-        pool,
+        db: pool,
         logger: createMockLogger(),
       });
 

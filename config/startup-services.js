@@ -17,28 +17,26 @@ const {
 /**
  * Initialize background queues (cover fetch, track fetch).
  * Should be called after database migrations complete.
- * @param {Object} pool - PostgreSQL connection pool
+ * @param {import('../db/types').DbFacade} db - Canonical datastore
  */
-function initializeQueues(pool) {
+function initializeQueues(db) {
   const {
     initializeCoverFetchQueue,
   } = require('../services/cover-fetch-queue');
-  initializeCoverFetchQueue(pool);
+  initializeCoverFetchQueue(db);
 
   const { initializeTrackFetchQueue } = require('../utils/track-fetch-queue');
-  initializeTrackFetchQueue(pool);
+  initializeTrackFetchQueue(db);
 }
 
 /**
  * Start background sync services (preference sync, playcount sync).
  * Only starts in production or when explicitly enabled via env vars.
  * Returns a cleanup function used during graceful shutdown.
- * @param {Object} pool - PostgreSQL connection pool
+ * @param {import('../db/types').DbFacade} db - Canonical datastore
  * @returns {Function} stopSyncServices cleanup function
  */
-function startSyncServices(pool) {
-  // Canonical datastore for services that use .raw() instead of pool.query.
-  const { db } = require('../db');
+function startSyncServices(db) {
   const cleanupTasks = [];
 
   // Start preference sync service (only in production or if explicitly enabled)
@@ -47,7 +45,7 @@ function startSyncServices(pool) {
     process.env.ENABLE_PREFERENCE_SYNC === 'true'
   ) {
     try {
-      const syncService = createPreferenceSyncService({ db, pool, logger });
+      const syncService = createPreferenceSyncService({ db, logger });
       syncService.start();
 
       cleanupTasks.push(async () => {
@@ -71,11 +69,7 @@ function startSyncServices(pool) {
     process.env.ENABLE_PLAYCOUNT_SYNC === 'true'
   ) {
     try {
-      const playcountSyncService = createPlaycountSyncService({
-        db,
-        pool,
-        logger,
-      });
+      const playcountSyncService = createPlaycountSyncService({ db, logger });
       playcountSyncService.start();
 
       cleanupTasks.push(async () => {

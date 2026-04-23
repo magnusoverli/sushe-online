@@ -3,18 +3,18 @@ const assert = require('node:assert');
 
 const { createListService } = require('../services/list-service');
 const { TransactionAbort } = require('../db/transaction');
-const { createMockLogger } = require('./helpers');
+const { createMockLogger, asMockDb } = require('./helpers');
 
 function createServiceDeps(pool) {
+  const db = asMockDb(pool);
   return {
-    pool,
+    db,
     logger: createMockLogger(),
     listsAsync: {
       find: mock.fn(async () => []),
       findWithCounts: mock.fn(async () => []),
       findAllUserListsWithItems: mock.fn(async () => []),
-      // raw() now used by list-service for fetchRecommendationMaps, findListById,
-      // and dismissSetup; delegate to the test's pool mock.
+      // raw() — shares the pool.query mock so existing poolQuery assertions work.
       raw: mock.fn((sql, params) => pool.query(sql, params)),
     },
     listItemsAsync: {

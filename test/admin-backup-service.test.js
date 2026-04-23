@@ -24,7 +24,7 @@ describe('admin-backup-service', () => {
     fs.writeFileSync(filePath, Buffer.from('PGDMP test backup bytes'));
 
     const service = createAdminBackupService({
-      pool: { query: async () => ({ rows: [] }) },
+      db: { raw: async () => ({ rows: [] }) },
       logger: createLogger(),
     });
 
@@ -39,7 +39,7 @@ describe('admin-backup-service', () => {
     fs.writeFileSync(filePath, Buffer.from('NOTPG backup bytes'));
 
     const service = createAdminBackupService({
-      pool: { query: async () => ({ rows: [] }) },
+      db: { raw: async () => ({ rows: [] }) },
       logger: createLogger(),
     });
 
@@ -50,7 +50,7 @@ describe('admin-backup-service', () => {
 
   it('getRuntimeConfig falls back to default pg binaries when custom bin is absent', () => {
     const service = createAdminBackupService({
-      pool: { query: async () => ({ rows: [] }) },
+      db: { raw: async () => ({ rows: [] }) },
       logger: createLogger(),
       process: {
         env: {

@@ -161,17 +161,16 @@ async function getRecommendationStatuses(db, years, userId) {
 }
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin, db, pool, usersAsync, listsAsync } = deps;
+  const { ensureAuth, ensureAdmin, db, usersAsync, listsAsync } = deps;
 
   const statsService = createStatsService({ usersAsync, listsAsync });
   const adminEventService = createAdminEventService({ db, logger });
-  const aggregateListService = createAggregateList({ db, pool, logger });
+  const aggregateListService = createAggregateList({ db, logger });
 
   app.get('/api/admin/bootstrap', ensureAuth, ensureAdmin, async (req, res) => {
     try {
       const telegramNotifier =
-        app.locals.telegramNotifier ||
-        createTelegramNotifier({ db, pool, logger });
+        app.locals.telegramNotifier || createTelegramNotifier({ db, logger });
       const albumSummaryService = app.locals.albumSummaryService;
       const imageRefetchService = app.locals.imageRefetchService;
       const catalogCleanupService = app.locals.catalogCleanupService;

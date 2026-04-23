@@ -2,26 +2,15 @@ const crypto = require('crypto');
 const { decrypt, encrypt } = require('./crypto-utils');
 
 /**
- * @param {object} poolOrDb - Either a pg Pool (legacy) or a datastore with .raw().
- *   A datastore is detected via duck-typing on .raw; anything else is adapted.
+ * @param {import('../../db/types').DbFacade} db - Canonical datastore with .raw().
  */
-function createConfigManager(
-  poolOrDb,
-  encryptionKey,
-  log,
-  setupHelpers,
-  baseUrl
-) {
+function createConfigManager(db, encryptionKey, log, setupHelpers, baseUrl) {
   let configCache = null;
   let configCacheTime = 0;
   const CONFIG_CACHE_TTL = 60000;
-  const db =
-    poolOrDb && typeof poolOrDb.raw === 'function'
-      ? poolOrDb
-      : poolOrDb
-        ? { raw: (sql, params) => poolOrDb.query(sql, params) }
-        : null;
-  const pool = db; // legacy name used for null-check in bodies
+  // `pool` name retained only so existing `if (!pool)` truthy-checks in this
+  // file still read naturally. They amount to "do we have a db configured?".
+  const pool = db;
 
   async function saveConfig(config) {
     if (!pool) {

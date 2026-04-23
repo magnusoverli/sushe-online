@@ -1,5 +1,6 @@
 const logger = require('../utils/logger');
-const { withTransaction } = require('../db/transaction');
+const { ensureDb } = require('../db/postgres');
+// withTransaction is invoked via db.withTransaction below.
 
 const DEFAULT_MIN_AGE_DAYS = 90;
 const MAX_MIN_AGE_DAYS = 3650;
@@ -72,21 +73,18 @@ function toRowCount(value) {
 }
 
 function createCatalogCleanupService(deps = {}) {
-  const pool = deps.pool;
-  const db =
-    deps.db ||
-    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
+  const db = ensureDb(deps.db, 'catalog-cleanup');
   const log = deps.logger || logger;
 
-  if (!db) {
-    throw new Error('catalog-cleanup requires deps.db (or legacy deps.pool)');
-  }
+  // getExistingTableSet expects a queryable with .query(); both a pg client
+  // (inside a transaction) and this shim satisfy that contract.
+  const dbAsQueryable = { query: (sql, params) => db.raw(sql, params) };
 
   async function getPreview(options = {}) {
     const minAgeDays = normalizeMinAgeDays(options.minAgeDays);
     const sampleLimit = normalizeSampleLimit(options.sampleLimit);
 
-    const existingTables = await getExistingTableSet(pool, [
+    const existingTables = await getExistingTableSet(dbAsQueryable, [
       ...Object.keys(REFERENCE_CHECKS),
       'user_album_stats',
       'album_distinct_pairs',
@@ -177,7 +175,7 @@ function createCatalogCleanupService(deps = {}) {
         : toRowCount(options.expectedDeleteCount);
     const sampleLimit = normalizeSampleLimit(options.sampleLimit);
 
-    const executionResult = await withTransaction(pool, async (client) => {
+    const executionResult = await db.withTransaction(async (client) => {
       const existingTables = await getExistingTableSet(client, [
         ...Object.keys(REFERENCE_CHECKS),
         'user_album_stats',

@@ -73,16 +73,16 @@ function createMockUserPrefs(overrides = {}) {
 // =============================================================================
 
 describe('createPreferenceSyncService', () => {
-  it('should throw if pool is not provided', () => {
+  it('should throw if db is not provided', () => {
     assert.throws(
       () => createPreferenceSyncService({}),
-      /Database pool is required/
+      /preference-sync requires deps\.db/
     );
   });
 
   it('should create service with default dependencies', () => {
     const pool = createMockPool();
-    const service = createPreferenceSyncService({ pool });
+    const service = createPreferenceSyncService({ db: pool });
 
     assert.ok(service.start);
     assert.ok(service.stop);
@@ -94,7 +94,7 @@ describe('createPreferenceSyncService', () => {
     const pool = createMockPool();
     const logger = createMockLogger();
     const service = createPreferenceSyncService({
-      pool,
+      db: pool,
       logger,
       syncIntervalMs: 1000,
     });
@@ -135,7 +135,11 @@ describe('getUsersNeedingSync', () => {
     const logger = createMockLogger();
     const userPrefs = createMockUserPrefs();
 
-    const service = createPreferenceSyncService({ pool, logger, userPrefs });
+    const service = createPreferenceSyncService({
+      db: pool,
+      logger,
+      userPrefs,
+    });
     const users = await service.getUsersNeedingSync();
 
     assert.strictEqual(users.length, 2);
@@ -154,7 +158,11 @@ describe('getUsersNeedingSync', () => {
     const logger = createMockLogger();
     const userPrefs = createMockUserPrefs();
 
-    const service = createPreferenceSyncService({ pool, logger, userPrefs });
+    const service = createPreferenceSyncService({
+      db: pool,
+      logger,
+      userPrefs,
+    });
     await service.getUsersNeedingSync(10);
 
     const params = pool.query.mock.calls[0].arguments[1];
@@ -172,7 +180,11 @@ describe('syncInternalData', () => {
     const logger = createMockLogger();
     const userPrefs = createMockUserPrefs();
 
-    const service = createPreferenceSyncService({ pool, logger, userPrefs });
+    const service = createPreferenceSyncService({
+      db: pool,
+      logger,
+      userPrefs,
+    });
     const result = await service.syncInternalData('user123');
 
     assert.strictEqual(userPrefs.aggregateFromLists.mock.calls.length, 1);
@@ -197,7 +209,7 @@ describe('syncSpotifyData', () => {
     const userPrefs = createMockUserPrefs();
 
     const service = createPreferenceSyncService({
-      pool,
+      db: pool,
       logger,
       spotifyAuth,
       userPrefs,
@@ -223,7 +235,7 @@ describe('syncSpotifyData', () => {
     const userPrefs = createMockUserPrefs();
 
     const service = createPreferenceSyncService({
-      pool,
+      db: pool,
       logger,
       spotifyAuth,
       userPrefs,
@@ -243,7 +255,7 @@ describe('syncSpotifyData', () => {
     const userPrefs = createMockUserPrefs();
 
     const service = createPreferenceSyncService({
-      pool,
+      db: pool,
       logger,
       spotifyAuth,
       userPrefs,
@@ -273,7 +285,7 @@ describe('syncLastfmData', () => {
     const userPrefs = createMockUserPrefs();
 
     const service = createPreferenceSyncService({
-      pool,
+      db: pool,
       logger,
       lastfmAuth,
       userPrefs,
@@ -290,7 +302,7 @@ describe('syncLastfmData', () => {
     const userPrefs = createMockUserPrefs();
 
     const service = createPreferenceSyncService({
-      pool,
+      db: pool,
       logger,
       lastfmAuth,
       userPrefs,
@@ -310,7 +322,7 @@ describe('syncLastfmData', () => {
     const userPrefs = createMockUserPrefs();
 
     const service = createPreferenceSyncService({
-      pool,
+      db: pool,
       logger,
       lastfmAuth,
       userPrefs,
@@ -342,7 +354,7 @@ describe('syncUserPreferences', () => {
     const userPrefs = createMockUserPrefs();
 
     const service = createPreferenceSyncService({
-      pool,
+      db: pool,
       logger,
       spotifyAuth,
       lastfmAuth,
@@ -381,7 +393,11 @@ describe('syncUserPreferences', () => {
       }),
     });
 
-    const service = createPreferenceSyncService({ pool, logger, userPrefs });
+    const service = createPreferenceSyncService({
+      db: pool,
+      logger,
+      userPrefs,
+    });
 
     const result = await service.syncUserPreferences({
       _id: 'user123',
@@ -404,7 +420,7 @@ describe('syncUserPreferences', () => {
     const userPrefs = createMockUserPrefs();
 
     const service = createPreferenceSyncService({
-      pool,
+      db: pool,
       logger,
       spotifyAuth,
       userPrefs,
@@ -427,7 +443,11 @@ describe('syncUserPreferences', () => {
     const logger = createMockLogger();
     const userPrefs = createMockUserPrefs();
 
-    const service = createPreferenceSyncService({ pool, logger, userPrefs });
+    const service = createPreferenceSyncService({
+      db: pool,
+      logger,
+      userPrefs,
+    });
 
     const result = await service.syncUserPreferences({
       _id: 'user123',
@@ -458,7 +478,11 @@ describe('runSyncCycle', () => {
     const logger = createMockLogger();
     const userPrefs = createMockUserPrefs();
 
-    const service = createPreferenceSyncService({ pool, logger, userPrefs });
+    const service = createPreferenceSyncService({
+      db: pool,
+      logger,
+      userPrefs,
+    });
     const results = await service.runSyncCycle();
 
     assert.strictEqual(results.total, 2);
@@ -484,7 +508,11 @@ describe('runSyncCycle', () => {
       }),
     });
 
-    const service = createPreferenceSyncService({ pool, logger, userPrefs });
+    const service = createPreferenceSyncService({
+      db: pool,
+      logger,
+      userPrefs,
+    });
 
     // Start first cycle
     const cycle1Promise = service.runSyncCycle();
@@ -525,7 +553,11 @@ describe('runSyncCycle', () => {
       }),
     });
 
-    const service = createPreferenceSyncService({ pool, logger, userPrefs });
+    const service = createPreferenceSyncService({
+      db: pool,
+      logger,
+      userPrefs,
+    });
     const results = await service.runSyncCycle();
 
     assert.strictEqual(results.total, 2);
@@ -545,7 +577,7 @@ describe('start and stop', () => {
     const userPrefs = createMockUserPrefs();
 
     const service = createPreferenceSyncService({
-      pool,
+      db: pool,
       logger,
       userPrefs,
       syncIntervalMs: 100000, // Long interval to prevent actual runs
@@ -566,7 +598,7 @@ describe('start and stop', () => {
     const userPrefs = createMockUserPrefs();
 
     const service = createPreferenceSyncService({
-      pool,
+      db: pool,
       logger,
       userPrefs,
       syncIntervalMs: 100000,
@@ -589,7 +621,11 @@ describe('start and stop', () => {
     const logger = createMockLogger();
     const userPrefs = createMockUserPrefs();
 
-    const service = createPreferenceSyncService({ pool, logger, userPrefs });
+    const service = createPreferenceSyncService({
+      db: pool,
+      logger,
+      userPrefs,
+    });
 
     assert.strictEqual(service.isSyncing(), false);
 

@@ -10,7 +10,7 @@ describe('album-service', () => {
     const pool = createMockPool([{ rows: [{ album_id: 'a1' }] }]);
 
     const service = createAlbumService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
       invalidateCachesForAlbumUsers: mock.fn(async () => {}),
@@ -42,9 +42,23 @@ describe('album-service', () => {
       connect: mock.fn(async () => client),
       query: mock.fn(async () => ({ rows: [], rowCount: 0 })),
     };
+    pool.raw = pool.query;
+    // Match the canonical datastore surface so album-service's
+    // db.withTransaction(cb) runs the callback with the mock client.
+    pool.withTransaction = mock.fn(async (cb) => {
+      await client.query('BEGIN');
+      try {
+        const r = await cb(client);
+        await client.query('COMMIT');
+        return r;
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      }
+    });
 
     const service = createAlbumService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
       invalidateCachesForAlbumUsers: mock.fn(async () => {}),
@@ -90,9 +104,10 @@ describe('album-service', () => {
         release: mock.fn(),
       })),
     };
+    pool.raw = pool.query;
 
     const service = createAlbumService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
       invalidateCachesForAlbumUsers: mock.fn(async () => {}),
@@ -123,9 +138,10 @@ describe('album-service', () => {
         release: mock.fn(),
       })),
     };
+    pool.raw = pool.query;
 
     const service = createAlbumService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
       invalidateCachesForAlbumUsers: mock.fn(async () => {}),

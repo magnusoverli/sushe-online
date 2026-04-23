@@ -11,28 +11,21 @@
  */
 
 const defaultLogger = require('../utils/logger');
-const { withTransaction, TransactionAbort } = require('../db/transaction');
+const { ensureDb } = require('../db/postgres');
+const { TransactionAbort } = require('../db/transaction');
 const { normalizeImageBuffer } = require('../utils/image-processing');
 
 /**
  * Create recommendation service with injected dependencies
  * @param {Object} deps
- * @param {Object} deps.pool - PostgreSQL pool
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Object} deps.logger - Logger instance
  * @param {Object} deps.crypto - Node.js crypto module
  * @param {Function} deps.upsertAlbumRecord - Helper from _helpers.js
  */
 // eslint-disable-next-line max-lines-per-function -- Cohesive service module with related recommendation operations
 function createRecommendationService(deps = {}) {
-  const pool = deps.pool;
-  const db =
-    deps.db ||
-    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
-  if (!db) {
-    throw new Error(
-      'recommendation-service requires deps.db (or legacy deps.pool)'
-    );
-  }
+  const db = ensureDb(deps.db, 'recommendation-service');
   const logger = deps.logger || defaultLogger;
   const crypto = deps.crypto || require('crypto');
   const { upsertAlbumRecord } = deps;
@@ -196,7 +189,7 @@ function createRecommendationService(deps = {}) {
     const timestamp = new Date();
     const _id = crypto.randomBytes(12).toString('hex');
 
-    const albumId = await withTransaction(pool, async (client) => {
+    const albumId = await db.withTransaction(async (client) => {
       const upsertedAlbumId = await upsertAlbumRecord(album, timestamp, client);
 
       const existing = await client.query(
@@ -439,7 +432,7 @@ function createRecommendationService(deps = {}) {
       throw new TransactionAbort(400, { error: 'userIds must be an array' });
     }
 
-    await withTransaction(pool, async (client) => {
+    await db.withTransaction(async (client) => {
       await client.query('DELETE FROM recommendation_access WHERE year = $1', [
         year,
       ]);

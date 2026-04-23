@@ -13,8 +13,9 @@
  */
 
 const defaultLogger = require('../utils/logger');
+const { ensureDb } = require('../db/postgres');
 const { TransactionAbort } = require('../db/transaction');
-const { withTransaction } = require('../db/transaction');
+// withTransaction is provided via db.withTransaction now.
 const { buildPartialUpdate } = require('../utils/query-builder');
 const { findPotentialDuplicates } = require('../utils/fuzzy-match');
 const { normalizeImageBuffer } = require('../utils/image-processing');
@@ -22,26 +23,16 @@ const { normalizeImageBuffer } = require('../utils/image-processing');
 /**
  * Create album service with injected dependencies
  * @param {Object} deps
- * @param {Object} deps.pool - PostgreSQL pool
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Object} deps.logger - Logger instance
  * @param {Function} deps.upsertAlbumRecord - Helper from _helpers.js
  * @param {Function} deps.invalidateCachesForAlbumUsers - Helper from _helpers.js
  */
 // eslint-disable-next-line max-lines-per-function -- Cohesive service module with related album operations
 function createAlbumService(deps = {}) {
-  const pool = deps.pool;
   const logger = deps.logger || defaultLogger;
   const { upsertAlbumRecord, invalidateCachesForAlbumUsers } = deps;
-
-  // Unified DB facade: prefer the canonical `db`, fall back to a pool adapter.
-  // All SQL in this file goes through db.raw for logging, metrics, and the
-  // shutdown drain flag. withTransaction imports elsewhere are kept in place.
-  const db =
-    deps.db ||
-    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
-  if (!db) {
-    throw new Error('album-service requires deps.db (or legacy deps.pool)');
-  }
+  const db = ensureDb(deps.db, 'album-service');
 
   function validateOptionalTextField(value, errorMessage) {
     if (value !== null && value !== undefined && typeof value !== 'string') {
@@ -291,7 +282,7 @@ function createAlbumService(deps = {}) {
     let successCount = 0;
     const albumIds = new Set();
 
-    await withTransaction(pool, async (client) => {
+    await db.withTransaction(async (client) => {
       for (const update of updates) {
         const { albumId, country, genre_1, genre_2 } = update;
         if (!albumId) continue;

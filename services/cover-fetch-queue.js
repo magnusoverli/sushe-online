@@ -16,6 +16,7 @@
  */
 
 const { RequestQueue } = require('../utils/request-queue');
+const { ensureDb } = require('../db/postgres');
 const logger = require('../utils/logger');
 const {
   normalizeForExternalApi,
@@ -282,7 +283,7 @@ function createCoverProviders(fetchFn) {
  * Factory function to create a CoverFetchQueue with dependency injection
  *
  * @param {Object} deps - Dependencies
- * @param {Object} deps.pool - Database connection pool
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Function} deps.fetch - Fetch function (for testing)
  * @param {number} deps.maxConcurrent - Max concurrent fetches (default: 3)
  * @returns {Object} - CoverFetchQueue instance
@@ -338,13 +339,7 @@ function createCoverFetchQueue(deps = {}) {
    * @returns {Promise<void>}
    */
   async function fetchAndStoreCover(albumId, artist, album) {
-    const pool = deps.pool;
-    if (!pool) {
-      throw new Error('Database pool not initialized');
-    }
-    const db = deps.db ||
-      deps.albumsAsync ||
-      deps.listsAsync || { raw: (sql, params) => pool.query(sql, params) };
+    const db = ensureDb(deps.db, 'cover-fetch-queue');
 
     // Try each provider in order until one succeeds
     for (const provider of coverProviders) {
@@ -413,16 +408,16 @@ function createCoverFetchQueue(deps = {}) {
   };
 }
 
-// Create and export singleton instance (will be initialized with pool later)
+// Create and export singleton instance (will be initialized with db later)
 let coverFetchQueue = null;
 
 /**
  * Initialize the singleton cover fetch queue
- * @param {Object} pool - Database connection pool
+ * @param {import('../db/types').DbFacade} db - Canonical datastore
  */
-function initializeCoverFetchQueue(pool) {
+function initializeCoverFetchQueue(db) {
   if (!coverFetchQueue) {
-    coverFetchQueue = createCoverFetchQueue({ pool });
+    coverFetchQueue = createCoverFetchQueue({ db });
     logger.info('Cover fetch queue initialized');
   }
   return coverFetchQueue;
@@ -435,7 +430,7 @@ function initializeCoverFetchQueue(pool) {
 function getCoverFetchQueue() {
   if (!coverFetchQueue) {
     throw new Error(
-      'Cover fetch queue not initialized. Call initializeCoverFetchQueue(pool) first.'
+      'Cover fetch queue not initialized. Call initializeCoverFetchQueue(db) first.'
     );
   }
   return coverFetchQueue;

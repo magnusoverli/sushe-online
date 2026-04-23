@@ -1,14 +1,8 @@
 /**
- * @param {object} poolOrDb - pg Pool (legacy) or datastore with .raw().
+ * @param {import('../../db/types').DbFacade} db - Canonical datastore with .raw().
  */
-function createWebhookHandler(poolOrDb, configManager, log) {
-  const db =
-    poolOrDb && typeof poolOrDb.raw === 'function'
-      ? poolOrDb
-      : poolOrDb
-        ? { raw: (sql, params) => poolOrDb.query(sql, params) }
-        : null;
-  const pool = db; // legacy name used for null-check in bodies
+function createWebhookHandler(db, configManager, log) {
+  const pool = db; // truthy alias for existing `if (!pool)` guards below
 
   async function verifyWebhookSecret(secret) {
     const config = await configManager.getConfig();

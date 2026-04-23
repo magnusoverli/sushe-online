@@ -1,5 +1,6 @@
 const logger = require('../utils/logger');
-const { withTransaction, TransactionAbort } = require('../db/transaction');
+const { ensureDb } = require('../db/postgres');
+const { TransactionAbort } = require('../db/transaction');
 const { buildPartialUpdate } = require('../utils/query-builder');
 const { createItemComments } = require('./list/item-comments');
 const { createListFetchers } = require('./list/fetchers');
@@ -17,10 +18,7 @@ const {
 
 // eslint-disable-next-line max-lines-per-function
 function createListService(deps = {}) {
-  const pool = deps.pool;
-  if (!pool) {
-    throw new Error('PostgreSQL pool is required for ListService');
-  }
+  const db = ensureDb(deps.db, 'list-service');
 
   const log = deps.logger || logger;
   const { listsAsync, listItemsAsync, crypto, validateYear, helpers } = deps;
@@ -98,20 +96,19 @@ function createListService(deps = {}) {
     if (!list) {
       throw new TransactionAbort(404, { error: 'List not found' });
     }
-    await validateMainListNotLocked(pool, list.year, list.isMain, action);
+    await validateMainListNotLocked(db, list.year, list.isMain, action);
     return list;
   }
 
   const { updateItemCommentField } = createItemComments({
-    pool,
-    withTransaction,
+    db,
     TransactionAbort,
     findListByIdOrThrow,
     logger: log,
   });
 
   const itemOperations = createListItemOperations({
-    pool,
+    db,
     crypto,
     upsertAlbumRecord: helpers.upsertAlbumRecord,
     batchUpsertAlbumRecords: helpers.batchUpsertAlbumRecords,
@@ -127,8 +124,7 @@ function createListService(deps = {}) {
     getPointsForPosition,
   });
   const managementOperations = createListManagementOperations({
-    pool,
-    withTransaction,
+    db,
     TransactionAbort,
     validateYear,
     validateMainListNotLocked,
@@ -137,10 +133,9 @@ function createListService(deps = {}) {
     buildPartialUpdate,
     deleteGroupIfEmptyAutoGroup,
   });
-  const setupStatus = createSetupStatus({ pool });
+  const setupStatus = createSetupStatus({ db });
   const writeOperations = createListWriteOperations({
-    pool,
-    withTransaction,
+    db,
     TransactionAbort,
     crypto,
     managementOperations,

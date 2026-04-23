@@ -6,16 +6,18 @@ const {
 const { createMockLogger } = require('./helpers');
 
 function createMockPoolWithQuery(handler) {
-  return {
-    query: mock.fn(handler),
-  };
+  const query = mock.fn(handler);
+  // Expose both pg-pool `.query` (so test assertions on `.query.mock.calls`
+  // keep working) and the canonical datastore `.raw` (so services that now
+  // require `deps.db` accept the same mock).
+  return { query, raw: query };
 }
 
 describe('external-identity-service', () => {
-  it('throws when db/pool is missing', () => {
+  it('throws when db is missing', () => {
     assert.throws(
       () => createExternalIdentityService({ logger: createMockLogger() }),
-      /db datastore or pool is required/
+      /external-identity-service requires deps\.db/
     );
   });
 
@@ -38,7 +40,7 @@ describe('external-identity-service', () => {
     });
 
     const service = createExternalIdentityService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
     const result = await service.getAlbumServiceMapping('spotify', 'album-1');
@@ -55,7 +57,7 @@ describe('external-identity-service', () => {
   it('skips album mapping upsert for unsupported services', async () => {
     const pool = createMockPoolWithQuery(async () => ({ rows: [] }));
     const service = createExternalIdentityService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 
@@ -71,7 +73,7 @@ describe('external-identity-service', () => {
   it('sanitizes persisted album mapping text fields', async () => {
     const pool = createMockPoolWithQuery(async () => ({ rows: [] }));
     const service = createExternalIdentityService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 
@@ -99,7 +101,7 @@ describe('external-identity-service', () => {
     });
 
     const service = createExternalIdentityService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
     const alias = await service.getArtistAlias(
@@ -121,7 +123,7 @@ describe('external-identity-service', () => {
     }));
 
     const service = createExternalIdentityService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 
@@ -137,7 +139,7 @@ describe('external-identity-service', () => {
   it('ignores invalid artist alias upserts', async () => {
     const pool = createMockPoolWithQuery(async () => ({ rows: [] }));
     const service = createExternalIdentityService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 
@@ -153,7 +155,7 @@ describe('external-identity-service', () => {
   it('normalizes canonical/service keys when upserting artist aliases', async () => {
     const pool = createMockPoolWithQuery(async () => ({ rows: [] }));
     const service = createExternalIdentityService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 

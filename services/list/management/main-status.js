@@ -1,5 +1,5 @@
 async function toggleMainStatus(ctx, listId, userId, isMain) {
-  return ctx.withTransaction(ctx.pool, async (client) => {
+  return ctx.db.withTransaction(async (client) => {
     const listResult = await client.query(
       `SELECT l.id, l._id, l.name, l.year, l.is_main, g.year as group_year
        FROM lists l
@@ -16,7 +16,7 @@ async function toggleMainStatus(ctx, listId, userId, isMain) {
     const listYear = list.year || list.group_year;
 
     try {
-      await ctx.validateYearNotLocked(ctx.pool, listYear, 'change main status');
+      await ctx.validateYearNotLocked(ctx.db, listYear, 'change main status');
     } catch (lockErr) {
       throw new ctx.TransactionAbort(403, {
         error: lockErr.body?.error || lockErr.message,
@@ -75,7 +75,7 @@ async function toggleMainStatus(ctx, listId, userId, isMain) {
 }
 
 async function deleteList(ctx, listId, userId) {
-  return ctx.withTransaction(ctx.pool, async (client) => {
+  return ctx.db.withTransaction(async (client) => {
     const listResult = await client.query(
       `SELECT id, _id, name, year, group_id, is_main FROM lists WHERE _id = $1 AND user_id = $2`,
       [listId, userId]

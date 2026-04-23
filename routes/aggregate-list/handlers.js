@@ -2,7 +2,7 @@ function createAggregateListHandlers(deps = {}) {
   const {
     aggregateList,
     logger,
-    pool,
+    db,
     validateYearNotLocked,
     scheduleAggregateRecompute,
   } = deps;
@@ -167,7 +167,7 @@ function createAggregateListHandlers(deps = {}) {
     const year = req.validatedYear;
 
     try {
-      await validateYearNotLocked(pool, year, 'manage contributors');
+      await validateYearNotLocked(db, year, 'manage contributors');
     } catch (err) {
       return res.status(403).json({
         error: err.message,
@@ -195,7 +195,7 @@ function createAggregateListHandlers(deps = {}) {
     const year = req.validatedYear;
 
     try {
-      await validateYearNotLocked(pool, year, 'manage contributors');
+      await validateYearNotLocked(db, year, 'manage contributors');
     } catch (err) {
       return res.status(403).json({
         error: err.message,

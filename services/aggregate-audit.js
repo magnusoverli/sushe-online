@@ -8,11 +8,11 @@
  */
 
 const logger = require('../utils/logger');
+const { ensureDb } = require('../db/postgres');
 const {
   findPotentialDuplicates,
   normalizeAlbumKey,
 } = require('../utils/fuzzy-match');
-const { withTransaction } = require('../db/transaction');
 const {
   basicNormalizeAlbumKey,
   createDuplicateAuditService,
@@ -24,29 +24,23 @@ const { createDuplicateService } = require('./duplicate-service');
 
 function createAggregateAudit(deps = {}) {
   const log = deps.logger || logger;
-  const pool = deps.pool;
-
-  if (!pool) {
-    throw new Error('PostgreSQL pool is required');
-  }
+  const db = ensureDb(deps.db, 'aggregate-audit');
 
   const duplicateAudit = createDuplicateAuditService({
-    pool,
+    db,
     log,
     normalizeAlbumKey,
     selectCanonicalAlbumId,
-    withTransaction,
   });
 
   const duplicateService =
-    deps.duplicateService || createDuplicateService({ pool, logger: log });
+    deps.duplicateService || createDuplicateService({ db, logger: log });
 
   const manualReconciliation = createManualReconciliationService({
-    pool,
+    db,
     log,
     normalizeAlbumKey,
     findPotentialDuplicates,
-    withTransaction,
     duplicateService,
   });
 

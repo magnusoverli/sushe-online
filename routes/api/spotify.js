@@ -22,7 +22,7 @@ module.exports = (app, deps) => {
     logger,
     fetch,
     requireSpotifyAuth,
-    pool,
+    db,
     refreshPlaycountsInBackground,
     externalIdentityService,
   } = deps;
@@ -233,7 +233,7 @@ module.exports = (app, deps) => {
             spotifyAlbumId: albumId,
             userId: req.user._id,
             lastfmUsername: req.user.lastfmUsername,
-            pool,
+            db,
             refreshPlaycountsInBackground,
           });
         }

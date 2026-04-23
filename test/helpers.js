@@ -26,29 +26,78 @@ function createMockLogger() {
 }
 
 /**
- * Creates a mock PostgreSQL pool with sequential query results.
+ * Creates a mock datastore/pool that satisfies BOTH the legacy pg-pool
+ * surface (query/connect) and the canonical datastore surface
+ * (raw/withClient/withTransaction). Services now require `deps.db`, but
+ * many tests historically created a "pool" with `.query`; this helper
+ * lets those tests keep working by exposing `.raw` as an alias.
  *
  * @param {Array} queryResults - Array of { rows, rowCount } objects returned in order
- * @param {Object} overrides - Additional properties to merge onto the pool object
- *
- * Examples:
- *   createMockPool([{ rows: [{ id: 1 }] }])           // single query result
- *   createMockPool([{ rows: [] }, { rows: [{ x: 1 }] }]) // two sequential queries
- *   createMockPool([], { connect: myCustomConnect })    // with overrides
+ * @param {Object} overrides - Additional properties to merge onto the object
  */
 function createMockPool(queryResults = [], overrides = {}) {
   let callIndex = 0;
+  const defaultQuery = mock.fn(async () => {
+    const result = queryResults[callIndex] || { rows: [], rowCount: 0 };
+    callIndex++;
+    return result;
+  });
+  const defaultConnect = mock.fn(async () => ({
+    query: mock.fn(async () => ({ rows: [], rowCount: 0 })),
+    release: mock.fn(),
+  }));
+  // Overrides can swap out query or connect — raw always tracks the
+  // active .query so `.raw()` callers hit the same mock that tests
+  // installed as `query`.
+  const query = overrides.query || defaultQuery;
+  const connect = overrides.connect || defaultConnect;
   return {
-    query: mock.fn(async () => {
-      const result = queryResults[callIndex] || { rows: [], rowCount: 0 };
-      callIndex++;
-      return result;
-    }),
-    connect: mock.fn(async () => ({
-      query: mock.fn(async () => ({ rows: [], rowCount: 0 })),
-      release: mock.fn(),
-    })),
     ...overrides,
+    // Legacy pg-pool surface
+    query,
+    connect,
+    // Canonical datastore surface — raw shares the active query mock so
+    // call assertions on `pool.query.mock.calls` still work when the
+    // code under test now invokes `.raw()` on what it received as
+    // `deps.db`.
+    raw: query,
+    withClient: mock.fn(async (cb) => {
+      const client = await connect();
+      try {
+        return await cb(client);
+      } finally {
+        if (client.release) client.release();
+      }
+    }),
+    withTransaction: mock.fn(async (cb) => {
+      const client = await connect();
+      try {
+        await client.query('BEGIN');
+        const r = await cb(client);
+        await client.query('COMMIT');
+        return r;
+      } finally {
+        if (client.release) client.release();
+      }
+    }),
+  };
+}
+
+/**
+ * Creates a mock canonical datastore with just the .raw interface.
+ * @param {Function} rawFn - The mock implementation for .raw
+ */
+function createMockDb(
+  rawFn = mock.fn(async () => ({ rows: [], rowCount: 0 }))
+) {
+  return {
+    raw: rawFn,
+    withClient: mock.fn(async (cb) =>
+      cb({ query: mock.fn(async () => ({ rows: [] })), release: () => {} })
+    ),
+    withTransaction: mock.fn(async (cb) =>
+      cb({ query: mock.fn(async () => ({ rows: [] })), release: () => {} })
+    ),
   };
 }
 
@@ -106,9 +155,59 @@ function createMockRes() {
   return res;
 }
 
+/**
+ * Decorate a bare { query, connect } pool mock with the datastore surface
+ * (raw + withTransaction + withClient) so it can be passed as deps.db.
+ *
+ * For tests that construct pool literals inline with only query/connect.
+ *
+ * @param {Object} pool - Minimum: { query: fn }. Optional: connect: fn.
+ * @returns {Object} The same pool, augmented in place.
+ */
+function asMockDb(pool) {
+  if (!pool.raw) pool.raw = pool.query;
+  if (!pool.withClient) {
+    pool.withClient = async (cb) => {
+      const c = pool.connect
+        ? await pool.connect()
+        : { query: pool.query, release: () => {} };
+      try {
+        return await cb(c);
+      } finally {
+        if (c.release) c.release();
+      }
+    };
+  }
+  if (!pool.withTransaction) {
+    pool.withTransaction = async (cb) => {
+      const c = pool.connect
+        ? await pool.connect()
+        : { query: pool.query, release: () => {} };
+      try {
+        await c.query('BEGIN');
+        const r = await cb(c);
+        await c.query('COMMIT');
+        return r;
+      } catch (err) {
+        try {
+          await c.query('ROLLBACK');
+        } catch (_err) {
+          // ignore rollback failures in test mocks
+        }
+        throw err;
+      } finally {
+        if (c.release) c.release();
+      }
+    };
+  }
+  return pool;
+}
+
 module.exports = {
   createMockLogger,
   createMockPool,
+  createMockDb,
+  asMockDb,
   createMockReq,
   createMockRes,
 };

@@ -8,8 +8,8 @@ function triggerPlaycountRefresh(ctx, user, addedItems) {
   }
 
   const albumIds = addedItems.map((item) => item.album_id);
-  ctx.pool
-    .query(
+  ctx.db
+    .raw(
       `SELECT album_id, artist, album FROM albums WHERE album_id = ANY($1::text[])`,
       [albumIds]
     )
@@ -33,7 +33,7 @@ function triggerPlaycountRefresh(ctx, user, addedItems) {
           user._id,
           user.lastfmUsername,
           albumsToRefresh,
-          ctx.pool,
+          ctx.db,
           ctx.logger
         )
         .catch((err) => {

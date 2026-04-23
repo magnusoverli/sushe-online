@@ -44,7 +44,7 @@ module.exports = (app, deps) => {
     isValidPassword,
     sanitizeUser,
     adminCodeState,
-    pool,
+    db,
     passport,
     authService,
     userService,
@@ -72,7 +72,7 @@ module.exports = (app, deps) => {
   const extensionTokenHandlers = createExtensionTokenHandlers({
     asyncHandler,
     authService,
-    pool,
+    db,
     generateExtensionToken,
     validateExtensionToken,
     cleanupExpiredTokens,

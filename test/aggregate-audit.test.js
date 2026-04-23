@@ -164,16 +164,16 @@ describe('aggregate-audit', () => {
   // ===========================================================================
 
   describe('createAggregateAudit', () => {
-    it('should throw if pool is not provided', () => {
+    it('should throw if db is not provided', () => {
       assert.throws(
         () => createAggregateAudit({}),
-        /PostgreSQL pool is required/
+        /aggregate-audit requires deps\.db/
       );
     });
 
     it('should create instance with pool', () => {
       const pool = createMockPool();
-      const audit = createAggregateAudit({ pool });
+      const audit = createAggregateAudit({ db: pool });
       assert.ok(audit);
       assert.strictEqual(typeof audit.findDuplicates, 'function');
       assert.strictEqual(typeof audit.previewFix, 'function');
@@ -213,7 +213,7 @@ describe('aggregate-audit', () => {
         },
       ]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const audit = createAggregateAudit({ db: pool, logger });
 
       const result = await audit.findDuplicates(2024);
 
@@ -260,7 +260,7 @@ describe('aggregate-audit', () => {
         },
       ]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const audit = createAggregateAudit({ db: pool, logger });
 
       const result = await audit.findDuplicates(2024);
 
@@ -302,7 +302,7 @@ describe('aggregate-audit', () => {
         },
       ]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const audit = createAggregateAudit({ db: pool, logger });
 
       const result = await audit.findDuplicates(2024);
 
@@ -321,7 +321,7 @@ describe('aggregate-audit', () => {
         { rows: [] }, // findDuplicates query returns empty
       ]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const audit = createAggregateAudit({ db: pool, logger });
 
       const result = await audit.previewFix(2024);
 
@@ -379,7 +379,7 @@ describe('aggregate-audit', () => {
         },
       ]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const audit = createAggregateAudit({ db: pool, logger });
 
       const result = await audit.previewFix(2024);
 
@@ -435,7 +435,7 @@ describe('aggregate-audit', () => {
         },
       ]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const audit = createAggregateAudit({ db: pool, logger });
 
       const result = await audit.getAuditReport(2024);
 
@@ -458,7 +458,7 @@ describe('aggregate-audit', () => {
         { rows: [] }, // Manual items query
       ]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const audit = createAggregateAudit({ db: pool, logger });
 
       const result = await audit.findManualAlbumsForReconciliation();
 
@@ -510,7 +510,7 @@ describe('aggregate-audit', () => {
         { rows: [] },
       ]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const audit = createAggregateAudit({ db: pool, logger });
 
       const result = await audit.findManualAlbumsForReconciliation();
 
@@ -559,7 +559,7 @@ describe('aggregate-audit', () => {
         },
       ]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const audit = createAggregateAudit({ db: pool, logger });
 
       const result = await audit.findManualAlbumsForReconciliation();
 
@@ -601,7 +601,7 @@ describe('aggregate-audit', () => {
         { rows: [] },
       ]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const audit = createAggregateAudit({ db: pool, logger });
 
       const result = await audit.findManualAlbumsForReconciliation();
 
@@ -637,7 +637,7 @@ describe('aggregate-audit', () => {
         { rows: [] },
       ]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const audit = createAggregateAudit({ db: pool, logger });
 
       const result = await audit.findManualAlbumsForReconciliation();
 
@@ -674,7 +674,7 @@ describe('aggregate-audit', () => {
         { rows: [] },
       ]);
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger });
+      const audit = createAggregateAudit({ db: pool, logger });
 
       const result = await audit.findManualAlbumsForReconciliation();
 
@@ -696,7 +696,11 @@ describe('aggregate-audit', () => {
       const duplicateService = {
         mergeAlbums: mock.fn(async () => ({ listItemsUpdated: 0 })),
       };
-      const audit = createAggregateAudit({ pool, logger, duplicateService });
+      const audit = createAggregateAudit({
+        db: pool,
+        logger,
+        duplicateService,
+      });
 
       await assert.rejects(
         async () => {
@@ -715,7 +719,11 @@ describe('aggregate-audit', () => {
       const duplicateService = {
         mergeAlbums: mock.fn(async () => ({ listItemsUpdated: 0 })),
       };
-      const audit = createAggregateAudit({ pool, logger, duplicateService });
+      const audit = createAggregateAudit({
+        db: pool,
+        logger,
+        duplicateService,
+      });
 
       await assert.rejects(
         async () => {
@@ -776,7 +784,11 @@ describe('aggregate-audit', () => {
       };
 
       const logger = createMockLogger();
-      const audit = createAggregateAudit({ pool, logger, duplicateService });
+      const audit = createAggregateAudit({
+        db: pool,
+        logger,
+        duplicateService,
+      });
 
       const result = await audit.mergeManualAlbum(
         'manual-123',

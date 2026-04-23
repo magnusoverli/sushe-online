@@ -71,7 +71,7 @@ describe('createImageRefetchService', () => {
 
   it('should create service with valid pool', () => {
     const pool = createMockPool();
-    const service = createImageRefetchService({ pool });
+    const service = createImageRefetchService({ db: pool });
 
     assert.ok(service, 'should create a service instance');
     assert.strictEqual(typeof service.getStats, 'function');
@@ -115,21 +115,21 @@ describe('Job state management', () => {
 
   it('isJobRunning should return false when no job is running', () => {
     const pool = createMockPool();
-    const service = createImageRefetchService({ pool });
+    const service = createImageRefetchService({ db: pool });
 
     assert.strictEqual(service.isJobRunning(), false);
   });
 
   it('stopJob should return false when no job is running', () => {
     const pool = createMockPool();
-    const service = createImageRefetchService({ pool });
+    const service = createImageRefetchService({ db: pool });
 
     assert.strictEqual(service.stopJob(), false);
   });
 
   it('getProgress should return null when no job is running', () => {
     const pool = createMockPool();
-    const service = createImageRefetchService({ pool });
+    const service = createImageRefetchService({ db: pool });
 
     assert.strictEqual(service.getProgress(), null);
   });
@@ -176,7 +176,7 @@ describe('getStats', () => {
     });
 
     const service = createImageRefetchService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
     const stats = await service.getStats();
@@ -206,7 +206,7 @@ describe('getStats', () => {
     });
 
     const service = createImageRefetchService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
     const stats = await service.getStats();
@@ -234,7 +234,7 @@ describe('getStats', () => {
     const pool = createMockPool([], { query: queryFn });
 
     const service = createImageRefetchService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
     await service.getStats();
@@ -296,7 +296,7 @@ describe('refetchAllImages', () => {
 
     const pool = createMockPool([], { query: queryFn });
     const service = createImageRefetchService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 
@@ -325,7 +325,7 @@ describe('refetchAllImages', () => {
 
     const pool = createMockPool([], { query: queryFn });
     const service = createImageRefetchService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
     const summary = await service.refetchAllImages();
@@ -354,7 +354,7 @@ describe('refetchAllImages', () => {
 
     const pool = createMockPool([], { query: queryFn });
     const service = createImageRefetchService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
     const summary = await service.refetchAllImages();
@@ -372,7 +372,7 @@ describe('refetchAllImages', () => {
     }));
     const pool = createMockPool([], { query: queryFn });
     const service = createImageRefetchService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 
@@ -390,7 +390,7 @@ describe('refetchAllImages', () => {
     });
     const pool = createMockPool([], { query: queryFn });
     const service = createImageRefetchService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 
@@ -442,7 +442,7 @@ describe('refetchAllImages', () => {
 
     const pool = createMockPool([], { query: queryFn });
     const service = createImageRefetchService({
-      pool,
+      db: pool,
       logger: createMockLogger(),
     });
 
@@ -490,7 +490,7 @@ describe('refetchAllImages', () => {
 
     const pool = createMockPool([], { query: queryFn });
     const logger = createMockLogger();
-    const service = createImageRefetchService({ pool, logger });
+    const service = createImageRefetchService({ db: pool, logger });
 
     // fetchCoverArt returns null for empty artist/album, so this should count as failed
     const summary = await service.refetchAllImages();

@@ -9,6 +9,7 @@
  */
 
 const defaultLogger = require('../utils/logger');
+const { ensureDb } = require('../db/postgres');
 const { TransactionAbort } = require('../db/transaction');
 const {
   SUSHE_USER_AGENT,
@@ -19,21 +20,12 @@ const {
 /**
  * Create reidentify service with injected dependencies
  * @param {Object} deps
- * @param {Object} deps.pool - PostgreSQL pool
+ * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Object} deps.logger - Logger instance
  * @param {Function} deps.fetchFn - Fetch function (for testability)
  */
-// eslint-disable-next-line max-lines-per-function -- Cohesive reidentification service with related internal helpers
 function createReidentifyService(deps = {}) {
-  const pool = deps.pool;
-  const db =
-    deps.db ||
-    (pool ? { raw: (sql, params) => pool.query(sql, params) } : null);
-  if (!db) {
-    throw new Error(
-      'reidentify-service requires deps.db (or legacy deps.pool)'
-    );
-  }
+  const db = ensureDb(deps.db, 'reidentify-service');
   const logger = deps.logger || defaultLogger;
   const fetchFn = deps.fetchFn || fetch;
 

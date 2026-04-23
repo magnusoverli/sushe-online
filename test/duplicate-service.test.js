@@ -2,7 +2,7 @@ const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
 
 const { createDuplicateService } = require('../services/duplicate-service');
-const { createMockLogger, createMockPool } = require('./helpers');
+const { createMockLogger, createMockPool, asMockDb } = require('./helpers');
 
 describe('duplicate-service', () => {
   it('scanDuplicates should find obvious duplicates with candidate blocking enabled', async () => {
@@ -63,7 +63,7 @@ describe('duplicate-service', () => {
     ]);
 
     const logger = createMockLogger();
-    const service = createDuplicateService({ pool, logger });
+    const service = createDuplicateService({ db: asMockDb(pool), logger });
 
     const result = await service.scanDuplicates(0.15);
 
@@ -124,7 +124,7 @@ describe('duplicate-service', () => {
     ]);
 
     const logger = createMockLogger();
-    const service = createDuplicateService({ pool, logger });
+    const service = createDuplicateService({ db: asMockDb(pool), logger });
     await service.scanDuplicates(0.15);
 
     const completionLog = logger.info.mock.calls.find(
@@ -216,7 +216,7 @@ describe('duplicate-service', () => {
     };
 
     const service = createDuplicateService({
-      pool,
+      db: asMockDb(pool),
       logger: createMockLogger(),
     });
 
@@ -353,7 +353,7 @@ describe('duplicate-service', () => {
     };
 
     const service = createDuplicateService({
-      pool,
+      db: asMockDb(pool),
       logger: createMockLogger(),
     });
 
@@ -497,7 +497,7 @@ describe('duplicate-service', () => {
     };
 
     const service = createDuplicateService({
-      pool,
+      db: asMockDb(pool),
       logger: createMockLogger(),
     });
 
@@ -602,7 +602,7 @@ describe('duplicate-service', () => {
     };
 
     const service = createDuplicateService({
-      pool,
+      db: asMockDb(pool),
       logger: createMockLogger(),
     });
 

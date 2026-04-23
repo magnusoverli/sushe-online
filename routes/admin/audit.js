@@ -7,12 +7,12 @@ const { createAggregateAudit } = require('../../services/aggregate-audit');
 const { validateYearParam } = require('../../middleware/validate-params');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin } = deps;
+  const { ensureAuth, ensureAdmin, db } = deps;
   const logger = require('../../utils/logger');
 
   // Create aggregate audit instance
   const aggregateAudit = createAggregateAudit({
-    pool: deps.pool,
+    db,
     logger,
     duplicateService: deps.duplicateService,
   });
@@ -22,7 +22,7 @@ module.exports = (app, deps) => {
     if (!affectedYears || affectedYears.length === 0) return [];
 
     const { createAggregateList } = require('../../services/aggregate-list');
-    const aggregateList = createAggregateList({ pool: deps.pool, logger });
+    const aggregateList = createAggregateList({ db, logger });
 
     const results = [];
     for (const year of affectedYears) {

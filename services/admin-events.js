@@ -3,6 +3,7 @@
 // Works independently of Telegram; Telegram is an optional notification layer
 
 const logger = require('../utils/logger');
+const { ensureDb } = require('../db/postgres');
 
 // ============================================
 // QUERY BUILDER HELPERS
@@ -144,14 +145,7 @@ async function notifyTelegramForUpdate(
  */
 function createAdminEventService(deps = {}) {
   const log = deps.logger || logger;
-  // Accept either a datastore (preferred) or a legacy pg pool.
-  // When given a pool, adapt to the .raw() interface for internal use.
-  const db =
-    deps.db ||
-    (deps.pool ? { raw: (sql, params) => deps.pool.query(sql, params) } : null);
-  if (!db) {
-    throw new Error('admin-events requires deps.db (or legacy deps.pool)');
-  }
+  const db = ensureDb(deps.db, 'admin-events');
   let telegramNotifier = deps.telegramNotifier || null;
 
   const actionHandlers = new Map();

@@ -71,123 +71,119 @@ const createMockFetch = (responses = {}) => {
 const createMockPool = (config = null) => {
   let storedConfig = config;
 
-  return {
-    query: async (sql, params = []) => {
-      // SELECT telegram_config
-      if (sql.includes('SELECT') && sql.includes('telegram_config')) {
-        if (storedConfig) {
-          return { rows: [storedConfig] };
-        }
-        return { rows: [] };
-      }
-
-      // DELETE telegram_config
-      if (sql.includes('DELETE') && sql.includes('telegram_config')) {
-        storedConfig = null;
-        return { rows: [] };
-      }
-
-      // INSERT telegram_config
-      if (sql.includes('INSERT INTO telegram_config')) {
-        storedConfig = {
-          id: 1,
-          bot_token_encrypted: params[0],
-          chat_id: params[1],
-          thread_id: params[2],
-          chat_title: params[3],
-          topic_name: params[4],
-          webhook_secret: params[5],
-          enabled: params[6],
-          configured_at: new Date(),
-          configured_by: params[7],
-        };
+  const impl = async (sql, params = []) => {
+    // SELECT telegram_config
+    if (sql.includes('SELECT') && sql.includes('telegram_config')) {
+      if (storedConfig) {
         return { rows: [storedConfig] };
       }
-
-      // telegram_admins queries
-      if (sql.includes('telegram_admins')) {
-        return { rows: [] };
-      }
-
       return { rows: [] };
-    },
+    }
+
+    // DELETE telegram_config
+    if (sql.includes('DELETE') && sql.includes('telegram_config')) {
+      storedConfig = null;
+      return { rows: [] };
+    }
+
+    // INSERT telegram_config
+    if (sql.includes('INSERT INTO telegram_config')) {
+      storedConfig = {
+        id: 1,
+        bot_token_encrypted: params[0],
+        chat_id: params[1],
+        thread_id: params[2],
+        chat_title: params[3],
+        topic_name: params[4],
+        webhook_secret: params[5],
+        enabled: params[6],
+        configured_at: new Date(),
+        configured_by: params[7],
+      };
+      return { rows: [storedConfig] };
+    }
+
+    // telegram_admins queries
+    if (sql.includes('telegram_admins')) {
+      return { rows: [] };
+    }
+
+    return { rows: [] };
   };
+  return { query: impl, raw: impl };
 };
 
 const createRecommendationMockPool = () => {
   let storedConfig = null;
   const threadsByYear = new Map();
 
-  return {
-    query: async (sql, params = []) => {
-      if (sql.includes('SELECT') && sql.includes('telegram_config')) {
-        return storedConfig ? { rows: [storedConfig] } : { rows: [] };
-      }
+  const impl = async (sql, params = []) => {
+    if (sql.includes('SELECT') && sql.includes('telegram_config')) {
+      return storedConfig ? { rows: [storedConfig] } : { rows: [] };
+    }
 
-      if (sql.includes('DELETE') && sql.includes('telegram_config')) {
-        storedConfig = null;
-        return { rows: [] };
-      }
-
-      if (sql.includes('INSERT INTO telegram_config')) {
-        storedConfig = {
-          id: 1,
-          bot_token_encrypted: params[0],
-          chat_id: params[1],
-          thread_id: params[2],
-          chat_title: params[3],
-          topic_name: params[4],
-          webhook_secret: params[5],
-          enabled: params[6],
-          configured_at: new Date(),
-          configured_by: params[7],
-          recommendations_enabled: false,
-        };
-        return { rows: [storedConfig] };
-      }
-
-      if (sql.includes('UPDATE telegram_config SET recommendations_enabled')) {
-        if (storedConfig) {
-          storedConfig.recommendations_enabled = params[0];
-        }
-        return { rows: [] };
-      }
-
-      if (
-        sql.includes('SELECT thread_id FROM telegram_recommendation_threads')
-      ) {
-        const threadId = threadsByYear.get(params[0]);
-        return threadId ? { rows: [{ thread_id: threadId }] } : { rows: [] };
-      }
-
-      if (sql.includes('INSERT INTO telegram_recommendation_threads')) {
-        threadsByYear.set(params[0], params[1]);
-        return { rows: [] };
-      }
-
-      if (
-        sql.includes(
-          'SELECT year, thread_id, topic_name, created_at FROM telegram_recommendation_threads'
-        )
-      ) {
-        const rows = Array.from(threadsByYear.entries())
-          .sort(([yearA], [yearB]) => yearB - yearA)
-          .map(([year, threadId]) => ({
-            year,
-            thread_id: threadId,
-            topic_name: `Recommendations ${year}`,
-            created_at: new Date(),
-          }));
-        return { rows };
-      }
-
-      if (sql.includes('telegram_admins')) {
-        return { rows: [] };
-      }
-
+    if (sql.includes('DELETE') && sql.includes('telegram_config')) {
+      storedConfig = null;
       return { rows: [] };
-    },
+    }
+
+    if (sql.includes('INSERT INTO telegram_config')) {
+      storedConfig = {
+        id: 1,
+        bot_token_encrypted: params[0],
+        chat_id: params[1],
+        thread_id: params[2],
+        chat_title: params[3],
+        topic_name: params[4],
+        webhook_secret: params[5],
+        enabled: params[6],
+        configured_at: new Date(),
+        configured_by: params[7],
+        recommendations_enabled: false,
+      };
+      return { rows: [storedConfig] };
+    }
+
+    if (sql.includes('UPDATE telegram_config SET recommendations_enabled')) {
+      if (storedConfig) {
+        storedConfig.recommendations_enabled = params[0];
+      }
+      return { rows: [] };
+    }
+
+    if (sql.includes('SELECT thread_id FROM telegram_recommendation_threads')) {
+      const threadId = threadsByYear.get(params[0]);
+      return threadId ? { rows: [{ thread_id: threadId }] } : { rows: [] };
+    }
+
+    if (sql.includes('INSERT INTO telegram_recommendation_threads')) {
+      threadsByYear.set(params[0], params[1]);
+      return { rows: [] };
+    }
+
+    if (
+      sql.includes(
+        'SELECT year, thread_id, topic_name, created_at FROM telegram_recommendation_threads'
+      )
+    ) {
+      const rows = Array.from(threadsByYear.entries())
+        .sort(([yearA], [yearB]) => yearB - yearA)
+        .map(([year, threadId]) => ({
+          year,
+          thread_id: threadId,
+          topic_name: `Recommendations ${year}`,
+          created_at: new Date(),
+        }));
+      return { rows };
+    }
+
+    if (sql.includes('telegram_admins')) {
+      return { rows: [] };
+    }
+
+    return { rows: [] };
   };
+  return { query: impl, raw: impl };
 };
 
 // =============================================================================
@@ -197,7 +193,11 @@ const createRecommendationMockPool = () => {
 test('validateToken should return valid for correct token', async () => {
   const logger = createMockLogger();
   const fetch = createMockFetch();
-  const notifier = createTelegramNotifier({ logger, fetch });
+  const notifier = createTelegramNotifier({
+    logger,
+    fetch,
+    db: { raw: async () => ({ rows: [] }) },
+  });
 
   const result = await notifier.validateToken('123:ABC');
 
@@ -211,7 +211,11 @@ test('validateToken should return invalid for bad token', async () => {
   const fetch = createMockFetch({
     getMe: { ok: false, description: 'Unauthorized' },
   });
-  const notifier = createTelegramNotifier({ logger, fetch });
+  const notifier = createTelegramNotifier({
+    logger,
+    fetch,
+    db: { raw: async () => ({ rows: [] }) },
+  });
 
   const result = await notifier.validateToken('invalid');
 
@@ -251,7 +255,11 @@ test('detectGroups should parse updates and find groups', async () => {
       ],
     },
   });
-  const notifier = createTelegramNotifier({ logger, fetch });
+  const notifier = createTelegramNotifier({
+    logger,
+    fetch,
+    db: { raw: async () => ({ rows: [] }) },
+  });
 
   const groups = await notifier.detectGroups('123:ABC');
 
@@ -266,7 +274,11 @@ test('detectGroups should return empty array when no groups found', async () => 
   const fetch = createMockFetch({
     getUpdates: { ok: true, result: [] },
   });
-  const notifier = createTelegramNotifier({ logger, fetch });
+  const notifier = createTelegramNotifier({
+    logger,
+    fetch,
+    db: { raw: async () => ({ rows: [] }) },
+  });
 
   const groups = await notifier.detectGroups('123:ABC');
 
@@ -291,7 +303,11 @@ test('getChatInfo should return chat details', async () => {
       },
     },
   });
-  const notifier = createTelegramNotifier({ logger, fetch });
+  const notifier = createTelegramNotifier({
+    logger,
+    fetch,
+    db: { raw: async () => ({ rows: [] }) },
+  });
 
   const info = await notifier.getChatInfo('123:ABC', -1001234567890);
 
@@ -308,7 +324,7 @@ test('getChatInfo should return chat details', async () => {
 test('isConfigured should return false when not configured', async () => {
   const logger = createMockLogger();
   const pool = createMockPool(null);
-  const notifier = createTelegramNotifier({ logger, pool });
+  const notifier = createTelegramNotifier({ logger, db: pool });
 
   const configured = await notifier.isConfigured();
 
@@ -324,7 +340,7 @@ test('isConfigured should return true when enabled', async () => {
     enabled: true,
     webhook_secret: 'secret-123',
   });
-  const notifier = createTelegramNotifier({ logger, pool });
+  const notifier = createTelegramNotifier({ logger, db: pool });
 
   const configured = await notifier.isConfigured();
 
@@ -344,7 +360,7 @@ test('sendMessage should send message when configured', async () => {
   const pool = createMockPool();
   const notifier = createTelegramNotifier({
     logger,
-    pool,
+    db: pool,
     fetch,
     encryptionKey,
     baseUrl: 'https://test.example.com',
@@ -367,7 +383,7 @@ test('sendMessage should send message when configured', async () => {
 test('sendMessage should fail when not configured', async () => {
   const logger = createMockLogger();
   const pool = createMockPool(null);
-  const notifier = createTelegramNotifier({ logger, pool });
+  const notifier = createTelegramNotifier({ logger, db: pool });
 
   const result = await notifier.sendMessage('Test message');
 
@@ -381,7 +397,10 @@ test('sendMessage should fail when not configured', async () => {
 
 test('parseCallbackData should parse event action callback', () => {
   const logger = createMockLogger();
-  const notifier = createTelegramNotifier({ logger });
+  const notifier = createTelegramNotifier({
+    logger,
+    db: { raw: async () => ({ rows: [] }) },
+  });
 
   const parsed = notifier.parseCallbackData('event:abc-123:approve');
 
@@ -393,7 +412,10 @@ test('parseCallbackData should parse event action callback', () => {
 
 test('parseCallbackData should return null for invalid data', () => {
   const logger = createMockLogger();
-  const notifier = createTelegramNotifier({ logger });
+  const notifier = createTelegramNotifier({
+    logger,
+    db: { raw: async () => ({ rows: [] }) },
+  });
 
   assert.strictEqual(notifier.parseCallbackData(null), null);
   assert.strictEqual(notifier.parseCallbackData(''), null);
@@ -411,7 +433,7 @@ test('verifyWebhookSecret should return true for matching secret', async () => {
     webhook_secret: 'my-secret-123',
     enabled: true,
   });
-  const notifier = createTelegramNotifier({ logger, pool });
+  const notifier = createTelegramNotifier({ logger, db: pool });
 
   const valid = await notifier.verifyWebhookSecret('my-secret-123');
 
@@ -425,7 +447,7 @@ test('verifyWebhookSecret should return false for wrong secret', async () => {
     webhook_secret: 'correct-secret',
     enabled: true,
   });
-  const notifier = createTelegramNotifier({ logger, pool });
+  const notifier = createTelegramNotifier({ logger, db: pool });
 
   const valid = await notifier.verifyWebhookSecret('wrong-secret');
 
@@ -437,7 +459,9 @@ test('verifyWebhookSecret should return false for wrong secret', async () => {
 // =============================================================================
 
 test('encrypt and decrypt should round-trip correctly', () => {
-  const { encrypt, decrypt } = createTelegramNotifier({});
+  const { encrypt, decrypt } = createTelegramNotifier({
+    db: { raw: async () => ({ rows: [] }) },
+  });
 
   const key = 'this-is-a-secret-key-at-least-32-chars';
   const plaintext = '123456789:ABCdefGHIjklMNOpqrSTUvwxYZ';
@@ -450,7 +474,9 @@ test('encrypt and decrypt should round-trip correctly', () => {
 });
 
 test('encrypt should throw for short key', () => {
-  const { encrypt } = createTelegramNotifier({});
+  const { encrypt } = createTelegramNotifier({
+    db: { raw: async () => ({ rows: [] }) },
+  });
 
   assert.throws(() => {
     encrypt('test', 'short');
@@ -483,7 +509,7 @@ test('notifyNewEvent should format and send event notification', async () => {
   const pool = createMockPool();
   const notifier = createTelegramNotifier({
     logger,
-    pool,
+    db: pool,
     fetch,
     encryptionKey,
     baseUrl: 'https://test.example.com',
@@ -534,7 +560,7 @@ test('disconnect should remove config and webhook', async () => {
 
   const notifier = createTelegramNotifier({
     logger,
-    pool,
+    db: pool,
     fetch,
     encryptionKey,
     baseUrl: 'https://test.example.com',
@@ -599,7 +625,7 @@ test('sendRecommendationNotification should create thread and send message', asy
 
   const notifier = createTelegramNotifier({
     logger,
-    pool,
+    db: pool,
     fetch,
     encryptionKey,
     baseUrl: 'https://test.example.com',
@@ -642,7 +668,7 @@ test('getRecommendationThreads should return year-sorted threads', async () => {
 
   const notifier = createTelegramNotifier({
     logger,
-    pool,
+    db: pool,
     fetch,
     encryptionKey,
     baseUrl: 'https://test.example.com',

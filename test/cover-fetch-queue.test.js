@@ -116,14 +116,14 @@ describe('CoverFetchQueue', () => {
 
   describe('createCoverFetchQueue', () => {
     it('should create queue with default maxConcurrent of 3', () => {
-      const defaultQueue = createCoverFetchQueue({ pool: mockPool });
+      const defaultQueue = createCoverFetchQueue({ db: mockPool });
       assert.ok(defaultQueue.add);
       assert.ok(defaultQueue.fetchAndStoreCover);
     });
 
     it('should respect custom maxConcurrent', () => {
       const customQueue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         maxConcurrent: 5,
       });
       assert.ok(customQueue);
@@ -142,7 +142,7 @@ describe('CoverFetchQueue', () => {
       });
 
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });
@@ -185,7 +185,7 @@ describe('CoverFetchQueue', () => {
       });
 
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });
@@ -219,7 +219,7 @@ describe('CoverFetchQueue', () => {
       });
 
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });
@@ -256,7 +256,7 @@ describe('CoverFetchQueue', () => {
       });
 
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });
@@ -274,7 +274,7 @@ describe('CoverFetchQueue', () => {
     it('should skip if albumId is missing', async () => {
       const mockFetch = createMockFetch({});
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });
@@ -289,7 +289,7 @@ describe('CoverFetchQueue', () => {
     it('should skip if artist is missing', async () => {
       const mockFetch = createMockFetch({});
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });
@@ -304,7 +304,7 @@ describe('CoverFetchQueue', () => {
     it('should skip if album is missing', async () => {
       const mockFetch = createMockFetch({});
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });
@@ -329,7 +329,7 @@ describe('CoverFetchQueue', () => {
       });
 
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });
@@ -379,7 +379,7 @@ describe('CoverFetchQueue', () => {
       });
 
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });
@@ -429,7 +429,7 @@ describe('CoverFetchQueue', () => {
       });
 
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });
@@ -450,7 +450,7 @@ describe('CoverFetchQueue', () => {
       const mockFetch = createMockFetch({}); // All providers fail
 
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });
@@ -483,7 +483,7 @@ describe('CoverFetchQueue', () => {
       });
 
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });
@@ -496,14 +496,14 @@ describe('CoverFetchQueue', () => {
       assert.ok(imageCall);
     });
 
-    it('should throw if pool is not initialized', async () => {
+    it('should throw if db is not initialized', async () => {
       const mockFetch = createMockFetch({});
       const nopoolQueue = createCoverFetchQueue({ fetch: mockFetch });
 
       await assert.rejects(
         () => nopoolQueue.fetchAndStoreCover('test-id', 'Artist', 'Album'),
         {
-          message: /Database pool not initialized/,
+          message: /cover-fetch-queue requires deps\.db/,
         }
       );
     });
@@ -527,7 +527,7 @@ describe('CoverFetchQueue', () => {
       });
 
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });
@@ -548,7 +548,7 @@ describe('CoverFetchQueue', () => {
     it('should return 0 for empty queue', () => {
       const mockFetch = createMockFetch({});
       const queue = createCoverFetchQueue({
-        pool: mockPool,
+        db: mockPool,
         fetch: mockFetch,
         maxConcurrent: 2,
       });

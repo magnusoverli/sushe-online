@@ -1,10 +1,10 @@
 /**
  * Factory compatibility tests.
  *
- * Every service factory that goes through the DB must accept both the new
- * canonical `deps.db` (a datastore with .raw) and the legacy `deps.pool`
- * (a pg Pool with .query). This test exists to prevent regressions where
- * a future refactor quietly drops one of the two paths.
+ * Every service factory must accept the canonical `deps.db` (a datastore
+ * with .raw / .withClient / .withTransaction) and throw a helpful error
+ * when it's missing. The legacy `deps.pool` has been retired — factories
+ * reject it and callers pass `db`.
  */
 
 const { describe, it, mock } = require('node:test');
@@ -24,17 +24,6 @@ function makeDb() {
     withTransaction: mock.fn(async (cb) =>
       cb({ query: async () => ({ rows: [] }) })
     ),
-  };
-}
-
-/** Build a minimal pg Pool mock. */
-function makePool() {
-  return {
-    query: mock.fn(async () => ({ rows: [], rowCount: 0 })),
-    connect: mock.fn(async () => ({
-      query: async () => ({ rows: [] }),
-      release: () => {},
-    })),
   };
 }
 
@@ -116,24 +105,13 @@ describe('factory-compat', () => {
         assert.ok(svc, `${name} must build with deps.db`);
       });
 
-      it('accepts legacy deps.pool (pg Pool)', () => {
-        const factory = load();
-        const pool = makePool();
-        const svc = factory({ pool, ...extra() });
-        assert.ok(svc, `${name} must build with legacy deps.pool`);
-      });
-
-      it('throws a helpful error when given neither', () => {
+      it('throws a helpful error when deps.db is missing', () => {
         const factory = load();
         assert.throws(
           () => factory({ ...extra() }),
           (err) => {
-            // Match either the new guidance or legacy phrasing — don't couple
-            // tightly to exact wording across 11 services.
             assert.ok(
-              err &&
-                err.message &&
-                /db|pool|PostgreSQL|Database|datastore/i.test(err.message),
+              err && err.message && /deps\.db/i.test(err.message),
               `${name} threw an unexpected error: ${err && err.message}`
             );
             return true;

@@ -1,4 +1,5 @@
 const logger = require('../utils/logger');
+const { ensureDb } = require('../db/postgres');
 const { normalizeAlbumKey } = require('../utils/fuzzy-match');
 const { POSITION_POINTS, getPositionPoints } = require('../utils/scoring');
 
@@ -524,27 +525,12 @@ async function getYearsWithMainListsOp(db) {
 /**
  * Create aggregate list utilities with injected dependencies
  * @param {Object} deps - Dependencies
- * @param {Object} deps.db - A PgDatastore (any table) used for .raw() and
- *   .withTransaction(). Legacy alias: deps.pool (adapted to .raw()).
- * @param {Object} deps.logger - Logger instance (optional)
+ * @param {import('../db/types').DbFacade} deps.db - Canonical datastore
+ * @param {Object} [deps.logger] - Logger instance
  */
 function createAggregateList(deps = {}) {
   const log = deps.logger || logger;
-  let db = deps.db;
-
-  if (!db && deps.pool) {
-    // Legacy adapter: wrap a raw pg pool so internal code can still use .raw
-    // and .withTransaction without the caller being updated.
-    const { withTransaction: baseTx } = require('../db/transaction');
-    db = {
-      raw: (sql, params) => deps.pool.query(sql, params),
-      withTransaction: (cb) => baseTx(deps.pool, cb),
-    };
-  }
-
-  if (!db) {
-    throw new Error('A db datastore (or legacy pool) is required');
-  }
+  const db = ensureDb(deps.db, 'aggregate-list');
 
   /**
    * Aggregate all main lists for a year into an aggregate list

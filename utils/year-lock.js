@@ -27,13 +27,16 @@ function createYearLock(deps = {}) {
   const TransactionAbort =
     deps.TransactionAbort || require('../db/transaction').TransactionAbort;
 
-  /** Accept a canonical datastore (.raw) or a legacy pg Pool (.query). */
-  function asDb(dbOrPool) {
-    if (dbOrPool && typeof dbOrPool.raw === 'function') return dbOrPool;
-    if (dbOrPool && typeof dbOrPool.query === 'function') {
-      return { raw: (sql, params) => dbOrPool.query(sql, params) };
+  /**
+   * Accept the canonical datastore (.raw). Falls back to a .query-shaped
+   * adapter for test mocks; production always passes the canonical db.
+   */
+  function asDb(db) {
+    if (db && typeof db.raw === 'function') return db;
+    if (db && typeof db.query === 'function') {
+      return { raw: (sql, params) => db.query(sql, params) };
     }
-    throw new Error('year-lock: expected a datastore with .raw() or a pg Pool');
+    throw new Error('year-lock: expected a datastore with .raw() or .query()');
   }
 
   /**
