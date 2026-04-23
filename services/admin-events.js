@@ -225,8 +225,12 @@ function createAdminEventService(deps = {}) {
 
     const total = await getEventCount(db, whereClause, params);
 
+    // Explicit column list so schema additions don't leak into API responses.
     const eventsResult = await db.raw(
-      `SELECT * FROM admin_events
+      `SELECT id, event_type, title, description, data, status, priority,
+              created_at, resolved_at, resolved_by, resolved_via,
+              telegram_message_id, telegram_chat_id, actions
+       FROM admin_events
        WHERE ${whereClause}
        ORDER BY
          CASE priority
@@ -250,8 +254,12 @@ function createAdminEventService(deps = {}) {
   async function getEventById(eventId) {
     if (!db) throw new Error('Database datastore not configured');
 
+    // Explicit column list so schema additions don't leak into API responses.
     const result = await db.raw(
-      'SELECT * FROM admin_events WHERE id = $1',
+      `SELECT id, event_type, title, description, data, status, priority,
+              created_at, resolved_at, resolved_by, resolved_via,
+              telegram_message_id, telegram_chat_id, actions
+       FROM admin_events WHERE id = $1`,
       [eventId],
       { name: 'admin-events-get-by-id', retryable: true }
     );

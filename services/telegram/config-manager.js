@@ -84,7 +84,15 @@ function createConfigManager(
       return configCache;
     }
 
-    const result = await db.raw('SELECT * FROM telegram_config LIMIT 1');
+    // Explicit column list so schema additions don't leak into responses.
+    const result = await db.raw(
+      `SELECT id, bot_token_encrypted, chat_id, thread_id, chat_title,
+              topic_name, webhook_secret, enabled, recommendations_enabled,
+              configured_at, configured_by
+       FROM telegram_config LIMIT 1`,
+      [],
+      { name: 'telegram-config-get', retryable: true }
+    );
     if (result.rows.length === 0) return null;
 
     const config = result.rows[0];

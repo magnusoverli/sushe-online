@@ -811,7 +811,11 @@ describe('GET /api/admin/bootstrap', () => {
         return { rows: [{ count: '1' }] };
       }
 
-      if (sql.includes('SELECT * FROM admin_events')) {
+      if (
+        sql.includes('FROM admin_events') &&
+        sql.includes("status = 'pending'") &&
+        !sql.includes('COUNT')
+      ) {
         return {
           rows: [
             {

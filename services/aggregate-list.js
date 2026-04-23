@@ -596,9 +596,14 @@ function createAggregateList(deps = {}) {
    * Get aggregate list for a year (from cache)
    */
   async function get(year) {
-    const result = await db.raw('SELECT * FROM master_lists WHERE year = $1', [
-      year,
-    ]);
+    // Explicit column list so schema additions don't leak into responses.
+    const result = await db.raw(
+      `SELECT id, year, revealed, revealed_at, computed_at,
+              data, stats, locked, created_at, updated_at
+       FROM master_lists WHERE year = $1`,
+      [year],
+      { name: 'aggregate-list-get-by-year', retryable: true }
+    );
     return result.rows[0] || null;
   }
 

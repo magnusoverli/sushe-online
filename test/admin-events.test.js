@@ -57,8 +57,12 @@ const createMockPool = (mockData = {}) => {
       };
     }
 
-    // SELECT pending events
-    if (sql.includes('SELECT *') && sql.includes("status = 'pending'")) {
+    // SELECT pending events (explicit column list or legacy SELECT *)
+    if (
+      sql.includes('FROM admin_events') &&
+      sql.includes("status = 'pending'") &&
+      !sql.includes('COUNT')
+    ) {
       const pending = events.filter((e) => e.status === 'pending');
       return { rows: pending };
     }
