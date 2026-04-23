@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-04-23",
+    "category": "perf",
+    "description": "Faster list updates with improved caching",
+    "hash": "7bfe56bb411d8ed9930c5515ffc5b416ce63a4ad",
+    "commitMessage": "Invalidate full list caches after list mutations"
+  },
+  {
     "date": "2026-04-22",
     "category": "ui",
     "description": "Improved messaging when trying to edit locked year fields",
