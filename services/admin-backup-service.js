@@ -2,6 +2,33 @@ const { spawn } = require('child_process');
 const { ensureDb } = require('../db/postgres');
 const fs = require('fs');
 const path = require('path');
+const { RESTORE_ERROR_CODES, createRestoreError } = require('./restore-errors');
+
+const DEFAULT_RESTORE_MAX_FILE_BYTES = 1024 * 1024 * 1024;
+const DEFAULT_RESTORE_TIMEOUT_MS = 10 * 60 * 1000;
+
+function parsePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(value || '', 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
+function getStderrSample(stderrData, maxLength = 500) {
+  if (typeof stderrData !== 'string') return '';
+  if (stderrData.length <= maxLength) return stderrData;
+  return stderrData.slice(-maxLength);
+}
+
+function toToolNotFoundError(toolName, originalError) {
+  return createRestoreError(
+    RESTORE_ERROR_CODES.TOOL_NOT_FOUND,
+    `${toolName} is not available in this environment`,
+    500,
+    { tool: toolName, reason: originalError?.message }
+  );
+}
 
 function getRuntimeConfig(processRef, fsDep, pathDep) {
   const pgMajor = processRef.env.PG_MAJOR || '18';
@@ -17,12 +44,25 @@ function getRuntimeConfig(processRef, fsDep, pathDep) {
 
   const databaseUrl = processRef.env.DATABASE_URL || '';
   const isDocker = databaseUrl.includes('host=/var/run/postgresql');
+  const restoreMaxFileBytes = parsePositiveInt(
+    processRef.env.RESTORE_MAX_FILE_BYTES,
+    DEFAULT_RESTORE_MAX_FILE_BYTES
+  );
+  const restoreTimeoutMs = parsePositiveInt(
+    processRef.env.RESTORE_TIMEOUT_MS,
+    DEFAULT_RESTORE_TIMEOUT_MS
+  );
+  const restorePreflightEnabled =
+    processRef.env.RESTORE_PREFLIGHT_ENABLED !== 'false';
 
   return {
     pgDumpCmd,
     pgRestoreCmd,
     isDocker,
     databaseUrl,
+    restoreMaxFileBytes,
+    restoreTimeoutMs,
+    restorePreflightEnabled,
   };
 }
 
@@ -39,9 +79,17 @@ function createDockerPgEnv(processRef) {
 
 async function createBackup({ config, spawnDep, logger, processRef }) {
   const { pgDumpCmd, isDocker, databaseUrl } = config;
-  const backupProcess = isDocker
-    ? spawnDep(pgDumpCmd, ['-Fc'], { env: createDockerPgEnv(processRef) })
-    : spawnDep(pgDumpCmd, ['-Fc', '-d', databaseUrl]);
+  let backupProcess;
+  try {
+    backupProcess = isDocker
+      ? spawnDep(pgDumpCmd, ['-Fc'], { env: createDockerPgEnv(processRef) })
+      : spawnDep(pgDumpCmd, ['-Fc', '-d', databaseUrl]);
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      throw toToolNotFoundError('pg_dump', error);
+    }
+    throw error;
+  }
 
   logger.info(
     isDocker
@@ -57,7 +105,13 @@ async function createBackup({ config, spawnDep, logger, processRef }) {
     backupProcess.stderr.on('data', (chunk) =>
       stderrChunks.push(chunk.toString())
     );
-    backupProcess.on('error', reject);
+    backupProcess.on('error', (error) => {
+      if (error?.code === 'ENOENT') {
+        reject(toToolNotFoundError('pg_dump', error));
+        return;
+      }
+      reject(error);
+    });
 
     backupProcess.on('close', (code) => {
       const stderrOutput = stderrChunks.join('');
@@ -90,6 +144,136 @@ function validateDumpFile(fsDep, tmpFile) {
   }
 
   return header.toString() === 'PGDMP';
+}
+
+function validateRestoreFile({ fsDep, tmpFile, fileSize, config }) {
+  if (!tmpFile) {
+    throw createRestoreError(
+      RESTORE_ERROR_CODES.NO_FILE_UPLOADED,
+      'No backup file was uploaded',
+      400
+    );
+  }
+
+  const maxFileBytes =
+    config?.restoreMaxFileBytes || DEFAULT_RESTORE_MAX_FILE_BYTES;
+  let detectedFileSize;
+  try {
+    detectedFileSize =
+      typeof fileSize === 'number' && fileSize > 0
+        ? fileSize
+        : fsDep.statSync(tmpFile).size;
+  } catch (error) {
+    throw createRestoreError(
+      RESTORE_ERROR_CODES.INVALID_DUMP,
+      'Unable to read uploaded backup file',
+      400,
+      { reason: error.message }
+    );
+  }
+
+  if (detectedFileSize > maxFileBytes) {
+    throw createRestoreError(
+      RESTORE_ERROR_CODES.FILE_TOO_LARGE,
+      `Backup file exceeds maximum size of ${maxFileBytes} bytes`,
+      413,
+      {
+        maxFileBytes,
+        fileSize: detectedFileSize,
+      }
+    );
+  }
+
+  const validDump = validateDumpFile(fsDep, tmpFile);
+  if (!validDump) {
+    throw createRestoreError(
+      RESTORE_ERROR_CODES.INVALID_DUMP,
+      'Invalid backup file. Must be a PostgreSQL custom dump file.',
+      400
+    );
+  }
+
+  return {
+    fileSize: detectedFileSize,
+    format: 'custom',
+  };
+}
+
+async function runRestorePreflight({
+  tmpFile,
+  restoreId,
+  config,
+  spawnDep,
+  logger,
+  processRef,
+}) {
+  if (config?.restorePreflightEnabled === false) {
+    logger.info(`[${restoreId}] Restore preflight check is disabled`);
+    return { skipped: true };
+  }
+
+  const args = ['--list', tmpFile];
+  const preflightOptions = config?.isDocker
+    ? { env: createDockerPgEnv(processRef) }
+    : {};
+
+  let preflightProcess;
+  try {
+    preflightProcess = spawnDep(config.pgRestoreCmd, args, preflightOptions);
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      throw toToolNotFoundError('pg_restore', error);
+    }
+    throw error;
+  }
+
+  const startedAt = Date.now();
+  let stderrData = '';
+
+  return new Promise((resolve, reject) => {
+    preflightProcess.stderr.on('data', (data) => {
+      stderrData += data.toString();
+    });
+
+    preflightProcess.on('error', (error) => {
+      if (error?.code === 'ENOENT') {
+        reject(toToolNotFoundError('pg_restore', error));
+        return;
+      }
+
+      reject(
+        createRestoreError(
+          RESTORE_ERROR_CODES.PRECHECK_FAILED,
+          'Backup preflight validation failed',
+          400,
+          { reason: error.message }
+        )
+      );
+    });
+
+    preflightProcess.on('exit', (code) => {
+      if (code !== 0) {
+        reject(
+          createRestoreError(
+            RESTORE_ERROR_CODES.PRECHECK_FAILED,
+            'Backup preflight validation failed',
+            400,
+            {
+              exitCode: code,
+              durationMs: Date.now() - startedAt,
+              stderrSample: getStderrSample(stderrData),
+            }
+          )
+        );
+        return;
+      }
+
+      resolve({
+        code,
+        durationMs: Date.now() - startedAt,
+      });
+    });
+  });
 }
 
 async function dropPublicTablesForRestore({ db, logger, restoreId }) {
@@ -150,7 +334,15 @@ async function runRestoreProcess({
     });
   }
 
-  const restoreProcess = spawnDep(pgRestoreCmd, args, restoreOptions);
+  let restoreProcess;
+  try {
+    restoreProcess = spawnDep(pgRestoreCmd, args, restoreOptions);
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      throw toToolNotFoundError('pg_restore', error);
+    }
+    throw error;
+  }
 
   if (isDocker) {
     const fileStream = fsDep.createReadStream(tmpFile);
@@ -162,6 +354,27 @@ async function runRestoreProcess({
 
   const startedAt = Date.now();
   let stderrData = '';
+  let timedOut = false;
+  let timeoutHandle = null;
+
+  if (config.restoreTimeoutMs > 0) {
+    timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      stderrData += `\nRestore timed out after ${config.restoreTimeoutMs}ms`;
+      try {
+        restoreProcess.kill('SIGTERM');
+      } catch (_error) {
+        // Ignore kill errors and let process handlers settle.
+      }
+    }, config.restoreTimeoutMs);
+  }
+
+  function clearRestoreTimeout() {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+      timeoutHandle = null;
+    }
+  }
 
   return new Promise((resolve, reject) => {
     restoreProcess.stderr.on('data', (data) => {
@@ -170,12 +383,22 @@ async function runRestoreProcess({
       if (typeof onStderr === 'function') onStderr(output);
     });
 
-    restoreProcess.on('error', reject);
-    restoreProcess.on('exit', (code) => {
+    restoreProcess.on('error', (error) => {
+      clearRestoreTimeout();
+      if (error?.code === 'ENOENT') {
+        reject(toToolNotFoundError('pg_restore', error));
+        return;
+      }
+      reject(error);
+    });
+    restoreProcess.on('exit', (code, signal) => {
+      clearRestoreTimeout();
       resolve({
         code,
+        signal,
         stderrData,
         durationMs: Date.now() - startedAt,
+        timedOut,
       });
     });
   });
@@ -256,6 +479,15 @@ function createAdminBackupService(deps = {}) {
     createBackup: (config) =>
       createBackup({ config, spawnDep, logger, processRef }),
     validateDumpFile: (tmpFile) => validateDumpFile(fsDep, tmpFile),
+    validateRestoreFile: (tmpFile, fileSize, config) =>
+      validateRestoreFile({ fsDep, tmpFile, fileSize, config }),
+    runRestorePreflight: (input) =>
+      runRestorePreflight({
+        ...input,
+        spawnDep,
+        logger,
+        processRef,
+      }),
     dropPublicTablesForRestore: (restoreId) =>
       dropPublicTablesForRestore({ db, logger, restoreId }),
     runRestoreProcess: (input) =>

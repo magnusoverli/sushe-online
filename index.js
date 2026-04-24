@@ -287,6 +287,7 @@ const deps = {
   usersRepository,
   duplicateService,
   reidentifyService,
+  broadcast,
 };
 
 // Application routes

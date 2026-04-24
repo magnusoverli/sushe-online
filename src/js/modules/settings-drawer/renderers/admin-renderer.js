@@ -653,7 +653,7 @@ export function createSettingsAdminRenderer() {
                 <label class="settings-label">Backup Database</label>
                 <p class="settings-description">Download a backup of the entire database</p>
               </div>
-              <a href="/admin/backup" class="settings-button" download>Download Backup</a>
+              <a id="downloadBackupBtn" href="/admin/backup" class="settings-button" download>Download Backup</a>
             </div>
             <div class="settings-row">
               <div class="settings-row-label">

@@ -126,6 +126,27 @@ function createBroadcast(getIO, logger) {
         userRoom,
       });
     },
+    forceLogoutAll(payload = {}) {
+      const io = getIO();
+      if (!io) {
+        logger.warn(
+          'WebSocket not initialized, cannot broadcast session:invalidated'
+        );
+        return;
+      }
+
+      io.emit('session:invalidated', {
+        reason: payload.reason || 'session_reset',
+        message:
+          payload.message ||
+          'Your session was invalidated. Please sign in again.',
+        invalidatedAt: new Date().toISOString(),
+      });
+
+      logger.info('Broadcast session:invalidated', {
+        reason: payload.reason || 'session_reset',
+      });
+    },
   };
 }
 

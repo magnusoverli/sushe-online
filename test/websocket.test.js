@@ -24,6 +24,7 @@ test('broadcast object should have all expected methods', () => {
   assert.strictEqual(typeof service.broadcast.listDeleted, 'function');
   assert.strictEqual(typeof service.broadcast.listRenamed, 'function');
   assert.strictEqual(typeof service.broadcast.listMainChanged, 'function');
+  assert.strictEqual(typeof service.broadcast.forceLogoutAll, 'function');
 });
 
 test('getIO should return null before setup', () => {
@@ -167,8 +168,12 @@ test('broadcast methods should accept correct parameters', () => {
     service.broadcast.listMainChanged('userABC', 'Main List', true);
   });
 
+  assert.doesNotThrow(() => {
+    service.broadcast.forceLogoutAll({ reason: 'database_restore' });
+  });
+
   // Each should have logged a warning since io is not initialized
-  assert.strictEqual(mockLogger.warn.mock.calls.length, 5);
+  assert.strictEqual(mockLogger.warn.mock.calls.length, 6);
 });
 
 // =============================================================================

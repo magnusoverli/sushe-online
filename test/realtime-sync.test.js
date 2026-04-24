@@ -211,4 +211,34 @@ describe('realtime-sync module', () => {
 
     assert.deepStrictEqual(refreshCalls, ['list-1']);
   });
+
+  it('redirects to logout when session is invalidated by server event', async () => {
+    const fakeSocket = createFakeSocket();
+    const toasts = [];
+    const timeoutCalls = [];
+    const win = {
+      location: {
+        href: '',
+      },
+    };
+
+    const sync = createRealtimeSync({
+      ioFactory: () => fakeSocket,
+      showToast: (...args) => toasts.push(args),
+      win,
+      setTimeoutFn: (fn, delay) => {
+        timeoutCalls.push(delay);
+        fn();
+      },
+    });
+
+    sync.connect();
+    await fakeSocket.trigger('session:invalidated', {
+      message: 'Database restore completed. Please sign in again.',
+    });
+
+    assert.deepStrictEqual(toasts, []);
+    assert.strictEqual(timeoutCalls[0], 2600);
+    assert.strictEqual(win.location.href, '/logout');
+  });
 });

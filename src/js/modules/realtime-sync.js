@@ -28,6 +28,8 @@ export function createRealtimeSync(deps = {}) {
     updateAlbumSummaryInPlace = async () => {},
     displayAlbums = () => {},
     ioFactory = io,
+    win = typeof window !== 'undefined' ? window : null,
+    setTimeoutFn = setTimeout,
     logger = console,
     debug = false,
   } = deps;
@@ -36,6 +38,7 @@ export function createRealtimeSync(deps = {}) {
   let isConnected = false;
   let reconnectAttempts = 0;
   const MAX_RECONNECT_ATTEMPTS = 10;
+  const SESSION_INVALIDATION_REDIRECT_DELAY_MS = 2600;
 
   function logDebug(message, meta) {
     if (!debug || typeof logger.debug !== 'function') return;
@@ -55,6 +58,15 @@ export function createRealtimeSync(deps = {}) {
     socket.on('list:renamed', handleListRenamed);
     socket.on('list:main-changed', handleListMainChanged);
     socket.on('album:summary-updated', handleAlbumSummaryUpdated);
+    socket.on('session:invalidated', handleSessionInvalidated);
+  }
+
+  function handleSessionInvalidated() {
+    if (win && win.location) {
+      setTimeoutFn(() => {
+        win.location.href = '/logout';
+      }, SESSION_INVALIDATION_REDIRECT_DELAY_MS);
+    }
   }
 
   /**

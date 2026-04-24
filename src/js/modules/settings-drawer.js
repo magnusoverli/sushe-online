@@ -175,15 +175,18 @@ export function createSettingsDrawer(deps = {}) {
     showConfirmation,
   });
 
-  const { handleAdminEventAction, handleRestoreDatabase } =
-    createSettingsAdminActions({
-      showConfirmation,
-      apiCall,
-      showToast,
-      categoryData,
-      loadCategoryData,
-      createSettingsModalBase,
-    });
+  const {
+    handleAdminEventAction,
+    handleDownloadBackup,
+    handleRestoreDatabase,
+  } = createSettingsAdminActions({
+    showConfirmation,
+    apiCall,
+    showToast,
+    categoryData,
+    loadCategoryData,
+    createSettingsModalBase,
+  });
 
   const {
     handleGrantAdmin,
@@ -286,6 +289,7 @@ export function createSettingsDrawer(deps = {}) {
     handleDisconnectTelegram,
     handleToggleTelegramRecommendations,
     handleTestTelegramRecommendations,
+    handleDownloadBackup,
     handleRestoreDatabase,
     handleGrantAdmin,
     handleRevokeAdmin,

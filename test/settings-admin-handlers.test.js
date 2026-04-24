@@ -82,6 +82,7 @@ function buildDeps(overrides = {}) {
     handleDisconnectTelegram: () => {},
     handleToggleTelegramRecommendations: () => {},
     handleTestTelegramRecommendations: () => {},
+    handleDownloadBackup: () => {},
     handleRestoreDatabase: () => {},
     handleGrantAdmin: async () => {},
     handleRevokeAdmin: async () => {},

@@ -26,6 +26,7 @@ export function createSettingsAdminHandlers(deps = {}) {
     handleDisconnectTelegram,
     handleToggleTelegramRecommendations,
     handleTestTelegramRecommendations,
+    handleDownloadBackup,
     handleRestoreDatabase,
     handleGrantAdmin,
     handleRevokeAdmin,
@@ -155,6 +156,11 @@ export function createSettingsAdminHandlers(deps = {}) {
     const restoreDatabaseBtn = doc.getElementById('restoreDatabaseBtn');
     if (restoreDatabaseBtn) {
       restoreDatabaseBtn.addEventListener('click', handleRestoreDatabase);
+    }
+
+    const downloadBackupBtn = doc.getElementById('downloadBackupBtn');
+    if (downloadBackupBtn) {
+      downloadBackupBtn.addEventListener('click', handleDownloadBackup);
     }
 
     doc.querySelectorAll('.admin-grant-admin').forEach((btn) => {
