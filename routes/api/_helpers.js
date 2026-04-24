@@ -115,7 +115,9 @@ function createHelpers(deps) {
 
     // Trigger async track fetch if needed
     if (result.needsTracksFetch && album.artist && album.album) {
-      const { getTrackFetchQueue } = require('../../utils/track-fetch-queue');
+      const {
+        getTrackFetchQueue,
+      } = require('../../services/track-fetch-queue');
       try {
         const trackQueue = getTrackFetchQueue();
         trackQueue.add(result.albumId, album.artist, album.album);
@@ -153,7 +155,7 @@ function createHelpers(deps) {
 
     // Trigger async operations for all albums
     const { getCoverFetchQueue } = require('../../services/cover-fetch-queue');
-    const { getTrackFetchQueue } = require('../../utils/track-fetch-queue');
+    const { getTrackFetchQueue } = require('../../services/track-fetch-queue');
     let coverQueue;
     let trackQueue;
     try {
