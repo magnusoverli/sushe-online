@@ -150,8 +150,8 @@ module.exports = (app, deps) => {
   const albumService = createAlbumService({
     db,
     logger,
+    responseCache,
     upsertAlbumRecord: helpers.upsertAlbumRecord,
-    invalidateCachesForAlbumUsers: helpers.invalidateCachesForAlbumUsers,
   });
 
   const externalIdentityService = createExternalIdentityService({

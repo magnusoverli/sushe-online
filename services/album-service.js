@@ -26,13 +26,58 @@ const { normalizeImageBuffer } = require('../utils/image-processing');
  * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Object} deps.logger - Logger instance
  * @param {Function} deps.upsertAlbumRecord - Helper from _helpers.js
- * @param {Function} deps.invalidateCachesForAlbumUsers - Helper from _helpers.js
+ * @param {Object} [deps.responseCache] - Response cache for list invalidation
+ * @param {Function} [deps.invalidateCachesForAlbumUsers] - Optional override
  */
 // eslint-disable-next-line max-lines-per-function -- Cohesive service module with related album operations
 function createAlbumService(deps = {}) {
   const logger = deps.logger || defaultLogger;
-  const { upsertAlbumRecord, invalidateCachesForAlbumUsers } = deps;
+  const { upsertAlbumRecord } = deps;
+  const responseCache = deps.responseCache;
   const db = ensureDb(deps.db, 'album-service');
+
+  const invalidateCachesForAlbumUsers =
+    typeof deps.invalidateCachesForAlbumUsers === 'function'
+      ? deps.invalidateCachesForAlbumUsers
+      : async (albumId) => {
+          if (
+            !albumId ||
+            !responseCache ||
+            typeof responseCache.invalidate !== 'function'
+          ) {
+            return;
+          }
+
+          try {
+            const result = await db.raw(
+              `SELECT DISTINCT l.user_id
+               FROM lists l
+               JOIN list_items li ON li.list_id = l._id
+               WHERE li.album_id = $1`,
+              [albumId],
+              {
+                name: 'album-service-find-users-with-album',
+                retryable: true,
+              }
+            );
+
+            for (const row of result.rows) {
+              responseCache.invalidate(`:${row.user_id}`);
+            }
+
+            if (result.rows.length > 0) {
+              logger.debug('Invalidated caches for album users', {
+                albumId,
+                usersAffected: result.rows.length,
+              });
+            }
+          } catch (error) {
+            logger.warn('Failed to invalidate caches for album users', {
+              albumId,
+              error: error.message,
+            });
+          }
+        };
 
   function validateOptionalTextField(value, errorMessage) {
     if (value !== null && value !== undefined && typeof value !== 'string') {

@@ -20,7 +20,7 @@ Phases
 [~] P2 Extract repositories and move table/domain SQL
 [x] P3 Centralize schema and row mapping
 [x] P4 Migrate auth/user stack to canonical surface
-[~] P5 Remove DB access from routes/middleware
+[x] P5 Remove DB access from routes/middleware
 [x] P6 Move DB-backed utilities out of utils/
 [~] P7 Clean composition root and dependency surface
 [~] P8 Standardize test harness on canonical DB contract
@@ -51,6 +51,10 @@ Commit Log
 - in progress: Moved admin bootstrap SQL out of route layer into
   `services/admin-bootstrap-service.js`, updated `routes/admin/bootstrap.js`
   to consume service methods, and added focused service unit coverage.
+- in progress: Removed the last route-layer raw DB query from
+  `routes/api/_helpers.js` by internalizing album cache-invalidation lookup in
+  `services/album-service.js` (with `responseCache` injection in API
+  composition).
 
 Legend
 - [ ] pending

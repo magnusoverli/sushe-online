@@ -194,48 +194,6 @@ function createHelpers(deps) {
   }
 
   /**
-   * Invalidate list caches for all users who have a specific album in their lists.
-   * This ensures that when canonical album data (e.g., genres) is updated,
-   * all users who rely on the canonical data (stored NULL in list_items) see the update.
-   *
-   * @param {string} albumId - The album_id to find affected users for
-   */
-  async function invalidateCachesForAlbumUsers(albumId) {
-    if (!albumId) return;
-
-    try {
-      // Find all users who have this album in any of their lists
-      const result = await db.raw(
-        `SELECT DISTINCT l.user_id
-         FROM lists l
-         JOIN list_items li ON li.list_id = l._id
-         WHERE li.album_id = $1`,
-        [albumId],
-        { name: 'helpers-find-users-with-album', retryable: true }
-      );
-
-      // Invalidate list caches for each affected user
-      for (const row of result.rows) {
-        // Invalidate all list-related caches for this user
-        // Need to invalidate BOTH patterns:
-        // 1. Metadata endpoint: GET:/api/lists:userId
-        // 2. Specific list endpoints: GET:/api/lists/*:userId
-        // Using just the userId pattern will match both since they all end with :userId
-        responseCache.invalidate(`:${row.user_id}`);
-      }
-
-      if (result.rows.length > 0) {
-        logger.debug(
-          `Invalidated caches for ${result.rows.length} users with album ${albumId}`
-        );
-      }
-    } catch (error) {
-      // Log but don't fail the request - cache invalidation is not critical
-      logger.warn(`Failed to invalidate caches for album ${albumId}:`, error);
-    }
-  }
-
-  /**
    * Invalidate list-related caches for a specific user.
    * Consolidates the repeated cache invalidation pattern used across list route handlers.
    *
@@ -391,7 +349,6 @@ function createHelpers(deps) {
     triggerAlbumSummaryFetch,
     upsertAlbumRecord,
     batchUpsertAlbumRecords,
-    invalidateCachesForAlbumUsers,
     invalidateListCaches,
     findOrCreateYearGroup,
     findOrCreateUncategorizedGroup,
