@@ -38,7 +38,7 @@ function sanitizeUser(user) {
  * This dramatically reduces DB writes (from every request to ~once per 5 min)
  *
  * @param {Object} req - Express request object
- * @param {Object} users - Users datastore
+ * @param {Object} queryable - User-activity queryable/service
  */
 const ACTIVITY_UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
@@ -79,12 +79,6 @@ function recordActivity(req, queryable) {
           req.user._id,
         ])
         .catch(() => {});
-    } else {
-      queryable.update(
-        { _id: req.user._id },
-        { $set: { lastActivity: new Date(now) } },
-        () => {} // Ignore result - non-critical operation
-      );
     }
   }
 }
@@ -109,7 +103,7 @@ function ensureAuth(req, res, next) {
  * Supports both session and bearer token authentication
  *
  * @param {Object} deps - Dependencies
- * @param {Object} deps.authService - Auth service with getUserById/updateLastActivity
+ * @param {Object} deps.authService - Auth service with getUserById
  * @param {import('../db/types').DbFacade} deps.db - Canonical datastore
  * @param {Function} deps.validateExtensionToken - Token validation function
  * @param {Function} deps.recordActivity - Activity recording function
@@ -128,11 +122,14 @@ function createEnsureAuthAPI(deps) {
   if (!authService) {
     throw new Error('createEnsureAuthAPI requires deps.authService');
   }
+  if (!db) {
+    throw new Error('createEnsureAuthAPI requires deps.db');
+  }
 
   return async function ensureAuthAPI(req, res, next) {
     // First check if authenticated via session
     if (req.isAuthenticated && req.isAuthenticated()) {
-      recordActivityFn(req, authService);
+      recordActivityFn(req, db);
       return next();
     }
 

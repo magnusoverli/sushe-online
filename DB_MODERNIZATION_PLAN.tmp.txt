@@ -67,6 +67,9 @@ Commit Log
 - in progress: Refactored admin bootstrap to canonical `db.raw` SQL
   (`db/bootstrap-admin.js`) and removed the last table-specific datastore
   construction from `db/index.js`; added focused bootstrap-admin unit tests.
+- in progress: Removed legacy callback-style activity-update fallback from
+  `middleware/auth.js` recordActivity and tightened API session activity writes
+  to use canonical `deps.db` in `createEnsureAuthAPI`.
 
 Legend
 - [ ] pending

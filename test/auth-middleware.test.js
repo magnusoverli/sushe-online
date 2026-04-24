@@ -119,15 +119,15 @@ describe('sanitizeUser', () => {
 
 describe('recordActivity', () => {
   it('should update user lastActivity when user exists', () => {
-    const mockUsers = {
-      update: mock.fn(),
+    const mockQueryable = {
+      updateLastActivity: mock.fn(async () => true),
     };
     const req = {
       user: { _id: 'user123' },
     };
 
     const beforeTime = Date.now();
-    recordActivity(req, mockUsers);
+    recordActivity(req, mockQueryable);
     const afterTime = Date.now();
 
     // Check that lastActivity was set on req.user
@@ -135,34 +135,46 @@ describe('recordActivity', () => {
     assert.ok(req.user.lastActivity.getTime() >= beforeTime);
     assert.ok(req.user.lastActivity.getTime() <= afterTime);
 
-    // Check that update was called
-    assert.strictEqual(mockUsers.update.mock.calls.length, 1);
-    const updateArgs = mockUsers.update.mock.calls[0].arguments;
-    assert.deepStrictEqual(updateArgs[0], { _id: 'user123' });
-    assert.ok(updateArgs[1].$set.lastActivity instanceof Date);
+    assert.strictEqual(mockQueryable.updateLastActivity.mock.calls.length, 1);
+    assert.strictEqual(
+      mockQueryable.updateLastActivity.mock.calls[0].arguments[0],
+      'user123'
+    );
+    assert.ok(
+      mockQueryable.updateLastActivity.mock.calls[0].arguments[1] instanceof
+        Date
+    );
   });
 
   it('should not update when no user on request', () => {
-    const mockUsers = {
-      update: mock.fn(),
+    const mockQueryable = {
+      updateLastActivity: mock.fn(async () => true),
     };
     const req = {};
 
-    recordActivity(req, mockUsers);
+    recordActivity(req, mockQueryable);
 
-    assert.strictEqual(mockUsers.update.mock.calls.length, 0);
+    assert.strictEqual(mockQueryable.updateLastActivity.mock.calls.length, 0);
   });
 
   it('should not throw when user is null', () => {
-    const mockUsers = {
-      update: mock.fn(),
+    const mockQueryable = {
+      updateLastActivity: mock.fn(async () => true),
     };
     const req = { user: null };
 
     // Should not throw
-    recordActivity(req, mockUsers);
+    recordActivity(req, mockQueryable);
 
-    assert.strictEqual(mockUsers.update.mock.calls.length, 0);
+    assert.strictEqual(mockQueryable.updateLastActivity.mock.calls.length, 0);
+  });
+
+  it('should not throw when queryable has no supported methods', () => {
+    const req = { user: { _id: 'user123' } };
+
+    assert.doesNotThrow(() => {
+      recordActivity(req, {});
+    });
   });
 
   it('should use raw update for tableless datastore instances', () => {
@@ -282,7 +294,6 @@ describe('createEnsureAuthAPI', () => {
       getUserById: mock.fn(() =>
         Promise.resolve({ _id: 'user123', email: 'test@example.com' })
       ),
-      updateLastActivity: mock.fn(() => Promise.resolve(true)),
     };
     mockPool = {};
     mockValidateExtensionToken = mock.fn(() => Promise.resolve('user123'));
@@ -314,9 +325,19 @@ describe('createEnsureAuthAPI', () => {
 
     assert.strictEqual(next.mock.calls.length, 1);
     assert.strictEqual(mockRecordActivity.mock.calls.length, 1);
-    assert.strictEqual(
-      mockRecordActivity.mock.calls[0].arguments[1],
-      mockAuthService
+    assert.strictEqual(mockRecordActivity.mock.calls[0].arguments[1], mockPool);
+  });
+
+  it('should throw when db dependency is missing', () => {
+    assert.throws(
+      () =>
+        createEnsureAuthAPI({
+          authService: mockAuthService,
+          validateExtensionToken: mockValidateExtensionToken,
+          recordActivity: mockRecordActivity,
+          logger: mockLogger,
+        }),
+      /createEnsureAuthAPI requires deps\.db/
     );
   });
 
