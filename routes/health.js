@@ -19,8 +19,20 @@ const MigrationManager = require('../db/migrations');
  * @param {Object} pool - PostgreSQL connection pool
  * @param {Object} [options]
  * @param {Promise<*>} [options.ready] - Startup readiness promise
+ * @param {(pool: Object) => Promise<Object>} [options.healthCheck] - Health checker override (tests)
+ * @param {(pool: Object) => {getMigrationStatus: () => Promise<Array<{executed: boolean}>>}} [options.createMigrationManager]
+ *   - Migration manager factory override (tests)
  */
 function registerHealthRoutes(app, pool, options = {}) {
+  const healthCheckFn =
+    typeof options.healthCheck === 'function'
+      ? options.healthCheck
+      : healthCheck;
+  const createMigrationManager =
+    typeof options.createMigrationManager === 'function'
+      ? options.createMigrationManager
+      : (dbPool) => new MigrationManager(dbPool);
+
   const startupState = { ready: false, error: null };
   Promise.resolve(options.ready)
     .then(() => {
@@ -30,11 +42,11 @@ function registerHealthRoutes(app, pool, options = {}) {
       startupState.error = error;
     });
 
-  const migrationManager = new MigrationManager(pool);
+  const migrationManager = createMigrationManager(pool);
 
   async function getReadiness() {
-    const dbHealth = await healthCheck(pool);
-    const responseTime = dbHealth.responseTime || Number.MAX_SAFE_INTEGER;
+    const dbHealth = await healthCheckFn(pool);
+    const responseTime = dbHealth.responseTime ?? Number.MAX_SAFE_INTEGER;
     const latencyThresholdMs =
       Number.parseInt(process.env.DB_READY_MAX_MS || '1000', 10) || 1000;
     const pendingMigrations = startupState.ready
@@ -52,7 +64,7 @@ function registerHealthRoutes(app, pool, options = {}) {
     const readiness = {
       startupReady: startupState.ready,
       startupError: startupState.error?.message || null,
-      responseTimeMs: dbHealth.responseTime || null,
+      responseTimeMs: dbHealth.responseTime ?? null,
       latencyThresholdMs,
       latencyHealthy: responseTime <= latencyThresholdMs,
       pool: poolState,
