@@ -209,21 +209,6 @@ function createTestApp(options = {}) {
     exports: mockAuthUtils,
   };
 
-  // Mock users datastore
-  const mockUsers = {
-    update: mock.fn((query, update, opts, callback) => callback(null, 1)),
-    findOne: mock.fn((query, callback) => callback(null, null)),
-  };
-
-  // Mock async datastores
-  const mockListsAsync = {
-    find: mock.fn(() => Promise.resolve([])),
-  };
-
-  const mockListItemsAsync = {
-    count: mock.fn(() => Promise.resolve(0)),
-  };
-
   // Mock validators
   const {
     isValidEmail,
@@ -277,10 +262,6 @@ function createTestApp(options = {}) {
     ensureAuth,
     ensureAuthAPI,
     rateLimitAdminRequest: mockRateLimitAdminRequest,
-    users: mockUsers,
-    usersAsync: mockUsersAsync,
-    listsAsync: mockListsAsync,
-    listItemsAsync: mockListItemsAsync,
     pool: mockPool,
     passport: {
       authenticate: () => (req, res, next) => next(),

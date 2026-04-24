@@ -162,14 +162,6 @@ function createTestApp(options = {}) {
     update: mock.fn(() => Promise.resolve(1)),
   };
 
-  const mockListsAsync = {
-    find: mock.fn(() => Promise.resolve([])),
-  };
-
-  const mockListItemsAsync = {
-    count: mock.fn(() => Promise.resolve(0)),
-  };
-
   // Mock pool
   const mockPool = {
     query:
@@ -251,10 +243,6 @@ function createTestApp(options = {}) {
     ensureAuth,
     ensureAuthAPI,
     rateLimitAdminRequest,
-    users: mockUsers,
-    usersAsync: mockUsersAsync,
-    listsAsync: mockListsAsync,
-    listItemsAsync: mockListItemsAsync,
     pool: mockPool,
     passport: {
       authenticate: () => (req, res, next) => next(),

@@ -76,12 +76,6 @@ function createTestApp() {
 
   const testUser = { _id: 'user-1', email: 'test@example.com' };
 
-  const mockUsers = { update: mock.fn((_q, _u, _o, cb) => cb(null, 1)) };
-  const mockUsersAsync = {
-    update: mock.fn(async () => 1),
-    findOne: mock.fn(async () => testUser),
-    insert: mock.fn(async () => ({ _id: 'new-user' })),
-  };
   const mockBcrypt = { hash: mock.fn(), compare: mock.fn() };
   const mockDb = {
     query: mock.fn(async () => ({ rows: [], rowCount: 1 })),
@@ -117,16 +111,6 @@ function createTestApp() {
     extensionAuthTemplate: () => '<html>Extension Auth</html>',
     isTokenValid: () => true,
     isTokenUsable: () => true,
-    users: mockUsers,
-    usersAsync: mockUsersAsync,
-    listsAsync: {
-      find: mock.fn(async () => []),
-      count: mock.fn(async () => 0),
-    },
-    listItemsAsync: {
-      count: mock.fn(async () => 0),
-      find: mock.fn(async () => []),
-    },
     bcrypt: mockBcrypt,
     isValidEmail: () => true,
     isValidUsername: () => true,

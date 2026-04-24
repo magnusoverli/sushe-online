@@ -79,17 +79,6 @@ function createTestApp() {
     next();
   });
 
-  const mockUsers = {
-    update: mock.fn((_query, _update, _opts, cb) => cb(null, 1)),
-  };
-  const mockUsersAsync = {
-    findOne: mock.fn(async (query) => {
-      if (query.email === testUser.email) return testUser;
-      return null;
-    }),
-    insert: mock.fn(async (doc) => ({ ...doc, _id: 'new-user' })),
-    update: mock.fn(async () => 1),
-  };
   const mockBcrypt = {
     hash: mock.fn(async (password) => `hashed-${password}`),
     compare: mock.fn(async () => true),
@@ -128,15 +117,6 @@ function createTestApp() {
       return next();
     },
     rateLimitAdminRequest: (_req, _res, next) => next(),
-    users: mockUsers,
-    usersAsync: mockUsersAsync,
-    listsAsync: {
-      find: mock.fn(async () => []),
-      count: mock.fn(async () => 0),
-    },
-    listItemsAsync: {
-      count: mock.fn(async () => 0),
-    },
     pool: mockPool,
     passport: {
       authenticate: (_strategy, callback) => (req, _res, _next) => {

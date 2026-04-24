@@ -73,6 +73,9 @@ Commit Log
 - in progress: Tightened `ensureDb` in `db/postgres.js` to require canonical
   `.raw` datastore shape (removed `.query` adapter path), and aligned affected
   auth/settings route tests to provide explicit `.raw` on DB mocks.
+- in progress: Removed unused legacy datastore deps (`users*`/`lists*`) from
+  auth-route integration test harnesses now that routes consume only
+  `authService`/`userService` + canonical `db`.
 
 Legend
 - [ ] pending
