@@ -108,7 +108,7 @@ test('generateNameVariations should deduplicate', () => {
 // createAlbumSummaryService tests
 // =============================================================================
 
-const { createMockLogger, createMockPool } = require('./helpers');
+const { createMockLogger, createMockPool, asMockDb } = require('./helpers');
 
 test('createAlbumSummaryService should throw without db', () => {
   assert.throws(() => {
@@ -142,7 +142,7 @@ test('getBatchStatus should return null when no job running', () => {
 });
 
 test('getStats should return album statistics', async () => {
-  const mockPool = {
+  const mockPool = asMockDb({
     query: async () => ({
       rows: [
         {
@@ -154,7 +154,7 @@ test('getStats should return album statistics', async () => {
         },
       ],
     }),
-  };
+  });
 
   const service = createAlbumSummaryService({
     db: mockPool,
@@ -183,7 +183,7 @@ test('stopBatchFetch should return false when no job running', () => {
 
 test('startBatchFetch should throw if already running', async () => {
   let pageCalls = 0;
-  const mockPool = {
+  const mockPool = asMockDb({
     query: async (query) => {
       if (query.includes('SELECT COUNT(*) AS total')) {
         return {
@@ -206,7 +206,7 @@ test('startBatchFetch should throw if already running', async () => {
       }
       return { rows: [] };
     },
-  };
+  });
 
   const service = createAlbumSummaryService({
     db: mockPool,
@@ -228,7 +228,7 @@ test('startBatchFetch should throw if already running', async () => {
 test('startBatchFetch should freeze batch scope to snapshot start time', async () => {
   const calls = [];
 
-  const mockPool = {
+  const mockPool = asMockDb({
     query: async (query, params = []) => {
       calls.push({ query, params });
 
@@ -244,7 +244,7 @@ test('startBatchFetch should freeze batch scope to snapshot start time', async (
 
       return { rows: [] };
     },
-  };
+  });
 
   const service = createAlbumSummaryService({
     db: mockPool,
@@ -284,7 +284,7 @@ test('startBatchFetch should freeze batch scope to snapshot start time', async (
 test('startBatchFetch should not loop when album_id is null', async () => {
   let pageCalls = 0;
 
-  const mockPool = {
+  const mockPool = asMockDb({
     query: async (query, params = []) => {
       if (query.includes('SELECT COUNT(*) AS total')) {
         return { rows: [{ total: '2' }] };
@@ -320,7 +320,7 @@ test('startBatchFetch should not loop when album_id is null', async () => {
 
       return { rows: [], rowCount: 0 };
     },
-  };
+  });
 
   const service = createAlbumSummaryService({
     db: mockPool,
@@ -342,9 +342,9 @@ test('startBatchFetch should not loop when album_id is null', async () => {
 });
 
 test('fetchAndStoreSummary should return error for missing album', async () => {
-  const mockPool = {
+  const mockPool = asMockDb({
     query: async () => ({ rows: [] }),
-  };
+  });
 
   const service = createAlbumSummaryService({
     db: mockPool,
@@ -358,7 +358,7 @@ test('fetchAndStoreSummary should return error for missing album', async () => {
 });
 
 test('fetchAndStoreSummary should skip fetch for empty artist', async () => {
-  const mockPool = {
+  const mockPool = asMockDb({
     query: async (query, _params) => {
       if (query.includes('SELECT album_id, artist, album')) {
         return {
@@ -370,7 +370,7 @@ test('fetchAndStoreSummary should skip fetch for empty artist', async () => {
       }
       return { rows: [] };
     },
-  };
+  });
 
   const service = createAlbumSummaryService({
     db: mockPool,
@@ -385,7 +385,7 @@ test('fetchAndStoreSummary should skip fetch for empty artist', async () => {
 });
 
 test('fetchAndStoreSummary should skip fetch for empty album', async () => {
-  const mockPool = {
+  const mockPool = asMockDb({
     query: async (query, _params) => {
       if (query.includes('SELECT album_id, artist, album')) {
         return {
@@ -397,7 +397,7 @@ test('fetchAndStoreSummary should skip fetch for empty album', async () => {
       }
       return { rows: [] };
     },
-  };
+  });
 
   const service = createAlbumSummaryService({
     db: mockPool,
@@ -412,7 +412,7 @@ test('fetchAndStoreSummary should skip fetch for empty album', async () => {
 });
 
 test('fetchAndStoreSummary should skip fetch for whitespace-only artist', async () => {
-  const mockPool = {
+  const mockPool = asMockDb({
     query: async (query, _params) => {
       if (query.includes('SELECT album_id, artist, album')) {
         return {
@@ -424,7 +424,7 @@ test('fetchAndStoreSummary should skip fetch for whitespace-only artist', async 
       }
       return { rows: [] };
     },
-  };
+  });
 
   const service = createAlbumSummaryService({
     db: mockPool,
@@ -491,7 +491,7 @@ test('fetchAlbumSummary should include source in result', async () => {
 // =============================================================================
 
 test('getStats should return source breakdown', async () => {
-  const mockPool = {
+  const mockPool = asMockDb({
     query: async () => ({
       rows: [
         {
@@ -503,7 +503,7 @@ test('getStats should return source breakdown', async () => {
         },
       ],
     }),
-  };
+  });
 
   const service = createAlbumSummaryService({
     db: mockPool,
