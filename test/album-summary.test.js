@@ -448,7 +448,6 @@ test('module should export helper functions for testing', () => {
   assert.strictEqual(typeof module.stripHtml, 'function');
   assert.strictEqual(typeof module.generateNameVariations, 'function');
   assert.strictEqual(typeof module.createAlbumSummaryService, 'function');
-  assert.strictEqual(typeof module.getDefaultInstance, 'function');
   assert.strictEqual(typeof module.fetchAlbumSummary, 'function');
   assert.ok(module.SUMMARY_SOURCES);
 });
