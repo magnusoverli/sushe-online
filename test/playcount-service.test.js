@@ -518,38 +518,30 @@ describe('playcount-service', () => {
       assert.deepStrictEqual(results.a, { playcount: 1, status: 'success' });
     });
 
-    it('should adapt a query-only pool into a datastore', async () => {
+    it('should reject a query-only pool without deps.db.raw', async () => {
       const mockLogger = createMockLogger();
       const queryOnlyPool = {
         query: mock.fn(async () => ({ rows: [], rowCount: 0 })),
       };
-      const mockRefresh = mock.fn(async (dbArg) => {
-        await dbArg.raw('SELECT 1', []);
-        return {
-          playcount: 2,
-          status: 'success',
-        };
-      });
+      const mockRefresh = mock.fn();
 
       const { refreshPlaycountsInBackground } = createPlaycountService({
         refreshAlbumPlaycount: mockRefresh,
       });
 
-      const results = await refreshPlaycountsInBackground(
-        'user1',
-        'lfm',
-        [createAlbum('b')],
-        queryOnlyPool,
-        mockLogger
+      await assert.rejects(
+        () =>
+          refreshPlaycountsInBackground(
+            'user1',
+            'lfm',
+            [createAlbum('b')],
+            queryOnlyPool,
+            mockLogger
+          ),
+        /playcount-service\.refreshPlaycountsInBackground requires deps\.db/
       );
-
-      assert.strictEqual(mockRefresh.mock.calls.length, 1);
-      assert.strictEqual(
-        typeof mockRefresh.mock.calls[0].arguments[0].raw,
-        'function'
-      );
-      assert.strictEqual(queryOnlyPool.query.mock.calls.length, 1);
-      assert.deepStrictEqual(results.b, { playcount: 2, status: 'success' });
+      assert.strictEqual(mockRefresh.mock.calls.length, 0);
+      assert.strictEqual(queryOnlyPool.query.mock.calls.length, 0);
     });
   });
 });

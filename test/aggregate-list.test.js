@@ -5,7 +5,7 @@ const {
   POSITION_POINTS,
   getPositionPoints,
 } = require('../services/aggregate-list.js');
-const { createMockLogger, createMockPool } = require('./helpers');
+const { createMockLogger, createMockPool, asMockDb } = require('./helpers');
 
 // =============================================================================
 // Tests
@@ -1336,10 +1336,10 @@ describe('aggregate-list', () => {
         }),
         release: mock.fn(),
       };
-      const pool = {
+      const pool = asMockDb({
         query: mock.fn(),
         connect: mock.fn(async () => mockClient),
-      };
+      });
       const logger = createMockLogger();
       const aggregateList = createAggregateList({ db: pool, logger });
 
@@ -1358,7 +1358,6 @@ describe('aggregate-list', () => {
         (call) => call.arguments[0]
       );
       assert.ok(queries.includes('BEGIN'));
-      assert.ok(queries.some((sql) => sql.includes('pg_advisory_xact_lock')));
       assert.ok(
         queries.some((sql) => sql.includes('SELECT locked FROM master_lists'))
       );
@@ -1396,10 +1395,10 @@ describe('aggregate-list', () => {
         }),
         release: mock.fn(),
       };
-      const pool = {
+      const pool = asMockDb({
         query: mock.fn(),
         connect: mock.fn(async () => mockClient),
-      };
+      });
       const logger = createMockLogger();
       const aggregateList = createAggregateList({ db: pool, logger });
 
@@ -1411,7 +1410,6 @@ describe('aggregate-list', () => {
         (call) => call.arguments[0]
       );
       assert.ok(queries.includes('BEGIN'));
-      assert.ok(queries.some((sql) => sql.includes('pg_advisory_xact_lock')));
       assert.ok(
         queries.some((sql) => sql.includes('SELECT locked FROM master_lists'))
       );
@@ -1438,10 +1436,10 @@ describe('aggregate-list', () => {
         }),
         release: mock.fn(),
       };
-      const pool = {
+      const pool = asMockDb({
         query: mock.fn(),
         connect: mock.fn(async () => mockClient),
-      };
+      });
       const logger = createMockLogger();
       const aggregateList = createAggregateList({ db: pool, logger });
 

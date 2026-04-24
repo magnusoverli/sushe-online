@@ -107,10 +107,12 @@ describe('CoverFetchQueue', () => {
 
   beforeEach(() => {
     // Mock database pool
+    const query = mock.fn(() =>
+      Promise.resolve({ rowCount: 1, rows: [{ album_id: 'test-id' }] })
+    );
     mockPool = {
-      query: mock.fn(() =>
-        Promise.resolve({ rowCount: 1, rows: [{ album_id: 'test-id' }] })
-      ),
+      query,
+      raw: query,
     };
   });
 
@@ -562,8 +564,10 @@ describe('Singleton functions', () => {
   let mockPool;
 
   beforeEach(() => {
+    const query = mock.fn(() => Promise.resolve({ rowCount: 1 }));
     mockPool = {
-      query: mock.fn(() => Promise.resolve({ rowCount: 1 })),
+      query,
+      raw: query,
     };
   });
 

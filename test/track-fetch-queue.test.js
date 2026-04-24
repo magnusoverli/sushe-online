@@ -56,10 +56,12 @@ describe('TrackFetchQueue', () => {
 
   beforeEach(() => {
     // Mock database pool
+    const query = mock.fn(() =>
+      Promise.resolve({ rowCount: 1, rows: [{ album_id: 'test-id' }] })
+    );
     mockPool = {
-      query: mock.fn(() =>
-        Promise.resolve({ rowCount: 1, rows: [{ album_id: 'test-id' }] })
-      ),
+      query,
+      raw: query,
     };
 
     // Mock logger
@@ -480,8 +482,10 @@ describe('TrackFetchQueue', () => {
       });
 
       // Mock database update returning 0 rows
+      const queryNoRows = mock.fn(() => Promise.resolve({ rowCount: 0 }));
       const mockPoolNoRows = {
-        query: mock.fn(() => Promise.resolve({ rowCount: 0 })),
+        query: queryNoRows,
+        raw: queryNoRows,
       };
 
       const queue = createTrackFetchQueue({
@@ -516,8 +520,10 @@ describe('Singleton functions', () => {
   let mockPool;
 
   beforeEach(() => {
+    const query = mock.fn(() => Promise.resolve({ rowCount: 1 }));
     mockPool = {
-      query: mock.fn(() => Promise.resolve({ rowCount: 1 })),
+      query,
+      raw: query,
     };
   });
 

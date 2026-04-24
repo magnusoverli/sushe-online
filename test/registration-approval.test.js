@@ -35,80 +35,81 @@ const createMockUsersAsync = (users = []) => {
 const createMockPool = (mockData = {}) => {
   const events = mockData.events || [];
   let eventCounter = 0;
+  const query = async (sql, params = []) => {
+    // INSERT admin_events
+    if (sql.includes('INSERT INTO admin_events')) {
+      const newEvent = {
+        id: `test-event-${++eventCounter}`,
+        event_type: params[0],
+        title: params[1],
+        description: params[2],
+        data: typeof params[3] === 'string' ? JSON.parse(params[3]) : params[3],
+        priority: params[4],
+        status: 'pending',
+        created_at: new Date(),
+        resolved_at: null,
+        resolved_by: null,
+        resolved_via: null,
+        telegram_message_id: null,
+        telegram_chat_id: null,
+      };
+      events.push(newEvent);
+      return { rows: [newEvent] };
+    }
+
+    // SELECT pending events (explicit column list or legacy SELECT *)
+    if (
+      sql.includes('FROM admin_events') &&
+      sql.includes("status = 'pending'") &&
+      !sql.includes('COUNT')
+    ) {
+      const pending = events.filter((e) => e.status === 'pending');
+      return { rows: pending };
+    }
+
+    // SELECT by ID
+    if (sql.includes('SELECT') && sql.includes('WHERE id = $1')) {
+      const event = events.find((e) => e.id === params[0]);
+      return { rows: event ? [event] : [] };
+    }
+
+    // UPDATE event (resolve)
+    if (sql.includes('UPDATE admin_events') && sql.includes('SET status')) {
+      const event = events.find((e) => e.id === params[3]);
+      if (event) {
+        event.status = params[0];
+        event.resolved_at = new Date();
+        event.resolved_by = params[1];
+        event.resolved_via = params[2];
+      }
+      return { rows: event ? [event] : [] };
+    }
+
+    // UPDATE telegram info
+    if (
+      sql.includes('UPDATE admin_events') &&
+      sql.includes('telegram_message_id')
+    ) {
+      const event = events.find((e) => e.id === params[2]);
+      if (event) {
+        event.telegram_message_id = params[0];
+        event.telegram_chat_id = params[1];
+      }
+      return { rows: event ? [event] : [] };
+    }
+
+    // COUNT pending
+    if (sql.includes('COUNT(*)') && sql.includes("status = 'pending'")) {
+      const pending = events.filter((e) => e.status === 'pending');
+      return { rows: [{ count: String(pending.length) }] };
+    }
+
+    return { rows: [] };
+  };
 
   return {
-    query: async (sql, params = []) => {
-      // INSERT admin_events
-      if (sql.includes('INSERT INTO admin_events')) {
-        const newEvent = {
-          id: `test-event-${++eventCounter}`,
-          event_type: params[0],
-          title: params[1],
-          description: params[2],
-          data:
-            typeof params[3] === 'string' ? JSON.parse(params[3]) : params[3],
-          priority: params[4],
-          status: 'pending',
-          created_at: new Date(),
-          resolved_at: null,
-          resolved_by: null,
-          resolved_via: null,
-          telegram_message_id: null,
-          telegram_chat_id: null,
-        };
-        events.push(newEvent);
-        return { rows: [newEvent] };
-      }
-
-      // SELECT pending events (explicit column list or legacy SELECT *)
-      if (
-        sql.includes('FROM admin_events') &&
-        sql.includes("status = 'pending'") &&
-        !sql.includes('COUNT')
-      ) {
-        const pending = events.filter((e) => e.status === 'pending');
-        return { rows: pending };
-      }
-
-      // SELECT by ID
-      if (sql.includes('SELECT') && sql.includes('WHERE id = $1')) {
-        const event = events.find((e) => e.id === params[0]);
-        return { rows: event ? [event] : [] };
-      }
-
-      // UPDATE event (resolve)
-      if (sql.includes('UPDATE admin_events') && sql.includes('SET status')) {
-        const event = events.find((e) => e.id === params[3]);
-        if (event) {
-          event.status = params[0];
-          event.resolved_at = new Date();
-          event.resolved_by = params[1];
-          event.resolved_via = params[2];
-        }
-        return { rows: event ? [event] : [] };
-      }
-
-      // UPDATE telegram info
-      if (
-        sql.includes('UPDATE admin_events') &&
-        sql.includes('telegram_message_id')
-      ) {
-        const event = events.find((e) => e.id === params[2]);
-        if (event) {
-          event.telegram_message_id = params[0];
-          event.telegram_chat_id = params[1];
-        }
-        return { rows: event ? [event] : [] };
-      }
-
-      // COUNT pending
-      if (sql.includes('COUNT(*)') && sql.includes("status = 'pending'")) {
-        const pending = events.filter((e) => e.status === 'pending');
-        return { rows: [{ count: String(pending.length) }] };
-      }
-
-      return { rows: [] };
-    },
+    query,
+    raw: query,
   };
 };
 
