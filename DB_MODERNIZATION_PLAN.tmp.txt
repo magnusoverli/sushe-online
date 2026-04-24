@@ -82,9 +82,9 @@ Commit Log
 - 0c9533b: Moved DB-backed track fetch queue from `utils/` to `services/`
   and updated startup/API helper imports to remove the remaining
   utility-layer datastore seam.
-- in progress: Move DB-backed album canonical module from `utils/` to
-  `services/`, tighten it to canonical `deps.db` contract via `ensureDb`, and
-  extend factory-compat coverage for the new service path.
+- 86f4991: Moved DB-backed album canonical module from `utils/` to
+  `services/`, tightened it to canonical `deps.db` contract via `ensureDb`, and
+  extended factory-compat coverage for the new service path.
 
 Legend
 - [ ] pending
