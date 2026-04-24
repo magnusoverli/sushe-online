@@ -86,6 +86,7 @@ function createTestApp() {
   const mockDb = {
     query: mock.fn(async () => ({ rows: [], rowCount: 1 })),
   };
+  mockDb.raw = mockDb.query;
 
   // Create service instances
   const { createAuthService } = require('../services/auth-service');

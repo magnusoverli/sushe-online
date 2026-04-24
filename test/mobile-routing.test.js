@@ -97,6 +97,7 @@ function createTestApp() {
   const mockPool = {
     query: mock.fn(async () => ({ rows: [], rowCount: 1 })),
   };
+  mockPool.raw = mockPool.query;
 
   const { createAuthService } = require('../services/auth-service');
   const { createUserService } = require('../services/user-service');

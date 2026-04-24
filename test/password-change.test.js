@@ -229,6 +229,7 @@ function createTestApp(options = {}) {
         return Promise.resolve({ rows: [], rowCount: 0 });
       }),
   };
+  mockPool.raw = mockPool.query;
 
   // Create service instances with test mocks
   const { createAuthService } = require('../services/auth-service');

@@ -38,7 +38,7 @@ describe('auth-service admin code logging', () => {
     };
 
     const service = createAuthService({
-      db: { query: mock.fn(async () => ({ rows: [], rowCount: 0 })) },
+      db: { raw: mock.fn(async () => ({ rows: [], rowCount: 0 })) },
       logger,
     });
 

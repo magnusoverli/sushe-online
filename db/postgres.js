@@ -33,10 +33,9 @@ const SLOW_QUERY_THRESHOLD_MS = Math.max(
 );
 
 /**
- * Coerce a caller-supplied `deps.db` into the canonical shape with `.raw`.
- * Accepts both the real PgDatastore (has .raw) and legacy-style mocks that
- * only expose `.query` — in the latter case, .raw is synthesized as a
- * thin adapter so the rest of the code path can stay uniform.
+ * Validate a caller-supplied `deps.db` against the canonical datastore shape.
+ * Services/repositories are expected to receive a DbFacade with `.raw`
+ * (and optionally `.withClient` / `.withTransaction`).
  *
  * Throws when `db` is missing entirely — callers use this to enforce the
  * "deps.db required" invariant at factory construction time.
@@ -47,51 +46,6 @@ const SLOW_QUERY_THRESHOLD_MS = Math.max(
  */
 function ensureDb(db, serviceName) {
   if (db && typeof db.raw === 'function') return db;
-  if (db && typeof db.query === 'function') {
-    // Test-style mock — still a valid datastore-shaped dep, just using the
-    // pg-client vocabulary. Adapt to the canonical surface so service
-    // code can call .raw / .withClient / .withTransaction uniformly.
-    const acquireClient = async () => {
-      if (typeof db.connect === 'function') return db.connect();
-      return { query: db.query.bind(db), release: () => {} };
-    };
-    return {
-      ...db,
-      raw: (sql, params) => db.query(sql, params),
-      withClient:
-        typeof db.withClient === 'function'
-          ? db.withClient.bind(db)
-          : async (cb) => {
-              const client = await acquireClient();
-              try {
-                return await cb(client);
-              } finally {
-                if (client.release) client.release();
-              }
-            },
-      withTransaction:
-        typeof db.withTransaction === 'function'
-          ? db.withTransaction.bind(db)
-          : async (cb) => {
-              const client = await acquireClient();
-              try {
-                await client.query('BEGIN');
-                const result = await cb(client);
-                await client.query('COMMIT');
-                return result;
-              } catch (err) {
-                try {
-                  await client.query('ROLLBACK');
-                } catch {
-                  // ignore rollback failures in test mocks
-                }
-                throw err;
-              } finally {
-                if (client.release) client.release();
-              }
-            },
-    };
-  }
   throw new Error(`${serviceName} requires deps.db`);
 }
 

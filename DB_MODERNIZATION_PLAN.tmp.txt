@@ -70,6 +70,9 @@ Commit Log
 - in progress: Removed legacy callback-style activity-update fallback from
   `middleware/auth.js` recordActivity and tightened API session activity writes
   to use canonical `deps.db` in `createEnsureAuthAPI`.
+- in progress: Tightened `ensureDb` in `db/postgres.js` to require canonical
+  `.raw` datastore shape (removed `.query` adapter path), and aligned affected
+  auth/settings route tests to provide explicit `.raw` on DB mocks.
 
 Legend
 - [ ] pending

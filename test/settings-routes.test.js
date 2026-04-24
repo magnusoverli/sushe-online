@@ -154,6 +154,7 @@ function createTestApp(options = {}) {
         return Promise.resolve({ rows: [], rowCount: 0 });
       }),
   };
+  mockPool.raw = mockPool.query;
 
   const mockListsAsync = {
     find: mock.fn(() => Promise.resolve([])),

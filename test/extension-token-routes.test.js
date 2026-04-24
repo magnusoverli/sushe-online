@@ -163,6 +163,7 @@ function createTestApp(options = {}) {
         return Promise.resolve({ rows: [], rowCount: 0 });
       }),
   };
+  mockPool.raw = mockPool.query;
 
   // Mock usersAsync for token validation
   const mockUsersAsync = {
