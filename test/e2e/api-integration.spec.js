@@ -181,7 +181,7 @@ async function setupAuthenticatedUser(page) {
       'To run integration tests:\n' +
       '1. Approve the user in admin panel, OR\n' +
       '2. Run: docker compose -f docker-compose.local.yml exec app node -e ' +
-      `"const db = require('./db'); db.users.update({email: '${TEST_USER.email}'}, {\\$set: {approvalStatus: 'approved'}}, {}, () => process.exit())"`
+      `"const { db } = require('./db'); db.raw('UPDATE users SET approval_status = $1 WHERE email = $2', ['approved', '${TEST_USER.email}']).then(() => process.exit())"`
   );
 }
 

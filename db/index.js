@@ -10,13 +10,7 @@ const {
 } = require('./postgres');
 const { drainPool } = require('./close-pool');
 const { createEnsureAdminUser } = require('./bootstrap-admin');
-const {
-  USERS_FIELD_MAP,
-  LISTS_FIELD_MAP,
-  LIST_ITEMS_FIELD_MAP,
-  ALBUMS_FIELD_MAP,
-  LIST_GROUPS_FIELD_MAP,
-} = require('./schema/table-maps');
+const { USERS_FIELD_MAP } = require('./schema/table-maps');
 const logger = require('../utils/logger');
 const { setPoolReference } = require('../utils/metrics');
 
@@ -26,7 +20,7 @@ if (!fs.existsSync(dataDir)) {
 }
 logger.info('Initializing database layer');
 
-let users, lists, listItems, albums, listGroups, db, pool;
+let users, db, pool;
 let ready;
 
 if (process.env.DATABASE_URL) {
@@ -48,10 +42,6 @@ if (process.env.DATABASE_URL) {
     application_name: process.env.PG_APP_NAME || 'sushe-online',
   });
   users = new PgDatastore(pool, 'users', USERS_FIELD_MAP);
-  lists = new PgDatastore(pool, 'lists', LISTS_FIELD_MAP);
-  listItems = new PgDatastore(pool, 'list_items', LIST_ITEMS_FIELD_MAP);
-  albums = new PgDatastore(pool, 'albums', ALBUMS_FIELD_MAP);
-  listGroups = new PgDatastore(pool, 'list_groups', LIST_GROUPS_FIELD_MAP);
   // Canonical tableless datastore. Exposes only raw/withClient/withTransaction;
   // all services that don't need tabled helpers (findOne/insert/update/...)
   // should receive this via deps.db. Shares the pool with the tabled instances,
@@ -103,11 +93,6 @@ async function closePool(opts = {}) {
 }
 
 module.exports = {
-  users,
-  lists,
-  listItems,
-  albums,
-  listGroups,
   db,
   dataDir,
   ready,
