@@ -61,7 +61,7 @@ Commit Log
 - 742423b: Trimmed `db/index.js` exports to the canonical surface (`db`,
   readiness/pool/close helpers) and updated e2e approval guidance to use
   `db.raw` SQL.
-- in progress: Removed service compatibility wrappers under `utils/`
+- 8687d75: Removed service compatibility wrappers under `utils/`
   (`auth-utils`, `year-lock`, `user-preferences`), switched runtime imports to
   `services/*`, and aligned affected tests/mocks to service module paths.
 
