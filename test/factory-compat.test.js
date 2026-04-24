@@ -80,6 +80,42 @@ const factories = [
     extra: () => ({ logger: createMockLogger() }),
   },
   {
+    name: 'list/fetchers',
+    load: () => require('../services/list/fetchers').createListFetchers,
+    extra: () => ({
+      fetchRecommendationMaps: mock.fn(async () => new Map()),
+      findListById: mock.fn(async () => null),
+      getPointsForPosition: mock.fn(() => 0),
+    }),
+  },
+  {
+    name: 'list/item-operations',
+    load: () =>
+      require('../services/list/item-operations').createListItemOperations,
+    extra: () => ({
+      crypto: mockCrypto,
+      upsertAlbumRecord: mock.fn(),
+      batchUpsertAlbumRecords: mock.fn(async () => new Map()),
+      logger: createMockLogger(),
+    }),
+  },
+  {
+    name: 'list/management-operations',
+    load: () =>
+      require('../services/list/management-operations')
+        .createListManagementOperations,
+    extra: () => ({
+      TransactionAbort: class TestAbort extends Error {},
+      acquireYearLocks: mock.fn(async () => {}),
+      validateYear: mock.fn(() => ({ valid: true, value: 2024 })),
+      validateMainListNotLocked: mock.fn(async () => {}),
+      validateYearNotLocked: mock.fn(async () => {}),
+      isYearLocked: mock.fn(async () => false),
+      buildPartialUpdate: mock.fn(() => ({ setClause: '', values: [] })),
+      deleteGroupIfEmptyAutoGroup: mock.fn(async () => {}),
+    }),
+  },
+  {
     name: 'playcount-sync-service',
     load: () =>
       require('../services/playcount-sync-service').createPlaycountSyncService,
@@ -96,6 +132,11 @@ const factories = [
     load: () =>
       require('../services/reidentify-service').createReidentifyService,
     extra: () => ({ logger: createMockLogger() }),
+  },
+  {
+    name: 'stats-service',
+    load: () => require('../services/stats-service').createStatsService,
+    extra: () => ({}),
   },
 ];
 

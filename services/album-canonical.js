@@ -117,7 +117,13 @@ function chooseBetterTracks(existing, newTracks) {
 function createAlbumCanonical(deps = {}) {
   const log = deps.logger || logger;
   const dbStore = ensureDb(deps.db, 'album-canonical');
-  const pool = { query: (sql, params) => dbStore.raw(sql, params) };
+
+  function executeQuery(client, sql, params, options = undefined) {
+    if (client && typeof client.query === 'function') {
+      return client.query(sql, params);
+    }
+    return dbStore.raw(sql, params, options);
+  }
 
   /**
    * Find an existing canonical album by normalized artist and album name
@@ -128,7 +134,6 @@ function createAlbumCanonical(deps = {}) {
    * @returns {Promise<Object|null>} - Existing album record or null
    */
   async function findByNormalizedName(artist, album, client = null) {
-    const db = client || pool;
     const normalizedArtist = normalizeForLookup(artist);
     const normalizedAlbum = normalizeForLookup(album);
 
@@ -137,7 +142,8 @@ function createAlbumCanonical(deps = {}) {
       return null;
     }
 
-    const result = await db.query(
+    const result = await executeQuery(
+      client,
       `SELECT 
         album_id, artist, album, release_date, country, 
         genre_1, genre_2, tracks, cover_image, cover_image_format,
@@ -150,7 +156,11 @@ function createAlbumCanonical(deps = {}) {
         CASE WHEN album_id IS NOT NULL THEN 0 ELSE 1 END,
         created_at ASC
       LIMIT 1`,
-      [normalizedArtist, normalizedAlbum]
+      [normalizedArtist, normalizedAlbum],
+      {
+        name: 'album-canonical-find-by-normalized-name',
+        retryable: true,
+      }
     );
 
     return result.rows[0] || null;
@@ -168,9 +178,8 @@ function createAlbumCanonical(deps = {}) {
       return null;
     }
 
-    const db = client || pool;
-
-    const result = await db.query(
+    const result = await executeQuery(
+      client,
       `SELECT 
         album_id, artist, album, release_date, country, 
         genre_1, genre_2, tracks, cover_image, cover_image_format,
@@ -179,7 +188,8 @@ function createAlbumCanonical(deps = {}) {
       FROM albums 
       WHERE album_id = $1
       LIMIT 1`,
-      [albumId]
+      [albumId],
+      { name: 'album-canonical-find-by-album-id', retryable: true }
     );
 
     return result.rows[0] || null;
@@ -269,8 +279,6 @@ function createAlbumCanonical(deps = {}) {
    * @returns {Promise<Object>} - { albumId, wasInserted, wasMerged, needsSummaryFetch, needsCoverFetch }
    */
   async function upsertCanonical(albumData, timestamp, client = null) {
-    const db = client || pool;
-
     // Sanitize artist and album names for consistent storage
     const sanitizedArtist = sanitizeForStorage(albumData.artist);
     const sanitizedAlbum = sanitizeForStorage(albumData.album);
@@ -305,7 +313,8 @@ function createAlbumCanonical(deps = {}) {
     if (albumData.album_id) {
       // Path 1: Album WITH external ID - conflict on album_id
       // Uses idx_albums_album_id_unique index
-      const result = await db.query(
+      const result = await executeQuery(
+        client,
         `INSERT INTO albums (
           album_id, artist, album, release_date, country,
           genre_1, genre_2, tracks, cover_image, cover_image_format,
@@ -372,7 +381,8 @@ function createAlbumCanonical(deps = {}) {
           coverFormat,
           timestamp,
           timestamp,
-        ]
+        ],
+        { name: 'album-canonical-upsert-with-id' }
       );
 
       const row = result.rows[0];
@@ -397,7 +407,8 @@ function createAlbumCanonical(deps = {}) {
       const normalizedArtist = normalizeForLookup(sanitizedArtist);
       const normalizedAlbum = normalizeForLookup(sanitizedAlbum);
 
-      const result = await db.query(
+      const result = await executeQuery(
+        client,
         `INSERT INTO albums (
           album_id, artist, album, release_date, country,
           genre_1, genre_2, tracks, cover_image, cover_image_format,
@@ -460,7 +471,8 @@ function createAlbumCanonical(deps = {}) {
           coverFormat,
           timestamp,
           timestamp,
-        ]
+        ],
+        { name: 'album-canonical-upsert-without-id' }
       );
 
       const row = result.rows[0];
@@ -502,7 +514,6 @@ function createAlbumCanonical(deps = {}) {
       return new Map([[key, result]]);
     }
 
-    const db = client || pool;
     const results = new Map();
 
     // Separate albums with/without album_id (different conflict strategies)
@@ -548,7 +559,8 @@ function createAlbumCanonical(deps = {}) {
       const createdAts = withId.map(() => timestamp);
       const updatedAts = withId.map(() => timestamp);
 
-      const result = await db.query(
+      const result = await executeQuery(
+        client,
         `INSERT INTO albums (
           album_id, artist, album, release_date, country, genre_1, genre_2, 
           tracks, created_at, updated_at
@@ -604,7 +616,8 @@ function createAlbumCanonical(deps = {}) {
           tracksList,
           createdAts,
           updatedAts,
-        ]
+        ],
+        { name: 'album-canonical-batch-upsert-with-id' }
       );
 
       // Map results by artist|album key
@@ -640,7 +653,8 @@ function createAlbumCanonical(deps = {}) {
       const createdAts = withoutId.map(() => timestamp);
       const updatedAts = withoutId.map(() => timestamp);
 
-      const result = await db.query(
+      const result = await executeQuery(
+        client,
         `INSERT INTO albums (
           album_id, artist, album, release_date, country, genre_1, genre_2, 
           tracks, created_at, updated_at
@@ -693,7 +707,8 @@ function createAlbumCanonical(deps = {}) {
           tracksList,
           createdAts,
           updatedAts,
-        ]
+        ],
+        { name: 'album-canonical-batch-upsert-without-id' }
       );
 
       // Map results by artist|album key

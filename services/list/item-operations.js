@@ -1,4 +1,5 @@
 const { triggerPlaycountRefresh } = require('./item-playcount-refresh');
+const { ensureDb } = require('../../db/postgres');
 
 function buildBatchInsertPayload(itemsToInsert, listId, timestamp) {
   const payload = {
@@ -256,7 +257,7 @@ async function processPositionUpdates(client, listId, updated, timestamp) {
 
 function createListItemOperations(deps = {}) {
   const context = {
-    db: deps.db,
+    db: ensureDb(deps.db, 'list/item-operations'),
     crypto: deps.crypto,
     upsertAlbumRecord: deps.upsertAlbumRecord,
     batchUpsertAlbumRecords: deps.batchUpsertAlbumRecords,
@@ -264,7 +265,6 @@ function createListItemOperations(deps = {}) {
     logger: deps.logger,
   };
 
-  if (!context.db) throw new Error('db is required');
   if (!context.crypto) throw new Error('crypto is required');
   if (typeof context.upsertAlbumRecord !== 'function') {
     throw new Error('upsertAlbumRecord is required');

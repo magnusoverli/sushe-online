@@ -4,10 +4,11 @@ const {
 const { bulkUpdate } = require('./management/bulk-update');
 const { updateListMetadata } = require('./management/update-list-metadata');
 const { toggleMainStatus, deleteList } = require('./management/main-status');
+const { ensureDb } = require('../../db/postgres');
 
 function createListManagementOperations(deps = {}) {
   const ctx = {
-    db: deps.db,
+    db: ensureDb(deps.db, 'list/management-operations'),
     TransactionAbort: deps.TransactionAbort,
     acquireYearLocks: deps.acquireYearLocks,
     validateYear: deps.validateYear,
@@ -18,7 +19,6 @@ function createListManagementOperations(deps = {}) {
     deleteGroupIfEmptyAutoGroup: deps.deleteGroupIfEmptyAutoGroup,
   };
 
-  if (!ctx.db) throw new Error('db is required');
   if (!ctx.TransactionAbort) throw new Error('TransactionAbort is required');
   if (typeof ctx.acquireYearLocks !== 'function') {
     throw new Error('acquireYearLocks is required');
