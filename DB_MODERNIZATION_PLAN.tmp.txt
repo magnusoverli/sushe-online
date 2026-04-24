@@ -42,19 +42,25 @@ Commit Log
 - 874b5f4: Moved DB-backed logic out of `utils/` into service modules
   (`services/auth-utils-service.js`, `services/year-lock-service.js`,
   `services/user-preferences-service.js`) with compatibility wrappers.
-- in progress: Removed `users`/`usersAsync` compatibility branches from
+- 2c26748: Removed `users`/`usersAsync` compatibility branches from
   `services/auth-service.js` and `services/user-service.js`, and migrated
   affected auth/settings/mobile/extension-token tests to canonical DB mocks.
-- in progress: Removed legacy async datastore aliases from `db/index.js`
+- 0d33b45: Removed legacy async datastore aliases from `db/index.js`
   (`usersAsync`, `listsAsync`, `listItemsAsync`, `albumsAsync`,
   `listGroupsAsync`) and updated stale service docs to reference `deps.db`.
-- in progress: Moved admin bootstrap SQL out of route layer into
+- 8d91e26: Moved admin bootstrap SQL out of route layer into
   `services/admin-bootstrap-service.js`, updated `routes/admin/bootstrap.js`
   to consume service methods, and added focused service unit coverage.
-- in progress: Removed the last route-layer raw DB query from
+- ad80b62: Removed the last route-layer raw DB query from
   `routes/api/_helpers.js` by internalizing album cache-invalidation lookup in
   `services/album-service.js` (with `responseCache` injection in API
   composition).
+- fabf13f: Inlined album cache-invalidation behavior directly inside
+  `services/album-service.js` and removed the helper override compatibility
+  path while retaining unit coverage.
+- 742423b: Trimmed `db/index.js` exports to the canonical surface (`db`,
+  readiness/pool/close helpers) and updated e2e approval guidance to use
+  `db.raw` SQL.
 
 Legend
 - [ ] pending
