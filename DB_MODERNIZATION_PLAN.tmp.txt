@@ -79,9 +79,9 @@ Commit Log
 - 3862f9d: Merged PR #353 with canonical test harness follow-up (`deps.db.raw`)
   so aggregate/album-summary/cover-fetch/playcount/registration/track-fetch
   tests run against the strict datastore contract.
-- next: Move DB-backed track fetch queue from `utils/` to `services/` and
-  update startup/API helper imports to remove the remaining utility-layer
-  datastore seam.
+- 0c9533b: Moved DB-backed track fetch queue from `utils/` to `services/`
+  and updated startup/API helper imports to remove the remaining
+  utility-layer datastore seam.
 
 Legend
 - [ ] pending
