@@ -6,7 +6,7 @@
 
 // Import shared utilities
 const { createAggregateList } = require('../../services/aggregate-list');
-const { createAlbumCanonical } = require('../../utils/album-canonical');
+const { createAlbumCanonical } = require('../../services/album-canonical');
 const {
   LOCK_NAMESPACES,
   acquireTransactionLocks,

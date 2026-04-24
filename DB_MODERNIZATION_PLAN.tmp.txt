@@ -17,7 +17,7 @@ Global Constraints
 Phases
 [x] P0 Freeze contract and add guardrails
 [x] P1 Split DB engine room responsibilities
-[~] P2 Extract repositories and move table/domain SQL
+[x] P2 Extract repositories and move table/domain SQL
 [x] P3 Centralize schema and row mapping
 [x] P4 Migrate auth/user stack to canonical surface
 [x] P5 Remove DB access from routes/middleware
@@ -25,7 +25,7 @@ Phases
 [x] P7 Clean composition root and dependency surface
 [x] P8 Standardize test harness on canonical DB contract
 [x] P9 Remove compatibility layers and dead code
-[~] P10 Final consistency sweep
+[x] P10 Final consistency sweep
 
 Execution Notes
 - Work in small, safe commits.
@@ -82,6 +82,9 @@ Commit Log
 - 0c9533b: Moved DB-backed track fetch queue from `utils/` to `services/`
   and updated startup/API helper imports to remove the remaining
   utility-layer datastore seam.
+- 86f4991: Moved DB-backed album canonical module from `utils/` to
+  `services/`, tightened it to canonical `deps.db` contract via `ensureDb`, and
+  extended factory-compat coverage for the new service path.
 
 Legend
 - [ ] pending
