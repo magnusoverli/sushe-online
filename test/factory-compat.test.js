@@ -44,7 +44,6 @@ const factories = [
     extra: () => ({
       logger: createMockLogger(),
       upsertAlbumRecord: () => {},
-      invalidateCachesForAlbumUsers: () => {},
     }),
   },
   {

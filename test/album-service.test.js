@@ -13,7 +13,6 @@ describe('album-service', () => {
       db: pool,
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
-      invalidateCachesForAlbumUsers: mock.fn(async () => {}),
     });
 
     await assert.rejects(
@@ -32,27 +31,35 @@ describe('album-service', () => {
     );
   });
 
-  it('updateCountry should update in a single statement and invalidate caches', async () => {
-    const invalidateCachesForAlbumUsers = mock.fn(async () => {});
-    const pool = createMockPool([{ rows: [{ album_id: 'a1' }], rowCount: 1 }]);
+  it('updateCountry should update and invalidate caches for affected users', async () => {
+    const responseCache = { invalidate: mock.fn() };
+    const pool = createMockPool([
+      { rows: [{ album_id: 'a1' }], rowCount: 1 },
+      { rows: [{ user_id: 'user-1' }], rowCount: 1 },
+    ]);
 
     const service = createAlbumService({
       db: pool,
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
-      invalidateCachesForAlbumUsers,
+      responseCache,
     });
 
     await service.updateCountry('a1', ' Norway ', 'user1');
 
-    assert.strictEqual(pool.query.mock.calls.length, 1);
+    assert.strictEqual(pool.query.mock.calls.length, 2);
     assert.ok(
       pool.query.mock.calls[0].arguments[0].includes('RETURNING album_id')
     );
-    assert.strictEqual(invalidateCachesForAlbumUsers.mock.calls.length, 1);
+    assert.ok(
+      pool.query.mock.calls[1].arguments[0].includes(
+        'SELECT DISTINCT l.user_id'
+      )
+    );
+    assert.strictEqual(responseCache.invalidate.mock.calls.length, 1);
     assert.strictEqual(
-      invalidateCachesForAlbumUsers.mock.calls[0].arguments[0],
-      'a1'
+      responseCache.invalidate.mock.calls[0].arguments[0],
+      ':user-1'
     );
   });
 
@@ -63,7 +70,6 @@ describe('album-service', () => {
       db: pool,
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
-      invalidateCachesForAlbumUsers: mock.fn(async () => {}),
     });
 
     await assert.rejects(
@@ -84,7 +90,6 @@ describe('album-service', () => {
       db: pool,
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
-      invalidateCachesForAlbumUsers: mock.fn(async () => {}),
     });
 
     await assert.rejects(
@@ -137,7 +142,6 @@ describe('album-service', () => {
       db: pool,
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
-      invalidateCachesForAlbumUsers: mock.fn(async () => {}),
     });
 
     await assert.rejects(
@@ -186,7 +190,6 @@ describe('album-service', () => {
       db: pool,
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
-      invalidateCachesForAlbumUsers: mock.fn(async () => {}),
     });
 
     await service.markDistinct('album-z', 'album-a', 'user-cuid-123');
@@ -220,7 +223,6 @@ describe('album-service', () => {
       db: pool,
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
-      invalidateCachesForAlbumUsers: mock.fn(async () => {}),
     });
 
     await service.markDistinct('album-1', 'album-2', 'missing-user');
