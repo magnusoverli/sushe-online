@@ -48,6 +48,9 @@ Commit Log
 - in progress: Removed legacy async datastore aliases from `db/index.js`
   (`usersAsync`, `listsAsync`, `listItemsAsync`, `albumsAsync`,
   `listGroupsAsync`) and updated stale service docs to reference `deps.db`.
+- in progress: Moved admin bootstrap SQL out of route layer into
+  `services/admin-bootstrap-service.js`, updated `routes/admin/bootstrap.js`
+  to consume service methods, and added focused service unit coverage.
 
 Legend
 - [ ] pending
