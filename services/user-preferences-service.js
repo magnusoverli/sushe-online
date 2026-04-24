@@ -241,23 +241,6 @@ function createUserPreferences(deps = {}) {
   };
 }
 
-let defaultDb = null;
-
-function setDb(db) {
-  defaultDb = db;
-}
-
-const getDefaultInstance = () => createUserPreferences({ db: defaultDb });
-
 module.exports = {
   createUserPreferences,
-  setDb,
-  aggregateFromLists: (...args) =>
-    getDefaultInstance().aggregateFromLists(...args),
-  calculateAffinity: (...args) =>
-    getDefaultInstance().calculateAffinity(...args),
-  savePreferences: (...args) => getDefaultInstance().savePreferences(...args),
-  getPreferences: (...args) => getDefaultInstance().getPreferences(...args),
-  checkRefreshNeeded: (...args) =>
-    getDefaultInstance().checkRefreshNeeded(...args),
 };

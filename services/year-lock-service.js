@@ -58,10 +58,10 @@ function createYearLock(deps = {}) {
     await acquireTransactionLocks(client, LOCK_NAMESPACES.YEAR, years);
   }
 
-  async function validateYearNotLocked(pool, year, operation) {
+  async function validateYearNotLocked(queryable, year, operation) {
     if (!year) return;
 
-    const locked = await isYearLocked(pool, year, { failOpen: false });
+    const locked = await isYearLocked(queryable, year, { failOpen: false });
     if (locked) {
       throw new TransactionAbort(403, {
         error: `Cannot ${operation}: Year ${year} is locked`,
@@ -72,15 +72,15 @@ function createYearLock(deps = {}) {
     }
   }
 
-  async function isMainListLocked(pool, year, isMain) {
+  async function isMainListLocked(queryable, year, isMain) {
     if (!year || !isMain) return false;
-    return await isYearLocked(pool, year);
+    return await isYearLocked(queryable, year);
   }
 
-  async function validateMainListNotLocked(pool, year, isMain, operation) {
+  async function validateMainListNotLocked(queryable, year, isMain, operation) {
     if (!year || !isMain) return;
 
-    const locked = await isYearLocked(pool, year, { failOpen: false });
+    const locked = await isYearLocked(queryable, year, { failOpen: false });
     if (locked) {
       throw new TransactionAbort(403, {
         error: `Cannot ${operation}: Main list for year ${year} is locked`,

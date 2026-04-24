@@ -157,7 +157,7 @@ describe('drainPool + ShuttingDownError integration', () => {
         release: () => {},
       })),
     };
-    const ds = new PgDatastore(pool, 't', { _id: '_id' });
+    const ds = new PgDatastore(pool);
     // Before draining: raw() works
     await ds.raw('SELECT 1');
     assert.strictEqual(pool.query.mock.calls.length, 1);

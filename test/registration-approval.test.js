@@ -34,6 +34,7 @@ const createMockUsersAsync = (users = []) => {
 // Mock pool that simulates PostgreSQL behavior
 const createMockPool = (mockData = {}) => {
   const events = mockData.events || [];
+  const users = mockData.users || [];
   let eventCounter = 0;
   const query = async (sql, params = []) => {
     // INSERT admin_events
@@ -83,6 +84,22 @@ const createMockPool = (mockData = {}) => {
         event.resolved_via = params[2];
       }
       return { rows: event ? [event] : [] };
+    }
+
+    if (sql.includes("SET approval_status = 'approved'")) {
+      const user = users.find((entry) => entry._id === params[0]);
+      if (user) {
+        user.approvalStatus = 'approved';
+      }
+      return { rows: user ? [{ _id: user._id }] : [] };
+    }
+
+    if (sql.includes("SET approval_status = 'rejected'")) {
+      const user = users.find((entry) => entry._id === params[0]);
+      if (user) {
+        user.approvalStatus = 'rejected';
+      }
+      return { rows: user ? [{ _id: user._id }] : [] };
     }
 
     // UPDATE telegram info
@@ -182,8 +199,6 @@ test('approve action should update user approval status to approved', async () =
       approvalStatus: 'pending',
     },
   ];
-  const usersAsync = createMockUsersAsync(users);
-
   const mockEvents = [
     {
       id: 'event-1',
@@ -196,31 +211,10 @@ test('approve action should update user approval status to approved', async () =
       },
     },
   ];
-  const pool = createMockPool({ events: mockEvents });
+  const pool = createMockPool({ events: mockEvents, users });
   const logger = createMockLogger();
   const service = createAdminEventService({ db: pool, logger });
-
-  // Register the approve handler (simulating what admin.js does)
-  service.registerActionHandler(
-    'account_approval',
-    'approve',
-    async (eventData, _adminUser) => {
-      const { userId, username } = eventData;
-      const result = await usersAsync.update(
-        { _id: userId },
-        { $set: { approvalStatus: 'approved', updatedAt: new Date() } }
-      );
-
-      if (result === 0) {
-        return { success: false, message: 'User not found' };
-      }
-
-      return {
-        success: true,
-        message: `Approved registration for ${username}`,
-      };
-    }
-  );
+  service.registerAccountApprovalHandlers();
 
   const adminUser = { _id: 'admin-1', username: 'admin' };
   const result = await service.executeAction(
@@ -234,7 +228,7 @@ test('approve action should update user approval status to approved', async () =
   assert.ok(result.message.includes('Approved'));
 
   // Verify user was updated
-  const updatedUser = await usersAsync.findOne({ _id: 'user-123' });
+  const updatedUser = users.find((user) => user._id === 'user-123');
   assert.strictEqual(updatedUser.approvalStatus, 'approved');
 });
 
@@ -251,8 +245,6 @@ test('reject action should update user approval status to rejected', async () =>
       approvalStatus: 'pending',
     },
   ];
-  const usersAsync = createMockUsersAsync(users);
-
   const mockEvents = [
     {
       id: 'event-2',
@@ -265,31 +257,10 @@ test('reject action should update user approval status to rejected', async () =>
       },
     },
   ];
-  const pool = createMockPool({ events: mockEvents });
+  const pool = createMockPool({ events: mockEvents, users });
   const logger = createMockLogger();
   const service = createAdminEventService({ db: pool, logger });
-
-  // Register the reject handler (simulating what admin.js does)
-  service.registerActionHandler(
-    'account_approval',
-    'reject',
-    async (eventData, _adminUser) => {
-      const { userId, username } = eventData;
-      const result = await usersAsync.update(
-        { _id: userId },
-        { $set: { approvalStatus: 'rejected', updatedAt: new Date() } }
-      );
-
-      if (result === 0) {
-        return { success: false, message: 'User not found' };
-      }
-
-      return {
-        success: true,
-        message: `Rejected registration for ${username}`,
-      };
-    }
-  );
+  service.registerAccountApprovalHandlers();
 
   const adminUser = { _id: 'admin-1', username: 'admin' };
   const result = await service.executeAction(
@@ -303,7 +274,7 @@ test('reject action should update user approval status to rejected', async () =>
   assert.ok(result.message.includes('Rejected'));
 
   // Verify user was updated
-  const updatedUser = await usersAsync.findOne({ _id: 'user-456' });
+  const updatedUser = users.find((user) => user._id === 'user-456');
   assert.strictEqual(updatedUser.approvalStatus, 'rejected');
 });
 
@@ -393,18 +364,7 @@ test('approve action should fail if userId is missing from event data', async ()
   const pool = createMockPool({ events: mockEvents });
   const logger = createMockLogger();
   const service = createAdminEventService({ db: pool, logger });
-
-  service.registerActionHandler(
-    'account_approval',
-    'approve',
-    async (eventData) => {
-      const { userId } = eventData;
-      if (!userId) {
-        return { success: false, message: 'Missing user ID in event data' };
-      }
-      return { success: true };
-    }
-  );
+  service.registerAccountApprovalHandlers();
 
   const result = await service.executeAction(
     'event-bad',
@@ -422,8 +382,6 @@ test('approve action should fail if userId is missing from event data', async ()
 // =============================================================================
 
 test('approve action should fail if user not found in database', async () => {
-  const usersAsync = createMockUsersAsync([]); // Empty users list
-
   const mockEvents = [
     {
       id: 'event-deleted',
@@ -432,30 +390,10 @@ test('approve action should fail if user not found in database', async () => {
       data: { userId: 'non-existent-user', username: 'deleteduser' },
     },
   ];
-  const pool = createMockPool({ events: mockEvents });
+  const pool = createMockPool({ events: mockEvents, users: [] });
   const logger = createMockLogger();
   const service = createAdminEventService({ db: pool, logger });
-
-  service.registerActionHandler(
-    'account_approval',
-    'approve',
-    async (eventData) => {
-      const { userId, username } = eventData;
-      const result = await usersAsync.update(
-        { _id: userId },
-        { $set: { approvalStatus: 'approved' } }
-      );
-
-      if (result === 0) {
-        return { success: false, message: 'User not found' };
-      }
-
-      return {
-        success: true,
-        message: `Approved registration for ${username}`,
-      };
-    }
-  );
+  service.registerAccountApprovalHandlers();
 
   const result = await service.executeAction(
     'event-deleted',

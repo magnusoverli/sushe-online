@@ -135,6 +135,13 @@ async function notifyTelegramForUpdate(
   }
 }
 
+function executeQueryable(queryable, sql, params, opts = undefined) {
+  if (queryable && typeof queryable.query === 'function') {
+    return queryable.query(sql, params);
+  }
+  return queryable.raw(sql, params, opts);
+}
+
 // ============================================
 // MAIN FACTORY
 // ============================================
@@ -164,6 +171,96 @@ function createAdminEventService(deps = {}) {
     }
     actionHandlers.get(eventType).set(action, handler);
     log.debug(`Registered action handler: ${eventType}/${action}`);
+  }
+
+  function registerAccountApprovalHandlers() {
+    registerActionHandler(
+      'account_approval',
+      'approve',
+      async (eventData, adminUser, _event, queryable) => {
+        const { userId, username } = eventData;
+
+        if (!userId) {
+          return { success: false, message: 'Missing user ID in event data' };
+        }
+
+        try {
+          const result = await executeQueryable(
+            queryable,
+            `UPDATE users
+             SET approval_status = 'approved', updated_at = NOW()
+             WHERE _id = $1
+             RETURNING _id`,
+            [userId],
+            { name: 'admin-events-approve-user' }
+          );
+
+          if (result.rows.length === 0) {
+            return { success: false, message: 'User not found' };
+          }
+
+          log.info('User registration approved', {
+            userId,
+            approvedBy: adminUser.username,
+          });
+
+          return {
+            success: true,
+            message: `Approved registration for ${username}`,
+          };
+        } catch (err) {
+          log.error('Error approving user registration', {
+            userId,
+            error: err.message,
+          });
+          return { success: false, message: 'Database error' };
+        }
+      }
+    );
+
+    registerActionHandler(
+      'account_approval',
+      'reject',
+      async (eventData, adminUser, _event, queryable) => {
+        const { userId, username } = eventData;
+
+        if (!userId) {
+          return { success: false, message: 'Missing user ID in event data' };
+        }
+
+        try {
+          const result = await executeQueryable(
+            queryable,
+            `UPDATE users
+             SET approval_status = 'rejected', updated_at = NOW()
+             WHERE _id = $1
+             RETURNING _id`,
+            [userId],
+            { name: 'admin-events-reject-user' }
+          );
+
+          if (result.rows.length === 0) {
+            return { success: false, message: 'User not found' };
+          }
+
+          log.info('User registration rejected', {
+            userId,
+            rejectedBy: adminUser.username,
+          });
+
+          return {
+            success: true,
+            message: `Rejected registration for ${username}`,
+          };
+        } catch (err) {
+          log.error('Error rejecting user registration', {
+            userId,
+            error: err.message,
+          });
+          return { success: false, message: 'Database error' };
+        }
+      }
+    );
   }
 
   /**
@@ -448,6 +545,7 @@ function createAdminEventService(deps = {}) {
     getPendingCount,
     getPendingCountsByPriority,
     registerActionHandler,
+    registerAccountApprovalHandlers,
     getAvailableActions,
     setTelegramNotifier,
   };

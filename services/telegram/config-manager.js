@@ -8,13 +8,9 @@ function createConfigManager(db, encryptionKey, log, setupHelpers, baseUrl) {
   let configCache = null;
   let configCacheTime = 0;
   const CONFIG_CACHE_TTL = 60000;
-  // `pool` name retained only so existing `if (!pool)` truthy-checks in this
-  // file still read naturally. They amount to "do we have a db configured?".
-  const pool = db;
-
   async function saveConfig(config) {
-    if (!pool) {
-      throw new Error('Database pool not configured');
+    if (!db) {
+      throw new Error('Database datastore not configured');
     }
 
     const encryptedToken = encrypt(config.botToken, encryptionKey);
@@ -63,7 +59,7 @@ function createConfigManager(db, encryptionKey, log, setupHelpers, baseUrl) {
   }
 
   async function getConfig(includeToken = false) {
-    if (!pool) return null;
+    if (!db) return null;
 
     if (
       configCache &&
@@ -115,7 +111,7 @@ function createConfigManager(db, encryptionKey, log, setupHelpers, baseUrl) {
   }
 
   async function disconnect() {
-    if (!pool) return false;
+    if (!db) return false;
 
     const config = await getConfig(true);
     if (config?.botToken) {
@@ -134,7 +130,7 @@ function createConfigManager(db, encryptionKey, log, setupHelpers, baseUrl) {
   }
 
   async function setRecommendationsEnabled(enabled) {
-    if (!pool) return false;
+    if (!db) return false;
 
     await db.raw('UPDATE telegram_config SET recommendations_enabled = $1', [
       enabled,

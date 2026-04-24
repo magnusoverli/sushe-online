@@ -694,19 +694,8 @@ function createAlbumSummaryService(deps = {}) {
   };
 }
 
-// Default instance (will be initialized with pool when needed)
-let defaultInstance = null;
-
-function getDefaultInstance(pool) {
-  if (!defaultInstance && pool) {
-    defaultInstance = createAlbumSummaryService({ pool });
-  }
-  return defaultInstance;
-}
-
 module.exports = {
   createAlbumSummaryService,
-  getDefaultInstance,
   // Export helpers for testing
   stripHtml,
   generateNameVariations,

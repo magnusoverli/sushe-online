@@ -124,10 +124,7 @@ function createOAuthTokenManager(config, deps = {}) {
    * Ensure user has valid token, refreshing if needed
    * @param {Object} user - User object with auth field
    * @param {Object} userStore - User persistence interface
-   *   Supported shapes:
-   *   - { saveOAuthToken(userId, authField, token) }
-   *   - { saveAuthToken(userId, authField, token) }
-   *   - Legacy NeDB style { update(query, update, options, cb) }
+   *   Expected shape: { saveOAuthToken(userId, authField, token) }
    * @returns {Object} { success, [authField], error, message }
    */
   async function ensureValidToken(user, userStore) {
@@ -176,20 +173,8 @@ function createOAuthTokenManager(config, deps = {}) {
     try {
       if (typeof userStore?.saveOAuthToken === 'function') {
         await userStore.saveOAuthToken(user._id, authField, newToken);
-      } else if (typeof userStore?.saveAuthToken === 'function') {
-        await userStore.saveAuthToken(user._id, authField, newToken);
-      } else if (typeof userStore?.update === 'function') {
-        await new Promise((resolve, reject) => {
-          userStore.update(
-            { _id: user._id },
-            { $set: { [authField]: newToken, updatedAt: new Date() } },
-            {},
-            (err) => {
-              if (err) reject(err);
-              else resolve();
-            }
-          );
-        });
+      } else {
+        throw new Error('OAuth token persistence requires saveOAuthToken()');
       }
 
       // Update the user object in memory as well

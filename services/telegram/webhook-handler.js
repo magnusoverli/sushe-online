@@ -2,8 +2,6 @@
  * @param {import('../../db/types').DbFacade} db - Canonical datastore with .raw().
  */
 function createWebhookHandler(db, configManager, log) {
-  const pool = db; // truthy alias for existing `if (!pool)` guards below
-
   async function verifyWebhookSecret(secret) {
     const config = await configManager.getConfig();
     return config?.webhookSecret === secret;
@@ -24,11 +22,11 @@ function createWebhookHandler(db, configManager, log) {
     log.warn('[DEBUG-TELEGRAM-LINK] getLinkedAdmin called', {
       telegramUserId,
       telegramUserIdType: typeof telegramUserId,
-      poolExists: !!pool,
+      dbExists: !!db,
     });
 
-    if (!pool) {
-      log.warn('[DEBUG-TELEGRAM-LINK] pool is null, returning null');
+    if (!db) {
+      log.warn('[DEBUG-TELEGRAM-LINK] db is null, returning null');
       return null;
     }
 
@@ -70,7 +68,7 @@ function createWebhookHandler(db, configManager, log) {
   }
 
   async function linkAdmin(telegramUserId, telegramUsername, appUserId) {
-    if (!pool) return false;
+    if (!db) return false;
 
     try {
       await db.raw(

@@ -114,7 +114,7 @@
 
 /**
  * Canonical DB facade — the shape of the tableless `db` export from
- * `db/index.js`, plus every tabled PgDatastore instance.
+ * `db/index.js` and the datastore instances passed through `deps.db`.
  * @typedef {Object} DbFacade
  * @property {(sql: string, params?: any[], opts?: QueryOpts) => Promise<import('pg').QueryResult>} raw
  * @property {(callback: (client: import('pg').PoolClient) => Promise<*>, opts?: { retryable?: boolean }) => Promise<*>} withClient

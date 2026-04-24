@@ -8,10 +8,8 @@ function createRecommendationsNotifier(
   configManager,
   log
 ) {
-  const pool = db; // truthy alias for existing `if (!pool)` guards below
-
   async function getThreads() {
-    if (!pool) return [];
+    if (!db) return [];
 
     const result = await db.raw(
       'SELECT year, thread_id, topic_name, created_at FROM telegram_recommendation_threads ORDER BY year DESC'
@@ -26,7 +24,7 @@ function createRecommendationsNotifier(
   }
 
   async function getOrCreateThread(year, botToken, chatId) {
-    if (!pool) return null;
+    if (!db) return null;
 
     const existing = await db.raw(
       'SELECT thread_id FROM telegram_recommendation_threads WHERE year = $1',

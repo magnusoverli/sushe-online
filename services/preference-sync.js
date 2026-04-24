@@ -6,6 +6,7 @@ const { ensureDb } = require('../db/postgres');
 const { createSpotifyAuth } = require('../utils/spotify-auth');
 const { createLastfmAuth } = require('../utils/lastfm-auth');
 const { createUserPreferences } = require('./user-preferences-service');
+const { createUserService } = require('./user-service');
 const { createMusicBrainz } = require('../utils/musicbrainz');
 
 // Default intervals
@@ -49,38 +50,16 @@ function logExternalSyncError(log, service, user, err) {
 // ============================================
 
 /**
- * Create a mock usersDb interface for token refresh. Accepts the canonical
- * datastore (with .raw) and exposes the .update(query, update, options, cb)
- * shape that spotifyAuth.ensureValidSpotifyToken expects.
- */
-function createMockUsersDb(db) {
-  return {
-    update: (query, update, options, callback) => {
-      const updateQuery = `
-        UPDATE users
-        SET spotify_auth = $1, updated_at = NOW()
-        WHERE _id = $2
-      `;
-      db.raw(updateQuery, [JSON.stringify(update.$set.spotifyAuth), query._id])
-        .then(() => callback(null))
-        .catch((err) => callback(err));
-    },
-  };
-}
-
-/**
  * Sync Spotify data for a user
  */
-async function syncSpotifyDataForUser(user, db, spotifyAuth, log) {
+async function syncSpotifyDataForUser(user, tokenStore, spotifyAuth, log) {
   if (!user.spotify_auth?.access_token) {
     return null;
   }
 
-  const usersDb = createMockUsersDb(db);
-
   const tokenResult = await spotifyAuth.ensureValidSpotifyToken(
     { _id: user._id, spotifyAuth: user.spotify_auth },
-    usersDb
+    tokenStore
   );
 
   if (!tokenResult.success) {
@@ -381,6 +360,8 @@ function createPreferenceSyncService(deps = {}) {
 
   const spotifyAuth = deps.spotifyAuth || createSpotifyAuth({ logger: log });
   const lastfmAuth = deps.lastfmAuth || createLastfmAuth({ logger: log });
+  const userService =
+    deps.userService || createUserService({ db, logger: log });
   const userPrefs =
     deps.userPrefs || createUserPreferences({ db, logger: log });
   const musicBrainz = deps.musicBrainz || createMusicBrainz({ logger: log });
@@ -437,7 +418,7 @@ function createPreferenceSyncService(deps = {}) {
    * Sync Spotify data for a user
    */
   async function syncSpotifyData(user) {
-    return syncSpotifyDataForUser(user, db, spotifyAuth, log);
+    return syncSpotifyDataForUser(user, userService, spotifyAuth, log);
   }
 
   /**

@@ -333,14 +333,13 @@ test('ensureValidSpotifyToken should refresh and save token successfully', async
     }),
   });
 
-  let dbUpdateCalled = false;
+  let saveCalled = false;
   const mockUsersDb = {
-    update: (query, update, options, callback) => {
-      dbUpdateCalled = true;
-      assert.strictEqual(query._id, 'user123');
-      assert.ok(update.$set.spotifyAuth);
-      assert.ok(update.$set.updatedAt);
-      callback(null);
+    saveOAuthToken: async (userId, authField, token) => {
+      saveCalled = true;
+      assert.strictEqual(userId, 'user123');
+      assert.strictEqual(authField, 'spotifyAuth');
+      assert.strictEqual(token.access_token, 'new_token');
     },
   };
 
@@ -365,7 +364,7 @@ test('ensureValidSpotifyToken should refresh and save token successfully', async
   assert.strictEqual(result.success, true);
   assert.strictEqual(result.spotifyAuth.access_token, 'new_token');
   assert.strictEqual(result.error, null);
-  assert.strictEqual(dbUpdateCalled, true);
+  assert.strictEqual(saveCalled, true);
   // User object should be updated in memory
   assert.strictEqual(user.spotifyAuth.access_token, 'new_token');
 });
@@ -381,8 +380,8 @@ test('ensureValidSpotifyToken should succeed even if DB save fails', async () =>
   });
 
   const mockUsersDb = {
-    update: (query, update, options, callback) => {
-      callback(new Error('DB error'));
+    saveOAuthToken: async () => {
+      throw new Error('DB error');
     },
   };
 

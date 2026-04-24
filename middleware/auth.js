@@ -58,20 +58,9 @@ function recordActivity(req, queryable) {
       req.session.lastActivityUpdatedAt = now;
     }
 
-    // Fire-and-forget DB update using prepared statement (non-blocking)
-    // Prefer explicit service/repository contracts when available.
+    // Fire-and-forget DB update using the canonical repository/datastore path.
     if (typeof queryable.updateLastActivity === 'function') {
       queryable.updateLastActivity(req.user._id, new Date(now)).catch(() => {});
-    } else if (
-      queryable.table &&
-      typeof queryable.updateFieldById === 'function'
-    ) {
-      queryable.updateFieldById(
-        req.user._id,
-        'lastActivity',
-        new Date(now),
-        () => {} // Ignore result - non-critical operation
-      );
     } else if (typeof queryable.raw === 'function') {
       queryable
         .raw('UPDATE users SET last_activity = $1 WHERE _id = $2', [

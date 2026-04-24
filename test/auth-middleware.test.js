@@ -179,10 +179,6 @@ describe('recordActivity', () => {
 
   it('should use raw update for tableless datastore instances', () => {
     const mockQueryable = {
-      table: null,
-      updateFieldById: mock.fn(() => {
-        throw new Error('should not use updateFieldById');
-      }),
       raw: mock.fn(() => Promise.resolve()),
     };
     const req = {
@@ -191,7 +187,6 @@ describe('recordActivity', () => {
 
     recordActivity(req, mockQueryable);
 
-    assert.strictEqual(mockQueryable.updateFieldById.mock.calls.length, 0);
     assert.strictEqual(mockQueryable.raw.mock.calls.length, 1);
     assert.strictEqual(
       mockQueryable.raw.mock.calls[0].arguments[0],
