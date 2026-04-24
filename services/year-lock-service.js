@@ -11,21 +11,23 @@ function createYearLock(deps = {}) {
   const { LOCK_NAMESPACES, acquireTransactionLocks } =
     deps.advisoryLocks || require('../db/advisory-locks');
 
-  function asDb(db) {
-    if (db && typeof db.raw === 'function') return db;
-    if (db && typeof db.query === 'function') {
-      return { raw: (sql, params) => db.query(sql, params) };
+  function asQueryable(queryable) {
+    if (queryable && typeof queryable.raw === 'function') return queryable;
+    if (queryable && typeof queryable.query === 'function') {
+      return { raw: (sql, params) => queryable.query(sql, params) };
     }
-    throw new Error('year-lock: expected a datastore with .raw() or .query()');
+    throw new Error(
+      'year-lock: expected DbFacade.raw() or transaction client.query()'
+    );
   }
 
-  async function isYearLocked(dbOrPool, year, opts = {}) {
+  async function isYearLocked(queryable, year, opts = {}) {
     if (!year) return false;
 
     const failOpen = opts.failOpen !== false;
 
     try {
-      const db = asDb(dbOrPool);
+      const db = asQueryable(queryable);
       const result = await db.raw(
         'SELECT locked FROM master_lists WHERE year = $1',
         [year],

@@ -2,13 +2,13 @@ const {
   mapListRowToItem,
   mapAlbumDataItemToResponse,
 } = require('./item-mapper');
+const { ensureDb } = require('../../db/postgres');
 
 // eslint-disable-next-line max-lines-per-function -- List fetchers keep related read-path SQL together for shared mapping behavior
 function createListFetchers(deps = {}) {
-  const { db, fetchRecommendationMaps, findListById, getPointsForPosition } =
-    deps;
+  const { fetchRecommendationMaps, findListById, getPointsForPosition } = deps;
+  const db = ensureDb(deps.db, 'list/fetchers');
 
-  if (!db) throw new Error('db is required');
   if (!fetchRecommendationMaps) {
     throw new Error('fetchRecommendationMaps is required');
   }

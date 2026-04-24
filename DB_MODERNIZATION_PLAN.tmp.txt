@@ -85,6 +85,9 @@ Commit Log
 - 86f4991: Moved DB-backed album canonical module from `utils/` to
   `services/`, tightened it to canonical `deps.db` contract via `ensureDb`, and
   extended factory-compat coverage for the new service path.
+- 6f885ff: Tightened remaining service contract seams by requiring canonical
+  `deps.db` in auth-utils/stats/list fetchers and simplifying year-lock
+  queryable handling for transaction clients.
 
 Legend
 - [ ] pending
