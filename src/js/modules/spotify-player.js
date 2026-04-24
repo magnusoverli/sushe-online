@@ -26,6 +26,7 @@ let consecutiveErrors = 0;
 let isPollingPaused = false;
 let isHeadlessMode = false; // True when running without UI (mobile)
 let isPremiumRequired = false; // True if user needs Spotify Premium for playback control
+let isSpotifyAuthUnavailable = false; // True when Spotify auth is missing/expired
 const pendingActions = new Set();
 
 // Last.fm scrobbling state
@@ -45,6 +46,11 @@ const POLL_INTERVAL_MOBILE = 3000; // 3s for mobile (balanced responsiveness/bat
 const NEAR_END_THRESHOLD = 5000; // 5 seconds from end
 const MAX_CONSECUTIVE_ERRORS = 5;
 const BASE_BACKOFF_MS = 1000;
+const SPOTIFY_AUTH_ERROR_CODES = new Set([
+  'NOT_AUTHENTICATED',
+  'TOKEN_EXPIRED',
+  'TOKEN_REFRESH_FAILED',
+]);
 
 // DOM Elements (cached on init)
 let elements = {};
@@ -323,6 +329,26 @@ async function apiCall(url, options = {}, actionName = null) {
               url.split('/').pop()
             );
           }
+          return null;
+        }
+
+        if (
+          response.status === 401 &&
+          SPOTIFY_AUTH_ERROR_CODES.has(errorData.code)
+        ) {
+          isSpotifyAuthUnavailable = true;
+          stopPolling();
+          currentPlayback = null;
+          updateMobileBar(null);
+          if (!isHeadlessMode) {
+            showState('not-connected');
+          }
+          if (window.currentUser) {
+            window.currentUser.spotifyAuth = false;
+          }
+          console.info(
+            'Spotify miniplayer disabled: Spotify authentication required'
+          );
           return null;
         }
 
@@ -1171,8 +1197,8 @@ async function pollPlaybackState() {
  * Start polling for playback state
  */
 function startPolling() {
-  // Don't poll if Premium is required (Free user)
-  if (isPremiumRequired) return;
+  // Don't poll if playback controls are unavailable for this user.
+  if (isPremiumRequired || isSpotifyAuthUnavailable) return;
   if (isPollingPaused) return;
   stopPolling();
 
@@ -1556,6 +1582,8 @@ export function destroyMiniplayer() {
   consecutiveErrors = 0;
   isPollingPaused = false;
   isHeadlessMode = false;
+  isPremiumRequired = false;
+  isSpotifyAuthUnavailable = false;
   resetScrobbleState();
 }
 
@@ -1624,6 +1652,8 @@ export function destroyPlaybackTracking() {
   consecutiveErrors = 0;
   isPollingPaused = false;
   isHeadlessMode = false;
+  isPremiumRequired = false;
+  isSpotifyAuthUnavailable = false;
   mobileElements = {};
   resetScrobbleState();
 }
