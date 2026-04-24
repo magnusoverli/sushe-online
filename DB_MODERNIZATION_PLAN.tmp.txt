@@ -16,7 +16,7 @@ Global Constraints
 
 Phases
 [~] P0 Freeze contract and add guardrails
-[ ] P1 Split DB engine room responsibilities
+[~] P1 Split DB engine room responsibilities
 [~] P2 Extract repositories and move table/domain SQL
 [x] P3 Centralize schema and row mapping
 [x] P4 Migrate auth/user stack to canonical surface
@@ -64,6 +64,9 @@ Commit Log
 - 8687d75: Removed service compatibility wrappers under `utils/`
   (`auth-utils`, `year-lock`, `user-preferences`), switched runtime imports to
   `services/*`, and aligned affected tests/mocks to service module paths.
+- in progress: Refactored admin bootstrap to canonical `db.raw` SQL
+  (`db/bootstrap-admin.js`) and removed the last table-specific datastore
+  construction from `db/index.js`; added focused bootstrap-admin unit tests.
 
 Legend
 - [ ] pending

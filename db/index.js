@@ -10,7 +10,6 @@ const {
 } = require('./postgres');
 const { drainPool } = require('./close-pool');
 const { createEnsureAdminUser } = require('./bootstrap-admin');
-const { USERS_FIELD_MAP } = require('./schema/table-maps');
 const logger = require('../utils/logger');
 const { setPoolReference } = require('../utils/metrics');
 
@@ -20,7 +19,7 @@ if (!fs.existsSync(dataDir)) {
 }
 logger.info('Initializing database layer');
 
-let users, db, pool;
+let db, pool;
 let ready;
 
 if (process.env.DATABASE_URL) {
@@ -41,13 +40,12 @@ if (process.env.DATABASE_URL) {
     allowExitOnIdle: false, // Don't exit when idle
     application_name: process.env.PG_APP_NAME || 'sushe-online',
   });
-  users = new PgDatastore(pool, 'users', USERS_FIELD_MAP);
   // Canonical tableless datastore. Exposes only raw/withClient/withTransaction;
   // all services that don't need tabled helpers (findOne/insert/update/...)
   // should receive this via deps.db. Shares the pool with the tabled instances,
   // so logging, metrics, drain-check, and retry apply uniformly.
   db = new PgDatastore(pool);
-  const ensureAdminUser = createEnsureAdminUser({ users, logger, bcrypt });
+  const ensureAdminUser = createEnsureAdminUser({ db, logger, bcrypt });
 
   ready = waitForPostgres(pool)
     .then(async () => {
