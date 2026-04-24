@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { createMockLogger } = require('./helpers');
-const { createAuthUtils } = require('../utils/auth-utils.js');
+const { createAuthUtils } = require('../services/auth-utils-service.js');
 
 // Create instance with mock logger for all tests
 const mockLogger = createMockLogger();

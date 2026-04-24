@@ -1,6 +1,8 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { createUserPreferences } = require('../utils/user-preferences.js');
+const {
+  createUserPreferences,
+} = require('../services/user-preferences-service.js');
 const { POSITION_POINTS, getPositionPoints } = require('../utils/scoring.js');
 const {
   normalizeArtistName,

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { createMockLogger } = require('./helpers');
-const { createYearLock } = require('../utils/year-lock.js');
+const { createYearLock } = require('../services/year-lock-service.js');
 const { TransactionAbort } = require('../db/transaction.js');
 
 /**

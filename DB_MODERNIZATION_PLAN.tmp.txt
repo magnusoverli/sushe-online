@@ -22,7 +22,7 @@ Phases
 [x] P4 Migrate auth/user stack to canonical surface
 [x] P5 Remove DB access from routes/middleware
 [x] P6 Move DB-backed utilities out of utils/
-[~] P7 Clean composition root and dependency surface
+[x] P7 Clean composition root and dependency surface
 [~] P8 Standardize test harness on canonical DB contract
 [~] P9 Remove compatibility layers and dead code
 [ ] P10 Final consistency sweep
@@ -61,6 +61,9 @@ Commit Log
 - 742423b: Trimmed `db/index.js` exports to the canonical surface (`db`,
   readiness/pool/close helpers) and updated e2e approval guidance to use
   `db.raw` SQL.
+- in progress: Removed service compatibility wrappers under `utils/`
+  (`auth-utils`, `year-lock`, `user-preferences`), switched runtime imports to
+  `services/*`, and aligned affected tests/mocks to service module paths.
 
 Legend
 - [ ] pending

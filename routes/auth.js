@@ -20,7 +20,7 @@ module.exports = (app, deps) => {
     generateExtensionToken,
     validateExtensionToken,
     cleanupExpiredTokens,
-  } = require('../utils/auth-utils');
+  } = require('../services/auth-utils-service');
   const { createResponseHelpers } = require('./auth/response-helpers');
   const { createSettingsHandlers } = require('./auth/settings-handlers');
   const { createSecurityHandlers } = require('./auth/security-handlers');

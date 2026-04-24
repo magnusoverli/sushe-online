@@ -204,7 +204,7 @@ function createTestApp(options = {}) {
   };
 
   // Cache the mock auth-utils
-  require.cache[require.resolve('../utils/auth-utils')] = {
+  require.cache[require.resolve('../services/auth-utils-service')] = {
     exports: mockAuthUtils,
   };
 

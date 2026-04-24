@@ -54,7 +54,10 @@ const {
   spotifyTemplate,
   extensionAuthTemplate,
 } = require('./templates');
-const { isTokenValid, isTokenUsable } = require('./utils/auth-utils');
+const {
+  isTokenValid,
+  isTokenUsable,
+} = require('./services/auth-utils-service');
 const { db, dataDir, ready, pool, closePool } = require('./db');
 const { createUsersRepository } = require('./db/repositories/users-repository');
 const { createAuthService } = require('./services/auth-service');
@@ -225,7 +228,7 @@ app.use((req, res, next) => {
 
 // ============ AUTH MIDDLEWARE ============
 
-const { validateExtensionToken } = require('./utils/auth-utils');
+const { validateExtensionToken } = require('./services/auth-utils-service');
 
 const rateLimitAdminRequest = createRateLimitAdminRequest({
   adminCodeAttempts: adminCodeState.adminCodeAttempts,
