@@ -14,10 +14,10 @@
  * @param {import('../db/types').DbFacade} deps.db - Canonical datastore
  * @returns {Object} Stats service methods
  */
-function createStatsService(deps = {}) {
-  const db = deps.db;
+const { ensureDb } = require('../db/postgres');
 
-  if (!db) throw new Error('db is required for StatsService');
+function createStatsService(deps = {}) {
+  const db = ensureDb(deps.db, 'stats-service');
 
   /**
    * Get public stats visible to all authenticated users.

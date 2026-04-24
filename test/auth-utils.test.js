@@ -149,7 +149,7 @@ test('generateExtensionToken should generate unique tokens', () => {
 // =============================================================================
 
 test('validateExtensionToken should return null for invalid token format', async () => {
-  const mockPool = { query: async () => ({ rows: [] }) };
+  const mockPool = { raw: async () => ({ rows: [] }) };
 
   // null/undefined
   assert.strictEqual(await validateExtensionToken(null, mockPool), null);
@@ -179,7 +179,7 @@ test('validateExtensionToken should return null for invalid token format', async
 
 test('validateExtensionToken should return null for token not found in database', async () => {
   const mockPool = {
-    query: async () => ({ rows: [] }),
+    raw: async () => ({ rows: [] }),
   };
 
   const validFormatToken = generateExtensionToken();
@@ -189,7 +189,7 @@ test('validateExtensionToken should return null for token not found in database'
 
 test('validateExtensionToken should return null for revoked token', async () => {
   const mockPool = {
-    query: async () => ({
+    raw: async () => ({
       rows: [
         {
           user_id: 123,
@@ -207,7 +207,7 @@ test('validateExtensionToken should return null for revoked token', async () => 
 
 test('validateExtensionToken should return null for expired token', async () => {
   const mockPool = {
-    query: async () => ({
+    raw: async () => ({
       rows: [
         {
           user_id: 123,
@@ -226,7 +226,7 @@ test('validateExtensionToken should return null for expired token', async () => 
 test('validateExtensionToken should return user_id for valid token and update last_used_at', async () => {
   let updateCalled = false;
   const mockPool = {
-    query: async (sql) => {
+    raw: async (sql) => {
       if (sql.includes('SELECT')) {
         return {
           rows: [
@@ -254,7 +254,7 @@ test('validateExtensionToken should return user_id for valid token and update la
 
 test('validateExtensionToken should return null on database error', async () => {
   const mockPool = {
-    query: async () => {
+    raw: async () => {
       throw new Error('Database connection failed');
     },
   };
@@ -270,7 +270,7 @@ test('validateExtensionToken should return null on database error', async () => 
 
 test('cleanupExpiredTokens should return rowCount on success', async () => {
   const mockPool = {
-    query: async () => ({ rowCount: 5 }),
+    raw: async () => ({ rowCount: 5 }),
   };
 
   const result = await cleanupExpiredTokens(mockPool);
@@ -279,7 +279,7 @@ test('cleanupExpiredTokens should return rowCount on success', async () => {
 
 test('cleanupExpiredTokens should return 0 when no tokens deleted', async () => {
   const mockPool = {
-    query: async () => ({ rowCount: 0 }),
+    raw: async () => ({ rowCount: 0 }),
   };
 
   const result = await cleanupExpiredTokens(mockPool);
@@ -288,7 +288,7 @@ test('cleanupExpiredTokens should return 0 when no tokens deleted', async () => 
 
 test('cleanupExpiredTokens should return 0 on database error', async () => {
   const mockPool = {
-    query: async () => {
+    raw: async () => {
       throw new Error('Database error');
     },
   };
@@ -305,7 +305,7 @@ test('validateExtensionToken should log error on database failure', async () => 
   const logger = createMockLogger();
   const { validateExtensionToken: validate } = createAuthUtils({ logger });
   const mockPool = {
-    query: async () => {
+    raw: async () => {
       throw new Error('Connection refused');
     },
   };
@@ -323,7 +323,7 @@ test('cleanupExpiredTokens should log error on database failure', async () => {
   const logger = createMockLogger();
   const { cleanupExpiredTokens: cleanup } = createAuthUtils({ logger });
   const mockPool = {
-    query: async () => {
+    raw: async () => {
       throw new Error('Timeout');
     },
   };

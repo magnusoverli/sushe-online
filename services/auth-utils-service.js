@@ -5,14 +5,7 @@
  */
 
 const crypto = require('crypto');
-
-function asDb(db) {
-  if (db && typeof db.raw === 'function') return db;
-  if (db && typeof db.query === 'function') {
-    return { raw: (sql, params) => db.query(sql, params) };
-  }
-  throw new Error('asDb(): expected a datastore with .raw() or .query()');
-}
+const { ensureDb } = require('../db/postgres');
 
 function createAuthUtils(deps = {}) {
   const logger = deps.logger || require('../utils/logger');
@@ -45,14 +38,14 @@ function createAuthUtils(deps = {}) {
     return true;
   }
 
-  async function validateExtensionToken(token, dbOrPool) {
+  async function validateExtensionToken(token, db) {
     if (!isValidExtensionToken(token)) {
       return null;
     }
-    const db = asDb(dbOrPool);
+    const datastore = ensureDb(db, 'auth-utils.validateExtensionToken');
 
     try {
-      const result = await db.raw(
+      const result = await datastore.raw(
         `SELECT user_id, expires_at, is_revoked
          FROM extension_tokens
          WHERE token = $1`,
@@ -73,7 +66,7 @@ function createAuthUtils(deps = {}) {
         return null;
       }
 
-      await db.raw(
+      await datastore.raw(
         `UPDATE extension_tokens
          SET last_used_at = NOW()
          WHERE token = $1`,
@@ -90,10 +83,10 @@ function createAuthUtils(deps = {}) {
     }
   }
 
-  async function cleanupExpiredTokens(dbOrPool) {
-    const db = asDb(dbOrPool);
+  async function cleanupExpiredTokens(db) {
+    const datastore = ensureDb(db, 'auth-utils.cleanupExpiredTokens');
     try {
-      const result = await db.raw(
+      const result = await datastore.raw(
         `DELETE FROM extension_tokens
          WHERE expires_at < NOW()
          OR is_revoked = TRUE`,
