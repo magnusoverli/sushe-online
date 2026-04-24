@@ -6,14 +6,22 @@ const { describe, it, mock, beforeEach } = require('node:test');
 const assert = require('node:assert');
 
 const {
-  createAlbumCanonical,
+  createAlbumCanonical: createAlbumCanonicalBase,
   sanitizeForStorage,
   normalizeForLookup,
   generateInternalAlbumId,
   isBetterCoverImage,
   chooseBetterText,
   chooseBetterTracks,
-} = require('../utils/album-canonical');
+} = require('../services/album-canonical');
+
+function createAlbumCanonical(deps = {}) {
+  const db = deps.db;
+  if (db && !db.raw && typeof db.query === 'function') {
+    return createAlbumCanonicalBase({ ...deps, db: { ...db, raw: db.query } });
+  }
+  return createAlbumCanonicalBase(deps);
+}
 
 // ============================================
 // HELPER FUNCTION TESTS

@@ -39,6 +39,11 @@ const factories = [
     extra: () => ({ logger: createMockLogger() }),
   },
   {
+    name: 'album-canonical',
+    load: () => require('../services/album-canonical').createAlbumCanonical,
+    extra: () => ({ logger: createMockLogger() }),
+  },
+  {
     name: 'album-service',
     load: () => require('../services/album-service').createAlbumService,
     extra: () => ({

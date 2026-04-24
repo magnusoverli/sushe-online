@@ -1,5 +1,5 @@
 /**
- * Album Canonical Utilities
+ * Album Canonical Service
  *
  * Handles canonical album deduplication by ensuring only ONE entry per unique
  * artist/album combination exists in the albums table, regardless of the source
@@ -15,9 +15,13 @@
  */
 
 const crypto = require('crypto');
-const logger = require('./logger');
-const { resolveCountryCode } = require('./musicbrainz');
-const { sanitizeForStorage, normalizeForLookup } = require('./normalization');
+const logger = require('../utils/logger');
+const { resolveCountryCode } = require('../utils/musicbrainz');
+const {
+  sanitizeForStorage,
+  normalizeForLookup,
+} = require('../utils/normalization');
+const { ensureDb } = require('../db/postgres');
 
 /**
  * Generate a stable internal album ID for manually added albums
@@ -112,18 +116,8 @@ function chooseBetterTracks(existing, newTracks) {
 // eslint-disable-next-line max-lines-per-function -- Cohesive utility module with multiple related functions
 function createAlbumCanonical(deps = {}) {
   const log = deps.logger || logger;
-  const dbStore = deps.db;
-  if (!dbStore) {
-    throw new Error('album-canonical requires deps.db');
-  }
-
-  // Inner functions follow `const db = client || pool` and call `.query(...)`.
-  // Accept either the canonical datastore (with .raw) or a pg-like object with
-  // .query directly — this keeps tests that mock a bare { query } usable.
-  const pool =
-    typeof dbStore.query === 'function'
-      ? dbStore
-      : { query: (sql, params) => dbStore.raw(sql, params) };
+  const dbStore = ensureDb(deps.db, 'album-canonical');
+  const pool = { query: (sql, params) => dbStore.raw(sql, params) };
 
   /**
    * Find an existing canonical album by normalized artist and album name
