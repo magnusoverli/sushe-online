@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-04-24",
+    "category": "fix",
+    "description": "Fixed app remembering deleted lists on startup",
+    "hash": "66ed7f82df15b82a994916530a264bcf6b138fdc",
+    "commitMessage": "Handle stale last-selected list references on startup\n\nValidate remembered list IDs against fetched metadata before requesting list payloads so fresh databases do not emit noisy 404 errors, and clear invalid local/server pointers when they are stale."
+  },
+  {
     "date": "2026-04-23",
     "category": "fix",
     "description": "Fixed activity tracking and external sync issues",
