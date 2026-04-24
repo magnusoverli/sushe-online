@@ -171,6 +171,83 @@ describe('app-list-operations module', () => {
     assert.strictEqual(storage.setItem.mock.calls.length, 0);
   });
 
+  it('clears stale last-selected list references without fetching missing list data', async () => {
+    let listsState = {};
+    const setListData = mock.fn();
+    const selectList = mock.fn();
+    const setRecommendationYears = mock.fn();
+    const updateGroupsFromServer = mock.fn();
+    const updateListNav = mock.fn();
+    const storage = {
+      getItem: mock.fn(() => 'missing-list'),
+      setItem: mock.fn(),
+      removeItem: mock.fn(),
+    };
+    const win = { lastSelectedList: 'missing-list' };
+
+    const apiCall = mock.fn(async (url) => {
+      if (url === '/api/lists') {
+        return {
+          'list-1': {
+            name: 'Existing List',
+            year: 2024,
+            isMain: false,
+            count: 0,
+            groupId: null,
+            sortOrder: 0,
+          },
+        };
+      }
+      if (url === '/api/groups') {
+        return [];
+      }
+      if (url === '/api/recommendations/years') {
+        return { years: [] };
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    const operations = createAppListOperations({
+      apiCall,
+      showToast: () => {},
+      getLists: () => listsState,
+      setLists: (nextLists) => {
+        listsState = nextLists;
+      },
+      getListData: () => [],
+      setListData,
+      updateListMetadata: () => {},
+      updateGroupsFromServer,
+      getCurrentListId: () => null,
+      selectList,
+      updateListNav,
+      setRecommendationYears,
+      loadSnapshotFromStorage: () => null,
+      getLastSavedSnapshots: () => new Map(),
+      createListSnapshot: () => [],
+      saveSnapshotToStorage: () => {},
+      markLocalSave: () => {},
+      computeListDiff: () => null,
+      storage,
+      win,
+      logger: { warn: () => {}, error: () => {} },
+    });
+
+    await operations.loadLists();
+
+    assert.strictEqual(apiCall.mock.calls.length, 3);
+    assert.strictEqual(setRecommendationYears.mock.calls.length, 1);
+    assert.strictEqual(updateGroupsFromServer.mock.calls.length, 1);
+    assert.strictEqual(updateListNav.mock.calls.length, 1);
+    assert.strictEqual(setListData.mock.calls.length, 0);
+    assert.strictEqual(selectList.mock.calls.length, 0);
+    assert.strictEqual(storage.removeItem.mock.calls.length, 1);
+    assert.deepStrictEqual(storage.removeItem.mock.calls[0].arguments, [
+      'lastSelectedList',
+    ]);
+    assert.strictEqual(win.lastSelectedList, null);
+  });
+
   it('saves lists incrementally, updates snapshots, and refreshes mobile bar', async () => {
     const snapshots = new Map([['list-1', [{ album_id: 'old' }]]]);
     const markLocalSave = mock.fn();

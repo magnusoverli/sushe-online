@@ -85,7 +85,6 @@ export function createAppListOperations(deps = {}) {
     try {
       const localLastListId = storage?.getItem?.('lastSelectedList');
       const serverLastListId = win?.lastSelectedList;
-      const targetListId = localLastListId || serverLastListId;
 
       const metadataPromise = apiCall('/api/lists');
       const groupsPromise = apiCall('/api/groups');
@@ -94,9 +93,6 @@ export function createAppListOperations(deps = {}) {
           years: [],
         })
       );
-      const listDataPromise = targetListId
-        ? apiCall(`/api/lists/${encodeURIComponent(targetListId)}`)
-        : null;
 
       const [fetchedLists, fetchedGroups, recYearsData] = await Promise.all([
         metadataPromise,
@@ -125,6 +121,28 @@ export function createAppListOperations(deps = {}) {
       });
       setLists(newLists);
 
+      const hasList = (listId) =>
+        Object.prototype.hasOwnProperty.call(newLists, listId);
+      let targetListId = null;
+
+      if (localLastListId && hasList(localLastListId)) {
+        targetListId = localLastListId;
+      } else if (serverLastListId && hasList(serverLastListId)) {
+        targetListId = serverLastListId;
+      }
+
+      if (localLastListId && !hasList(localLastListId)) {
+        try {
+          storage?.removeItem?.('lastSelectedList');
+        } catch (_error) {
+          // Ignore local storage write failures.
+        }
+      }
+
+      if (serverLastListId && !hasList(serverLastListId) && win) {
+        win.lastSelectedList = null;
+      }
+
       const lists = getLists();
       Object.keys(lists).forEach((listId) => {
         const snapshot = loadSnapshotFromStorage(listId);
@@ -135,16 +153,18 @@ export function createAppListOperations(deps = {}) {
 
       updateListNav();
 
-      if (listDataPromise && targetListId) {
+      if (targetListId) {
         try {
-          const listData = await listDataPromise;
+          const listData = await apiCall(
+            `/api/lists/${encodeURIComponent(targetListId)}`
+          );
           setListData(targetListId, listData);
 
           if (!getCurrentListId()) {
             selectList(targetListId);
-            if (!localLastListId && serverLastListId) {
+            if (localLastListId !== targetListId) {
               try {
-                storage?.setItem?.('lastSelectedList', serverLastListId);
+                storage?.setItem?.('lastSelectedList', targetListId);
               } catch (_error) {
                 // Ignore local storage write failures.
               }
