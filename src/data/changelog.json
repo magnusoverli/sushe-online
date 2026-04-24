@@ -2,6 +2,13 @@
   {
     "date": "2026-04-24",
     "category": "fix",
+    "description": "Fixed Spotify connection issues when authorization fails",
+    "hash": "488f63759e6c00d07405ddf851f33fc4e59c43f4",
+    "commitMessage": "Handle Spotify auth polling failures and bump npm\n\nStop miniplayer polling when Spotify auth is missing or expired so local/dev sessions do not spam repeated 401 console errors, and update the Docker base npm pin to 11.13.0."
+  },
+  {
+    "date": "2026-04-24",
+    "category": "fix",
     "description": "Fixed app remembering deleted lists on startup",
     "hash": "66ed7f82df15b82a994916530a264bcf6b138fdc",
     "commitMessage": "Handle stale last-selected list references on startup\n\nValidate remembered list IDs against fetched metadata before requesting list payloads so fresh databases do not emit noisy 404 errors, and clear invalid local/server pointers when they are stale."
