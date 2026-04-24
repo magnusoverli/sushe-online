@@ -1,5 +1,5 @@
 /**
- * Tests for utils/track-fetch-queue.js
+ * Tests for services/track-fetch-queue.js
  * Tests track fetch queue functionality
  */
 
@@ -9,7 +9,7 @@ const {
   createTrackFetchQueue,
   initializeTrackFetchQueue,
   getTrackFetchQueue,
-} = require('../utils/track-fetch-queue.js');
+} = require('../services/track-fetch-queue.js');
 
 // Local wait helper for async operations
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

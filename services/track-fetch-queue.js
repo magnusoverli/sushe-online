@@ -9,9 +9,9 @@
  * MusicBrainz for background operations).
  */
 
-const { RequestQueue } = require('./request-queue');
-const logger = require('./logger');
-const { normalizeForExternalApi } = require('./normalization');
+const { RequestQueue } = require('../utils/request-queue');
+const logger = require('../utils/logger');
+const { normalizeForExternalApi } = require('../utils/normalization');
 const { ensureDb } = require('../db/postgres');
 
 /**

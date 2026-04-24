@@ -25,7 +25,9 @@ function initializeQueues(db) {
   } = require('../services/cover-fetch-queue');
   initializeCoverFetchQueue(db);
 
-  const { initializeTrackFetchQueue } = require('../utils/track-fetch-queue');
+  const {
+    initializeTrackFetchQueue,
+  } = require('../services/track-fetch-queue');
   initializeTrackFetchQueue(db);
 }
 

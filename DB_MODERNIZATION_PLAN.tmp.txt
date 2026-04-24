@@ -15,17 +15,17 @@ Global Constraints
 - No new legacy surfaces may be introduced.
 
 Phases
-[~] P0 Freeze contract and add guardrails
-[~] P1 Split DB engine room responsibilities
+[x] P0 Freeze contract and add guardrails
+[x] P1 Split DB engine room responsibilities
 [~] P2 Extract repositories and move table/domain SQL
 [x] P3 Centralize schema and row mapping
 [x] P4 Migrate auth/user stack to canonical surface
 [x] P5 Remove DB access from routes/middleware
 [x] P6 Move DB-backed utilities out of utils/
 [x] P7 Clean composition root and dependency surface
-[~] P8 Standardize test harness on canonical DB contract
-[~] P9 Remove compatibility layers and dead code
-[ ] P10 Final consistency sweep
+[x] P8 Standardize test harness on canonical DB contract
+[x] P9 Remove compatibility layers and dead code
+[~] P10 Final consistency sweep
 
 Execution Notes
 - Work in small, safe commits.
@@ -64,18 +64,24 @@ Commit Log
 - 8687d75: Removed service compatibility wrappers under `utils/`
   (`auth-utils`, `year-lock`, `user-preferences`), switched runtime imports to
   `services/*`, and aligned affected tests/mocks to service module paths.
-- in progress: Refactored admin bootstrap to canonical `db.raw` SQL
+- b1d6544: Refactored admin bootstrap onto canonical `db.raw` SQL
   (`db/bootstrap-admin.js`) and removed the last table-specific datastore
   construction from `db/index.js`; added focused bootstrap-admin unit tests.
-- in progress: Removed legacy callback-style activity-update fallback from
+- c4acb1c: Removed legacy callback-style activity-update fallback from
   `middleware/auth.js` recordActivity and tightened API session activity writes
   to use canonical `deps.db` in `createEnsureAuthAPI`.
-- in progress: Tightened `ensureDb` in `db/postgres.js` to require canonical
+- 63cd220: Tightened `ensureDb` in `db/postgres.js` to require canonical
   `.raw` datastore shape (removed `.query` adapter path), and aligned affected
   auth/settings route tests to provide explicit `.raw` on DB mocks.
-- in progress: Removed unused legacy datastore deps (`users*`/`lists*`) from
+- 5ace64d: Removed unused legacy datastore deps (`users*`/`lists*`) from
   auth-route integration test harnesses now that routes consume only
   `authService`/`userService` + canonical `db`.
+- 3862f9d: Merged PR #353 with canonical test harness follow-up (`deps.db.raw`)
+  so aggregate/album-summary/cover-fetch/playcount/registration/track-fetch
+  tests run against the strict datastore contract.
+- 0c9533b: Moved DB-backed track fetch queue from `utils/` to `services/`
+  and updated startup/API helper imports to remove the remaining
+  utility-layer datastore seam.
 
 Legend
 - [ ] pending
