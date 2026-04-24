@@ -271,6 +271,38 @@ describe('syncSpotifyData', () => {
     assert.ok(result.savedAlbums);
     assert.ok(result.syncedAt);
   });
+
+  it('should fail fast on Spotify app access errors', async () => {
+    const pool = createMockPool();
+    const logger = createMockLogger();
+    const spotifyAuth = createMockSpotifyAuth({
+      getSavedAlbums: mock.fn(async () => {
+        throw new Error(
+          'Spotify API error: 403 - The user is not registered for this application. Please check your settings on https://developer.spotify.com/dashboard.'
+        );
+      }),
+    });
+    const userPrefs = createMockUserPrefs();
+
+    const service = createPreferenceSyncService({
+      db: pool,
+      logger,
+      spotifyAuth,
+      userPrefs,
+    });
+
+    await assert.rejects(
+      () =>
+        service.syncSpotifyData({
+          _id: 'user123',
+          spotify_auth: { access_token: 'token', refresh_token: 'refresh' },
+        }),
+      /not registered for this application/
+    );
+    assert.strictEqual(spotifyAuth.getAllTopArtists.mock.calls.length, 0);
+    assert.strictEqual(spotifyAuth.getAllTopTracks.mock.calls.length, 0);
+    assert.strictEqual(spotifyAuth.fetchAllPages.mock.calls.length, 0);
+  });
 });
 
 // =============================================================================
@@ -338,6 +370,38 @@ describe('syncLastfmData', () => {
     assert.ok(result.topAlbums);
     assert.strictEqual(result.totalScrobbles, 5000);
     assert.ok(result.syncedAt);
+  });
+
+  it('should fail fast on Last.fm API key errors', async () => {
+    const pool = createMockPool();
+    const logger = createMockLogger();
+    const lastfmAuth = createMockLastfmAuth({
+      getUserInfo: mock.fn(async () => {
+        throw new Error(
+          'Invalid API key - You must be granted a valid key by last.fm'
+        );
+      }),
+    });
+    const userPrefs = createMockUserPrefs();
+
+    const service = createPreferenceSyncService({
+      db: pool,
+      logger,
+      lastfmAuth,
+      userPrefs,
+    });
+
+    await assert.rejects(
+      () =>
+        service.syncLastfmData({
+          _id: 'user123',
+          lastfm_auth: { session_key: 'key' },
+          lastfm_username: 'testuser',
+        }),
+      /Invalid API key/
+    );
+    assert.strictEqual(lastfmAuth.getAllTopArtists.mock.calls.length, 0);
+    assert.strictEqual(lastfmAuth.getAllTopAlbums.mock.calls.length, 0);
   });
 });
 

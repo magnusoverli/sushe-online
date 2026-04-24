@@ -14,6 +14,36 @@ const DEFAULT_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 const RATE_LIMIT_DELAY_MS = 2000; // 2 seconds between users
 const STARTUP_DELAY_MS = 30000; // 30 seconds after startup
 
+function isSpotifyUserRegistrationError(err) {
+  return (err?.message || '').includes('not registered for this application');
+}
+
+function isLastfmConfigError(err) {
+  return (err?.message || '').includes('Invalid API key');
+}
+
+function logExternalSyncError(log, service, user, err) {
+  const isExpectedExternalError =
+    (service === 'spotify' && isSpotifyUserRegistrationError(err)) ||
+    (service === 'lastfm' && isLastfmConfigError(err));
+  const message =
+    service === 'spotify'
+      ? 'Failed to sync Spotify data'
+      : 'Failed to sync Last.fm data';
+  const metadata = {
+    userId: user._id,
+    username: user.username,
+    error: err.message,
+  };
+
+  if (isExpectedExternalError) {
+    log.warn(message, metadata);
+    return;
+  }
+
+  log.error(message, metadata);
+}
+
 // ============================================
 // SPOTIFY SYNC HELPER
 // ============================================
@@ -64,6 +94,10 @@ async function syncSpotifyDataForUser(user, db, spotifyAuth, log) {
   const accessToken = tokenResult.spotifyAuth.access_token;
   const userContext = { userId: user._id, username: user.username };
 
+  // Probe a single endpoint first so account/app access errors do not fan out
+  // into several parallel Spotify requests and duplicate log lines.
+  await spotifyAuth.getSavedAlbums(accessToken, 1, 0, userContext);
+
   const [topArtists, topTracks, savedAlbumsRaw] = await Promise.all([
     spotifyAuth.getAllTopArtists(accessToken, 50, userContext),
     spotifyAuth.getAllTopTracks(accessToken, 50, userContext),
@@ -97,11 +131,12 @@ async function syncLastfmDataForUser(user, lastfmAuth, log) {
   }
 
   const username = user.lastfm_username;
-
-  const [topArtists, topAlbums, userInfo] = await Promise.all([
+  // Probe with a single request first so invalid app configuration fails once
+  // instead of spawning many parallel Last.fm requests that all return the same error.
+  const userInfo = await lastfmAuth.getUserInfo(username);
+  const [topArtists, topAlbums] = await Promise.all([
     lastfmAuth.getAllTopArtists(username, 50),
     lastfmAuth.getAllTopAlbums(username, 50),
-    lastfmAuth.getUserInfo(username),
   ]);
 
   let artistTags = new Map();
@@ -245,11 +280,7 @@ async function syncAllDataSources(user, syncHelpers, log) {
         updates.spotifySyncedAt = spotifyData.syncedAt;
       }
     } catch (err) {
-      log.error('Failed to sync Spotify data', {
-        userId,
-        username: user.username,
-        error: err.message,
-      });
+      logExternalSyncError(log, 'spotify', user, err);
       errors.push({ source: 'spotify', error: err.message });
     }
   }
@@ -266,11 +297,7 @@ async function syncAllDataSources(user, syncHelpers, log) {
         updates.lastfmSyncedAt = lastfmData.syncedAt;
       }
     } catch (err) {
-      log.error('Failed to sync Last.fm data', {
-        userId,
-        username: user.username,
-        error: err.message,
-      });
+      logExternalSyncError(log, 'lastfm', user, err);
       errors.push({ source: 'lastfm', error: err.message });
     }
   }

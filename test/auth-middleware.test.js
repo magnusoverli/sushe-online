@@ -164,6 +164,32 @@ describe('recordActivity', () => {
 
     assert.strictEqual(mockUsers.update.mock.calls.length, 0);
   });
+
+  it('should use raw update for tableless datastore instances', () => {
+    const mockQueryable = {
+      table: null,
+      updateFieldById: mock.fn(() => {
+        throw new Error('should not use updateFieldById');
+      }),
+      raw: mock.fn(() => Promise.resolve()),
+    };
+    const req = {
+      user: { _id: 'user123' },
+    };
+
+    recordActivity(req, mockQueryable);
+
+    assert.strictEqual(mockQueryable.updateFieldById.mock.calls.length, 0);
+    assert.strictEqual(mockQueryable.raw.mock.calls.length, 1);
+    assert.strictEqual(
+      mockQueryable.raw.mock.calls[0].arguments[0],
+      'UPDATE users SET last_activity = $1 WHERE _id = $2'
+    );
+    assert.strictEqual(
+      mockQueryable.raw.mock.calls[0].arguments[1][1],
+      'user123'
+    );
+  });
 });
 
 // =============================================================================

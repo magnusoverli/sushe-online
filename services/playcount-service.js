@@ -13,6 +13,7 @@
 
 /** Staleness threshold: only refresh albums older than 2 hours */
 const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+const { ensureDb } = require('../db/postgres');
 
 /**
  * Build a lookup map of normalized artist+album keys to cached stats.
@@ -149,6 +150,10 @@ function createPlaycountService(deps = {}) {
     db,
     logger
   ) {
+    const datastore = ensureDb(
+      db,
+      'playcount-service.refreshPlaycountsInBackground'
+    );
     const results = {};
 
     // Process in batches with rate limiting (~5 req/sec for Last.fm)
@@ -166,7 +171,7 @@ function createPlaycountService(deps = {}) {
         });
 
         const result = await refreshAlbumPlaycount(
-          db,
+          datastore,
           logger,
           userId,
           lastfmUsername,
@@ -235,8 +240,10 @@ function createPlaycountService(deps = {}) {
     logger,
     normalizeAlbumKey,
   }) {
+    const datastore = ensureDb(db, 'playcount-service.getListPlaycounts');
+
     // Verify list exists
-    const list = await db.raw(
+    const list = await datastore.raw(
       `SELECT _id FROM lists WHERE _id = $1 AND user_id = $2`,
       [listId, userId]
     );
@@ -245,7 +252,7 @@ function createPlaycountService(deps = {}) {
     }
 
     // Get all albums in the list
-    const listItemsResult = await db.raw(
+    const listItemsResult = await datastore.raw(
       `SELECT li._id, li.album_id, a.artist, a.album
        FROM list_items li
        LEFT JOIN albums a ON li.album_id = a.album_id
@@ -283,7 +290,7 @@ function createPlaycountService(deps = {}) {
     }
 
     if (statsPredicates.length > 0) {
-      const statsResult = await db.raw(
+      const statsResult = await datastore.raw(
         `SELECT artist, album_name, album_id, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at
          FROM user_album_stats
          WHERE user_id = $1
@@ -310,7 +317,7 @@ function createPlaycountService(deps = {}) {
         userId,
         lastfmUsername,
         albumsToRefresh,
-        db,
+        datastore,
         logger
       ).catch((err) => {
         logger.error('Background playcount refresh failed:', err);

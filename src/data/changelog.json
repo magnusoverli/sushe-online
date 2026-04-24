@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-04-23",
+    "category": "fix",
+    "description": "Fixed activity tracking and external sync issues",
+    "hash": "59c1317029bd18079a1e75bc35a470d9a61d5694",
+    "commitMessage": "Fix activity and external sync failures\n\nPrevent tableless datastore calls from crashing activity and playcount updates. Fail fast on known Spotify and Last.fm configuration errors so background sync stops fanning out into noisy repeated failures."
+  },
+  {
+    "date": "2026-04-23",
     "category": "perf",
     "description": "Faster list updates with improved caching",
     "hash": "7bfe56bb411d8ed9930c5515ffc5b416ce63a4ad",

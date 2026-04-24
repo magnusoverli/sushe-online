@@ -205,8 +205,16 @@ async function getLastfmArtistCandidates(db, log, album) {
  */
 async function refreshAlbumPlaycount(db, log, userId, lastfmUsername, album) {
   try {
+    const datastore = ensureDb(
+      db,
+      'playcount-sync-service.refreshAlbumPlaycount'
+    );
     const albumId = album.album_id || null;
-    const artistCandidates = await getLastfmArtistCandidates(db, log, album);
+    const artistCandidates = await getLastfmArtistCandidates(
+      datastore,
+      log,
+      album
+    );
 
     let info = null;
     let matchedArtist = album.artist;
@@ -242,7 +250,7 @@ async function refreshAlbumPlaycount(db, log, userId, lastfmUsername, album) {
     if (matchedArtist !== album.artist) {
       try {
         const externalIdentityService = createExternalIdentityService({
-          db,
+          db: datastore,
           logger: log,
         });
 
@@ -278,12 +286,12 @@ async function refreshAlbumPlaycount(db, log, userId, lastfmUsername, album) {
         artist: album.artist,
         album: album.album,
       });
-      await upsertPlaycount(db, userId, album, null, 'not_found');
+      await upsertPlaycount(datastore, userId, album, null, 'not_found');
       return { playcount: null, status: 'not_found' };
     }
 
     const playcount = parseInt(info.userplaycount || 0);
-    await upsertPlaycount(db, userId, album, playcount, 'success');
+    await upsertPlaycount(datastore, userId, album, playcount, 'success');
     return { playcount, status: 'success' };
   } catch (err) {
     log.warn('Failed to fetch playcount for album', {
@@ -294,7 +302,11 @@ async function refreshAlbumPlaycount(db, log, userId, lastfmUsername, album) {
 
     // Store as error state so we retry later
     try {
-      await upsertPlaycount(db, userId, album, null, 'error');
+      const datastore = ensureDb(
+        db,
+        'playcount-sync-service.refreshAlbumPlaycount'
+      );
+      await upsertPlaycount(datastore, userId, album, null, 'error');
     } catch (dbErr) {
       log.error('Failed to store error status', {
         error: dbErr.message,
