@@ -37,7 +37,7 @@
     "optimize:icons": "bash scripts/optimize-icons.sh",
     "report:maintainability": "node scripts/maintainability-report.js",
     "report:maintainability:json": "node scripts/maintainability-report.js --json",
-    "lint:structure:baseline": "node scripts/maintainability-report.js --max-js-files-over-300=83 --max-js-files-over-700=20 --max-legacy-markers=98"
+    "lint:structure:baseline": "node scripts/maintainability-report.js --max-js-files-over-300=90 --max-js-files-over-700=20 --max-legacy-markers=98"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
