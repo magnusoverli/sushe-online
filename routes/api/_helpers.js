@@ -8,6 +8,9 @@
 const { createAggregateList } = require('../../services/aggregate-list');
 const { createAlbumCanonical } = require('../../services/album-canonical');
 const {
+  createAlbumCoverService,
+} = require('../../services/album-cover-service');
+const {
   LOCK_NAMESPACES,
   acquireTransactionLocks,
 } = require('../../db/advisory-locks');
@@ -36,6 +39,7 @@ function createHelpers(deps) {
 
   // Create album canonical instance for deduplication
   const albumCanonical = createAlbumCanonical({ db, logger });
+  const albumCoverService = createAlbumCoverService({ db, logger });
 
   /**
    * Helper to trigger aggregate list recomputation for a year (non-blocking)
@@ -82,7 +86,8 @@ function createHelpers(deps) {
    * @returns {Promise<string>} - The canonical album_id to use
    */
   async function upsertAlbumRecord(album, timestamp, client = null) {
-    // Ignore legacy inline cover payloads; covers are fetched asynchronously.
+    // Keep canonical metadata upserts lightweight; explicit cover payloads are
+    // persisted through the dedicated cover path after the canonical ID resolves.
     const albumDataWithoutCover = stripLegacyCoverFields(album);
 
     const result = await albumCanonical.upsertCanonical(
@@ -90,6 +95,15 @@ function createHelpers(deps) {
       timestamp,
       client
     );
+
+    if (album.cover_image) {
+      await albumCoverService.updateCoverImageWithClient(
+        client || db,
+        result.albumId,
+        album.cover_image
+      );
+      result.needsCoverFetch = false;
+    }
 
     // Trigger async summary fetch if needed
     if (result.needsSummaryFetch) {
@@ -153,6 +167,22 @@ function createHelpers(deps) {
       client
     );
 
+    const explicitCoverAlbumIds = new Set();
+    for (const album of albums) {
+      if (!album?.cover_image) continue;
+      const key = `${album.artist}|${album.album}`;
+      const result = results.get(key);
+      if (!result) continue;
+
+      await albumCoverService.updateCoverImageWithClient(
+        client || db,
+        result.albumId,
+        album.cover_image
+      );
+      result.needsCoverFetch = false;
+      explicitCoverAlbumIds.add(result.albumId);
+    }
+
     // Trigger async operations for all albums
     const { getCoverFetchQueue } = require('../../services/cover-fetch-queue');
     const { getTrackFetchQueue } = require('../../services/track-fetch-queue');
@@ -182,7 +212,13 @@ function createHelpers(deps) {
       }
 
       // Trigger cover fetch if needed
-      if (result.needsCoverFetch && artist && album && coverQueue) {
+      if (
+        result.needsCoverFetch &&
+        !explicitCoverAlbumIds.has(result.albumId) &&
+        artist &&
+        album &&
+        coverQueue
+      ) {
         coverQueue.add(result.albumId, artist, album);
       }
 

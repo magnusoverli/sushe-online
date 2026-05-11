@@ -520,6 +520,10 @@ function createDuplicateService(deps = {}) {
     if (deleteCoverSize > keepCoverSize) {
       pushField('cover_image', deleteAlbum.cover_image);
       pushField('cover_image_format', deleteAlbum.cover_image_format || 'jpeg');
+      pushField(
+        'cover_image_updated_at',
+        deleteAlbum.cover_image_updated_at || new Date()
+      );
     }
 
     const keepSummary = normalizeText(keepAlbum.summary);
@@ -874,6 +878,7 @@ function createDuplicateService(deps = {}) {
     const albumsResult = await client.query(
       `SELECT album_id, artist, album, release_date, country,
               genre_1, genre_2, tracks, cover_image, cover_image_format,
+              cover_image_updated_at,
               summary, summary_source, summary_fetched_at
        FROM albums WHERE album_id = $1 OR album_id = $2`,
       [keepAlbumId, deleteAlbumId]
@@ -1331,6 +1336,7 @@ function createDuplicateService(deps = {}) {
     const albumsResult = await db.raw(
       `SELECT album_id, artist, album, release_date, country,
               genre_1, genre_2, tracks, cover_image, cover_image_format,
+              cover_image_updated_at,
               summary, summary_source, summary_fetched_at
        FROM albums
        WHERE album_id = ANY($1::text[])`,

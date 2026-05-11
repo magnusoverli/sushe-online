@@ -6,7 +6,12 @@ const {
   ITUNES_IMAGE_SIZE,
   upscaleItunesArtworkUrl,
   normalizeImageBuffer,
+  decodeImagePayload,
+  processUploadedCoverImage,
 } = require('../utils/image-processing');
+
+const PNG_1X1_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
 
 describe('image-processing', () => {
   describe('constants', () => {
@@ -50,6 +55,33 @@ describe('image-processing', () => {
       const result = normalizeImageBuffer(base64);
       assert.ok(Buffer.isBuffer(result));
       assert.strictEqual(result.toString(), original);
+    });
+  });
+
+  describe('decodeImagePayload', () => {
+    it('should decode plain base64 image data', () => {
+      const result = decodeImagePayload(PNG_1X1_BASE64);
+      assert.ok(Buffer.isBuffer(result));
+      assert.ok(result.length > 0);
+    });
+
+    it('should decode data URL image data', () => {
+      const result = decodeImagePayload(
+        `data:image/png;base64,${PNG_1X1_BASE64}`
+      );
+      assert.ok(Buffer.isBuffer(result));
+      assert.ok(result.length > 0);
+    });
+  });
+
+  describe('processUploadedCoverImage', () => {
+    it('should normalize uploads to JPEG buffers', async () => {
+      const result = await processUploadedCoverImage(PNG_1X1_BASE64);
+      assert.strictEqual(result.format, 'JPEG');
+      assert.ok(Buffer.isBuffer(result.buffer));
+      assert.ok(
+        result.buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))
+      );
     });
   });
 });

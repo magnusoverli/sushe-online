@@ -25,6 +25,7 @@ function mapListRowToItem(row, recommendationMap = null) {
     tracks: row.tracks || null,
     cover_image: row.cover_image || '',
     cover_image_format: row.cover_image_format || '',
+    cover_image_updated_at: row.cover_image_updated_at,
     summary: row.summary || '',
     summary_source: row.summary_source || '',
     recommended_by: recommendation?.recommendedBy || null,
@@ -58,6 +59,7 @@ function mapAlbumDataItemToResponse(item, options = {}) {
     comments_2: item.comments2 || '',
     tracks: item.tracks,
     cover_image_format: item.coverImageFormat,
+    cover_image_updated_at: item.coverImageUpdatedAt || null,
     summary: item.summary || '',
     summary_source: item.summarySource || '',
     recommended_by: recommendation?.recommendedBy || null,
@@ -78,9 +80,14 @@ function mapAlbumDataItemToResponse(item, options = {}) {
   }
 
   if (item.albumId) {
+    const version = item.coverImageUpdatedAt
+      ? `?v=${new Date(item.coverImageUpdatedAt).getTime()}`
+      : '';
     return {
       ...base,
-      cover_image_url: `/api/albums/${item.albumId}/cover`,
+      cover_image_url: `/api/albums/${encodeURIComponent(
+        item.albumId
+      )}/cover${version}`,
     };
   }
 

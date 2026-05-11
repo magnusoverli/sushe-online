@@ -468,8 +468,11 @@ function createImageRefetchService(deps = {}) {
               // Update the album with new image
               await db.raw(
                 `UPDATE albums 
-                 SET cover_image = $1, cover_image_format = 'JPEG', updated_at = NOW()
-                 WHERE album_id = $2`,
+                  SET cover_image = $1,
+                      cover_image_format = 'JPEG',
+                      cover_image_updated_at = NOW(),
+                      updated_at = NOW()
+                  WHERE album_id = $2`,
                 [imageBuffer, album.album_id]
               );
               summary.success++;

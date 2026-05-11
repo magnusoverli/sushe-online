@@ -358,7 +358,12 @@ function createCoverFetchQueue(deps = {}) {
 
           // Store in database
           const result = await db.raw(
-            'UPDATE albums SET cover_image = $1, cover_image_format = $2, updated_at = NOW() WHERE album_id = $3',
+            `UPDATE albums
+             SET cover_image = $1,
+                 cover_image_format = $2,
+                 cover_image_updated_at = NOW(),
+                 updated_at = NOW()
+             WHERE album_id = $3`,
             [processedBuffer, 'JPEG', albumId]
           );
 

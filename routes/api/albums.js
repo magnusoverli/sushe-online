@@ -22,20 +22,57 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     asyncHandler(
       async (req, res) => {
-        const { imageBuffer, contentType, albumId } =
+        const { imageBuffer, contentType, albumId, coverImageUpdatedAt } =
           await albumService.getCoverImage(req.params.album_id);
+        const version = coverImageUpdatedAt
+          ? new Date(coverImageUpdatedAt).getTime()
+          : imageBuffer.length;
+        const hasVersion = typeof req.query.v === 'string';
 
         res.set({
           'Content-Type': contentType,
           'Content-Length': imageBuffer.length,
-          'Cache-Control': 'public, max-age=31536000, immutable',
-          ETag: `"${albumId}-${imageBuffer.length}"`,
+          'Cache-Control': hasVersion
+            ? 'private, max-age=31536000, immutable'
+            : 'private, max-age=300, must-revalidate',
+          ETag: `"${albumId}-${version}-${imageBuffer.length}"`,
         });
+
+        if (coverImageUpdatedAt) {
+          res.set('Last-Modified', new Date(coverImageUpdatedAt).toUTCString());
+        }
 
         res.send(imageBuffer);
       },
       'fetching album cover',
       { errorMessage: 'Error fetching image' }
+    )
+  );
+
+  // Replace canonical album cover image
+  app.patch(
+    '/api/albums/:albumId/cover',
+    ensureAuthAPI,
+    asyncHandler(
+      async (req, res) => {
+        const result = await albumService.updateCoverImage(
+          req.params.albumId,
+          req.body.cover_image,
+          req.user?._id
+        );
+
+        res.json({
+          success: true,
+          album_id: result.albumId,
+          cover_image_format: result.format,
+          cover_image_updated_at: result.coverImageUpdatedAt,
+          cover_image_url: `/api/albums/${encodeURIComponent(
+            result.albumId
+          )}/cover?v=${new Date(result.coverImageUpdatedAt).getTime()}`,
+        });
+      },
+      'updating album cover',
+      { errorMessage: 'Error updating cover image' }
     )
   );
 

@@ -20,6 +20,9 @@ const TARGET_SIZE = 512;
 /** JPEG quality for processed images (0-100) */
 const JPEG_QUALITY = 100;
 
+/** Maximum decoded bytes accepted for manual cover uploads (5 MB). */
+const MAX_UPLOAD_IMAGE_BYTES = 5 * 1024 * 1024;
+
 /** iTunes artwork request size (larger than TARGET_SIZE for quality) */
 const ITUNES_IMAGE_SIZE = 600;
 
@@ -65,11 +68,37 @@ function normalizeImageBuffer(coverImage) {
     : Buffer.from(coverImage, 'base64');
 }
 
+function decodeImagePayload(payload) {
+  if (Buffer.isBuffer(payload)) return payload;
+  if (typeof payload !== 'string' || payload.trim().length === 0) {
+    throw new Error('cover_image is required');
+  }
+
+  const base64 = payload.includes(',') ? payload.split(',').pop() : payload;
+  const buffer = Buffer.from(base64, 'base64');
+  if (buffer.length === 0) {
+    throw new Error('cover_image is invalid');
+  }
+  if (buffer.length > MAX_UPLOAD_IMAGE_BYTES) {
+    throw new Error('cover_image exceeds 5 MB');
+  }
+  return buffer;
+}
+
+async function processUploadedCoverImage(payload) {
+  const buffer = decodeImagePayload(payload);
+  const processed = await processImage(buffer);
+  return { buffer: processed, format: 'JPEG' };
+}
+
 module.exports = {
   TARGET_SIZE,
   JPEG_QUALITY,
   ITUNES_IMAGE_SIZE,
+  MAX_UPLOAD_IMAGE_BYTES,
   processImage,
   upscaleItunesArtworkUrl,
   normalizeImageBuffer,
+  decodeImagePayload,
+  processUploadedCoverImage,
 };

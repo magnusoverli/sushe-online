@@ -318,8 +318,8 @@ function createAlbumCanonical(deps = {}) {
         `INSERT INTO albums (
           album_id, artist, album, release_date, country,
           genre_1, genre_2, tracks, cover_image, cover_image_format,
-          created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          cover_image_updated_at, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT (album_id) 
         WHERE album_id IS NOT NULL AND album_id != ''
         DO UPDATE SET
@@ -357,10 +357,8 @@ function createAlbumCanonical(deps = {}) {
             THEN EXCLUDED.cover_image
             ELSE albums.cover_image
           END,
-          cover_image_format = CASE 
-            WHEN EXCLUDED.cover_image IS NOT NULL THEN EXCLUDED.cover_image_format
-            ELSE albums.cover_image_format
-          END,
+          cover_image_format = CASE WHEN EXCLUDED.cover_image IS NOT NULL AND (albums.cover_image IS NULL OR LENGTH(EXCLUDED.cover_image) > LENGTH(albums.cover_image)) THEN EXCLUDED.cover_image_format ELSE albums.cover_image_format END,
+          cover_image_updated_at = CASE WHEN EXCLUDED.cover_image IS NOT NULL AND (albums.cover_image IS NULL OR LENGTH(EXCLUDED.cover_image) > LENGTH(albums.cover_image)) THEN EXCLUDED.cover_image_updated_at ELSE albums.cover_image_updated_at END,
           updated_at = EXCLUDED.updated_at
         RETURNING 
           album_id,
@@ -379,6 +377,7 @@ function createAlbumCanonical(deps = {}) {
           tracks,
           coverImageBuffer,
           coverFormat,
+          coverImageBuffer ? timestamp : null,
           timestamp,
           timestamp,
         ],
@@ -412,8 +411,8 @@ function createAlbumCanonical(deps = {}) {
         `INSERT INTO albums (
           album_id, artist, album, release_date, country,
           genre_1, genre_2, tracks, cover_image, cover_image_format,
-          created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          cover_image_updated_at, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT (LOWER(TRIM(COALESCE(artist, ''))), LOWER(TRIM(COALESCE(album, ''))))
         WHERE album_id IS NULL OR album_id = ''
         DO UPDATE SET
@@ -447,10 +446,8 @@ function createAlbumCanonical(deps = {}) {
             THEN EXCLUDED.cover_image
             ELSE albums.cover_image
           END,
-          cover_image_format = CASE 
-            WHEN EXCLUDED.cover_image IS NOT NULL THEN EXCLUDED.cover_image_format
-            ELSE albums.cover_image_format
-          END,
+          cover_image_format = CASE WHEN EXCLUDED.cover_image IS NOT NULL AND (albums.cover_image IS NULL OR LENGTH(EXCLUDED.cover_image) > LENGTH(albums.cover_image)) THEN EXCLUDED.cover_image_format ELSE albums.cover_image_format END,
+          cover_image_updated_at = CASE WHEN EXCLUDED.cover_image IS NOT NULL AND (albums.cover_image IS NULL OR LENGTH(EXCLUDED.cover_image) > LENGTH(albums.cover_image)) THEN EXCLUDED.cover_image_updated_at ELSE albums.cover_image_updated_at END,
           updated_at = EXCLUDED.updated_at
         RETURNING 
           album_id,
@@ -469,6 +466,7 @@ function createAlbumCanonical(deps = {}) {
           tracks,
           coverImageBuffer,
           coverFormat,
+          coverImageBuffer ? timestamp : null,
           timestamp,
           timestamp,
         ],

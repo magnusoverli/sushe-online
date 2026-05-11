@@ -19,6 +19,7 @@ const { TransactionAbort } = require('../db/transaction');
 const { buildPartialUpdate } = require('../utils/query-builder');
 const { findPotentialDuplicates } = require('../utils/fuzzy-match');
 const { normalizeImageBuffer } = require('../utils/image-processing');
+const { createAlbumCoverService } = require('./album-cover-service');
 
 /**
  * Create album service with injected dependencies
@@ -34,6 +35,7 @@ function createAlbumService(deps = {}) {
   const { upsertAlbumRecord } = deps;
   const responseCache = deps.responseCache;
   const db = ensureDb(deps.db, 'album-service');
+  const albumCoverService = createAlbumCoverService({ db, logger });
 
   async function invalidateCachesForAlbumUsers(albumId) {
     if (
@@ -140,7 +142,13 @@ function createAlbumService(deps = {}) {
    */
   async function getCoverImage(albumId) {
     const result = await db.raw(
-      'SELECT cover_image, cover_image_format, artist, album FROM albums WHERE album_id = $1',
+      `SELECT cover_image,
+              cover_image_format,
+              cover_image_updated_at,
+              updated_at,
+              artist,
+              album
+       FROM albums WHERE album_id = $1`,
       [albumId]
     );
 
@@ -181,7 +189,22 @@ function createAlbumService(deps = {}) {
       ? `image/${album.cover_image_format.toLowerCase()}`
       : 'image/jpeg';
 
-    return { imageBuffer, contentType, albumId };
+    return {
+      imageBuffer,
+      contentType,
+      albumId,
+      coverImageUpdatedAt: album.cover_image_updated_at || album.updated_at,
+    };
+  }
+
+  async function updateCoverImage(albumId, coverImagePayload, userId) {
+    const result = await albumCoverService.updateCoverImage(
+      albumId,
+      coverImagePayload,
+      userId
+    );
+    await invalidateCachesForAlbumUsers(albumId);
+    return result;
   }
 
   /**
@@ -486,6 +509,7 @@ function createAlbumService(deps = {}) {
 
   return {
     getCoverImage,
+    updateCoverImage,
     getSummary,
     updateSummary,
     updateCountry,

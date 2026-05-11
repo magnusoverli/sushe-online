@@ -5,6 +5,9 @@ const { createAlbumService } = require('../services/album-service');
 const { TransactionAbort } = require('../db/transaction');
 const { createMockLogger, createMockPool } = require('./helpers');
 
+const PNG_1X1_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+
 describe('album-service', () => {
   it('updateSummary should throw 404 when album does not exist', async () => {
     const pool = createMockPool([{ rows: [], rowCount: 0 }]);
@@ -228,5 +231,67 @@ describe('album-service', () => {
     await service.markDistinct('album-1', 'album-2', 'missing-user');
 
     assert.strictEqual(pool.query.mock.calls.length, 2);
+  });
+
+  it('updateCoverImage should process and store an explicit cover replacement', async () => {
+    const updatedAt = new Date('2026-05-11T10:20:34.794Z');
+    const responseCache = { invalidate: mock.fn() };
+    const pool = createMockPool([
+      {
+        rows: [
+          {
+            album_id: 'album-1',
+            cover_image_updated_at: updatedAt,
+          },
+        ],
+        rowCount: 1,
+      },
+      { rows: [{ user_id: 'user-1' }], rowCount: 1 },
+    ]);
+
+    const service = createAlbumService({
+      db: pool,
+      logger: createMockLogger(),
+      upsertAlbumRecord: mock.fn(),
+      responseCache,
+    });
+
+    const result = await service.updateCoverImage(
+      'album-1',
+      PNG_1X1_BASE64,
+      'user-1'
+    );
+
+    assert.strictEqual(result.albumId, 'album-1');
+    assert.strictEqual(result.format, 'JPEG');
+    assert.strictEqual(result.coverImageUpdatedAt, updatedAt);
+    assert.strictEqual(pool.query.mock.calls.length, 2);
+    assert.ok(
+      pool.query.mock.calls[0].arguments[0].includes(
+        'cover_image_updated_at = NOW()'
+      )
+    );
+    assert.ok(Buffer.isBuffer(pool.query.mock.calls[0].arguments[1][0]));
+    assert.strictEqual(responseCache.invalidate.mock.calls.length, 1);
+  });
+
+  it('updateCoverImage should reject invalid cover payloads', async () => {
+    const pool = createMockPool();
+    const service = createAlbumService({
+      db: pool,
+      logger: createMockLogger(),
+      upsertAlbumRecord: mock.fn(),
+    });
+
+    await assert.rejects(
+      () => service.updateCoverImage('album-1', '', 'user-1'),
+      (err) => {
+        assert.ok(err instanceof TransactionAbort);
+        assert.strictEqual(err.statusCode, 400);
+        assert.strictEqual(err.body.error, 'cover_image is required');
+        return true;
+      }
+    );
+    assert.strictEqual(pool.query.mock.calls.length, 0);
   });
 });

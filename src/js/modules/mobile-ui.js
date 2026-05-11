@@ -1014,7 +1014,37 @@ export function createMobileUI(deps = {}) {
       displayAlbums(albumsToSave, { forceFullRebuild: true });
 
       try {
-        await saveList(currentList, albumsToSave);
+        let albumsForSave = albumsToSave;
+        if (pendingCoverData && updatedAlbum.album_id) {
+          const albumWithoutCoverPayload = { ...updatedAlbum };
+          delete albumWithoutCoverPayload.cover_image;
+          delete albumWithoutCoverPayload.cover_image_format;
+          albumsForSave = [...albumsToSave];
+          albumsForSave[index] = albumWithoutCoverPayload;
+        }
+
+        await saveList(currentList, albumsForSave);
+        if (pendingCoverData && updatedAlbum.album_id) {
+          const coverResult = await apiCall(
+            `/api/albums/${encodeURIComponent(updatedAlbum.album_id)}/cover`,
+            {
+              method: 'PATCH',
+              body: JSON.stringify({
+                cover_image: pendingCoverData.base64,
+                cover_image_format: pendingCoverData.format,
+              }),
+            }
+          );
+
+          updatedAlbum.cover_image_url = coverResult.cover_image_url;
+          updatedAlbum.cover_image_updated_at =
+            coverResult.cover_image_updated_at;
+          delete updatedAlbum.cover_image;
+          delete updatedAlbum.cover_image_format;
+          albumsToSave[index] = updatedAlbum;
+          setListData(currentList, albumsToSave);
+          displayAlbums(albumsToSave, { forceFullRebuild: true });
+        }
         showToast('Album updated successfully');
       } catch (error) {
         console.error('Error saving album:', error);

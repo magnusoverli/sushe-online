@@ -28,6 +28,7 @@ test('mapListRowToItem maps row fields and recommendation metadata', () => {
       tracks: ['Track A', 'Track B'],
       cover_image: 'base64-image',
       cover_image_format: 'jpeg',
+      cover_image_updated_at: '2026-05-11T10:20:34.794Z',
       summary: 'Summary',
       summary_source: 'claude',
     },
@@ -51,6 +52,7 @@ test('mapListRowToItem maps row fields and recommendation metadata', () => {
     tracks: ['Track A', 'Track B'],
     cover_image: 'base64-image',
     cover_image_format: 'jpeg',
+    cover_image_updated_at: '2026-05-11T10:20:34.794Z',
     summary: 'Summary',
     summary_source: 'claude',
     recommended_by: 'alice',
@@ -59,6 +61,7 @@ test('mapListRowToItem maps row fields and recommendation metadata', () => {
 });
 
 test('mapAlbumDataItemToResponse maps non-export response with cover image URL', () => {
+  const coverDate = new Date('2026-05-11T10:20:34.794Z');
   const recommendationMap = new Map([
     ['album-2', { recommendedBy: 'bob', recommendedAt: '2025-02-01' }],
   ]);
@@ -79,6 +82,7 @@ test('mapAlbumDataItemToResponse maps non-export response with cover image URL',
       comments2: null,
       tracks: null,
       coverImageFormat: 'png',
+      coverImageUpdatedAt: coverDate,
       summary: null,
       summarySource: null,
     },
@@ -90,7 +94,10 @@ test('mapAlbumDataItemToResponse maps non-export response with cover image URL',
     }
   );
 
-  assert.strictEqual(result.cover_image_url, '/api/albums/album-2/cover');
+  assert.strictEqual(
+    result.cover_image_url,
+    `/api/albums/album-2/cover?v=${coverDate.getTime()}`
+  );
   assert.strictEqual(result.track_pick, 'Song 1');
   assert.strictEqual(result.comments_2, '');
   assert.strictEqual(result.recommended_by, 'bob');
@@ -119,6 +126,7 @@ test('mapAlbumDataItemToResponse maps export payload with base64 image and point
       tracks: null,
       coverImage: coverBuffer,
       coverImageFormat: 'jpeg',
+      coverImageUpdatedAt: null,
       summary: '',
       summarySource: '',
     },

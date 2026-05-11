@@ -40,9 +40,10 @@ function createListFetchers(deps = {}) {
          a.genre_1,
          a.genre_2,
          a.tracks,
-         a.cover_image,
-         a.cover_image_format,
-         a.summary,
+          a.cover_image,
+          a.cover_image_format,
+          a.cover_image_updated_at,
+          a.summary,
          a.summary_source
        FROM lists l
        LEFT JOIN list_items li ON li.list_id = l._id
@@ -186,6 +187,7 @@ function createListFetchers(deps = {}) {
               a.tracks,
               a.cover_image,
               a.cover_image_format,
+              a.cover_image_updated_at,
               a.summary,
               a.summary_source
        FROM list_items li
@@ -213,6 +215,7 @@ function createListFetchers(deps = {}) {
       tracks: row.tracks || null,
       coverImage: row.cover_image || '',
       coverImageFormat: row.cover_image_format || '',
+      coverImageUpdatedAt: row.cover_image_updated_at || null,
       summary: row.summary || '',
       summarySource: row.summary_source || '',
     }));
