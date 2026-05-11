@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-05-11",
+    "category": "fix",
+    "description": "Fixed album covers not saving when replaced",
+    "hash": "124c51a814b0d20dcb0146f864bcd165e084d095",
+    "commitMessage": "Fix album cover replacement persistence\n\nPersist explicit cover uploads through a dedicated album cover path and version cover URLs so replacements bypass stale browser caches."
+  },
+  {
     "date": "2026-04-24",
     "category": "fix",
     "description": "Fixed Spotify connection issues when authorization fails",
