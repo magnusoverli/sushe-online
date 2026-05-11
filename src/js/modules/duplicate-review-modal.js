@@ -258,16 +258,22 @@ function renderCurrentCluster() {
           role="button"
           aria-label="Set ${escapeHtml(member.artist)} - ${escapeHtml(member.album)} as canonical"
         >
-          <div class="shrink-0" aria-hidden="true">
-            <span class="w-4 h-4 rounded-full border ${isCanonical ? 'border-green-400 bg-green-500 block' : 'border-gray-500 bg-transparent block'}"></span>
+          <div class="w-16 shrink-0 text-xs">
+            ${
+              isCanonical
+                ? '<span class="text-green-400 font-medium">Keep</span>'
+                : `<label class="merge-target-control inline-flex items-center gap-2 text-gray-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      class="merge-target-checkbox"
+                      data-album-id="${escapeHtml(member.album_id)}"
+                      aria-label="Merge ${escapeHtml(member.artist)} - ${escapeHtml(member.album)} into the kept album"
+                      ${isSelected ? 'checked' : ''}
+                    />
+                    <span>Merge</span>
+                  </label>`
+            }
           </div>
-          <input
-            type="checkbox"
-            class="merge-target-checkbox"
-            data-album-id="${escapeHtml(member.album_id)}"
-            ${isCanonical ? 'disabled' : ''}
-            ${isSelected ? 'checked' : ''}
-          />
           <img
             src="${coverUrl}"
             alt="${escapeHtml(member.album)}"
@@ -304,7 +310,7 @@ function renderCurrentCluster() {
       <div class="p-3 rounded border border-gray-700 bg-gray-900/50">
         <div class="text-sm text-gray-200">${cluster.memberCount} variants in this cluster</div>
         <div class="text-xs text-gray-400 mt-1">${confidenceLabel}</div>
-        <div class="text-xs text-gray-500 mt-2">Click any album row to set it as canonical.</div>
+        <div class="text-xs text-gray-500 mt-2">Click a row to choose the album to keep. Checked Merge rows will be retired into it.</div>
       </div>
 
       <div id="clusterPreviewPanel" class="hidden p-3 rounded border border-gray-700 bg-gray-900/50 text-sm text-gray-300"></div>
@@ -318,7 +324,7 @@ function renderCurrentCluster() {
   content.querySelectorAll('[data-variant-row]').forEach((row) => {
     row.addEventListener('click', (event) => {
       const interactiveTarget = event.target.closest(
-        '.merge-target-checkbox, .mark-distinct-btn'
+        '.merge-target-control, .merge-target-checkbox, .mark-distinct-btn'
       );
       if (interactiveTarget) return;
       applyCanonicalSelection(row.dataset.variantId);
