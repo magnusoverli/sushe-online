@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-05-11",
+    "category": "ui",
+    "description": "Improved duplicate review merge selection clarity",
+    "hash": "25f7431727907dfaaa2709cb0fe238423fa60108",
+    "commitMessage": "Clarify duplicate review merge selection\n\nLabel kept and merged album variants separately so changing the canonical album no longer looks like an inverted checkbox state."
+  },
+  {
+    "date": "2026-05-11",
     "category": "fix",
     "description": "Fixed album covers not saving when replaced",
     "hash": "124c51a814b0d20dcb0146f864bcd165e084d095",
