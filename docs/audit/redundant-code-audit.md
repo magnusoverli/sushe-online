@@ -22,7 +22,7 @@ Investigation of redundant, dead, legacy, and orphaned code across the entire `s
 
 | Phase | Topic                              | Effort | Status      | Started | Completed | Candidates | Notes |
 | ----- | ---------------------------------- | ------ | ----------- | ------- | --------- | ---------- | ----- |
-| 0     | Baseline & ground truth            | S      | pending     |         |           |            | Blocks every other phase |
+| 0     | Baseline & ground truth            | S      | done        | 2026-05-12 | 2026-05-12 | —          | Migration-collision question resolved; see F-0-4 |
 | 1     | Orphan files & leftovers           | M      | pending     |         |           |            | Parallel after P0 |
 | 2     | Dead JS exports                    | L      | pending     |         |           |            | Parallel after P0 |
 | 3     | Dead routes / endpoints            | M      | pending     |         |           |            | Parallel after P0 |
@@ -279,3 +279,340 @@ Decision values: `remove` (with commit hash), `keep` (with reason), `defer` (rev
 ## Findings
 
 _(Phase findings will be appended below as each phase completes. Each phase gets its own `## Phase N — Findings` heading. Findings within a phase use IDs `F-<phase>-<n>`.)_
+
+## Phase 0 — Findings
+
+Discovery-only baseline. No removal candidates. All later phases reference this section for the authoritative reachability set.
+
+### F-0-1 — Repo snapshot
+
+- **Branch:** `main`
+- **HEAD:** `cbc900e` ("Add redundant code audit plan and progress tracker")
+- **Working tree:** clean tracked-files-wise; only untracked path is `.claude/agent-memory/` (audit agent memory, gitignored).
+- **Last 30 commit subjects** (newest first):
+  1. `cbc900e` Add redundant code audit plan and progress tracker
+  2. `979e0e4` Merge branch 'main' of https://github.com/magnusoverli/sushe-online
+  3. `3cba470` Project-scope redundant code agent
+  4. `5876f26` Update changelog [skip ci]
+  5. `25f7431` Clarify duplicate review merge selection
+  6. `c9af251` Update changelog [skip ci]
+  7. `124c51a` Fix album cover replacement persistence
+  8. `841a827` Restore playlist preferences migration
+  9. `3f2ddc1` Raise maintainability baseline threshold to 90
+  10. `f3fa3dd` Improve restore progress sequencing and backup download resilience
+  11. `188d3f8` Fix health readiness handling for zero-latency checks
+  12. `2ccde5f` Align album-summary export test with facade cleanup
+  13. `8143c88` Remove final DB facade compatibility leftovers
+  14. `8431d55` Update changelog [skip ci]
+  15. `488f637` Handle Spotify auth polling failures and bump npm
+  16. `d854f06` Update changelog [skip ci]
+  17. `ed3e3db` Harden canonical DB contract checks in service factories
+  18. `66ed7f8` Handle stale last-selected list references on startup
+  19. `e59f65e` Merge pull request #356 from magnusoverli/refactor/close-db-modernization-leftovers
+  20. `ad2f557` Record final contract seam cleanup in tracker
+  21. `6f885ff` Tighten remaining db contract seams in services
+  22. `54828c9` Merge pull request #355 from magnusoverli/refactor/finalize-db-modernization-plan
+  23. `fe72e39` Finalize tracker with album canonical milestone
+  24. `86f4991` Move album canonical into service layer
+  25. `e0a5394` Merge pull request #354 from magnusoverli/refactor/track-fetch-queue-service-move
+  26. `15332f3` Update tracker with track queue move milestone
+  27. `0c9533b` Move track fetch queue into services layer
+  28. `3862f9d` Merge pull request #353 from magnusoverli/fix/canonical-db-test-mocks
+  29. `899ebc7` Align canonical db test harnesses with deps.db.raw contract
+  30. `5ace64d` Prune legacy auth-route test dependency wiring
+
+  Notable signal: a heavy "DB modernization / canonical service" refactor stream wrapped up across commits `54828c9..8143c88`; legacy DB-facade leftovers were explicitly removed in `8143c88`. This is the freshest area, so any "looks redundant" hit in `db/`, `services/`, or repository code needs extra suspicion — it may be a freshly-completed seam, not dead.
+
+### F-0-2 — Entry-point set (reachability roots)
+
+These are the verified entry points. Phase 1 and Phase 2 reachability graphs MUST start from this set.
+
+- **Server runtime entry:** [`index.js`](../../index.js) (started via `node index.js`, also re-required by tests via the route registrars).
+- **Standalone scripts (each is its own root):**
+  - [`scripts/migrate.js`](../../scripts/migrate.js) — `npm run migrate*` (4 variants).
+  - [`scripts/deduplicate-list-items.js`](../../scripts/deduplicate-list-items.js) — not wired into `package.json` scripts; check Phase 11.
+  - [`scripts/resize-existing-images.js`](../../scripts/resize-existing-images.js) — not wired into `package.json` scripts; check Phase 11.
+  - [`scripts/update-changelog.js`](../../scripts/update-changelog.js) — `changelog`, `changelog:quick`, `changelog:git`.
+  - [`scripts/ci-changelog.js`](../../scripts/ci-changelog.js) — verify Phase 11 (likely called from `.github/workflows`).
+  - [`scripts/maintainability-report.js`](../../scripts/maintainability-report.js) — `report:maintainability*`, `lint:structure:baseline`.
+  - [`scripts/run-tests.sh`](../../scripts/run-tests.sh) — `npm test`.
+  - [`scripts/setup-git-hooks.sh`](../../scripts/setup-git-hooks.sh) — `changelog:setup`.
+  - [`scripts/optimize-icons.sh`](../../scripts/optimize-icons.sh) — `optimize:icons`.
+  - [`scripts/docker-entrypoint-upgrade.sh`](../../scripts/docker-entrypoint-upgrade.sh) — verify Phase 11 (likely Dockerfile-invoked).
+- **Server-side template root:** [`templates.js`](../../templates.js) — required by `index.js:55` and by individual route modules. It is the only re-exporter of `templates/*.js`; see F-0-6.
+- **Frontend Vite entry:** [`src/js/main.js`](../../src/js/main.js) — single `input` in `vite.config.js:21`. Outputs `public/js/bundle.js` plus split chunks under `public/js/chunks/`. Both output dirs are gitignored.
+- **Service worker:** [`public/service-worker.js`](../../public/service-worker.js) — NOT registered automatically; verify Phase 1 whether anything still registers it (only static caches `output.css`, `manifest.json`, `og-image.png`).
+- **Views (EJS):** [`views/layout.ejs`](../../views/layout.ejs), [`views/login.ejs`](../../views/login.ejs), [`views/spotify-page.ejs`](../../views/spotify-page.ejs), [`views/aggregate-list-page.ejs`](../../views/aggregate-list-page.ejs), [`views/health.ejs`](../../views/health.ejs).
+  - `layout.ejs` + `login.ejs` are loaded via `ejs.compile(fs.readFileSync(...))` in [`templates.js`](../../templates.js#L36-L43).
+  - `spotify-page.ejs` via [`templates/spotify-template.js`](../../templates/spotify-template.js#L7).
+  - `aggregate-list-page.ejs` via [`templates/aggregate-list-template.js`](../../templates/aggregate-list-template.js#L7).
+  - `health.ejs` via `res.render('health')` in [`routes/health.js`](../../routes/health.js#L108). It is the ONLY `res.render()` call in the codebase — every other view is rendered via the EJS-compile facade, not `app.render`/`res.render`.
+- **DB migration roots:** [`db/migrations/index.js`](../../db/migrations/index.js) + every file in `db/migrations/migrations/*.js` — see F-0-4.
+- **Tests (Node):** `test/*.test.js`, plus shared helper [`test/helpers.js`](../../test/helpers.js); see F-0-10.
+- **Tests (Playwright):** `test/e2e/*.spec.js` (5 files).
+- **Browser-extension entries (per [`manifest.json`](../../browser-extension/manifest.json)):**
+  - `background.js` (service worker)
+  - `content-script.js` (RYM pages)
+  - `auth-listener.js` (sushe `/extension/auth` page)
+  - `popup.js` (popup action)
+  - `options.js` (options page)
+  - Indirectly: `auth-state.js`, `shared-utils.js` (imported by the above).
+
+### F-0-3 — Route registration model
+
+Mounting is **explicit, not convention-based**. Phase 3 must enumerate from `index.js` outward.
+
+In [`index.js`](../../index.js#L240-L299) the registrars are required and called explicitly:
+
+```js
+const authRoutes         = require('./routes/auth');
+const oauthRoutes        = require('./routes/oauth');
+const adminRoutes        = require('./routes/admin');
+const apiRoutes          = require('./routes/api/index');
+const preferencesRoutes  = require('./routes/preferences');
+const aggregateListRoutes= require('./routes/aggregate-list');
+
+authRoutes(app, deps);
+oauthRoutes(app, deps);
+adminRoutes(app, deps);
+apiRoutes(app, deps);
+preferencesRoutes(app, deps);
+const { aggregateList } = aggregateListRoutes(app, deps);
+```
+
+Plus [`routes/health.js`](../../routes/health.js) — registered earlier at [`index.js:204`](../../index.js#L204) via `registerHealthRoutes(app, pool, { ready })`.
+
+Each registrar takes `(app, deps)` and EITHER calls `app.get/post/...` directly OR delegates to sub-files. Sub-registrars discovered:
+
+- [`routes/oauth/index.js`](../../routes/oauth/index.js) → requires `./spotify`, `./tidal`, `./lastfm`.
+- [`routes/admin/index.js`](../../routes/admin/index.js) → requires the seven `routes/admin/*.js` siblings (audit, backup, bootstrap, catalog-cleanup, duplicates, events, images, reidentify, stats, telegram, users, album-summaries — confirm full list in Phase 3).
+- [`routes/api/index.js`](../../routes/api/index.js) → requires each `routes/api/*.js`. Notably it dynamically passes `sharedDeps` to siblings (see [line 250](../../routes/api/index.js#L250) for `telegram` — flagged as the only example I confirmed; Phase 3 must read the whole file).
+- [`routes/auth.js`](../../routes/auth.js#L24-L29) → requires sibling factory modules under `routes/auth/`.
+- [`routes/preferences.js`](../../routes/preferences.js) + `routes/preferences/*` — facade.
+- [`routes/aggregate-list.js`](../../routes/aggregate-list.js) + `routes/aggregate-list/handlers.js` — facade.
+
+There is no `routes/index.js` and no auto-discovery. A route file added to `routes/` but not required from `index.js` or a sibling registrar will be **silently dead**.
+
+**Full `deps` object passed to route registrars** (from [`index.js:255-291`](../../index.js#L255-L291)). Phase 2 MUST treat each of these as live (registrars destructure them):
+
+| Key | Source |
+|-----|--------|
+| `htmlTemplate` | `./templates` |
+| `registerTemplate` | `./templates` |
+| `loginTemplate` | `./templates` |
+| `forgotPasswordTemplate` | `./templates` |
+| `resetPasswordTemplate` | `./templates` |
+| `invalidTokenTemplate` | `./templates` |
+| `spotifyTemplate` | `./templates` |
+| `extensionAuthTemplate` | `./templates` |
+| `isTokenValid` | `./services/auth-utils-service` |
+| `isTokenUsable` | `./services/auth-utils-service` |
+| `csrfProtection` | `./middleware/csrf` (created via `createCsrfProtection()`) |
+| `ensureAuth` | `./middleware/auth` |
+| `ensureAuthAPI` | `./middleware/auth` (factory `createEnsureAuthAPI`) |
+| `ensureAdmin` | `./middleware/auth` |
+| `rateLimitAdminRequest` | factory `createRateLimitAdminRequest` |
+| `upload` | local multer instance |
+| `bcrypt` | `bcryptjs` |
+| `crypto` | node `crypto` |
+| `nodemailer` | `nodemailer` |
+| `composeForgotPasswordEmail` | `./utils/forgot-email` |
+| `isValidEmail` | `./utils/validators` |
+| `isValidUsername` | `./utils/validators` |
+| `isValidPassword` | `./utils/validators` |
+| `sanitizeUser` | `./middleware/auth` |
+| `adminCodeState` | `./config/admin-code` |
+| `dataDir` | `./db` |
+| `db` | `./db` |
+| `passport` | `passport` |
+| `invalidateUserCache` | `./config/passport` |
+| `authService` | factory `createAuthService` |
+| `userService` | factory `createUserService` |
+| `usersRepository` | factory `createUsersRepository` |
+| `duplicateService` | factory `createDuplicateService` |
+| `reidentifyService` | factory `createReidentifyService` |
+| `broadcast` | `./utils/websocket` |
+
+Phase 2 false-positive trap: a literal grep for e.g. `isTokenValid` may only find it in `index.js` and one route file. That is normal — the rest of the codebase reads it as `deps.isTokenValid` or via destructure. Not dead.
+
+### F-0-4 — Migration loader (the critical question)
+
+The loader is in [`db/migrations/index.js`](../../db/migrations/index.js). Key mechanics:
+
+- [`getMigrationFiles()`](../../db/migrations/index.js#L38-L54): `fs.readdirSync(this.migrationsDir).filter(.js).sort()`. Each entry becomes `{ version: file.replace('.js',''), filePath }`.
+- The `version` IS the **full filename minus `.js`**, not a numeric prefix. So `006_add_extension_tokens` and `006_add_playlist_preferences` are TWO DIFFERENT versions.
+- [`schema_migrations`](../../db/migrations/index.js#L21-L28) stores `version` with `UNIQUE NOT NULL` — uniqueness applies to the full string, so both 006 files (and both 053 files) can coexist in the table.
+- [`runMigrations()`](../../db/migrations/index.js#L210-L257) executes pending files in `sort()` order under a Postgres advisory lock (`MIGRATION_LOCK_KEY = 0x53755368`).
+- A `_checkForwardSchemaGuard()` ([line 188](../../db/migrations/index.js#L188-L202)) refuses to start if the DB has versions the code doesn't know — so a rolled-back deploy is protected.
+
+**Collision-pair behavior — answered:**
+
+Lexicographic `sort()` order for the colliding pairs:
+
+1. `006_add_extension_tokens.js`  →  version `006_add_extension_tokens`  (runs FIRST)
+2. `006_add_playlist_preferences.js` → version `006_add_playlist_preferences` (runs SECOND)
+3. ...
+4. `053_add_comments_2_column.js` → version `053_add_comments_2_column` (runs FIRST of the pair)
+5. `053_add_external_identity_mappings.js` → version `053_add_external_identity_mappings` (runs SECOND of the pair)
+
+**Both migrations in each pair run, in deterministic order. Neither shadows the other.** There is no duplicate-numeric-prefix detection in the loader — the duplicate `006*` / `053*` prefix is purely cosmetic. They are independent migrations that happen to share a numeric prefix.
+
+Confirmed by git history: commit `841a827` ("Restore playlist preferences migration") only re-added `006_add_playlist_preferences.js`; commit `c840487` originally added `006_add_extension_tokens.js`. Both exist on disk now and the version strings differ. Same story for 053: `62d93ad` added `053_add_comments_2_column`, `0cd8728` added `053_add_external_identity_mappings`.
+
+**Filename convention:** `<3-digit-prefix>_<snake_case_name>.js`. Numeric prefixes are not gap-free (no 027 is missing — verified; actually the on-disk set runs 001–062 with no numeric gaps; the only "anomaly" is the two duplicate-prefix pairs).
+
+**Phase 4 implication:** The collision pairs are NOT a bug to fix. They are a documented, working pattern. Phase 4 must treat the 64 migration files as a single dynamically-loaded set; any "rename" or "remove" recommendation for a migration is automatically MEDIUM at best and requires explicit user direction.
+
+### F-0-5 — Repository layer
+
+- **No `db/repositories/index.js`** exists. There is no barrel export. Each repository is required directly by name.
+- All three repositories are factory-style: `createXRepository({ db, ... })`.
+- Files (3): [`db/repositories/users-repository.js`](../../db/repositories/users-repository.js), [`db/repositories/lists-repository.js`](../../db/repositories/lists-repository.js), [`db/repositories/list-items-repository.js`](../../db/repositories/list-items-repository.js).
+- `index.js:62` requires only `createUsersRepository` directly; the other two are required from inside service factories (Phase 2 must verify).
+- Each repository imports its column list from `db/schema/*` — Phase 4 should treat `db/schema/*.js` as the canonical column inventory.
+
+### F-0-6 — Templates pattern (facade)
+
+[`templates.js`](../../templates.js) is a **facade** that aggregates the per-page modules under [`templates/`](../../templates/). It does the EJS pre-compile dance for layout/login itself, then re-exports the per-page templates produced by the factories. Confirmed by reading both files:
+
+- `templates.js` requires: `./utils/color-utils`, `./utils/template-helpers`, `./templates/auth-templates`, `./templates/extension-auth-template`, `./templates/aggregate-list-template`, `./templates/spotify-template`, `./templates/spotify-components`.
+- It exports: `htmlTemplate, registerTemplate, loginTemplate, forgotPasswordTemplate, resetPasswordTemplate, invalidTokenTemplate, spotifyTemplate, aggregateListTemplate, extensionAuthTemplate, headerComponent, formatDate, formatDateTime, asset`.
+- The `deps` object only consumes 8 of these (no `aggregateListTemplate`, `headerComponent`, `formatDate`, `formatDateTime`, `asset` re-export). Phase 2/7 should check whether the unused-by-deps exports have any non-`index.js` consumers — they may be used by route files that `require('../templates')` directly. Likely the case for `aggregateListTemplate` (the aggregate-list route imports it directly from the facade).
+
+Phase 7 conclusion: `templates.js` is **NOT a duplicate** of `templates/*.js`; it is the canonical re-export.
+
+### F-0-7 — Vite chunking rules (landmines)
+
+Every substring rule in `vite.config.js` [`manualChunks`](../../vite.config.js#L25-L38) — Phase 1, 2, 7 must check renames against these:
+
+| Substring | Chunk |
+|-----------|-------|
+| `music-services` | `music-services` |
+| `import-export` | `import-export` |
+| `musicbrainz` | `album-editing` |
+| `sortablejs` | `vendor-sortable` |
+
+Also a **commonjsOptions.include** allowlist: `/utils[\\/]normalization\.js$/` ([vite.config.js:18](../../vite.config.js#L18)). This is essential for [`utils/normalization.js`](../../utils/normalization.js) to be bundled correctly into the browser bundle (CJS → ESM transform). If `utils/normalization.js` is ever renamed/moved without updating this regex, the browser bundle breaks with `ReferenceError: module is not defined`. Treat this file as **must-not-rename** without code-config changes.
+
+Alias: `@utils` → repo `utils/` directory ([vite.config.js:9](../../vite.config.js#L9)). Phase 2 must grep for `@utils/` imports as well as relative imports.
+
+### F-0-8 — Tailwind safelist (FP minefield)
+
+Safelist in [`tailwind.config.js`](../../tailwind.config.js#L11-L172) contains **127 explicit class names** grouped by category (album/dnd/cell/utility/flex/spacing/sizing/typography/bg/border/hover/transition/animation/focus/layout/custom). Phase 8 must enumerate these verbatim; none are removable without confirming they are not used via dynamic class concatenation in JS.
+
+**Content-scan paths** (Tailwind's other source of "alive" classes):
+
+- `./index.js`
+- `./views/**/*.{js,ts,jsx,tsx,ejs}`
+- `./public/**/*.html`
+- `./src/**/*.{js,ts,jsx,tsx}`
+- `./public/**/*.js`
+- `./templates.js`
+
+Note: `templates/**/*.js` is NOT in the scan list (only `templates.js`). If a per-page template file in `templates/` introduces a class not already covered by another path, it won't be picked up. Worth a Phase 8 spot-check.
+
+Also note: `routes/**/*.js` is NOT scanned. Any HTML class string emitted from a route handler must come from a template, `index.js`, or a public asset to be detected.
+
+### F-0-9 — Package manager and dependencies
+
+- **Package manager:** npm. Lockfile: `package-lock.json` (present at repo root, gitignore confirmed not excluded).
+- No `pnpm-lock.yaml`, no `yarn.lock`.
+- `npm ls` not run (the user asked us to skip it). Listing below is read directly from [`package.json`](../../package.json).
+
+**`dependencies` (28):**
+
+`@anthropic-ai/sdk`, `bcryptjs`, `compression`, `connect-pg-simple`, `cors`, `csrf`, `dotenv`, `ejs`, `express`, `express-rate-limit`, `express-session`, `helmet`, `jspdf`, `multer`, `nodemailer`, `passport`, `passport-local`, `pg`, `pino`, `prom-client`, `sharp`, `socket.io`
+
+**`devDependencies` (22):**
+
+`@eslint/js`, `@playwright/test`, `@tailwindcss/postcss`, `@types/node`, `@types/pg`, `c8`, `concurrently`, `eslint`, `eslint-config-prettier`, `eslint-plugin-import`, `eslint-plugin-prettier`, `eslint-plugin-security`, `nodemon`, `patch-package`, `postcss`, `postcss-cli`, `prettier`, `session-file-store`, `socket.io-client`, `supertest`, `tailwindcss`, `typescript`, `vite`
+
+**`overrides`:** `eslint-plugin-import.eslint` pinned to `$eslint` — documented as a temporary workaround.
+
+Phase 5 will use this list verbatim.
+
+### F-0-10 — Test discovery
+
+- `npm test` runs `npm run lint:strict && bash scripts/run-tests.sh`. **Note:** `scripts/run-tests.sh` is a bash script — this will fail on Windows unless run from Git Bash / WSL. (Not in scope for Phase 0 but flagged for the user.)
+- [`scripts/run-tests.sh`](../../scripts/run-tests.sh) does:
+  1. Phase 1 — Auto-discovered unit tests via shell glob `test/*.test.js` minus a hardcoded `INTEGRATION_TESTS` exclusion list (3 files: `list-fetch-optimization.test.js`, `recommendations.test.js`, `year-locking.test.js`). Run in **parallel** via `node --test`.
+  2. Phase 2 — Same 3 integration files run **serially** if `DATABASE_URL` is reachable.
+  3. Phase 3 — Playwright e2e in `test/e2e/*.spec.js` (5 files), only outside CI and only if `npx playwright --version` succeeds.
+- Test file count via Glob (`test/**/*.test.js`): **>100** Node unit/integration tests. Test discovery is auto-by-glob, no manifest.
+- **Shared helper:** [`test/helpers.js`](../../test/helpers.js) — required by at least `test/album-service.test.js`, `test/year-lock-utils.test.js`, `test/websocket.test.js`, `test/user-service.test.js`, `test/user-preferences.test.js` (sample of 5 confirmed). Phase 10 must NOT treat `helpers.js` as orphaned even if a literal grep for its symbol names looks sparse.
+- Glob `test/helpers/**` returns nothing — there is no helper directory, just the one file.
+
+### F-0-11 — External consumer surfaces (must-not-remove)
+
+Phase 3 false-positive prevention. Each of these paths is consumed by something OUTSIDE the server codebase. Touch only with explicit user direction.
+
+**OAuth callbacks** (consumed by Spotify, Tidal, Last.fm — URL is registered in their dashboards):
+
+- `GET /auth/spotify/callback` — [`routes/oauth/spotify.js:50`](../../routes/oauth/spotify.js#L50). `.env.example` line: `SPOTIFY_REDIRECT_URI=http://localhost:3000/auth/spotify/callback`.
+- `GET /auth/tidal/callback` — [`routes/oauth/tidal.js:57`](../../routes/oauth/tidal.js#L57). `.env.example` line: `TIDAL_REDIRECT_URI=http://localhost:3000/auth/tidal/callback`.
+- `GET /auth/lastfm/callback` — [`routes/oauth/lastfm.js:45`](../../routes/oauth/lastfm.js#L45).
+
+**OAuth siblings** (used by user-initiated flow and disconnect, but referenced from the same external auth flow):
+
+- `GET /auth/spotify`, `GET /auth/spotify/disconnect` — `routes/oauth/spotify.js`.
+- `GET /auth/tidal`, `GET /auth/tidal/disconnect` — `routes/oauth/tidal.js`.
+- `GET /auth/lastfm`, `GET /auth/lastfm/disconnect` — `routes/oauth/lastfm.js`.
+
+**Browser-extension endpoints** (consumed by `browser-extension/background.js`, `popup.js`, `options.js`, `auth-listener.js`):
+
+- `GET /extension/auth` — [`routes/auth.js:294`](../../routes/auth.js#L294). Referenced from extension `popup.js:167`, `options.js:113`, `background.js:736`, and matched by `manifest.json` `content_scripts.matches`.
+- `POST /api/auth/extension-token` — `routes/auth.js:296-300`.
+- `GET  /api/auth/validate-token` — `routes/auth.js:302`.
+- `DELETE /api/auth/extension-token` — `routes/auth.js:304-308`.
+- `GET /api/auth/extension-tokens` — `routes/auth.js:310-314`.
+- `POST /api/auth/cleanup-tokens` — `routes/auth.js:316-319`.
+- `GET /api/lists` — referenced by `browser-extension/background.js:354`.
+- `GET /api/lists/:id/items` (PATCH) — referenced by `browser-extension/background.js:957`.
+- `GET /api/proxy/musicbrainz?endpoint=...` — referenced by `browser-extension/background.js:871, :914`.
+
+**Telegram webhook / bot endpoints** (server-initiated outbound; the Telegram bot pulls notifications, but admin routes under `/api/admin/telegram/*` are consumed from the admin UI — see [`routes/admin/telegram.js`](../../routes/admin/telegram.js#L42-L286)):
+
+- The Telegram integration in this codebase is OUTBOUND (the server sends to Telegram via `telegramNotifier.sendTestMessage()` etc.). There is no inbound webhook endpoint receiving messages from Telegram. The 13 `/api/admin/telegram/*` paths are admin-UI-driven; consumers live in `src/js/**` (Phase 3 must verify).
+
+**Health / metrics** (consumed by external monitoring — k8s probes, Prometheus scraper):
+
+- `GET /health/db` — [`routes/health.js:90`](../../routes/health.js#L90).
+- `GET /health` — `routes/health.js:107` (renders `health.ejs`).
+- `GET /api/health` — `routes/health.js:112`.
+- `GET /ready` — `routes/health.js:137` (k8s readiness probe).
+- `GET /metrics` — `routes/health.js:149` (Prometheus, IP-restricted).
+
+**Misc external surfaces:**
+
+- `GET /.well-known/*` — [`index.js:150`](../../index.js#L150). Used by Android Asset Links / iOS Universal Links. Endpoint exists but returns empty.
+- Icon shim routes (`/favicon.ico`, `/apple-touch-icon*.png`) — `index.js:305-327`. Consumed by browsers automatically.
+
+### F-0-12 — Excluded paths
+
+The plan's exclusion list still matches reality:
+
+`node_modules/`, `.git/`, `public/js/bundle.js`, `public/js/chunks/`, `public/styles/output.css`, `playwright-report/`, `test-results/`, `coverage/`, `.opencode/`, `.agents/`, `.claude/`, `screenshots/`, `plans/`.
+
+Additions to add to the audit's exclusion / "not a candidate" pile:
+
+- `data/` — gitignored runtime directory referenced by `--ignore data/` in the `dev` script.
+- `docker-entrypoint-initdb.d/` — Postgres image init, declared in `docker-compose*.yml`. Phase 11 will revisit.
+- `patches/` — patch-package targets. Phase 11 will verify each patch.
+- `mobile/` — empty directory, kept for git tracking but excluded from lint/tailwind scans. Phase 1 candidate.
+- `src/data/` — runtime-loaded JSON/text data (countries, genres, changelog). Loaded by code, not modules-imported.
+
+### F-0-13 — Open questions blocking later phases
+
+None of these block Phase 1, 5, 6, 9, 11, or 12 — those can start in parallel.
+
+1. **Migration-collision behavior** — RESOLVED (F-0-4). Both files in each `006_*` and `053_*` pair execute as distinct versions. Phase 4 does NOT need to remove a collision.
+2. **`scripts/deduplicate-list-items.js`, `scripts/resize-existing-images.js`** — not wired into `package.json`. Phase 11 must confirm whether they are invoked from CI/Docker entrypoint or are one-off maintenance scripts the user wants to keep on disk regardless.
+3. **`scripts/ci-changelog.js`** — likely called from `.github/workflows/`; Phase 11 must verify via `.github/workflows/*.yml`.
+4. **`scripts/docker-entrypoint-upgrade.sh`** — likely invoked from `Dockerfile`; Phase 11 must verify.
+5. **`templates.js` re-exports `aggregateListTemplate`, `headerComponent`, `formatDate`, `formatDateTime`, `asset`** — none of these are in the `deps` object passed to route registrars. Phase 2 must confirm direct `require('../templates')` consumption before flagging.
+6. **`public/service-worker.js`** — Phase 1 must confirm whether any client code still calls `navigator.serviceWorker.register(...)`. If nothing registers it, this is an orphan.
+7. **Bash-only `scripts/run-tests.sh`** — not a Phase question; just an environmental note for the user (Windows users need Git Bash / WSL to run `npm test`).
+8. **`mobile/` empty directory** — Phase 1 candidate; user confirmation needed.
+9. **`utils/normalization.js`** — Phase 2/7 must NOT recommend rename/move without simultaneously updating the regex in [`vite.config.js:18`](../../vite.config.js#L18).
+10. **Recently-completed "DB modernization" stream** — anything in `db/`, `services/`, repository factories, or `routes/api/_helpers.js` that looks redundant is suspect; cross-check git log against the freshly-merged PRs `#353..#356` before flagging.
+
