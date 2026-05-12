@@ -606,13 +606,13 @@ Additions to add to the audit's exclusion / "not a candidate" pile:
 None of these block Phase 1, 5, 6, 9, 11, or 12 — those can start in parallel.
 
 1. **Migration-collision behavior** — RESOLVED (F-0-4). Both files in each `006_*` and `053_*` pair execute as distinct versions. Phase 4 does NOT need to remove a collision.
-2. **`scripts/deduplicate-list-items.js`, `scripts/resize-existing-images.js`** — not wired into `package.json`. Phase 11 must confirm whether they are invoked from CI/Docker entrypoint or are one-off maintenance scripts the user wants to keep on disk regardless.
+2. **`scripts/deduplicate-list-items.js`, `scripts/resize-existing-images.js`** — not wired into `package.json`. Phase 11 must confirm whether they are invoked from CI/Docker entrypoint or are one-off maintenance scripts the user wants to keep on disk regardless. **[User decision 2026-05-12: remove if Phase 11 confirms no caller anywhere — CI, Docker, cron, docs.]**
 3. **`scripts/ci-changelog.js`** — likely called from `.github/workflows/`; Phase 11 must verify via `.github/workflows/*.yml`.
 4. **`scripts/docker-entrypoint-upgrade.sh`** — likely invoked from `Dockerfile`; Phase 11 must verify.
 5. **`templates.js` re-exports `aggregateListTemplate`, `headerComponent`, `formatDate`, `formatDateTime`, `asset`** — none of these are in the `deps` object passed to route registrars. Phase 2 must confirm direct `require('../templates')` consumption before flagging.
 6. **`public/service-worker.js`** — Phase 1 must confirm whether any client code still calls `navigator.serviceWorker.register(...)`. If nothing registers it, this is an orphan.
 7. **Bash-only `scripts/run-tests.sh`** — not a Phase question; just an environmental note for the user (Windows users need Git Bash / WSL to run `npm test`).
-8. **`mobile/` empty directory** — Phase 1 candidate; user confirmation needed.
+8. **`mobile/` empty directory** — Phase 1 candidate; user confirmation needed. **[User decision 2026-05-12: vestigial — remove once Phase 1 confirms zero references in code/configs.]**
 9. **`utils/normalization.js`** — Phase 2/7 must NOT recommend rename/move without simultaneously updating the regex in [`vite.config.js:18`](../../vite.config.js#L18).
 10. **Recently-completed "DB modernization" stream** — anything in `db/`, `services/`, repository factories, or `routes/api/_helpers.js` that looks redundant is suspect; cross-check git log against the freshly-merged PRs `#353..#356` before flagging.
 
