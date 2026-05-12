@@ -23,7 +23,7 @@ Investigation of redundant, dead, legacy, and orphaned code across the entire `s
 | Phase | Topic                              | Effort | Status      | Started | Completed | Candidates | Notes |
 | ----- | ---------------------------------- | ------ | ----------- | ------- | --------- | ---------- | ----- |
 | 0     | Baseline & ground truth            | S      | done        | 2026-05-12 | 2026-05-12 | —          | Migration-collision question resolved; see F-0-4 |
-| 1     | Orphan files & leftovers           | M      | pending     |         |           |            | Parallel after P0 |
+| 1     | Orphan files & leftovers           | M      | done        | 2026-05-12 | 2026-05-12 | 9 (CERTAIN 2, HIGH 1, MED 5, needs-info 1) | See [phase-1-findings.md](phase-1-findings.md). 107/107 frontend + 227/227 server files reachable. |
 | 2     | Dead JS exports                    | L      | pending     |         |           |            | Parallel after P0 |
 | 3     | Dead routes / endpoints            | M      | pending     |         |           |            | Parallel after P0 |
 | 4     | DB columns / migrations            | L      | pending     |         |           |            | HIGH RISK — never auto-remove migrations |
@@ -33,8 +33,8 @@ Investigation of redundant, dead, legacy, and orphaned code across the entire `s
 | 8     | Dead CSS / Tailwind                | M      | pending     |         |           |            | Tailwind safelist is FP-heavy |
 | 9     | Legacy markers / commented code    | S–M    | pending     |         |           |            | Parallel after P0 |
 | 10    | Obsolete tests                     | M      | pending     |         |           |            | Depends on P1 + P2 |
-| 11    | Stale scripts / CI / patches       | S      | pending     |         |           |            | Parallel after P0 |
-| 12    | Root docs / leftovers              | S      | pending     |         |           |            | User confirms before any removal |
+| 11    | Stale scripts / CI / patches       | S      | done        | 2026-05-12 | 2026-05-12 | 3 (CERTAIN 2, needs-info 1) | See [phase-11-findings.md](phase-11-findings.md). Patch still load-bearing; revisit when upstream `eslint-plugin-security` #185 ships. |
+| 12    | Root docs / leftovers              | S      | done        | 2026-05-12 | 2026-05-12 | 6 (CERTAIN 1, LOW-keep 1, MED-keep 1, needs-info 3) | See [phase-12-findings.md](phase-12-findings.md). `nul` removable; 3 planning docs await user decision. |
 
 Status legend: `pending` · `in-progress` · `blocked` · `done` · `skipped`
 
