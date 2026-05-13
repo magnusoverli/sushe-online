@@ -114,7 +114,5 @@ function startAdminCodeRotation() {
 module.exports = {
   getAdminCodeState,
   startAdminCodeRotation,
-  generateAdminCode,
-  generateSecureCode,
   getLoggableCode,
 };

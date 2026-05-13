@@ -1,18 +1,9 @@
 const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
-const {
-  generateSecureCode,
-  getLoggableCode,
-} = require('../config/admin-code.js');
+const { getLoggableCode } = require('../config/admin-code.js');
 const { createAuthService } = require('../services/auth-service.js');
 
 describe('admin-code secure generation', () => {
-  it('generateSecureCode returns uppercase alphanumeric code of expected length', () => {
-    const code = generateSecureCode(8);
-    assert.strictEqual(code.length, 8);
-    assert.ok(/^[A-Z0-9]{8}$/.test(code));
-  });
-
   it('getLoggableCode masks code when ADMIN_CODE_LOG_MODE=masked', () => {
     const originalValue = process.env.ADMIN_CODE_LOG_MODE;
     process.env.ADMIN_CODE_LOG_MODE = 'masked';
