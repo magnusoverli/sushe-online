@@ -199,10 +199,6 @@ function evaluateThresholds(metrics, thresholds = {}) {
 }
 
 module.exports = {
-  DEFAULT_IGNORED_PREFIXES,
-  SOURCE_EXTENSIONS,
-  LEGACY_MARKER_REGEX,
-  normalizePath,
   shouldIncludeFile,
   buildFileRecord,
   calculateMaintainabilityMetrics,
