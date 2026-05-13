@@ -3,7 +3,7 @@
 Investigation of redundant, dead, legacy, and orphaned code across the entire `sushe-online` codebase.
 
 **Started:** 2026-05-12
-**Status:** Discovery complete — all 13 phases (0–12) done. 7 atomic removal commits landed. Awaiting user decisions on remaining candidates.
+**Status:** Discovery + initial execution complete. 29 atomic removal commits landed across 22 finding IDs. Stage C surgery (~15 paired commits) + Stages D/E/F/G pending.
 **Driver:** redundant-code-detector agent (per-phase spawns; previous paused id `ac73cb4bffd5a7e07` superseded)
 
 ---
@@ -272,9 +272,9 @@ Format: `| ID | Phase | Confidence | Decision | Commit / Rationale |`
 | -- | ----- | ---------- | -------- | ------------------ |
 | F-1-1 | 1 | CERTAIN | remove | `0396896` — public/countries.txt: exact duplicate of bundled src/data/countries.txt |
 | F-1-2 | 1 | CERTAIN | remove | `c0e804d` — mobile/: 16,138 gitignored files cleaned off disk; lint+metrics ignore entries dropped |
-| F-1-3 | 1 | HIGH | defer | public/service-worker.js — functionally dead but affects stale-client deploy hygiene; user decision on timing |
-| F-1-4..F-1-7 | 1 | MEDIUM | defer | 4 superseded browser-extension screenshots — pending user review |
-| F-1-8 | 1 | MEDIUM | defer | unreferenced PWA icon long tail — run `npm run optimize:icons` as separate operation |
+| F-1-3 | 1 | HIGH | remove | `916dfa9` — service-worker.js + ESLint stanza removed |
+| F-1-4..F-1-7 | 1 | MEDIUM | remove | `2dda57b` — 4 superseded browser-extension screenshots removed |
+| F-1-8 | 1 | MEDIUM | defer | unreferenced PWA icon long tail — `optimize-icons.sh` requires bash + ImageMagick + webp (Windows-incompat); user to run manually |
 | F-1-9 | 1 | needs-info | remove | `f45b1f1` — dropped two refs to non-existent browser-extension/STORE_LISTING.md |
 | F-5-1 | 5 | CERTAIN | remove | `14e82c1` — c8 devDep removed (+ 603-line transitive lockfile cleanup) |
 | F-6-2..F-6-11 | 6 | n/a | doc-gap | 21 env vars read in code but missing from `.env.example`; not removals but worth a follow-up doc commit |
@@ -289,8 +289,25 @@ Format: `| ID | Phase | Confidence | Decision | Commit / Rationale |`
 | F-12-4 | 12 | needs-info | remove | `28fcf9c` — DB_LAYER_UNIFICATION_PLAN.md: superseded by completed DB modernization |
 | F-12-5 | 12 | needs-info | remove | `28fcf9c` — DB_MODERNIZATION_PLAN.tmp.txt: all P0-P10 marked done |
 | F-12-6 | 12 | needs-info | keep | DESIGN.md: user-local working file, leave alone |
-| F-2-1..F-2-18 | 2 | CERTAIN | pending-approval | 18 dead-export candidates incl. 3 whole-file removals (`playcount-service.js`, `playcount-sync-service.js`, `track-resolution-service.js`); see phase-2-findings.md |
-| F-2-19..F-2-31 | 2 | HIGH | defer-with-P10 | 13 test-only seams; pair with Phase 10 orphan-test cleanup |
+| F-2-4 | 2 | CERTAIN | remove | `5f54417` — playcount-service.js: 3 internal exports dropped |
+| F-2-5 | 2 | CERTAIN | remove | `d7d7647` — playcount-sync-service.js: upsertPlaycount dropped |
+| F-2-10 | 2 | CERTAIN | remove | `b3f050b` — track-resolution-service.js: 2 internal exports dropped |
+| F-2-11 CERTAIN | 2 | CERTAIN | remove | `2584dab` — affinity-calculator.js: 11 internal exports dropped (HIGH portion still pending) |
+| F-2-12 CERTAIN | 2 | CERTAIN | remove | `39e0572` — fuzzy-match.js: STRIP_PATTERNS, ARTICLES dropped (HIGH portion still pending) |
+| F-2-13 | 2 | CERTAIN | remove | `bca27bf` — maintainability-metrics.js: 4 internal exports dropped |
+| F-2-17 | 2 | CERTAIN | remove | `9e58856` — unfurl-url.js: 3 internal exports dropped |
+| F-2-18 | 2 | CERTAIN | remove | `a154121` — origin-policy.js: PRIVATE_NETWORK_ORIGIN_REGEX dropped |
+| F-2-21 CERTAIN | 2 | CERTAIN | remove | `6eb18e3` — error-handler.js: ErrorCodes, sendErrorResponse, errorResponses dropped (HIGH portion still pending) |
+| F-2-22 | 2 | CERTAIN | remove | `87ec954` — session-cache.js: createSessionCache dropped |
+| F-2-31 | 2 | CERTAIN | remove | `31ed3f6` — incremental-update-detector.js: 4 helper exports demoted |
+| F-2-33 | 2 | CERTAIN | remove | `e839099` — spotify-player.js: 3 lifecycle exports demoted |
+| F-2-34 | 2 | CERTAIN | remove | `d563dac` — tidal-widget.js: 2 exports demoted |
+| F-2-35 | 2 | CERTAIN | remove | `01b25d8` — year-lock.js: isYearLockedSync demoted |
+| F-2-36 | 2 | CERTAIN | remove | `7367a56` — 3 dead _-prefixed locals across 3 files |
+| F-2-3 + F-10-1 | 2/10 | HIGH | remove | `90240a1` — utils/response-helpers.js + test deleted (whole-file pair) |
+| F-2-23 + F-10-17 | 2/10 | HIGH | remove | `8f02d7e` — config/process-handlers.js createProcessHandlers dropped + test deleted |
+| F-2-24 + F-10-18 | 2/10 | HIGH | remove | `bc05e8f` — config/session.js test-only exports dropped + test deleted |
+| F-2-1, F-2-2, F-2-6..F-2-9, F-2-11 HIGH, F-2-12 HIGH, F-2-15, F-2-16, F-2-19, F-2-20, F-2-21 HIGH, F-2-25, F-2-32 | 2 | HIGH | pending-surgery | Remaining 15 paired F-2 HIGH + F-10 surgery commits (test-file describe-block edits); approved by user but not yet executed |
 | F-2-32..F-2-36 | 2 | LOW | defer | 5 user-call items (Last.fm discovery, DB modernization residue, `db/schema/table-maps.js`) |
 | F-3-1..F-3-14 | 3 | CERTAIN | pending-approval | 14 dead endpoints; review before removal (HTTP surface, blast radius higher than code-only) |
 | F-3-15..F-3-23 | 3 | HIGH | defer | 9 likely-dead endpoints (lastfm long-tail, admin stubs) |
@@ -299,7 +316,7 @@ Format: `| ID | Phase | Confidence | Decision | Commit / Rationale |`
 | F-4-2 | 4 | MEDIUM | defer | `users.preferred_ui` column — orphaned after mobile SPA auto-redirect feature was removed |
 | F-4-3 | 4 | n/a | BUG | `services/aggregate-audit/manual-reconciliation.js:447` — schema-code drift will THROW at runtime; not a redundancy finding |
 | F-7-1..F-7-6 | 7 | LOW | keep | 0 duplicates found; 6 hypothesized pairs verified as intentional design |
-| F-8-1 | 8 | CERTAIN | pending-approval | `drag-active` safelist entry — only reference is the safelist line itself |
+| F-8-1 | 8 | CERTAIN | remove | `33f99bf` — drag-active Tailwind safelist entry dropped |
 | F-8-2..F-8-7 | 8 | HIGH | defer | safelist (`dragging`, `lg:grid-cols-4`, etc.) + input.css legacy `.lastfm-*`, `.wikipedia-badge`, dead `.preferences-*` selectors |
 | F-8-8 | 8 | MEDIUM | needs-info | `.settings-textarea` selector — design-system intent unclear |
 | F-8-9 | 8 | LOW | keep | `.miniplayer-progress.seeking` — no-op rule kept |
