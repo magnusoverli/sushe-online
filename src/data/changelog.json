@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-05-13",
+    "category": "fix",
+    "description": "Fixed database restore and login issues",
+    "hash": "ef63f7fcf778006a0a3d73caff99ad653c2d3132",
+    "commitMessage": "Fix database restore restart and auth handling"
+  },
+  {
     "date": "2026-05-11",
     "category": "ui",
     "description": "Improved duplicate review merge selection clarity",
