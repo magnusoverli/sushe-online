@@ -576,17 +576,6 @@ function calculateAffinity(
 module.exports = {
   GENRE_MAPPINGS,
   filterGenreTags,
-  normalizeActiveWeights,
-  addInternalArtists,
-  addSpotifyArtists,
-  addLastfmArtists,
-  buildLastfmArtistTagsMap,
-  addInternalGenres,
-  addSpotifyGenres,
-  addLastfmGenres,
-  buildCountryScores,
-  convertScoresToArrays,
-  jsonOrNull,
   buildSavePreferencesParams,
   calculateAffinity,
 };
