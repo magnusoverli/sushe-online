@@ -120,6 +120,4 @@ function flashMiddleware() {
 module.exports = {
   createSessionMiddleware,
   flashMiddleware,
-  resolveSessionSettings,
-  FALLBACK_SESSION_SECRET,
 };
