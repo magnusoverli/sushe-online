@@ -22,7 +22,6 @@ const DEFAULT_IGNORED_PREFIXES = [
   'playwright-report/',
   'test-results/',
   'coverage/',
-  'mobile/',
   '.opencode/',
   'plans/',
 ];
