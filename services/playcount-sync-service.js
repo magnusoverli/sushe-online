@@ -579,6 +579,5 @@ function createPlaycountSyncService(deps = {}) {
 
 module.exports = {
   createPlaycountSyncService,
-  upsertPlaycount,
   refreshAlbumPlaycount,
 };
