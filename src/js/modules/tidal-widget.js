@@ -73,14 +73,14 @@ export function initTidalWidget() {
 /**
  * Clean up the widget when navigating away
  */
-export function destroyTidalWidget() {
+function destroyTidalWidget() {
   elements = {};
 }
 
 /**
  * Hide the Tidal widget (used when switching to Spotify)
  */
-export function hideTidalWidget() {
+function hideTidalWidget() {
   if (elements.container) {
     elements.container.classList.add('hidden');
   }
