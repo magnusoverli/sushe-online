@@ -332,6 +332,4 @@ function createTrackResolutionService(deps = {}) {
 
 module.exports = {
   createTrackResolutionService,
-  looksLikeMBID,
-  sanitizeForSearch,
 };
