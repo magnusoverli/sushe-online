@@ -3,8 +3,8 @@
 Investigation of redundant, dead, legacy, and orphaned code across the entire `sushe-online` codebase.
 
 **Started:** 2026-05-12
-**Status:** Plan approved; awaiting Phase 0 kickoff
-**Driver:** redundant-code-detector agent (paused id: `ac73cb4bffd5a7e07`)
+**Status:** Batches 1 + 2 complete (Phases 0, 1, 5, 6, 9, 11, 12). 6 atomic removal commits landed. Phases 2, 3, 4, 7, 8, 10 pending.
+**Driver:** redundant-code-detector agent (per-phase spawns; previous paused id `ac73cb4bffd5a7e07` superseded)
 
 ---
 
@@ -27,11 +27,11 @@ Investigation of redundant, dead, legacy, and orphaned code across the entire `s
 | 2     | Dead JS exports                    | L      | pending     |         |           |            | Parallel after P0 |
 | 3     | Dead routes / endpoints            | M      | pending     |         |           |            | Parallel after P0 |
 | 4     | DB columns / migrations            | L      | pending     |         |           |            | HIGH RISK — never auto-remove migrations |
-| 5     | Unused npm dependencies            | S      | pending     |         |           |            | Parallel after P0 |
-| 6     | Unused env vars / config keys      | S      | pending     |         |           |            | Parallel after P0 |
+| 5     | Unused npm dependencies            | S      | done        | 2026-05-13 | 2026-05-13 | 1 (CERTAIN 1) | See [phase-5-findings.md](phase-5-findings.md). `c8` devDep leftover from coverage-infra removal. |
+| 6     | Unused env vars / config keys      | S      | done        | 2026-05-13 | 2026-05-13 | 0 removals (+ doc gaps + 1 adjacent) | See [phase-6-findings.md](phase-6-findings.md). All 25 keys in `.env.example` actively consumed. 21 undocumented vars surfaced; 1 unused `TIDAL_CLIENT_SECRET` declaration in compose. |
 | 7     | Duplicate utilities                | M      | pending     |         |           |            | Parallel after P0 |
 | 8     | Dead CSS / Tailwind                | M      | pending     |         |           |            | Tailwind safelist is FP-heavy |
-| 9     | Legacy markers / commented code    | S–M    | pending     |         |           |            | Parallel after P0 |
+| 9     | Legacy markers / commented code    | S–M    | done        | 2026-05-13 | 2026-05-13 | 0 removals (+ 1 cross-phase referral) | See [phase-9-findings.md](phase-9-findings.md). Zero TODO/FIXME/HACK/@deprecated/commented-out blocks. `utils/logger.js` no-op seam referred to Phase 2/10. |
 | 10    | Obsolete tests                     | M      | pending     |         |           |            | Depends on P1 + P2 |
 | 11    | Stale scripts / CI / patches       | S      | done        | 2026-05-12 | 2026-05-12 | 3 (CERTAIN 2, needs-info 1) | See [phase-11-findings.md](phase-11-findings.md). Patch still load-bearing; revisit when upstream `eslint-plugin-security` #185 ships. |
 | 12    | Root docs / leftovers              | S      | done        | 2026-05-12 | 2026-05-12 | 6 (CERTAIN 1, LOW-keep 1, MED-keep 1, needs-info 3) | See [phase-12-findings.md](phase-12-findings.md). `nul` removable; 3 planning docs await user decision. |
@@ -270,7 +270,25 @@ Format: `| ID | Phase | Confidence | Decision | Commit / Rationale |`
 
 | ID | Phase | Confidence | Decision | Commit / Rationale |
 | -- | ----- | ---------- | -------- | ------------------ |
-| _(empty — will be populated as findings are reviewed)_ | | | | |
+| F-1-1 | 1 | CERTAIN | remove | `0396896` — public/countries.txt: exact duplicate of bundled src/data/countries.txt |
+| F-1-2 | 1 | CERTAIN | remove | `c0e804d` — mobile/: 16,138 gitignored files cleaned off disk; lint+metrics ignore entries dropped |
+| F-1-3 | 1 | HIGH | defer | public/service-worker.js — functionally dead but affects stale-client deploy hygiene; user decision on timing |
+| F-1-4..F-1-7 | 1 | MEDIUM | defer | 4 superseded browser-extension screenshots — pending user review |
+| F-1-8 | 1 | MEDIUM | defer | unreferenced PWA icon long tail — run `npm run optimize:icons` as separate operation |
+| F-1-9 | 1 | needs-info | remove | `f45b1f1` — dropped two refs to non-existent browser-extension/STORE_LISTING.md |
+| F-5-1 | 5 | CERTAIN | pending-approval | `c8` devDep — leftover from cc561bf "Remove test coverage infrastructure"; awaiting user nod |
+| F-6-2..F-6-11 | 6 | n/a | doc-gap | 21 env vars read in code but missing from `.env.example`; not removals but worth a follow-up doc commit |
+| F-6-12 | 6 | HIGH | defer | `TIDAL_CLIENT_SECRET` declared in docker-compose.local.yml:28 but unused (Tidal uses PKCE); awaiting user decision |
+| F-9-1 | 9 | MEDIUM | defer-to-P2/P10 | `utils/logger.js` no-op compat seam — Phase 2 (dead exports) + Phase 10 (self-referential tests) territory |
+| F-11-1 | 11 | CERTAIN | remove | `c880a1d` — scripts/deduplicate-list-items.js: unwired maintenance script |
+| F-11-2 | 11 | CERTAIN | remove | `c880a1d` — scripts/resize-existing-images.js: unwired maintenance script |
+| F-11-3 | 11 | needs-info | remove | `ffc2fc0` — docker-entrypoint-initdb.d/01-extensions.sql: redundant in local-dev, CI, prod. Follow-up: 2 inline CI lines now equally dead |
+| F-12-1 | 12 | CERTAIN | no-action | `nul`: already absent from disk; was untracked anyway — no commit needed |
+| F-12-2 | 12 | LOW | keep | `.restart-trigger`: actively written by services/admin-backup-service.js:434 |
+| F-12-3 | 12 | MEDIUM | keep | `skills-lock.json`: user confirmed .agents/skills/uncodixfy/ tool still active |
+| F-12-4 | 12 | needs-info | remove | `28fcf9c` — DB_LAYER_UNIFICATION_PLAN.md: superseded by completed DB modernization |
+| F-12-5 | 12 | needs-info | remove | `28fcf9c` — DB_MODERNIZATION_PLAN.tmp.txt: all P0-P10 marked done |
+| F-12-6 | 12 | needs-info | keep | DESIGN.md: user-local working file, leave alone |
 
 Decision values: `remove` (with commit hash), `keep` (with reason), `defer` (revisit when), `needs-info` (open question).
 
