@@ -3,7 +3,7 @@
 Investigation of redundant, dead, legacy, and orphaned code across the entire `sushe-online` codebase.
 
 **Started:** 2026-05-12
-**Status:** Batches 1, 2, 3 complete (Phases 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12). Phase 10 running. 7 atomic removal commits landed.
+**Status:** Discovery complete — all 13 phases (0–12) done. 7 atomic removal commits landed. Awaiting user decisions on remaining candidates.
 **Driver:** redundant-code-detector agent (per-phase spawns; previous paused id `ac73cb4bffd5a7e07` superseded)
 
 ---
@@ -32,7 +32,7 @@ Investigation of redundant, dead, legacy, and orphaned code across the entire `s
 | 7     | Duplicate utilities                | M      | done        | 2026-05-13 | 2026-05-13 | 0 candidates (6 verified-legit pairs) | See [phase-7-findings.md](phase-7-findings.md). All Phase 0 hypothesized duplicates verified as intentional facade/layer-separation. |
 | 8     | Dead CSS / Tailwind                | M      | done        | 2026-05-13 | 2026-05-13 | 10 (CERTAIN 1, HIGH 6, MED 1, LOW 1) | See [phase-8-findings.md](phase-8-findings.md). SortableJS auto-emit traps correctly avoided. |
 | 9     | Legacy markers / commented code    | S–M    | done        | 2026-05-13 | 2026-05-13 | 0 removals (+ 1 cross-phase referral) | See [phase-9-findings.md](phase-9-findings.md). Zero TODO/FIXME/HACK/@deprecated/commented-out blocks. `utils/logger.js` no-op seam referred to Phase 2/10. |
-| 10    | Obsolete tests                     | M      | pending     |         |           |            | Depends on P1 + P2 |
+| 10    | Obsolete tests                     | M      | done        | 2026-05-13 | 2026-05-13 | 18 paired (CERTAIN 1, HIGH 2, surgery 15) | See [phase-10-findings.md](phase-10-findings.md). All 18 P2-CERTAIN have zero test coverage — those removals need no test action. |
 | 11    | Stale scripts / CI / patches       | S      | done        | 2026-05-12 | 2026-05-12 | 3 (CERTAIN 2, needs-info 1) | See [phase-11-findings.md](phase-11-findings.md). Patch still load-bearing; revisit when upstream `eslint-plugin-security` #185 ships. |
 | 12    | Root docs / leftovers              | S      | done        | 2026-05-12 | 2026-05-12 | 6 (CERTAIN 1, LOW-keep 1, MED-keep 1, needs-info 3) | See [phase-12-findings.md](phase-12-findings.md). `nul` removable; 3 planning docs await user decision. |
 
@@ -303,6 +303,11 @@ Format: `| ID | Phase | Confidence | Decision | Commit / Rationale |`
 | F-8-2..F-8-7 | 8 | HIGH | defer | safelist (`dragging`, `lg:grid-cols-4`, etc.) + input.css legacy `.lastfm-*`, `.wikipedia-badge`, dead `.preferences-*` selectors |
 | F-8-8 | 8 | MEDIUM | needs-info | `.settings-textarea` selector — design-system intent unclear |
 | F-8-9 | 8 | LOW | keep | `.miniplayer-progress.seeking` — no-op rule kept |
+| F-10-1 | 10 | CERTAIN | pair-with-F-2-3 | `test/response-helpers.test.js` — whole-file orphan, remove in same commit as F-2-3 |
+| F-10-2..F-10-9, F-10-11..F-10-15, F-10-19, F-10-20 | 10 | HIGH | pair-with-P2-HIGH | 15 surgery-only test edits, paired 1:1 with their Phase 2 HIGH targets |
+| F-10-10 | 10 | defer | defer | `test/lastfm-auth.test.js` — waits on F-2-14 Last.fm roadmap decision |
+| F-10-17 | 10 | HIGH | pair-with-F-2-23 | `test/process-handlers.test.js` — whole-file orphan |
+| F-10-18 | 10 | HIGH | pair-with-F-2-24 | `test/session-config.test.js` — whole-file orphan |
 
 Decision values: `remove` (with commit hash), `keep` (with reason), `defer` (revisit when), `needs-info` (open question).
 
