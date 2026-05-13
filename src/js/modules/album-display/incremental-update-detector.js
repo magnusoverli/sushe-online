@@ -1,10 +1,10 @@
-export function getAlbumId(album) {
+function getAlbumId(album) {
   return (
     album._id || `${album.artist}::${album.album}::${album.release_date || ''}`
   );
 }
 
-export function getAlbumIdFromFingerprint(fp) {
+function getAlbumIdFromFingerprint(fp) {
   const pipeIdx = fp.indexOf('|');
   const id = pipeIdx >= 0 ? fp.substring(0, pipeIdx) : fp;
   if (id) return id;
@@ -13,7 +13,7 @@ export function getAlbumIdFromFingerprint(fp) {
   return `${parts[1] || ''}::${parts[2] || ''}::${parts[3] || ''}`;
 }
 
-export function findSingleAddition(oldFingerprints, newAlbums) {
+function findSingleAddition(oldFingerprints, newAlbums) {
   if (newAlbums.length !== oldFingerprints.length + 1) return null;
 
   const oldIds = new Set(oldFingerprints.map(getAlbumIdFromFingerprint));
@@ -44,7 +44,7 @@ export function findSingleAddition(oldFingerprints, newAlbums) {
   return null;
 }
 
-export function findSingleRemoval(oldFingerprints, newAlbums) {
+function findSingleRemoval(oldFingerprints, newAlbums) {
   if (newAlbums.length !== oldFingerprints.length - 1) return -1;
 
   const newIds = new Set(newAlbums.map(getAlbumId));
