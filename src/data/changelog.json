@@ -2,6 +2,13 @@
   {
     "date": "2026-05-13",
     "category": "fix",
+    "description": "Fixed album covers not loading properly",
+    "hash": "883556821b913bc25e837d0b43a1d52c9ee36bdd",
+    "commitMessage": "Retry album cover loads after async fetch"
+  },
+  {
+    "date": "2026-05-13",
+    "category": "fix",
     "description": "Fixed album covers not loading after adding new items",
     "hash": "bef20aaf0913d8f1861d4ed9aab0e2dc0fa5c529",
     "commitMessage": "Fix async cover fetch after extension adds"
