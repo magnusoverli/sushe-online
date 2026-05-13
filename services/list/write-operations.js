@@ -12,6 +12,7 @@ function createListWriteOperations(deps = {}) {
     crypto,
     managementOperations,
     itemOperations,
+    triggerAlbumBackgroundFetches,
     findListByIdOrThrow,
     findOrCreateYearGroup,
     findOrCreateUncategorizedGroup,
@@ -226,6 +227,10 @@ function createListWriteOperations(deps = {}) {
       totalChanges: changeCount,
       duplicates: duplicateAlbums?.length || 0,
     });
+
+    if (typeof triggerAlbumBackgroundFetches === 'function') {
+      triggerAlbumBackgroundFetches(addedItems);
+    }
 
     itemOperations.triggerPlaycountRefresh(user, addedItems);
 

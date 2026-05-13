@@ -150,7 +150,12 @@ function mapItemToInsertRecord(
       primary_track: item.primary_track || null,
       secondary_track: item.secondary_track || null,
     },
-    addedItem: { album_id: upsertResult.albumId, _id: itemId },
+    addedItem: {
+      album_id: upsertResult.albumId,
+      _id: itemId,
+      artist: item.artist,
+      album: item.album,
+    },
   };
 }
 

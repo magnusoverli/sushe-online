@@ -257,7 +257,7 @@ describe('admin-backup-service', () => {
     assert.strictEqual(timers[0].delay, 10);
 
     timers.shift().fn();
-    assert.ok(triggerPath.endsWith('.restart-trigger.json'));
+    assert.ok(triggerPath.endsWith('restart-trigger.json'));
     assert.strictEqual(exitCodes.length, 0);
     assert.strictEqual(timers.length, 0);
   });

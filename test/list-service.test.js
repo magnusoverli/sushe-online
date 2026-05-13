@@ -764,4 +764,95 @@ describe('list-service write operations', () => {
     assert.deepStrictEqual(result.duplicateAlbums, []);
     assert.strictEqual(result.list._id, 'list1');
   });
+
+  it('incrementalUpdate triggers album background fetches after commit', async () => {
+    const events = [];
+    const client = {
+      query: mock.fn(async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          events.push(sql);
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
+          return { rows: [createOwnedListRow()] };
+        }
+
+        if (sql.includes('COALESCE(MAX(position), 0)')) {
+          return { rows: [{ max_pos: 0 }] };
+        }
+
+        if (sql.includes('FROM list_items')) {
+          return { rows: [] };
+        }
+
+        if (sql.includes('INSERT INTO list_items')) {
+          return { rows: [], rowCount: 1 };
+        }
+
+        if (sql.startsWith('UPDATE lists SET updated_at = $1 WHERE _id = $2')) {
+          return { rows: [], rowCount: 1 };
+        }
+
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+      release: mock.fn(),
+    };
+
+    const pool = {
+      query: mock.fn(async (sql) => {
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(async () => client),
+    };
+
+    const deps = createServiceDeps(pool);
+    deps.helpers.batchUpsertAlbumRecords = mock.fn(
+      async () =>
+        new Map([
+          [
+            'Panopticon|Det Hjemsokte Hjertet',
+            {
+              albumId: '01ce764b-626f-43a7-b73a-378bcb4c03ea',
+              needsCoverFetch: true,
+            },
+          ],
+        ])
+    );
+    deps.helpers.triggerAlbumBackgroundFetches = mock.fn(() => {
+      events.push('background-fetches');
+    });
+
+    const service = createListService(deps);
+    const result = await service.incrementalUpdate(
+      'list1',
+      'user1',
+      {
+        added: [
+          {
+            artist: 'Panopticon',
+            album: 'Det Hjemsokte Hjertet',
+            album_id: '01ce764b-626f-43a7-b73a-378bcb4c03ea',
+          },
+        ],
+        removed: [],
+        updated: [],
+      },
+      { _id: 'user1' }
+    );
+
+    assert.strictEqual(result.changeCount, 1);
+    assert.deepStrictEqual(events.slice(-2), ['COMMIT', 'background-fetches']);
+    assert.deepStrictEqual(
+      deps.helpers.triggerAlbumBackgroundFetches.mock.calls[0].arguments[0],
+      [
+        {
+          album_id: '01ce764b-626f-43a7-b73a-378bcb4c03ea',
+          _id: '313233343536373839303132',
+          artist: 'Panopticon',
+          album: 'Det Hjemsokte Hjertet',
+        },
+      ]
+    );
+  });
 });

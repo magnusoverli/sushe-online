@@ -67,6 +67,39 @@ function createHelpers(deps) {
     }
   }
 
+  function triggerAlbumBackgroundFetches(items = []) {
+    if (!Array.isArray(items) || items.length === 0) return;
+
+    const { getCoverFetchQueue } = require('../../services/cover-fetch-queue');
+    const { getTrackFetchQueue } = require('../../services/track-fetch-queue');
+    let coverQueue = null;
+    let trackQueue = null;
+
+    try {
+      coverQueue = getCoverFetchQueue();
+    } catch (error) {
+      logger.warn('Cover fetch queue not available after list update', {
+        error: error.message,
+      });
+    }
+
+    try {
+      trackQueue = getTrackFetchQueue();
+    } catch (error) {
+      logger.warn('Track fetch queue not available after list update', {
+        error: error.message,
+      });
+    }
+
+    for (const item of items) {
+      if (!item?.album_id || !item.artist || !item.album) continue;
+
+      triggerAlbumSummaryFetch(item.album_id, item.artist, item.album);
+      if (coverQueue) coverQueue.add(item.album_id, item.artist, item.album);
+      if (trackQueue) trackQueue.add(item.album_id, item.artist, item.album);
+    }
+  }
+
   function stripLegacyCoverFields(album) {
     const cleaned = { ...album };
     delete cleaned.cover_image;
@@ -387,6 +420,7 @@ function createHelpers(deps) {
     triggerAlbumSummaryFetch,
     upsertAlbumRecord,
     batchUpsertAlbumRecords,
+    triggerAlbumBackgroundFetches,
     invalidateListCaches,
     findOrCreateYearGroup,
     findOrCreateUncategorizedGroup,

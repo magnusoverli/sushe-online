@@ -178,6 +178,7 @@ function createListService(deps = {}) {
     crypto,
     managementOperations,
     itemOperations,
+    triggerAlbumBackgroundFetches: helpers.triggerAlbumBackgroundFetches,
     findListByIdOrThrow,
     findOrCreateYearGroup,
     findOrCreateUncategorizedGroup,

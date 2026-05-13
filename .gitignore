@@ -183,6 +183,7 @@ opencodetmp/*
 design_system/
 # Restart trigger file for development (touched to force nodemon restart)
 .restart-trigger*
+restart-trigger*
 docker-app-logs.txt
 nul
 code_groups.md

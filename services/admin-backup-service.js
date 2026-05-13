@@ -432,7 +432,7 @@ function scheduleRestart({
     logger.info(`[${restoreId}] Restarting server now...`);
 
     if (processRef.env.NODE_ENV === 'development') {
-      const triggerFile = pathDep.join(__dirname, '../.restart-trigger.json');
+      const triggerFile = pathDep.join(__dirname, '../restart-trigger.json');
       let restartTriggered = false;
 
       try {
