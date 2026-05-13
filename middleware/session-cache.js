@@ -199,5 +199,4 @@ function createSessionCache(deps = {}) {
 module.exports = {
   SessionCache,
   wrapSessionStore,
-  createSessionCache,
 };
