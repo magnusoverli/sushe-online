@@ -482,8 +482,6 @@ const defaultInstance = createMusicBrainz();
 module.exports = {
   createMusicBrainz,
   resolveCountryCode: defaultInstance.resolveCountryCode,
-  searchArtist: defaultInstance.searchArtist,
-  getArtistById: defaultInstance.getArtistById,
   getArtistCountriesBatch: defaultInstance.getArtistCountriesBatch,
   COUNTRY_CODE_MAP: defaultInstance.COUNTRY_CODE_MAP,
 };
