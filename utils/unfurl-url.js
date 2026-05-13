@@ -90,8 +90,5 @@ function validateUnfurlTarget(rawUrl) {
 }
 
 module.exports = {
-  isPrivateIpv4,
-  isPrivateIpv6,
-  isDisallowedHost,
   validateUnfurlTarget,
 };
