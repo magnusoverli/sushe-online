@@ -19,7 +19,6 @@ module.exports = {
 
     // Drag and drop classes
     'dragging',
-    'drag-active',
     'drop-target',
 
     // Editable cell classes
