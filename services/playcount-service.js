@@ -335,8 +335,5 @@ const defaultInstance = createPlaycountService();
 
 module.exports = {
   createPlaycountService,
-  buildStatsMap,
-  matchAndFindStale,
-  STALE_THRESHOLD_MS,
   ...defaultInstance,
 };
