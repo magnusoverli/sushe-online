@@ -204,8 +204,7 @@ function createTidalPlaylistService(deps) {
     if (!profileResp.ok) {
       throw new Error(`Failed to get Tidal profile: ${profileResp.status}`);
     }
-    const profile = await profileResp.json();
-    const _userId = profile.data.id;
+    await profileResp.json();
 
     // Check if playlist exists
     let playlistId = null;

@@ -632,7 +632,6 @@ export function createListCrud(deps = {}) {
    */
   function initializeRenameList() {
     const modal = document.getElementById('renameListModal');
-    const _currentNameSpan = document.getElementById('currentListIdName'); // Used in openRenameModal
     const nameInput = document.getElementById('newListNameInput');
     const yearInput = document.getElementById('editListYear');
     const yearError = document.getElementById('editYearError');
