@@ -420,10 +420,6 @@ module.exports = {
   normalizeAlbumKey,
   deriveMinScoreFromThreshold,
 
-  // Constants (for testing)
-  STRIP_PATTERNS,
-  ARTICLES,
-
   // Threshold constants
   AUTO_MERGE_THRESHOLD,
   MODAL_THRESHOLD,
