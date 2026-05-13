@@ -8,7 +8,6 @@ Chrome extension that allows you to add albums from RateYourMusic.com directly t
 
 - **[SUBMISSION_CHECKLIST.md](SUBMISSION_CHECKLIST.md)** - Quick checklist of what you need to do
 - **[CHROME_STORE_SUBMISSION.md](CHROME_STORE_SUBMISSION.md)** - Complete step-by-step guide
-- **[STORE_LISTING.md](STORE_LISTING.md)** - Store description & marketing copy
 - **[PRIVACY_POLICY.md](PRIVACY_POLICY.md)** - Privacy policy for the store listing
 
 **Quick package for submission:**
