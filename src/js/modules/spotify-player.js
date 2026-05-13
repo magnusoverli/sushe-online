@@ -1570,31 +1570,6 @@ export function initMiniplayer() {
 }
 
 /**
- * Clean up the player when navigating away
- */
-function destroyMiniplayer() {
-  stopPolling();
-  stopProgressAnimation();
-  document.removeEventListener('visibilitychange', handleVisibilityChange);
-  currentPlayback = null;
-  previousTrackId = null;
-  previousAlbumId = null;
-  consecutiveErrors = 0;
-  isPollingPaused = false;
-  isHeadlessMode = false;
-  isPremiumRequired = false;
-  isSpotifyAuthUnavailable = false;
-  resetScrobbleState();
-}
-
-/**
- * Get current playback state (for now-playing feature)
- */
-function getCurrentPlayback() {
-  return currentPlayback;
-}
-
-/**
  * Initialize headless playback tracking (for mobile)
  * Polls Spotify API without updating desktop UI, but updates mobile now-playing bar
  */
@@ -1633,27 +1608,3 @@ export function refreshMobileBarVisibility() {
 
 // Make available globally for app.js to call
 window.refreshMobileBarVisibility = refreshMobileBarVisibility;
-
-/**
- * Clean up headless playback tracking
- */
-function destroyPlaybackTracking() {
-  stopPolling();
-  stopMobileProgressAnimation();
-  document.removeEventListener('visibilitychange', handleVisibilityChange);
-  // Hide mobile bar
-  if (mobileElements.bar) {
-    mobileElements.bar.classList.remove('visible');
-    document.body.classList.remove('now-playing-bar-visible');
-  }
-  currentPlayback = null;
-  previousTrackId = null;
-  previousAlbumId = null;
-  consecutiveErrors = 0;
-  isPollingPaused = false;
-  isHeadlessMode = false;
-  isPremiumRequired = false;
-  isSpotifyAuthUnavailable = false;
-  mobileElements = {};
-  resetScrobbleState();
-}

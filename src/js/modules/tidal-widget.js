@@ -69,19 +69,3 @@ export function initTidalWidget() {
   showState('connected');
   console.log('Tidal widget: Initialized in connected state');
 }
-
-/**
- * Clean up the widget when navigating away
- */
-function destroyTidalWidget() {
-  elements = {};
-}
-
-/**
- * Hide the Tidal widget (used when switching to Spotify)
- */
-function hideTidalWidget() {
-  if (elements.container) {
-    elements.container.classList.add('hidden');
-  }
-}

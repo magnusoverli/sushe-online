@@ -176,26 +176,6 @@ function wrapSessionStore(store, cache, options = {}) {
   return store;
 }
 
-/**
- * Create a session cache middleware instance
- * Factory function for dependency injection
- *
- * @param {Object} deps - Dependencies (for testing)
- * @param {Object} deps.logger - Logger instance
- * @returns {Object} - SessionCache class and wrapSessionStore function
- */
-function createSessionCache(deps = {}) {
-  const log = deps.logger || logger;
-
-  // Return modified versions that use injected logger
-  return {
-    SessionCache,
-    wrapSessionStore: (store, cache, options = {}) => {
-      return wrapSessionStore(store, cache, { ...options, logger: log });
-    },
-  };
-}
-
 module.exports = {
   SessionCache,
   wrapSessionStore,
