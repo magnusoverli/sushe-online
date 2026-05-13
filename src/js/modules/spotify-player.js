@@ -1572,7 +1572,7 @@ export function initMiniplayer() {
 /**
  * Clean up the player when navigating away
  */
-export function destroyMiniplayer() {
+function destroyMiniplayer() {
   stopPolling();
   stopProgressAnimation();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -1590,7 +1590,7 @@ export function destroyMiniplayer() {
 /**
  * Get current playback state (for now-playing feature)
  */
-export function getCurrentPlayback() {
+function getCurrentPlayback() {
   return currentPlayback;
 }
 
@@ -1637,7 +1637,7 @@ window.refreshMobileBarVisibility = refreshMobileBarVisibility;
 /**
  * Clean up headless playback tracking
  */
-export function destroyPlaybackTracking() {
+function destroyPlaybackTracking() {
   stopPolling();
   stopMobileProgressAnimation();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
