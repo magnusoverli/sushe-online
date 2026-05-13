@@ -2,6 +2,13 @@
   {
     "date": "2026-05-13",
     "category": "fix",
+    "description": "Fixed album covers not loading after adding new items",
+    "hash": "bef20aaf0913d8f1861d4ed9aab0e2dc0fa5c529",
+    "commitMessage": "Fix async cover fetch after extension adds"
+  },
+  {
+    "date": "2026-05-13",
+    "category": "fix",
     "description": "Fixed database restore and login issues",
     "hash": "ef63f7fcf778006a0a3d73caff99ad653c2d3132",
     "commitMessage": "Fix database restore restart and auth handling"
