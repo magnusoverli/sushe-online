@@ -3,7 +3,7 @@
 Investigation of redundant, dead, legacy, and orphaned code across the entire `sushe-online` codebase.
 
 **Started:** 2026-05-12
-**Status:** Batches 1 + 2 complete (Phases 0, 1, 5, 6, 9, 11, 12). 6 atomic removal commits landed. Phases 2, 3, 4, 7, 8, 10 pending.
+**Status:** Batches 1, 2, 3 complete (Phases 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12). Phase 10 running. 7 atomic removal commits landed.
 **Driver:** redundant-code-detector agent (per-phase spawns; previous paused id `ac73cb4bffd5a7e07` superseded)
 
 ---
@@ -24,13 +24,13 @@ Investigation of redundant, dead, legacy, and orphaned code across the entire `s
 | ----- | ---------------------------------- | ------ | ----------- | ------- | --------- | ---------- | ----- |
 | 0     | Baseline & ground truth            | S      | done        | 2026-05-12 | 2026-05-12 | —          | Migration-collision question resolved; see F-0-4 |
 | 1     | Orphan files & leftovers           | M      | done        | 2026-05-12 | 2026-05-12 | 9 (CERTAIN 2, HIGH 1, MED 5, needs-info 1) | See [phase-1-findings.md](phase-1-findings.md). 107/107 frontend + 227/227 server files reachable. |
-| 2     | Dead JS exports                    | L      | pending     |         |           |            | Parallel after P0 |
-| 3     | Dead routes / endpoints            | M      | pending     |         |           |            | Parallel after P0 |
-| 4     | DB columns / migrations            | L      | pending     |         |           |            | HIGH RISK — never auto-remove migrations |
+| 2     | Dead JS exports                    | L      | done        | 2026-05-13 | 2026-05-13 | 36 (CERTAIN 18, HIGH 13 w/P10, LOW 5) | See [phase-2-findings.md](phase-2-findings.md). 18 CERTAIN incl. 3 whole-file removals; 13 HIGH pair with Phase 10 test cleanup. |
+| 3     | Dead routes / endpoints            | M      | done        | 2026-05-13 | 2026-05-13 | 35 (CERTAIN 14, HIGH 9, MED 12) | See [phase-3-findings.md](phase-3-findings.md). 12 MEDIUM = entire `/api/preferences/*` surface never wired to UI. |
+| 4     | DB columns / migrations            | L      | done        | 2026-05-13 | 2026-05-13 | 3 MED (incl. 1 BUG) | See [phase-4-findings.md](phase-4-findings.md). F-4-3 is a real bug, not redundancy: schema-code drift will throw at runtime. |
 | 5     | Unused npm dependencies            | S      | done        | 2026-05-13 | 2026-05-13 | 1 (CERTAIN 1) | See [phase-5-findings.md](phase-5-findings.md). `c8` devDep leftover from coverage-infra removal. |
 | 6     | Unused env vars / config keys      | S      | done        | 2026-05-13 | 2026-05-13 | 0 removals (+ doc gaps + 1 adjacent) | See [phase-6-findings.md](phase-6-findings.md). All 25 keys in `.env.example` actively consumed. 21 undocumented vars surfaced; 1 unused `TIDAL_CLIENT_SECRET` declaration in compose. |
-| 7     | Duplicate utilities                | M      | pending     |         |           |            | Parallel after P0 |
-| 8     | Dead CSS / Tailwind                | M      | pending     |         |           |            | Tailwind safelist is FP-heavy |
+| 7     | Duplicate utilities                | M      | done        | 2026-05-13 | 2026-05-13 | 0 candidates (6 verified-legit pairs) | See [phase-7-findings.md](phase-7-findings.md). All Phase 0 hypothesized duplicates verified as intentional facade/layer-separation. |
+| 8     | Dead CSS / Tailwind                | M      | done        | 2026-05-13 | 2026-05-13 | 10 (CERTAIN 1, HIGH 6, MED 1, LOW 1) | See [phase-8-findings.md](phase-8-findings.md). SortableJS auto-emit traps correctly avoided. |
 | 9     | Legacy markers / commented code    | S–M    | done        | 2026-05-13 | 2026-05-13 | 0 removals (+ 1 cross-phase referral) | See [phase-9-findings.md](phase-9-findings.md). Zero TODO/FIXME/HACK/@deprecated/commented-out blocks. `utils/logger.js` no-op seam referred to Phase 2/10. |
 | 10    | Obsolete tests                     | M      | pending     |         |           |            | Depends on P1 + P2 |
 | 11    | Stale scripts / CI / patches       | S      | done        | 2026-05-12 | 2026-05-12 | 3 (CERTAIN 2, needs-info 1) | See [phase-11-findings.md](phase-11-findings.md). Patch still load-bearing; revisit when upstream `eslint-plugin-security` #185 ships. |
@@ -276,7 +276,7 @@ Format: `| ID | Phase | Confidence | Decision | Commit / Rationale |`
 | F-1-4..F-1-7 | 1 | MEDIUM | defer | 4 superseded browser-extension screenshots — pending user review |
 | F-1-8 | 1 | MEDIUM | defer | unreferenced PWA icon long tail — run `npm run optimize:icons` as separate operation |
 | F-1-9 | 1 | needs-info | remove | `f45b1f1` — dropped two refs to non-existent browser-extension/STORE_LISTING.md |
-| F-5-1 | 5 | CERTAIN | pending-approval | `c8` devDep — leftover from cc561bf "Remove test coverage infrastructure"; awaiting user nod |
+| F-5-1 | 5 | CERTAIN | remove | `14e82c1` — c8 devDep removed (+ 603-line transitive lockfile cleanup) |
 | F-6-2..F-6-11 | 6 | n/a | doc-gap | 21 env vars read in code but missing from `.env.example`; not removals but worth a follow-up doc commit |
 | F-6-12 | 6 | HIGH | defer | `TIDAL_CLIENT_SECRET` declared in docker-compose.local.yml:28 but unused (Tidal uses PKCE); awaiting user decision |
 | F-9-1 | 9 | MEDIUM | defer-to-P2/P10 | `utils/logger.js` no-op compat seam — Phase 2 (dead exports) + Phase 10 (self-referential tests) territory |
@@ -289,6 +289,20 @@ Format: `| ID | Phase | Confidence | Decision | Commit / Rationale |`
 | F-12-4 | 12 | needs-info | remove | `28fcf9c` — DB_LAYER_UNIFICATION_PLAN.md: superseded by completed DB modernization |
 | F-12-5 | 12 | needs-info | remove | `28fcf9c` — DB_MODERNIZATION_PLAN.tmp.txt: all P0-P10 marked done |
 | F-12-6 | 12 | needs-info | keep | DESIGN.md: user-local working file, leave alone |
+| F-2-1..F-2-18 | 2 | CERTAIN | pending-approval | 18 dead-export candidates incl. 3 whole-file removals (`playcount-service.js`, `playcount-sync-service.js`, `track-resolution-service.js`); see phase-2-findings.md |
+| F-2-19..F-2-31 | 2 | HIGH | defer-with-P10 | 13 test-only seams; pair with Phase 10 orphan-test cleanup |
+| F-2-32..F-2-36 | 2 | LOW | defer | 5 user-call items (Last.fm discovery, DB modernization residue, `db/schema/table-maps.js`) |
+| F-3-1..F-3-14 | 3 | CERTAIN | pending-approval | 14 dead endpoints; review before removal (HTTP surface, blast radius higher than code-only) |
+| F-3-15..F-3-23 | 3 | HIGH | defer | 9 likely-dead endpoints (lastfm long-tail, admin stubs) |
+| F-3-24..F-3-35 | 3 | MEDIUM | needs-info | entire `/api/preferences/*` granular surface; tested but never wired to UI |
+| F-4-1 | 4 | MEDIUM | defer | `users.playlist_preferences` column — but commit `841a827` deliberately restored its migration just before audit; treat as LOW per F-0-13.10 |
+| F-4-2 | 4 | MEDIUM | defer | `users.preferred_ui` column — orphaned after mobile SPA auto-redirect feature was removed |
+| F-4-3 | 4 | n/a | BUG | `services/aggregate-audit/manual-reconciliation.js:447` — schema-code drift will THROW at runtime; not a redundancy finding |
+| F-7-1..F-7-6 | 7 | LOW | keep | 0 duplicates found; 6 hypothesized pairs verified as intentional design |
+| F-8-1 | 8 | CERTAIN | pending-approval | `drag-active` safelist entry — only reference is the safelist line itself |
+| F-8-2..F-8-7 | 8 | HIGH | defer | safelist (`dragging`, `lg:grid-cols-4`, etc.) + input.css legacy `.lastfm-*`, `.wikipedia-badge`, dead `.preferences-*` selectors |
+| F-8-8 | 8 | MEDIUM | needs-info | `.settings-textarea` selector — design-system intent unclear |
+| F-8-9 | 8 | LOW | keep | `.miniplayer-progress.seeking` — no-op rule kept |
 
 Decision values: `remove` (with commit hash), `keep` (with reason), `defer` (revisit when), `needs-info` (open question).
 
