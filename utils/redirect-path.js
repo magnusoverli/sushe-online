@@ -39,6 +39,5 @@ function sanitizeReturnPath(path, fallback = '/') {
 }
 
 module.exports = {
-  isSafeInternalPath,
   sanitizeReturnPath,
 };
