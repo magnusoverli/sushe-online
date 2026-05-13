@@ -80,7 +80,6 @@ function createOriginPolicyFromEnv(env = process.env) {
 }
 
 module.exports = {
-  PRIVATE_NETWORK_ORIGIN_REGEX,
   normalizeOrigin,
   parseAllowedOrigins,
   isAllowedOrigin,
