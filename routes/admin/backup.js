@@ -16,10 +16,12 @@ const {
 } = require('../../services/restore-errors');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin, upload, db, broadcast } = deps;
+  const { ensureAuth, ensureAuthAPI, ensureAdmin, upload, db, broadcast } =
+    deps;
   const backupService = createAdminBackupService({ db, logger });
   const restoreOperationService =
     deps.restoreOperationService || createRestoreOperationService();
+  const ensureRestoreAuth = ensureAuthAPI || ensureAuth;
   const RESTORE_SUCCESS_NOTICE_DELAY_MS = 2200;
   const LOGOUT_NOTICE_DELAY_MS = 1800;
   const RESTART_NOTICE_DELAY_MS = 1800;
@@ -100,7 +102,7 @@ module.exports = (app, deps) => {
 
   app.get(
     '/admin/restore/:restoreId/status',
-    ensureAuth,
+    ensureRestoreAuth,
     ensureAdmin,
     (req, res) => {
       const operation = restoreOperationService.getOperation(
@@ -131,7 +133,7 @@ module.exports = (app, deps) => {
 
   app.post(
     '/admin/restore',
-    ensureAuth,
+    ensureRestoreAuth,
     ensureAdmin,
     rejectIfRestoreInProgress,
     restoreUploadMiddleware,

@@ -222,4 +222,43 @@ describe('admin-backup-service', () => {
 
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
+
+  it('uses a watched nodemon trigger file for development restarts', () => {
+    const timers = [];
+    const exitCodes = [];
+    let triggerPath = null;
+    const service = createAdminBackupService({
+      db: { raw: async () => ({ rows: [] }) },
+      logger: createLogger(),
+      process: {
+        env: { NODE_ENV: 'development' },
+        exit: (code) => exitCodes.push(code),
+      },
+      fs: {
+        ...fs,
+        utimesSync() {},
+        writeFileSync() {},
+      },
+      path: {
+        ...path,
+        join: (...parts) => {
+          triggerPath = path.join(...parts);
+          return triggerPath;
+        },
+      },
+      setTimeout: (fn, delay) => {
+        timers.push({ fn, delay });
+        return timers.length;
+      },
+    });
+
+    service.scheduleRestart('restore_restart_test', 10);
+    assert.strictEqual(timers.length, 1);
+    assert.strictEqual(timers[0].delay, 10);
+
+    timers.shift().fn();
+    assert.ok(triggerPath.endsWith('.restart-trigger.json'));
+    assert.strictEqual(exitCodes.length, 0);
+    assert.strictEqual(timers.length, 0);
+  });
 });

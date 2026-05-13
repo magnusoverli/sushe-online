@@ -204,6 +204,10 @@ export function createSettingsAdminActions(deps = {}) {
           `/admin/restore/${encodeURIComponent(restoreId)}/status`
         );
 
+        if (!status) {
+          return;
+        }
+
         if (status?.status) {
           progressText.textContent = mapRestoreStatusMessage(status.status);
         }

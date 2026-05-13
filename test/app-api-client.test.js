@@ -101,4 +101,31 @@ describe('app-api-client module', () => {
     assert.strictEqual(win.location.href, '/app');
     assert.strictEqual(logger.error.mock.calls.length, 1);
   });
+
+  it('redirects instead of parsing HTML login responses as JSON', async () => {
+    const win = { csrfToken: null, location: { href: '/app' } };
+    const fetchImpl = mock.fn(async () => ({
+      ok: true,
+      status: 200,
+      redirected: true,
+      url: 'http://localhost/login',
+      headers: { get: () => 'text/html; charset=utf-8' },
+      json: async () => {
+        throw new Error('should not parse html as json');
+      },
+    }));
+    const logger = { error: mock.fn() };
+    const client = createAppApiClient({
+      getRealtimeSyncModuleInstance: () => null,
+      fetchImpl,
+      win,
+      logger,
+    });
+
+    const result = await client.apiCall('/admin/restore/restore_1/status');
+
+    assert.strictEqual(result, undefined);
+    assert.strictEqual(win.location.href, '/login');
+    assert.strictEqual(logger.error.mock.calls.length, 0);
+  });
 });

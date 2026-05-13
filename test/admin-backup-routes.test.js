@@ -9,6 +9,13 @@ function createTestApp(options = {}) {
   const app = express();
   app.use(express.json());
 
+  const ensureAuth =
+    options.ensureAuth ||
+    ((req, _res, next) => {
+      req.user = { username: 'admin', role: 'admin' };
+      next();
+    });
+
   const upload = options.upload || {
     single: () => (req, _res, next) => {
       req.file = { path: '/tmp/fake.dump', size: 10 };
@@ -17,10 +24,8 @@ function createTestApp(options = {}) {
   };
 
   const deps = {
-    ensureAuth: (req, _res, next) => {
-      req.user = { username: 'admin' };
-      next();
-    },
+    ensureAuth,
+    ensureAuthAPI: options.ensureAuthAPI || ensureAuth,
     ensureAdmin: (_req, _res, next) => next(),
     upload,
     db: { raw: async () => ({ rows: [] }) },
@@ -93,5 +98,24 @@ describe('admin backup restore routes', () => {
     assert.strictEqual(response.status, 200);
     assert.strictEqual(response.body.restoreId, 'restore_123');
     assert.strictEqual(response.body.status, 'restoring');
+  });
+
+  it('uses API authentication for restore status requests', async () => {
+    const app = createTestApp({
+      ensureAuth: (_req, res) => res.redirect('/login'),
+      ensureAuthAPI: (_req, res) =>
+        res.status(401).json({ error: 'Unauthorized' }),
+      restoreOperationService: {
+        hasActiveRestore: () => false,
+        getOperation: () => null,
+      },
+    });
+
+    const response = await request(app).get(
+      '/admin/restore/restore_123/status'
+    );
+
+    assert.strictEqual(response.status, 401);
+    assert.strictEqual(response.body.error, 'Unauthorized');
   });
 });

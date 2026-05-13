@@ -424,14 +424,15 @@ function scheduleRestart({
   processRef,
   fsDep,
   pathDep,
+  setTimeoutFn,
 }) {
   logger.info(`[${restoreId}] Scheduling server restart in ${delayMs}ms...`);
 
-  setTimeout(() => {
+  setTimeoutFn(() => {
     logger.info(`[${restoreId}] Restarting server now...`);
 
     if (processRef.env.NODE_ENV === 'development') {
-      const triggerFile = pathDep.join(__dirname, '../.restart-trigger');
+      const triggerFile = pathDep.join(__dirname, '../.restart-trigger.json');
       let restartTriggered = false;
 
       try {
@@ -473,6 +474,7 @@ function createAdminBackupService(deps = {}) {
   const pathDep = deps.path || path;
   const spawnDep = deps.spawn || spawn;
   const processRef = deps.process || process;
+  const setTimeoutFn = deps.setTimeout || setTimeout;
 
   return {
     getRuntimeConfig: () => getRuntimeConfig(processRef, fsDep, pathDep),
@@ -508,6 +510,7 @@ function createAdminBackupService(deps = {}) {
         processRef,
         fsDep,
         pathDep,
+        setTimeoutFn,
       }),
   };
 }

@@ -10,6 +10,48 @@ export function createAppApiClient(deps = {}) {
     logger = console,
   } = deps;
 
+  function redirectToLogin() {
+    if (win) {
+      win.location.href = '/login';
+    }
+  }
+
+  function isLoginRedirectResponse(response) {
+    if (!response?.redirected || typeof response.url !== 'string') {
+      return false;
+    }
+
+    try {
+      const baseUrl = win?.location?.href || 'http://localhost';
+      return new URL(response.url, baseUrl).pathname === '/login';
+    } catch (_error) {
+      return response.url.includes('/login');
+    }
+  }
+
+  async function readJsonResponse(response) {
+    if (isLoginRedirectResponse(response)) {
+      redirectToLogin();
+      return undefined;
+    }
+
+    const contentType = response.headers?.get?.('content-type') || '';
+    if (
+      contentType &&
+      !contentType.toLowerCase().includes('application/json')
+    ) {
+      const error = new Error(
+        `Expected JSON response but received ${contentType}`
+      );
+      error.response = response;
+      error.status = response.status;
+      error.code = 'NON_JSON_RESPONSE';
+      throw error;
+    }
+
+    return await response.json();
+  }
+
   async function apiCall(url, options = {}) {
     try {
       const socketId = getRealtimeSyncModuleInstance()?.getSocket?.()?.id;
@@ -46,7 +88,11 @@ export function createAppApiClient(deps = {}) {
       if (!response.ok) {
         if (response.status === 401) {
           try {
-            const errorData = await response.json();
+            const errorData = await readJsonResponse(response);
+
+            if (!errorData) {
+              return;
+            }
 
             if (
               errorData.code === 'TOKEN_EXPIRED' ||
@@ -61,24 +107,20 @@ export function createAppApiClient(deps = {}) {
               throw oauthError;
             }
 
-            if (win) {
-              win.location.href = '/login';
-            }
+            redirectToLogin();
             return;
           } catch (parseError) {
             if (parseError.data) {
               throw parseError;
             }
-            if (win) {
-              win.location.href = '/login';
-            }
+            redirectToLogin();
             return;
           }
         }
 
         let errorData = null;
         try {
-          errorData = await response.json();
+          errorData = await readJsonResponse(response);
         } catch (_parseError) {
           // Ignore parse failure and throw generic error below.
         }
@@ -96,7 +138,7 @@ export function createAppApiClient(deps = {}) {
         throw error;
       }
 
-      return await response.json();
+      return await readJsonResponse(response);
     } catch (error) {
       if (error.name !== 'AbortError') {
         logger.error('API call failed:', error);
