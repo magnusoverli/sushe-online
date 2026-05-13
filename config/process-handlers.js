@@ -127,6 +127,5 @@ function createProcessHandlers(deps = {}) {
 const defaultHandlers = createProcessHandlers();
 
 module.exports = {
-  createProcessHandlers,
   registerProcessHandlers: defaultHandlers.registerProcessHandlers,
 };
