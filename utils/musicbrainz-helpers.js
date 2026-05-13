@@ -111,8 +111,6 @@ function extractTracksFromMedia(media) {
 
 module.exports = {
   SUSHE_USER_AGENT,
-  EU_COUNTRIES,
-  scoreRelease,
   selectBestRelease,
   extractTracksFromMedia,
 };

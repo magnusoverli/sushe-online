@@ -2,8 +2,6 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const {
   SUSHE_USER_AGENT,
-  EU_COUNTRIES,
-  scoreRelease,
   selectBestRelease,
   extractTracksFromMedia,
 } = require('../utils/musicbrainz-helpers');
@@ -13,71 +11,6 @@ describe('musicbrainz-helpers', () => {
     it('should be a non-empty string', () => {
       assert.strictEqual(typeof SUSHE_USER_AGENT, 'string');
       assert.ok(SUSHE_USER_AGENT.length > 0);
-    });
-  });
-
-  describe('EU_COUNTRIES', () => {
-    it('should be a Set containing expected countries', () => {
-      assert.ok(EU_COUNTRIES instanceof Set);
-      assert.ok(EU_COUNTRIES.has('DE'));
-      assert.ok(EU_COUNTRIES.has('FR'));
-      assert.ok(EU_COUNTRIES.has('GB'));
-      assert.ok(EU_COUNTRIES.has('XE'));
-    });
-
-    it('should not contain non-EU countries', () => {
-      assert.ok(!EU_COUNTRIES.has('US'));
-      assert.ok(!EU_COUNTRIES.has('JP'));
-      assert.ok(!EU_COUNTRIES.has('XW'));
-    });
-  });
-
-  describe('scoreRelease', () => {
-    it('should return -1 for non-Official releases', () => {
-      assert.strictEqual(scoreRelease({ status: 'Bootleg' }), -1);
-      assert.strictEqual(scoreRelease({ status: 'Promotion' }), -1);
-    });
-
-    it('should return positive score for Official EU release', () => {
-      const score = scoreRelease({
-        status: 'Official',
-        country: 'DE',
-        media: [],
-        date: '2020-01-01',
-      });
-      assert.ok(score > 0);
-    });
-
-    it('should score EU higher than XW', () => {
-      const euScore = scoreRelease({
-        status: 'Official',
-        country: 'DE',
-        media: [],
-        date: '2020-01-01',
-      });
-      const xwScore = scoreRelease({
-        status: 'Official',
-        country: 'XW',
-        media: [],
-        date: '2020-01-01',
-      });
-      assert.ok(euScore > xwScore);
-    });
-
-    it('should add points for Digital media', () => {
-      const digital = scoreRelease({
-        status: 'Official',
-        country: 'US',
-        media: [{ format: 'Digital Media' }],
-        date: '2020-01-01',
-      });
-      const vinyl = scoreRelease({
-        status: 'Official',
-        country: 'US',
-        media: [{ format: '12" Vinyl' }],
-        date: '2020-01-01',
-      });
-      assert.ok(digital > vinyl);
     });
   });
 
