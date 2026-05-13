@@ -165,21 +165,6 @@ export default [
     },
   },
   {
-    files: ['public/service-worker.js'],
-    languageOptions: {
-      globals: {
-        self: 'readonly',
-        caches: 'readonly',
-        clients: 'readonly',
-        skipWaiting: 'readonly',
-        registration: 'readonly',
-      },
-    },
-    rules: {
-      'no-console': 'off',
-    },
-  },
-  {
     files: ['scripts/**/*.js'],
     rules: {
       'no-console': 'off',
