@@ -5,8 +5,34 @@
 export const PLACEHOLDER_GIF =
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
+const COVER_RETRY_DELAY_MS = 2500;
+const MAX_COVER_RETRIES = 2;
+
+function addRetryParam(url) {
+  try {
+    const origin = globalThis.location?.origin || 'http://localhost';
+    const parsed = new URL(url, origin);
+    parsed.searchParams.set('coverRetry', String(Date.now()));
+    return parsed.pathname + parsed.search + parsed.hash;
+  } catch (_error) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}coverRetry=${Date.now()}`;
+  }
+}
+
+function renderCoverPlaceholder(parent) {
+  parent.innerHTML = `<div class="album-cover-placeholder rounded-sm bg-gray-800 shadow-lg">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+      <polyline points="21 15 16 10 5 21"></polyline>
+    </svg>
+  </div>`;
+}
+
 export function createAlbumDisplayShared(deps = {}) {
   const doc = deps.doc || (typeof document !== 'undefined' ? document : null);
+  const setTimer = deps.setTimeout || globalThis.setTimeout;
   const createObserver =
     deps.createObserver ||
     ((callback, options) => new IntersectionObserver(callback, options));
@@ -21,6 +47,36 @@ export function createAlbumDisplayShared(deps = {}) {
   let fingerprintCache = new WeakMap();
   let rowElementsCache = new WeakMap();
   let coverImageObserver = null;
+
+  function handleCoverError(image) {
+    const coverSrc = image.dataset.coverSrc || image.src;
+    const retryCount = Number.parseInt(
+      image.dataset.coverRetryCount || '0',
+      10
+    );
+
+    if (coverSrc && retryCount < MAX_COVER_RETRIES) {
+      image.dataset.coverRetryCount = String(retryCount + 1);
+      image.src = PLACEHOLDER_GIF;
+      setTimer(() => {
+        if (image.isConnected === false) return;
+        image.src = addRetryParam(coverSrc);
+      }, COVER_RETRY_DELAY_MS);
+      return;
+    }
+
+    if (image.parentElement) {
+      renderCoverPlaceholder(image.parentElement);
+    }
+  }
+
+  function attachCoverErrorRetry(image) {
+    if (image.dataset.coverRetryAttached === 'true') return;
+    if (typeof image.addEventListener !== 'function') return;
+
+    image.dataset.coverRetryAttached = 'true';
+    image.addEventListener('error', () => handleCoverError(image));
+  }
 
   function applyVisibilityInPlace() {
     const container = doc?.getElementById('albumContainer');
@@ -55,6 +111,7 @@ export function createAlbumDisplayShared(deps = {}) {
           const image = entry.target;
           const lazySrc = image.dataset.lazySrc;
           if (lazySrc) {
+            image.dataset.coverSrc = lazySrc;
             image.src = lazySrc;
             delete image.dataset.lazySrc;
           }
@@ -75,6 +132,7 @@ export function createAlbumDisplayShared(deps = {}) {
 
     const lazyImages = container.querySelectorAll('img[data-lazy-src]');
     lazyImages.forEach((img) => {
+      attachCoverErrorRetry(img);
       coverImageObserver.observe(img);
     });
   }

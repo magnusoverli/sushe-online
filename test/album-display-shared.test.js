@@ -112,6 +112,64 @@ describe('album-display-shared module', () => {
     assert.strictEqual(unobserved[0], img);
   });
 
+  it('retries cover images after initial load errors', () => {
+    const timers = [];
+    let observerCallback = null;
+    let errorHandler = null;
+    const parent = { innerHTML: '' };
+    const img = {
+      dataset: { lazySrc: '/api/albums/album1/cover' },
+      src: '',
+      parentElement: parent,
+      isConnected: true,
+      addEventListener(event, handler) {
+        if (event === 'error') errorHandler = handler;
+      },
+    };
+
+    const utils = createAlbumDisplayShared({
+      doc: { getElementById: () => null },
+      computeGridTemplate: () => '',
+      getVisibleColumns: () => [],
+      getToggleableColumns: () => [],
+      isColumnVisible: () => true,
+      setTimeout(callback) {
+        timers.push(callback);
+      },
+      createObserver(callback) {
+        observerCallback = callback;
+        return {
+          observe() {},
+          unobserve() {},
+        };
+      },
+    });
+
+    const container = {
+      querySelectorAll(selector) {
+        if (selector === 'img[data-lazy-src]') return [img];
+        return [];
+      },
+    };
+
+    utils.observeLazyImages(container);
+    observerCallback([{ isIntersecting: true, target: img }]);
+    assert.strictEqual(img.src, '/api/albums/album1/cover');
+    assert.strictEqual(img.dataset.coverSrc, '/api/albums/album1/cover');
+
+    errorHandler();
+    assert.match(img.src, /^data:image\/gif;base64,/);
+    assert.strictEqual(timers.length, 1);
+
+    timers[0]();
+    assert.match(img.src, /^\/api\/albums\/album1\/cover\?coverRetry=/);
+
+    errorHandler();
+    timers[1]();
+    errorHandler();
+    assert.match(parent.innerHTML, /album-cover-placeholder/);
+  });
+
   it('caches row element lookups and supports reset', () => {
     let queries = 0;
     const span = {};
