@@ -655,19 +655,14 @@ export function createAlbumContextMenu(deps = {}) {
         '<div class="px-4 py-2 text-sm text-gray-500">No other lists available</div>';
     } else {
       submenu.innerHTML = sortedYears
-        .map((year) => {
-          const locked = isYearLockedSync(Number(year));
-          const dimClass = locked ? ' opacity-60' : '';
-          const lockIcon = locked
-            ? '<i class="fas fa-lock text-xs text-yellow-500/70 mr-2" aria-label="Locked"></i>'
-            : '';
-          return `
-        <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap${dimClass}" data-year="${year}"${locked ? ' data-locked="true"' : ''}>
+        .map(
+          (year) => `
+        <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-year="${year}">
           <span>${year}</span>
-          <span class="flex items-center ml-3">${lockIcon}<i class="fas fa-chevron-right text-xs text-gray-500"></i></span>
+          <i class="fas fa-chevron-right text-xs ml-3 text-gray-500"></i>
         </button>
-      `;
-        })
+      `
+        )
         .join('');
 
       // Add hover handlers to each year option
@@ -744,8 +739,10 @@ export function createAlbumContextMenu(deps = {}) {
     // Populate the lists submenu
     listsSubmenu.innerHTML = yearLists
       .map((listId) => {
-        const name = getLists()[listId]?.name || listId;
-        if (yearLocked) {
+        const meta = getLists()[listId];
+        const name = meta?.name || listId;
+        const listLocked = yearLocked && meta?.isMain === true;
+        if (listLocked) {
           return `
       <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap opacity-60 cursor-not-allowed" data-target-list="${listId}" data-locked="true">
         <span><span class="mr-2">&bull;</span>${name}</span>
@@ -775,7 +772,7 @@ export function createAlbumContextMenu(deps = {}) {
         moveOption?.classList.remove('bg-gray-700', 'text-white');
 
         if (btn.dataset.locked === 'true') {
-          showToast(`Year ${year} is locked`, 'error');
+          showToast(`Main list for ${year} is locked`, 'error');
           return;
         }
 
@@ -857,19 +854,14 @@ export function createAlbumContextMenu(deps = {}) {
         '<div class="px-4 py-2 text-sm text-gray-500">No other lists available</div>';
     } else {
       submenu.innerHTML = sortedYears
-        .map((year) => {
-          const locked = isYearLockedSync(Number(year));
-          const dimClass = locked ? ' opacity-60' : '';
-          const lockIcon = locked
-            ? '<i class="fas fa-lock text-xs text-yellow-500/70 mr-2" aria-label="Locked"></i>'
-            : '';
-          return `
-        <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap${dimClass}" data-year="${year}"${locked ? ' data-locked="true"' : ''}>
+        .map(
+          (year) => `
+        <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-year="${year}">
           <span>${year}</span>
-          <span class="flex items-center ml-3">${lockIcon}<i class="fas fa-chevron-right text-xs text-gray-500"></i></span>
+          <i class="fas fa-chevron-right text-xs ml-3 text-gray-500"></i>
         </button>
-      `;
-        })
+      `
+        )
         .join('');
 
       // Add hover handlers to each year option
@@ -945,8 +937,10 @@ export function createAlbumContextMenu(deps = {}) {
     // Populate the lists submenu
     listsSubmenu.innerHTML = yearLists
       .map((listId) => {
-        const name = getLists()[listId]?.name || listId;
-        if (yearLocked) {
+        const meta = getLists()[listId];
+        const name = meta?.name || listId;
+        const listLocked = yearLocked && meta?.isMain === true;
+        if (listLocked) {
           return `
       <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap opacity-60 cursor-not-allowed" data-target-list="${listId}" data-locked="true">
         <span><span class="mr-2">&bull;</span>${name}</span>
@@ -976,7 +970,7 @@ export function createAlbumContextMenu(deps = {}) {
         copyOption?.classList.remove('bg-gray-700', 'text-white');
 
         if (btn.dataset.locked === 'true') {
-          showToast(`Year ${year} is locked`, 'error');
+          showToast(`Main list for ${year} is locked`, 'error');
           return;
         }
 

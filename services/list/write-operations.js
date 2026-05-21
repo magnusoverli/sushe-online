@@ -16,7 +16,7 @@ function createListWriteOperations(deps = {}) {
     findListByIdOrThrow,
     findOrCreateYearGroup,
     findOrCreateUncategorizedGroup,
-    validateYearNotLocked,
+    validateMainListNotLocked,
     logger,
   } = deps;
 
@@ -35,8 +35,8 @@ function createListWriteOperations(deps = {}) {
   if (typeof findOrCreateUncategorizedGroup !== 'function') {
     throw new Error('findOrCreateUncategorizedGroup is required');
   }
-  if (typeof validateYearNotLocked !== 'function') {
-    throw new Error('validateYearNotLocked is required');
+  if (typeof validateMainListNotLocked !== 'function') {
+    throw new Error('validateMainListNotLocked is required');
   }
 
   async function createList(
@@ -145,7 +145,12 @@ function createListWriteOperations(deps = {}) {
         client
       );
 
-      await validateYearNotLocked(client, list.year, 'modify list items');
+      await validateMainListNotLocked(
+        client,
+        list.year,
+        list.is_main,
+        'modify list items'
+      );
 
       await client.query('DELETE FROM list_items WHERE list_id = $1', [
         list._id,
@@ -194,7 +199,12 @@ function createListWriteOperations(deps = {}) {
         client
       );
 
-      await validateYearNotLocked(client, list.year, 'modify list items');
+      await validateMainListNotLocked(
+        client,
+        list.year,
+        list.is_main,
+        'modify list items'
+      );
 
       changeCount += await itemOperations.processRemovals(
         client,

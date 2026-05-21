@@ -33,9 +33,17 @@ export function createMobileListSelectionActions(deps = {}) {
         if (!listsByYear[year]) {
           listsByYear[year] = [];
         }
-        listsByYear[year].push({ id: listId, name: listName });
+        listsByYear[year].push({
+          id: listId,
+          name: listName,
+          isMain: meta?.isMain === true,
+        });
       } else {
-        listsWithoutYear.push({ id: listId, name: listName });
+        listsWithoutYear.push({
+          id: listId,
+          name: listName,
+          isMain: meta?.isMain === true,
+        });
       }
     });
 
@@ -109,13 +117,10 @@ export function createMobileListSelectionActions(deps = {}) {
       const yearSections = sortedYears
         .map((year, idx) => {
           const yearLocked = isYearLockedSync(Number(year));
-          const headerDim = yearLocked ? ' opacity-60' : '';
-          const yearLockIcon = yearLocked
-            ? '<i class="fas fa-lock text-xs text-yellow-500/70" aria-label="Locked"></i>'
-            : '';
           const listButtons = listsByYear[year]
             .map((list) => {
-              if (yearLocked) {
+              const listLocked = yearLocked && list.isMain === true;
+              if (listLocked) {
                 return `
                   <button data-target-list="${list.id}" data-locked="true"
                           class="w-full flex items-center justify-between text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm text-gray-300 opacity-60">
@@ -135,15 +140,14 @@ export function createMobileListSelectionActions(deps = {}) {
           return `
           <div class="year-section" data-year="${year}">
             <button data-action="toggle-year" data-year="${year}"
-                    class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded-sm${headerDim}">
+                    class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded-sm">
               <span class="font-medium text-white">${year}</span>
               <div class="flex items-center gap-2">
-                ${yearLockIcon}
                 <span class="text-xs text-gray-500">${listsByYear[year].length} list${listsByYear[year].length !== 1 ? 's' : ''}</span>
                 <i class="fas fa-chevron-down text-gray-500 text-xs transition-transform duration-200" data-year-chevron="${year}"></i>
               </div>
             </button>
-            <div data-year-lists="${year}" data-year-locked="${yearLocked ? 'true' : 'false'}" class="${idx === 0 ? '' : 'hidden'} overflow-hidden transition-all duration-200 ease-out" style="${idx === 0 ? '' : 'max-height: 0;'}">
+            <div data-year-lists="${year}" class="${idx === 0 ? '' : 'hidden'} overflow-hidden transition-all duration-200 ease-out" style="${idx === 0 ? '' : 'max-height: 0;'}">
               <div class="ml-4 border-l-2 border-gray-700 pl-2">
                 ${listButtons}
               </div>
@@ -264,7 +268,7 @@ export function createMobileListSelectionActions(deps = {}) {
 
         if (btn.dataset.locked === 'true') {
           const lockedYear = btn.closest('[data-year]')?.dataset.year || 'this';
-          showToast(`Year ${lockedYear} is locked`, 'error');
+          showToast(`Main list for ${lockedYear} is locked`, 'error');
           return;
         }
 
