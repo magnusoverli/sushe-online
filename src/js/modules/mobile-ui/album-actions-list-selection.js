@@ -263,8 +263,7 @@ export function createMobileListSelectionActions(deps = {}) {
         close();
 
         if (btn.dataset.locked === 'true') {
-          const lockedYear =
-            btn.closest('[data-year]')?.dataset.year || 'this';
+          const lockedYear = btn.closest('[data-year]')?.dataset.year || 'this';
           showToast(`Year ${lockedYear} is locked`, 'error');
           return;
         }
