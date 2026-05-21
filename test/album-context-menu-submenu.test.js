@@ -38,6 +38,7 @@ describe('album context menu submenu controller wiring', async () => {
       albumMoveSubmenu: createElement('albumMoveSubmenu'),
       albumMoveListsSubmenu: createElement('albumMoveListsSubmenu'),
       albumCopySubmenu: createElement('albumCopySubmenu'),
+      albumCopyListsSubmenu: createElement('albumCopyListsSubmenu'),
     };
 
     globalThis.document = {

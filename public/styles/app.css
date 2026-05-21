@@ -907,6 +907,8 @@ input[list]::-webkit-list-button {
   #albumContextMenu,
   #albumMoveSubmenu,
   #albumMoveListsSubmenu,
+  #albumCopySubmenu,
+  #albumCopyListsSubmenu,
   #playAlbumSubmenu,
   #downloadListSubmenu {
     border-color: transparent;

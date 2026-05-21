@@ -182,6 +182,7 @@ function createListService(deps = {}) {
     findListByIdOrThrow,
     findOrCreateYearGroup,
     findOrCreateUncategorizedGroup,
+    validateYearNotLocked,
     logger: log,
   });
 

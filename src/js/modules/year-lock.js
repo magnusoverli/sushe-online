@@ -99,7 +99,7 @@ export async function isListLocked(year, isMain) {
  * @param {number|null} year - Year to check
  * @returns {boolean}
  */
-function isYearLockedSync(year) {
+export function isYearLockedSync(year) {
   if (!year) return false;
   if (!lockedYearsCache) return false;
   return lockedYearsCache.includes(year);

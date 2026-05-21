@@ -6,6 +6,9 @@ export function createMobileListSelectionActions(deps = {}) {
     getLists,
     showMoveConfirmation,
     showCopyConfirmation,
+    showToast = () => {},
+    getLockedYears = async () => [],
+    isYearLockedSync = () => false,
   } = deps;
 
   /**
@@ -53,7 +56,12 @@ export function createMobileListSelectionActions(deps = {}) {
    * @param {string} options.albumId - Album identity string
    * @param {Function} options.onSelect - Callback when a target list is selected: (albumId, targetListId) => void
    */
-  function showMobileListSelectionSheet({ title, index, albumId, onSelect }) {
+  async function showMobileListSelectionSheet({
+    title,
+    index,
+    albumId,
+    onSelect,
+  }) {
     const currentList = getCurrentList();
 
     // Validate index
@@ -69,6 +77,9 @@ export function createMobileListSelectionActions(deps = {}) {
     }
 
     const album = albumsForSheet[index];
+
+    // Warm locked-years cache so we can dim locked entries (cached for 30s)
+    await getLockedYears();
 
     // Group lists by year
     const { listsByYear, sortedYears, listsWithoutYear } = groupListsForMove();
@@ -96,34 +107,50 @@ export function createMobileListSelectionActions(deps = {}) {
     } else {
       // Build year accordion sections
       const yearSections = sortedYears
-        .map(
-          (year, idx) => `
-          <div class="year-section" data-year="${year}">
-            <button data-action="toggle-year" data-year="${year}"
-                    class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded-sm">
-              <span class="font-medium text-white">${year}</span>
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-gray-500">${listsByYear[year].length} list${listsByYear[year].length !== 1 ? 's' : ''}</span>
-                <i class="fas fa-chevron-down text-gray-500 text-xs transition-transform duration-200" data-year-chevron="${year}"></i>
-              </div>
-            </button>
-            <div data-year-lists="${year}" class="${idx === 0 ? '' : 'hidden'} overflow-hidden transition-all duration-200 ease-out" style="${idx === 0 ? '' : 'max-height: 0;'}">
-              <div class="ml-4 border-l-2 border-gray-700 pl-2">
-                ${listsByYear[year]
-                  .map(
-                    (list) => `
+        .map((year, idx) => {
+          const yearLocked = isYearLockedSync(Number(year));
+          const headerDim = yearLocked ? ' opacity-60' : '';
+          const yearLockIcon = yearLocked
+            ? '<i class="fas fa-lock text-xs text-yellow-500/70" aria-label="Locked"></i>'
+            : '';
+          const listButtons = listsByYear[year]
+            .map((list) => {
+              if (yearLocked) {
+                return `
+                  <button data-target-list="${list.id}" data-locked="true"
+                          class="w-full flex items-center justify-between text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm text-gray-300 opacity-60">
+                    <span>${list.name}</span>
+                    <i class="fas fa-lock text-xs text-yellow-500/70 ml-3" aria-label="Locked"></i>
+                  </button>
+                `;
+              }
+              return `
                   <button data-target-list="${list.id}"
                           class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm text-gray-300">
                     ${list.name}
                   </button>
-                `
-                  )
-                  .join('')}
+                `;
+            })
+            .join('');
+          return `
+          <div class="year-section" data-year="${year}">
+            <button data-action="toggle-year" data-year="${year}"
+                    class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded-sm${headerDim}">
+              <span class="font-medium text-white">${year}</span>
+              <div class="flex items-center gap-2">
+                ${yearLockIcon}
+                <span class="text-xs text-gray-500">${listsByYear[year].length} list${listsByYear[year].length !== 1 ? 's' : ''}</span>
+                <i class="fas fa-chevron-down text-gray-500 text-xs transition-transform duration-200" data-year-chevron="${year}"></i>
+              </div>
+            </button>
+            <div data-year-lists="${year}" data-year-locked="${yearLocked ? 'true' : 'false'}" class="${idx === 0 ? '' : 'hidden'} overflow-hidden transition-all duration-200 ease-out" style="${idx === 0 ? '' : 'max-height: 0;'}">
+              <div class="ml-4 border-l-2 border-gray-700 pl-2">
+                ${listButtons}
               </div>
             </div>
           </div>
-        `
-        )
+        `;
+        })
         .join('');
 
       // Build "Other" section for lists without year
@@ -234,6 +261,14 @@ export function createMobileListSelectionActions(deps = {}) {
         e.stopPropagation();
         const targetList = btn.dataset.targetList;
         close();
+
+        if (btn.dataset.locked === 'true') {
+          const lockedYear =
+            btn.closest('[data-year]')?.dataset.year || 'this';
+          showToast(`Year ${lockedYear} is locked`, 'error');
+          return;
+        }
+
         onSelect(albumId, targetList);
       });
     });

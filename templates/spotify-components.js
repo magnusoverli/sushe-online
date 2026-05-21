@@ -113,9 +113,14 @@ function createSpotifyComponents(deps) {
     <!-- Populated dynamically with lists for selected year -->
   </div>
   
-  <!-- Submenu for Copy to List -->
+  <!-- Submenu for Copy to List - Years -->
   <div id="albumCopySubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
-    <!-- Populated dynamically with available lists -->
+    <!-- Populated dynamically with years -->
+  </div>
+
+  <!-- Submenu for Copy to List - Lists within a year -->
+  <div id="albumCopyListsSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
+    <!-- Populated dynamically with lists for selected year -->
   </div>
   
   <!-- Submenu for Play Album (Spotify Connect devices) -->

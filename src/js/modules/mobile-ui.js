@@ -161,6 +161,8 @@ export function createMobileUI(deps = {}) {
     showDiscoveryModal,
     showMoveConfirmation,
     showCopyConfirmation,
+    getLockedYears: deps.getLockedYears,
+    isYearLockedSync: deps.isYearLockedSync,
     onEditAlbum: showMobileEditFormSafe,
     onPlayAlbum: playAlbumSafe,
     onRemoveAlbum: removeAlbumSafe,

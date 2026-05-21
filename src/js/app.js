@@ -29,6 +29,8 @@ import {
   invalidateLockedRecommendationYearsCache,
   isListLocked,
   isListLockedSync,
+  isYearLockedSync,
+  getLockedYears,
   showYearLockUI,
   clearYearLockUI,
 } from './modules/year-lock.js';
@@ -397,6 +399,8 @@ const getAlbumContextMenuModule = createLazyModule(() =>
     loadLists,
     getRecommendationsModule: () => getRecommendationsModule(),
     getMobileUIModule: () => getMobileUIModule(),
+    getLockedYears,
+    isYearLockedSync,
     createContextSubmenuController,
   })
 );
@@ -572,6 +576,8 @@ const getMobileUIModule = createLazyModule(() =>
       getRecommendationsModule().recommendAlbum(...args),
     openRenameCategoryModal,
     getCurrentUser: () => window.currentUser || {},
+    getLockedYears,
+    isYearLockedSync,
   })
 );
 

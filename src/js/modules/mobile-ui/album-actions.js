@@ -289,6 +289,9 @@ export function createMobileAlbumActions(deps = {}) {
       getLists,
       showMoveConfirmation,
       showCopyConfirmation,
+      showToast,
+      getLockedYears: deps.getLockedYears,
+      isYearLockedSync: deps.isYearLockedSync,
     });
 
   return {

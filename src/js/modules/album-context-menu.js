@@ -45,12 +45,16 @@ export function createAlbumContextMenu(deps = {}) {
     loadLists,
     getRecommendationsModule,
     getMobileUIModule,
+    getLockedYears = async () => [],
+    isYearLockedSync = () => false,
     createContextSubmenuController:
       makeContextSubmenuController = createContextSubmenuController,
   } = deps;
 
   let currentMoveHighlightedYear = null;
   let moveListsHideTimeout = null;
+  let currentCopyHighlightedYear = null;
+  let copyListsHideTimeout = null;
   let albumSubmenuController = null;
 
   function clearMoveListsHideTimeout() {
@@ -67,6 +71,22 @@ export function createAlbumContextMenu(deps = {}) {
       ?.querySelector(`[data-year="${currentMoveHighlightedYear}"]`)
       ?.classList.remove('bg-gray-700', 'text-white');
     currentMoveHighlightedYear = null;
+  }
+
+  function clearCopyListsHideTimeout() {
+    if (copyListsHideTimeout) {
+      clearTimeout(copyListsHideTimeout);
+      copyListsHideTimeout = null;
+    }
+  }
+
+  function clearCopyYearHighlight() {
+    if (!currentCopyHighlightedYear) return;
+    const yearMenu = document.getElementById('albumCopySubmenu');
+    yearMenu
+      ?.querySelector(`[data-year="${currentCopyHighlightedYear}"]`)
+      ?.classList.remove('bg-gray-700', 'text-white');
+    currentCopyHighlightedYear = null;
   }
 
   function hideAlbumPlaySubmenu() {
@@ -87,10 +107,13 @@ export function createAlbumContextMenu(deps = {}) {
   }
 
   function hideCopySubmenu() {
+    clearCopyListsHideTimeout();
     document.getElementById('albumCopySubmenu')?.classList.add('hidden');
+    document.getElementById('albumCopyListsSubmenu')?.classList.add('hidden');
     document
       .getElementById('copyAlbumOption')
       ?.classList.remove('bg-gray-700', 'text-white');
+    clearCopyYearHighlight();
   }
 
   function hideAlbumSubmenus() {
@@ -137,12 +160,16 @@ export function createAlbumContextMenu(deps = {}) {
         },
         {
           triggerId: 'copyAlbumOption',
-          submenuIds: ['albumCopySubmenu'],
+          submenuIds: ['albumCopySubmenu', 'albumCopyListsSubmenu'],
+          relatedMenuIds: ['albumCopySubmenu', 'albumCopyListsSubmenu'],
           onShow: showCopyToListSubmenu,
           onHide: hideCopySubmenu,
         },
       ],
-      onHideAll: clearMoveYearHighlight,
+      onHideAll: () => {
+        clearMoveYearHighlight();
+        clearCopyYearHighlight();
+      },
     });
 
     albumSubmenuController.initialize();
@@ -599,7 +626,7 @@ export function createAlbumContextMenu(deps = {}) {
   /**
    * Show the move to list submenu for desktop (shows years)
    */
-  function showMoveToListSubmenu() {
+  async function showMoveToListSubmenu() {
     const submenu = document.getElementById('albumMoveSubmenu');
     const listsSubmenu = document.getElementById('albumMoveListsSubmenu');
     const moveOption = document.getElementById('moveAlbumOption');
@@ -617,6 +644,9 @@ export function createAlbumContextMenu(deps = {}) {
     // Highlight the parent menu item
     moveOption.classList.add('bg-gray-700', 'text-white');
 
+    // Warm locked-years cache so we can dim locked entries (cached for 30s)
+    await getLockedYears();
+
     // Group lists by year
     const { listsByYear, sortedYears } = groupListsForMove();
 
@@ -625,14 +655,19 @@ export function createAlbumContextMenu(deps = {}) {
         '<div class="px-4 py-2 text-sm text-gray-500">No other lists available</div>';
     } else {
       submenu.innerHTML = sortedYears
-        .map(
-          (year) => `
-        <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-year="${year}">
+        .map((year) => {
+          const locked = isYearLockedSync(Number(year));
+          const dimClass = locked ? ' opacity-60' : '';
+          const lockIcon = locked
+            ? '<i class="fas fa-lock text-xs text-yellow-500/70 mr-2" aria-label="Locked"></i>'
+            : '';
+          return `
+        <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap${dimClass}" data-year="${year}"${locked ? ' data-locked="true"' : ''}>
           <span>${year}</span>
-          <i class="fas fa-chevron-right text-xs ml-3 text-gray-500"></i>
+          <span class="flex items-center ml-3">${lockIcon}<i class="fas fa-chevron-right text-xs text-gray-500"></i></span>
         </button>
-      `
-        )
+      `;
+        })
         .join('');
 
       // Add hover handlers to each year option
@@ -704,15 +739,26 @@ export function createAlbumContextMenu(deps = {}) {
       return;
     }
 
+    const yearLocked = isYearLockedSync(Number(year));
+
     // Populate the lists submenu
     listsSubmenu.innerHTML = yearLists
-      .map(
-        (listId) => `
-      <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listId}">
-        <span class="mr-2">&bull;</span>${getLists()[listId]?.name || listId}
+      .map((listId) => {
+        const name = getLists()[listId]?.name || listId;
+        if (yearLocked) {
+          return `
+      <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap opacity-60 cursor-not-allowed" data-target-list="${listId}" data-locked="true">
+        <span><span class="mr-2">&bull;</span>${name}</span>
+        <i class="fas fa-lock text-xs text-yellow-500/70 ml-3" aria-label="Locked"></i>
       </button>
-    `
-      )
+    `;
+        }
+        return `
+      <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listId}">
+        <span class="mr-2">&bull;</span>${name}
+      </button>
+    `;
+      })
       .join('');
 
     // Add click handlers to each list option
@@ -727,6 +773,11 @@ export function createAlbumContextMenu(deps = {}) {
         yearSubmenu.classList.add('hidden');
         listsSubmenu.classList.add('hidden');
         moveOption?.classList.remove('bg-gray-700', 'text-white');
+
+        if (btn.dataset.locked === 'true') {
+          showToast(`Year ${year} is locked`, 'error');
+          return;
+        }
 
         // Show confirmation modal
         getMobileUIModule().showMoveConfirmation(
@@ -775,62 +826,74 @@ export function createAlbumContextMenu(deps = {}) {
   }
 
   /**
-   * Show the copy to list submenu for desktop (flat list, no year hierarchy)
+   * Show the copy to list submenu for desktop (shows years)
    */
-  function showCopyToListSubmenu() {
+  async function showCopyToListSubmenu() {
     const submenu = document.getElementById('albumCopySubmenu');
+    const listsSubmenu = document.getElementById('albumCopyListsSubmenu');
     const copyOption = document.getElementById('copyAlbumOption');
 
     if (!submenu || !copyOption) return;
 
-    clearMoveListsHideTimeout();
-    clearMoveYearHighlight();
+    clearCopyListsHideTimeout();
+
+    if (listsSubmenu) {
+      listsSubmenu.classList.add('hidden');
+    }
+
+    clearCopyYearHighlight();
 
     // Highlight the parent menu item
     copyOption.classList.add('bg-gray-700', 'text-white');
 
+    // Warm locked-years cache so we can dim locked entries (cached for 30s)
+    await getLockedYears();
+
     // Group lists by year
     const { listsByYear, sortedYears } = groupListsForMove();
 
-    // Build a flat list of all available lists, grouped by year for readability
-    const allLists = [];
-    sortedYears.forEach((year) => {
-      (listsByYear[year] || []).forEach((listId) => {
-        allLists.push({ listId, name: getLists()[listId]?.name || listId });
-      });
-    });
-
-    if (allLists.length === 0) {
+    if (sortedYears.length === 0) {
       submenu.innerHTML =
         '<div class="px-4 py-2 text-sm text-gray-500">No other lists available</div>';
     } else {
-      submenu.innerHTML = allLists
-        .map(
-          ({ listId, name }) => `
-        <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listId}">
-          <span class="mr-2">&bull;</span>${name}
+      submenu.innerHTML = sortedYears
+        .map((year) => {
+          const locked = isYearLockedSync(Number(year));
+          const dimClass = locked ? ' opacity-60' : '';
+          const lockIcon = locked
+            ? '<i class="fas fa-lock text-xs text-yellow-500/70 mr-2" aria-label="Locked"></i>'
+            : '';
+          return `
+        <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap${dimClass}" data-year="${year}"${locked ? ' data-locked="true"' : ''}>
+          <span>${year}</span>
+          <span class="flex items-center ml-3">${lockIcon}<i class="fas fa-chevron-right text-xs text-gray-500"></i></span>
         </button>
-      `
-        )
+      `;
+        })
         .join('');
 
-      // Add click handlers to each list option
-      submenu.querySelectorAll('[data-target-list]').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const targetList = btn.dataset.targetList;
+      // Add hover handlers to each year option
+      submenu.querySelectorAll('[data-year]').forEach((btn) => {
+        btn.addEventListener('mouseenter', () => {
+          clearCopyListsHideTimeout();
+          const year = btn.dataset.year;
+          showCopyToListYearSubmenu(year, btn, listsByYear);
+        });
 
-          // Hide all menus and remove highlights
-          document.getElementById('albumContextMenu')?.classList.add('hidden');
-          submenu.classList.add('hidden');
-          copyOption?.classList.remove('bg-gray-700', 'text-white');
+        btn.addEventListener('mouseleave', (e) => {
+          const listsMenu = document.getElementById('albumCopyListsSubmenu');
+          const toListsSubmenu =
+            listsMenu &&
+            (e.relatedTarget === listsMenu ||
+              listsMenu.contains(e.relatedTarget));
 
-          // Show copy confirmation modal
-          getMobileUIModule().showCopyConfirmation(
-            getContextAlbumSelection().albumId,
-            targetList
-          );
+          if (!toListsSubmenu) {
+            copyListsHideTimeout = setTimeout(() => {
+              if (listsMenu) listsMenu.classList.add('hidden');
+              btn.classList.remove('bg-gray-700', 'text-white');
+              currentCopyHighlightedYear = null;
+            }, 100);
+          }
         });
       });
     }
@@ -843,6 +906,123 @@ export function createAlbumContextMenu(deps = {}) {
     submenu.style.left = `${menuRect.right}px`;
     submenu.style.top = `${copyRect.top}px`;
     submenu.classList.remove('hidden');
+  }
+
+  /**
+   * Show the lists submenu for a specific year (copy variant)
+   */
+  function showCopyToListYearSubmenu(year, yearButton, listsByYear) {
+    const listsSubmenu = document.getElementById('albumCopyListsSubmenu');
+    const yearSubmenu = document.getElementById('albumCopySubmenu');
+    const copyOption = document.getElementById('copyAlbumOption');
+
+    if (!listsSubmenu || !yearSubmenu) return;
+
+    // Remove highlight from previously highlighted year
+    if (currentCopyHighlightedYear && currentCopyHighlightedYear !== year) {
+      const prevBtn = yearSubmenu.querySelector(
+        `[data-year="${currentCopyHighlightedYear}"]`
+      );
+      if (prevBtn) {
+        prevBtn.classList.remove('bg-gray-700', 'text-white');
+      }
+    }
+
+    // Highlight the current year button
+    yearButton.classList.add('bg-gray-700', 'text-white');
+    currentCopyHighlightedYear = year;
+
+    // Get lists for this year
+    const yearLists = listsByYear[year] || [];
+
+    if (yearLists.length === 0) {
+      listsSubmenu.classList.add('hidden');
+      return;
+    }
+
+    const yearLocked = isYearLockedSync(Number(year));
+
+    // Populate the lists submenu
+    listsSubmenu.innerHTML = yearLists
+      .map((listId) => {
+        const name = getLists()[listId]?.name || listId;
+        if (yearLocked) {
+          return `
+      <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap opacity-60 cursor-not-allowed" data-target-list="${listId}" data-locked="true">
+        <span><span class="mr-2">&bull;</span>${name}</span>
+        <i class="fas fa-lock text-xs text-yellow-500/70 ml-3" aria-label="Locked"></i>
+      </button>
+    `;
+        }
+        return `
+      <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listId}">
+        <span class="mr-2">&bull;</span>${name}
+      </button>
+    `;
+      })
+      .join('');
+
+    // Add click handlers to each list option
+    listsSubmenu.querySelectorAll('[data-target-list]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const targetList = btn.dataset.targetList;
+
+        // Hide all menus and remove highlights
+        document.getElementById('albumContextMenu')?.classList.add('hidden');
+        yearSubmenu.classList.add('hidden');
+        listsSubmenu.classList.add('hidden');
+        copyOption?.classList.remove('bg-gray-700', 'text-white');
+
+        if (btn.dataset.locked === 'true') {
+          showToast(`Year ${year} is locked`, 'error');
+          return;
+        }
+
+        // Show copy confirmation modal
+        getMobileUIModule().showCopyConfirmation(
+          getContextAlbumSelection().albumId,
+          targetList
+        );
+      });
+    });
+
+    // Handle mouse leaving the lists submenu
+    listsSubmenu.onmouseenter = () => {
+      clearCopyListsHideTimeout();
+    };
+
+    listsSubmenu.onmouseleave = (e) => {
+      const yearMenu = document.getElementById('albumCopySubmenu');
+      const toYearSubmenu =
+        yearMenu &&
+        (e.relatedTarget === yearMenu || yearMenu.contains(e.relatedTarget));
+
+      if (!toYearSubmenu) {
+        copyListsHideTimeout = setTimeout(() => {
+          listsSubmenu.classList.add('hidden');
+          const highlightedYear = currentCopyHighlightedYear;
+          if (highlightedYear) {
+            const yearBtn = yearMenu?.querySelector(
+              `[data-year="${highlightedYear}"]`
+            );
+            if (yearBtn) {
+              yearBtn.classList.remove('bg-gray-700', 'text-white');
+            }
+            currentCopyHighlightedYear = null;
+          }
+        }, 100);
+      }
+    };
+
+    // Position lists submenu next to the year button
+    const yearRect = yearButton.getBoundingClientRect();
+    const yearSubmenuRect = yearSubmenu.getBoundingClientRect();
+
+    listsSubmenu.style.left = `${yearSubmenuRect.right}px`;
+    listsSubmenu.style.top = `${yearRect.top}px`;
+    listsSubmenu.classList.remove('hidden');
   }
 
   // ========================================================
@@ -865,6 +1045,7 @@ export function createAlbumContextMenu(deps = {}) {
     showMoveToListSubmenu,
     showMoveToListYearSubmenu,
     showCopyToListSubmenu,
+    showCopyToListYearSubmenu,
     hideSubmenuOnLeave,
   };
 }
