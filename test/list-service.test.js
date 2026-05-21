@@ -729,6 +729,10 @@ describe('list-service write operations', () => {
           return { rows: [], rowCount: 0 };
         }
 
+        if (sql.includes('SELECT locked FROM master_lists')) {
+          return { rows: [] };
+        }
+
         if (sql.startsWith('UPDATE lists SET updated_at = $1 WHERE _id = $2')) {
           return { rows: [], rowCount: 1 };
         }
@@ -772,6 +776,10 @@ describe('list-service write operations', () => {
         if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
           events.push(sql);
           return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('SELECT locked FROM master_lists')) {
+          return { rows: [] };
         }
 
         if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
