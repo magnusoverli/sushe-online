@@ -63,7 +63,7 @@ services:
         max-file: '3'
 
   db:
-    image: postgres:18.1
+    image: postgres:18.4
     container_name: sushe-db-local
     ports:
       - '5433:5432'
