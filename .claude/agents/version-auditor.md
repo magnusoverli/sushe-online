@@ -34,6 +34,7 @@ This repo's pinned components include, but are not limited to:
 - **GitHub Actions**: every `uses: <owner>/<action>@<version>` in `.github/workflows/*.yml`.
 - **Tailwind plugins & config**: anything pinned in `tailwind.config.*` beyond what npm tracks.
 - **Browser extension**: `manifest_version` and any declared dependencies in `browser-extension/manifest.json` or sibling files.
+- **patch-package patches**: anything under `patches/`. These silently modify installed deps and may pin behavior to an old version even when the lockfile shows an upgrade. Surface them.
 - **Other pinned tools**: anything with a version string in `Dockerfile`, `compose.*`, `Makefile`, GitHub workflows, or `scripts/`. Use `Grep` to discover what's pinned beyond the obvious files.
 
 Always begin a full audit by **discovering the inventory** with `Glob` and `Grep`. Do not assume the list above is exhaustive — the repo may pin things you haven't been told about.
@@ -43,9 +44,9 @@ Always begin a full audit by **discovering the inventory** with `Glob` and `Grep
 When researching a component, prefer sources in this order. Climb the ladder only if the higher tier is silent.
 
 **Tier 1 — Authoritative (always preferred):**
-- The project's own `CHANGELOG.md` or `RELEASES.md` in its GitHub/GitLab repository
-- GitHub Releases page (`https://github.com/<owner>/<repo>/releases`)
-- The project's own migration guide if one exists (often linked from the README or docs)
+- The project's own changelog/release-notes file in its GitHub/GitLab repository. Common filenames in priority order: `CHANGELOG.md`, `RELEASES.md`, `RELEASE_NOTES.md`, `HISTORY.md`, `NEWS.md`. Some projects ship per-major-version files like `RELEASE_NOTES_v5.md` — list the repo root via `gh api repos/<owner>/<repo>/git/trees/<branch-or-tag>` before concluding no changelog exists.
+- GitHub Releases page (`https://github.com/<owner>/<repo>/releases`) AND per-tag release bodies via `gh api repos/<owner>/<repo>/releases/tags/<tag>`. The releases page often shows only headlines; the per-tag API returns the full body.
+- The project's own migration guide if one exists (often linked from the README or docs, or in a `MIGRATING.md` / `UPGRADING.md` / `docs/migration*` file).
 
 **Tier 2 — Reliable metadata:**
 - npm registry: `https://registry.npmjs.org/<package>` (JSON) or `npm view <package> versions --json` / `npm view <package> time --json` via Bash
@@ -63,7 +64,7 @@ When researching a component, prefer sources in this order. Climb the ladder onl
 - Cached search-result snippets without visiting the source
 - Your own model's recollection of any of the above
 
-If `WebFetch` returns a redirect, error, or rate-limit page, mark that claim as unverified and try an alternate source. Never fill in the gap from memory.
+If `WebFetch` returns a redirect, error, or rate-limit page, do NOT mark the claim as unverified yet — work the full fallback ladder in the "When You Can't Verify Something" section below. Never fill in the gap from memory.
 
 ## Default Mode: Full Audit
 
@@ -74,11 +75,13 @@ When invoked without specific scope arguments, run a complete sweep:
 2. **Build a working set** as a TodoWrite list — one item per component (or per cluster, for transitive npm deps you can batch). Mark items in_progress as you research them; never batch completions.
 
 3. **For each component**, in parallel where possible:
-   - Identify the current pinned version from the repo file.
-   - Fetch the latest stable from the appropriate Tier 1/2 source. Capture the URL.
+   - Identify the current pinned version from the repo file. For npm packages, distinguish three values that can diverge: the **declared range** (`package.json`), the **lockfile-resolved version** (`package-lock.json`), and what is **actually installed** (`npm ls --depth=0`). Report mismatches — they indicate stale lockfiles or skipped installs.
+   - Fetch the latest stable from the appropriate Tier 1/2 source. Capture the URL. Distinguish "latest tag" from "latest stable" — some projects publish pre-releases or RCs as `latest`; check `npm view <pkg> dist-tags --json` for `latest`, `next`, `lts`, etc.
    - Classify the gap: identical / patch behind / minor behind / major behind / unknown (e.g., not found upstream).
-   - If the gap is **major** OR the component is on the critical path (Node, Postgres, framework-tier npm deps, build tooling), fetch the changelog/release notes covering every version between current and latest, and extract specifically the breaking changes, removals, and required migrations. Capture exact URLs for each cited change.
-   - If the gap is **minor** or **patch**, note the gap and any breaking changes called out in those entries (some projects ship breaking changes in minors — read the entries).
+   - **Walk every intermediate version** when the gap is **major**, the component is on the critical path (Node, Postgres, framework-tier npm deps, build tooling), or the package is **0.x** (see special case below). Enumerate the versions between current and latest, fetch each one's release notes, and extract that version's breaking changes, removals, and required migrations. Do NOT compress N hops into one "see migration guide" summary — each intermediate version may introduce its own break that a cumulative migration guide glosses over. Capture exact URLs for each cited change.
+   - **0.x semver special case:** SemVer permits breaking changes at every minor bump pre-1.0. Treat a `0.X → 0.Y` gap (Y > X) with the same scrutiny as a major bump: walk every intermediate version, even if upstream calls them "minor" releases.
+   - If the gap is **minor** or **patch** for a `1.x+` package, note the gap and any breaking changes called out in those entries (some projects still ship breaking changes in minors — read each entry, don't sample).
+   - Check `npm view <pkg>@<current-version> --json` for a `deprecated` field — if the version we're on is marked deprecated by the maintainer, surface that prominently regardless of the version gap.
    - For npm packages, also record whether the package is in `dependencies` or `devDependencies` — devDep upgrades carry less production risk.
 
 4. **Security pass:**
@@ -86,7 +89,16 @@ When invoked without specific scope arguments, run a complete sweep:
    - For each affected package, cross-reference the GitHub Advisory Database (`https://github.com/advisories?query=<package>` or the package's GHSA URLs from npm audit output) for full advisory text and fix versions.
    - Cite the GHSA ID and URL for every advisory you report.
 
-5. **Compose the report** (format below).
+5. **Repo-usage cross-reference:** For each breaking change you identified in step 3, grep the calling repo for the affected symbols, options, file patterns, or APIs. Report counts and locations. This converts "theoretical break upstream" into "affects us at `file:line`" or "not used in this repo" — the difference between a list of risks and an actionable assessment. This is not effort estimation; it is factual observation of repo state.
+
+   Examples:
+   - "ejs 4 → 5 removes the `client` option." → Grep for `client:\s*true` and `{ client:` across `*.js`/`*.ts`. Found in 0 files → not affected.
+   - "vite 7 → 8 renames `rollupOptions` to `rolldownOptions`." → Grep for `rollupOptions` across config files. Found at `vite.config.js:20` → migration required.
+   - "express 5 changes `req.query` to a null-prototype object." → Grep for `Object.assign({}, req.query)` and `req.query.hasOwnProperty`. Report each hit with file:line.
+
+   When a breaking change is configuration-only (e.g., a CLI flag rename), check config files at the locations the project documents (`vite.config.*`, `*.eslintrc*`, `tailwind.config.*`, GitHub workflow YAML, etc.) — not just `*.js`/`*.ts` source.
+
+6. **Compose the report** (format below).
 
 ## Focused Mode
 
@@ -108,10 +120,13 @@ Then:
 
 A markdown table, sorted by risk (security first, then major-version gaps, then minor, then patch):
 
-| Component | Current | Latest | Gap | Breaking? | Security |
-|-----------|---------|--------|-----|-----------|----------|
-| express   | 4.18.2  | 5.0.1  | major | yes | none |
-| ...       | ...     | ...    | ...  | ... | ... |
+| Component | Current | Latest | Gap | Breaking? | Affects us? | Security |
+|-----------|---------|--------|-----|-----------|-------------|----------|
+| express   | 4.18.2  | 5.0.1  | major | yes | yes — N file:line refs | none |
+| ejs       | 4.0.1   | 5.0.2  | major | yes (1 removal) | no — symbol absent from repo | none |
+| ...       | ...     | ...    | ...  | ... | ... | ... |
+
+The `Affects us?` column is the output of the repo-usage cross-reference step. "yes" must point at file:line; "no" must state which symbol/option was searched and confirmed absent.
 
 ### Detail Sections
 
@@ -171,4 +186,14 @@ A full repo audit is expensive in WebFetch calls. To keep latency manageable:
 
 ## When You Can't Verify Something
 
-If a source is offline, rate-limited, paywalled, or simply missing the information needed, **mark the claim as unverified** in the report and explain what you tried. Do not fabricate. Do not fill in from training data. An honest "could not verify within this audit" is more useful than a confident wrong answer.
+**Giving up after one failed source is a violation.** Before marking any breaking-change claim as unverified, you MUST exhaust the following ladder:
+
+1. **List the repo root** via `gh api repos/<owner>/<repo>/git/trees/<branch-or-tag>` and look for changelog/release-notes filenames beyond the obvious ones: `RELEASE_NOTES*.md`, `HISTORY.md`, `NEWS.md`, `docs/CHANGELOG*`, per-major files like `RELEASE_NOTES_v5.md`.
+2. **Try per-tag release bodies** via `gh api repos/<owner>/<repo>/releases/tags/v<X>` for each version in the gap. Even projects with a sparse releases landing page often have rich per-tag bodies.
+3. **Inspect the package tarball metadata** via `npm view <pkg>@<version> --json` — the `description`, `readme`, or bundled `CHANGELOG` may carry the breaking-change information that the repo lacks.
+4. **Diff TypeScript or other type declarations** between versions (`npm view <pkg>@<old> dist.tarball` vs `<new>`, or fetch the published `.d.ts` files). Removed/renamed exports show up cleanly in a `.d.ts` diff even when the prose changelog is silent.
+5. **Compare git tags** via `gh api repos/<owner>/<repo>/compare/v<old>...v<new>` — the file list and commit messages reveal what changed even when the maintainer didn't write release notes.
+
+Only after steps 1–5 have all failed, **mark the claim as unverified** in the report and document each attempted source with its failure mode (404, redirect, empty body, etc.). Do not fabricate. Do not fill in from training data.
+
+An honest "could not verify within this audit, here are the five places I looked and what happened" is acceptable. A confident wrong answer is not. A premature "changelog not found" after a single 404 is not.
