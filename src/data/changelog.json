@@ -1,5 +1,19 @@
 [
   {
+    "date": "2026-05-21",
+    "category": "fix",
+    "description": "Year locks now work correctly for main list only",
+    "hash": "9044679262477520635ea1354ec8213d88b74808",
+    "commitMessage": "Scope year lock to main list only in item writes and UI dimming\n\nThe earlier change used validateYearNotLocked, which blocked all item\nwrites for any list in a locked year. That conflicts with the documented\ncontract enforced by test/year-locking.test.js: a year lock freezes only\nthe main (aggregate) list for that year; non-main user lists remain\neditable. Switch the server check to validateMainListNotLocked and the\nUI dim/lock indicator to only the main list of a locked year. Year-level\nmarkers in the move/copy submenus are removed since most lists in a\nlocked year are still navigable. Toast wording updated to \"Main list for\nYYYY is locked\".\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+  },
+  {
+    "date": "2026-05-21",
+    "category": "fix",
+    "description": "Moving and copying albums now respects year lock settings",
+    "hash": "2f8e53d7424b2b65da8123d3aedc1421b2dca9a7",
+    "commitMessage": "Respect year locks in move/copy and align copy submenu with move\n\nThe PUT and PATCH item-write endpoints bypassed year-lock checks, so move\nand copy could mutate lists belonging to locked years. Now the write\npath validates the list''s year inside the transaction and rejects with\nYEAR_LOCKED, and the desktop/mobile target-picker UIs dim locked-year\nentries with a lock icon and short-circuit clicks with a toast.\n\nAlso restructures the copy-to-list submenu to use the same year then\nlist hierarchy as move-to-list, replacing the flat list it had before.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+  },
+  {
     "date": "2026-05-13",
     "category": "fix",
     "description": "Fixed album covers not loading properly",
