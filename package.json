@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "postinstall": "patch-package || true",
     "start": "npm run build && node index.js",
     "dev": "concurrently \"npm run watch:css\" \"npm run watch:js\" \"nodemon --legacy-watch --exitcrash --ignore data/ --ignore '*.log' index.js\"",
     "build": "npm run build:css && npm run build:js",
@@ -40,7 +39,7 @@
     "lint:structure:baseline": "node scripts/maintainability-report.js --max-js-files-over-300=90 --max-js-files-over-700=20 --max-legacy-markers=98"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.97.1",
+    "@anthropic-ai/sdk": "^0.98.0",
     "bcryptjs": "^3.0.2",
     "compression": "^1.7.4",
     "connect-pg-simple": "^10.0.0",
@@ -79,9 +78,8 @@
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-prettier": "^5.5.1",
-    "eslint-plugin-security": "^3.0.1",
+    "eslint-plugin-security": "^4.0.0",
     "nodemon": "^3.1.10",
-    "patch-package": "^8.0.1",
     "postcss": "^8.5.3",
     "postcss-cli": "^11.0.1",
     "prettier": "^3.6.2",
