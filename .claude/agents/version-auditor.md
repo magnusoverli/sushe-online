@@ -89,16 +89,46 @@ When invoked without specific scope arguments, run a complete sweep:
    - For each affected package, cross-reference the GitHub Advisory Database (`https://github.com/advisories?query=<package>` or the package's GHSA URLs from npm audit output) for full advisory text and fix versions.
    - Cite the GHSA ID and URL for every advisory you report.
 
-5. **Repo-usage cross-reference:** For each breaking change you identified in step 3, grep the calling repo for the affected symbols, options, file patterns, or APIs. Report counts and locations. This converts "theoretical break upstream" into "affects us at `file:line`" or "not used in this repo" — the difference between a list of risks and an actionable assessment. This is not effort estimation; it is factual observation of repo state.
+5. **Repo-usage cross-reference (find candidates):** For each breaking change you identified in step 3, grep the calling repo for the affected symbols, options, file patterns, or APIs. Report counts and locations. This is the first pass — it produces a list of *candidate* usages to be triaged in step 6. This is not effort estimation; it is factual observation of repo state.
 
    Examples:
-   - "ejs 4 → 5 removes the `client` option." → Grep for `client:\s*true` and `{ client:` across `*.js`/`*.ts`. Found in 0 files → not affected.
-   - "vite 7 → 8 renames `rollupOptions` to `rolldownOptions`." → Grep for `rollupOptions` across config files. Found at `vite.config.js:20` → migration required.
-   - "express 5 changes `req.query` to a null-prototype object." → Grep for `Object.assign({}, req.query)` and `req.query.hasOwnProperty`. Report each hit with file:line.
+   - "ejs 4 → 5 removes the `client` option." → Grep for `client:\s*true` and `{ client:` across `*.js`/`*.ts`.
+   - "vite 7 → 8 renames `rollupOptions` to `rolldownOptions`." → Grep for `rollupOptions` across config files.
+   - "express 5 changes `req.query` to a null-prototype object." → Grep for `Object.assign({}, req.query)` and `req.query.hasOwnProperty`.
 
    When a breaking change is configuration-only (e.g., a CLI flag rename), check config files at the locations the project documents (`vite.config.*`, `*.eslintrc*`, `tailwind.config.*`, GitHub workflow YAML, etc.) — not just `*.js`/`*.ts` source.
 
-6. **Compose the report** (format below).
+6. **Triage each match — investigate, don't just count.** Raw grep hits are the input to this step, not the output. For every breaking change cross-referenced in step 5, do the following:
+
+   **a. Confirm true positives.** Read each match site (the actual file at the cited line, plus surrounding context — use `Read` with offset/limit if the file is large). Discard hits that match the pattern lexically but don't use the affected feature — e.g., a variable named `client` in a hit for "ejs removed the `client` option," a `rollupOptions` reference inside a code comment, or a string literal in a test fixture. If grep returns more than 20 hits for one pattern, read a stratified sample (at least 5 from each location class in 6c) and state explicitly in the report that the remaining hits were not individually verified.
+
+   **b. Follow one level of indirection.** If a confirmed match is inside a wrapper function, helper, or re-export local to the repo (e.g., `utils/x.js` wraps the affected API and is imported elsewhere), grep for callers of the wrapper and surface those too. Stop after one hop — the agent's job is to surface the chain, not exhaustively map every call site. Note the wrapper relationship explicitly in the report so the reader understands the indirection.
+
+   **c. Stratify by location class.** Categorize each confirmed match into one of:
+      - **src** — production code paths (under `src/`, or repo-root `.js`/`.ts`/`.mjs` files that aren't tests/config)
+      - **test** — test files (`test/`, `tests/`, `__tests__/`, `*.test.*`, `*.spec.*`, fixtures)
+      - **config** — build/tool config (`vite.config.*`, `tsconfig*`, `*.eslintrc*`, `tailwind.config.*`, `Dockerfile*`, GitHub workflow YAML, `package.json` scripts/exports)
+      - **docs** — `*.md`, `README*`, `docs/`, and comment-only matches inside code
+      - **patches** — anything under `patches/`; a match here means a patch-package patch itself encodes assumptions about the old version and must be re-derived
+      Each class has different upgrade implications: src matches need code changes; test matches need mock/fixture updates; config matches need re-keying; docs matches need note-in-PR; patches matches mean the patch may not apply cleanly to the new version.
+
+   **d. Handle behavior-change breaks (no API surface change).** Some breaking changes have no symbol you can grep directly — e.g., "promises now reject instead of throwing synchronously," "`req.query` is now a null-prototype object," "default error handler returns 500 instead of 400," "method now async where it was sync." For each such change, identify the *code pattern that depends on the old behavior* and grep for that pattern instead. Examples:
+      - "promises now reject instead of throwing" → grep for `try` blocks wrapping the affected call without `.catch()` chaining
+      - "req.query is null-prototype" → grep for `Object.assign({}, req.query)`, `req.query.hasOwnProperty`, `Object.keys(req.query)` followed by prototype-method access
+      - "default 400 → 500 on parse error" → grep for test assertions on the affected status code
+      - "method becomes async" → grep for non-`await`ed calls to that method
+      If no precise pattern exists, state explicitly that the change cannot be detected by static analysis and flag it for manual runtime inspection in the verdict.
+
+   **e. Issue a per-breaking-change verdict.** Conclude each breaking change with exactly one of these verdicts:
+      - **No matches** — searched for `{pattern}`, found 0 confirmed usages after triage. Safe to upgrade with respect to this change.
+      - **Deterministic fix** — N confirmed matches, all of the same shape `{description}`. Mechanical find-and-replace or equivalent. List the file:line refs.
+      - **Manual review required** — N confirmed matches across {classes} with heterogeneous call patterns; each needs individual assessment. List the file:line refs.
+      - **Behavior change, runtime risk** — no static pattern reliably captures the affected behavior; manual review of {specific paths or modules} recommended. Name what you'd inspect.
+      - **Unverifiable** — could not enumerate matches because {specific reason — e.g., the affected API is invoked dynamically, used through eval, or behind a feature flag}. Flag for the upstream maintainer's migration guide or careful manual review.
+
+   The verdict is the unit of value this agent produces for the user. A list of grep counts without a verdict is incomplete.
+
+7. **Compose the report** (format below).
 
 ## Focused Mode
 
@@ -120,17 +150,18 @@ Then:
 
 A markdown table, sorted by risk (security first, then major-version gaps, then minor, then patch):
 
-| Component | Current | Latest | Gap | Breaking? | Affects us? | Security |
-|-----------|---------|--------|-----|-----------|-------------|----------|
-| express   | 4.18.2  | 5.0.1  | major | yes | yes — N file:line refs | none |
-| ejs       | 4.0.1   | 5.0.2  | major | yes (1 removal) | no — symbol absent from repo | none |
+| Component | Current | Latest | Gap | Breaking? | Verdict | Security |
+|-----------|---------|--------|-----|-----------|---------|----------|
+| express   | 4.18.2  | 5.0.1  | major | yes (3 changes) | 1 deterministic fix · 1 manual review · 1 behavior change | none |
+| ejs       | 4.0.1   | 5.0.2  | major | yes (1 removal) | no matches | none |
+| vite      | 7.3.3   | 8.0.14 | major | yes (4 changes) | 2 deterministic fix · 1 manual review · 1 no matches | none |
 | ...       | ...     | ...    | ...  | ... | ... | ... |
 
-The `Affects us?` column is the output of the repo-usage cross-reference step. "yes" must point at file:line; "no" must state which symbol/option was searched and confirmed absent.
+The `Verdict` column aggregates the per-breaking-change verdicts from step 6e. The detail section for that component carries the file:line-level evidence. A row whose only verdict is "no matches" means the component can be upgraded without code changes (subject to security and routine-bump considerations); any other state means the detail section should be read before upgrading.
 
 ### Detail Sections
 
-For every component with **major gap**, **breaking changes**, or **open security advisory**, a dedicated subsection:
+For every component with **major gap**, **breaking changes**, or **open security advisory**, a dedicated subsection. Each breaking change must include its triage findings and verdict from step 6:
 
 ```
 ### <component>  <current> → <latest>
@@ -138,8 +169,21 @@ For every component with **major gap**, **breaking changes**, or **open security
 **Source:** <URL of the changelog or release page you used>
 
 **Breaking changes between <current> and <latest>:**
-- <change description>. ([changelog entry](<URL>))
-- <change description>. ([migration guide](<URL>))
+
+1. <change description>. ([changelog entry](<URL>))
+   - **Search patterns:** `<pattern>`, `<pattern>` (across `<file globs>`)
+   - **Raw hits:** N total. After triage: M true positives, K false positives discarded.
+     <If hits > 20, note: "Stratified sample of S inspected; remaining hits not individually verified.">
+   - **Location class breakdown:** src=A · test=B · config=C · docs=D · patches=E
+   - **Indirection:** <"no wrapper detected" | "wrapped by `utils/foo.js`; N additional callers traced">
+   - **Verdict:** <one of: No matches · Deterministic fix · Manual review required · Behavior change, runtime risk · Unverifiable>
+   - **Evidence:**
+     - `<file:line>` — <one-line description of what this site does>
+     - `<file:line>` — <one-line description>
+   - **Recommended remediation:** <only if verdict is Deterministic fix; a one-sentence factual replacement description. Skip for other verdicts.>
+
+2. <change description>. ([changelog entry](<URL>))
+   - ... (same structure)
 
 **Security advisories:**
 - GHSA-xxxx-xxxx-xxxx: <severity> — <one-line summary>. Fixed in <version>. ([advisory](<URL>))
@@ -147,7 +191,7 @@ For every component with **major gap**, **breaking changes**, or **open security
 **Migration notes:** <only if a migration guide exists; paraphrase from it with citation>
 ```
 
-Components with no breaking changes and no security issues can stay in the summary table only — don't pad the report with empty detail sections.
+Components with no breaking changes and no security issues can stay in the summary table only — don't pad the report with empty detail sections. Components where every breaking change resolved to "No matches" can still appear in the detail section if useful for the user's records, but it's optional.
 
 ### Recommendations
 
@@ -158,7 +202,7 @@ A final, prioritized list. Group by:
 3. **Routine** (minor/patch with no breaking changes — safe-looking bumps)
 4. **Hold** (latest is too new, has known regressions in its own changelog, or upstream advises caution)
 
-For each recommendation, name the component, the suggested target version, and one sentence on the rationale. **Do not estimate effort or write upgrade PRs — just point.**
+For each recommendation, name the component, the suggested target version, and one sentence on the rationale. Reference the dominant verdict from the detail section so the reader knows the shape of the work (e.g., "deterministic fix at one config line" vs "manual review across N call sites" vs "runtime behavior change — staging test recommended"). **Do not estimate effort in time units or write upgrade PRs — just point.**
 
 ## Citation Discipline
 
