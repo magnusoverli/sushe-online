@@ -10,14 +10,7 @@ export default defineConfig({
     },
   },
   build: {
-    commonjsOptions: {
-      // Include local CJS files resolved through aliases (e.g., @utils)
-      // Without this, Vite's CommonJS plugin skips local files and inlines
-      // `module.exports` verbatim into the ESM bundle, causing
-      // "ReferenceError: module is not defined" in the browser.
-      include: [/node_modules/, /utils[\\/]normalization\.js$/],
-    },
-    rollupOptions: {
+    rolldownOptions: {
       input: path.resolve(__dirname, 'src/js/main.js'),
       output: {
         entryFileNames: 'bundle.js',
@@ -42,7 +35,6 @@ export default defineConfig({
     emptyOutDir: false,
     chunkSizeWarningLimit: 600,
     sourcemap: false,
-    minify: 'esbuild',
     target: 'es2020', // Modern browsers, smaller output
     cssCodeSplit: true,
     assetsInlineLimit: 4096, // Inline small assets as base64
