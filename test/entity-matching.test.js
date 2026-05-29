@@ -49,6 +49,20 @@ describe('externalMatchKey', () => {
       externalMatchKey('Wall')
     );
   });
+
+  it('romanizes Cyrillic so different names get distinct, non-empty keys', () => {
+    // Regression: the comparison layer is ASCII-only, so before romanization
+    // every Cyrillic name collapsed to "" and any two compared as identical.
+    assert.strictEqual(
+      externalMatchKey('Патриархь'),
+      externalMatchKey('Patriarkh')
+    );
+    assert.ok(externalMatchKey('Патриархь').length > 0);
+    assert.notStrictEqual(
+      externalMatchKey('Патриархь'),
+      externalMatchKey('Аквариум')
+    );
+  });
 });
 
 describe('generateQueryForms', () => {
@@ -70,6 +84,15 @@ describe('generateQueryForms', () => {
     assert.ok(
       forms.includes('Det hjemsokte hjertet'),
       'folded ASCII fallback present'
+    );
+  });
+
+  it('adds a romanized fallback for Cyrillic (native first)', () => {
+    const forms = generateQueryForms('Патриархь');
+    assert.strictEqual(forms[0], 'Патриархь'); // native form first
+    assert.ok(
+      forms.includes('Patriarkh'),
+      'romanized fallback present so Spotify/iTunes/Deezer can match'
     );
   });
 
@@ -110,6 +133,15 @@ describe('nameSimilarity', () => {
   it('scores ø/o and æ/ae variants as identical', () => {
     assert.strictEqual(nameSimilarity('Blodørn', 'Blodorn'), 1);
     assert.strictEqual(nameSimilarity('Kjærlighet', 'Kjaerlighet'), 1);
+  });
+
+  it('matches a Cyrillic name to its romanization', () => {
+    assert.strictEqual(nameSimilarity('Патриархь', 'Patriarkh'), 1);
+  });
+
+  it('does NOT score two different Cyrillic names as identical', () => {
+    // Regression: both stripped to "" by the ASCII-only scorer → returned 1.0.
+    assert.notStrictEqual(nameSimilarity('Патриархь', 'Аквариум'), 1);
   });
 
   it('returns 0 when either side is empty', () => {

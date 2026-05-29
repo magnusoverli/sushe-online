@@ -91,6 +91,170 @@ function transliterateSpecialLetters(str) {
   return str.replace(SPECIAL_LETTER_RE, (ch) => SPECIAL_LETTER_MAP[ch]);
 }
 
+/**
+ * Cyrillic + Greek → Latin transliteration (best-effort, deterministic).
+ *
+ * External services (Spotify, iTunes, Deezer) index these under a romanized
+ * form, so a native-script query returns nothing. Romanizing gives us a query
+ * fallback AND — crucially — a non-empty match key: without it, the comparison
+ * layer strips non-Latin to nothing (its punctuation rule is ASCII-only), so
+ * EVERY Cyrillic name collapses to "" and any two are scored as identical.
+ *
+ * Applied AFTER NFD-stripping, so precomposed letters (ё, й, ї, accented Greek)
+ * have already decomposed to their base form. Best-effort: it won't always
+ * match a service's exact romanization, but it's deterministic and distinct per
+ * name (fixing the false-equality bug) and close enough for fuzzy search.
+ *
+ * Scripts without a simple letter mapping (CJK, etc.) are NOT handled here —
+ * those would need a dictionary-based library and are out of scope.
+ */
+const SCRIPT_MAP = {
+  // Cyrillic (Russian + common Ukrainian/Serbian), lowercase
+  а: 'a',
+  б: 'b',
+  в: 'v',
+  г: 'g',
+  д: 'd',
+  е: 'e',
+  ж: 'zh',
+  з: 'z',
+  и: 'i',
+  й: 'y',
+  к: 'k',
+  л: 'l',
+  м: 'm',
+  н: 'n',
+  о: 'o',
+  п: 'p',
+  р: 'r',
+  с: 's',
+  т: 't',
+  у: 'u',
+  ф: 'f',
+  х: 'kh',
+  ц: 'ts',
+  ч: 'ch',
+  ш: 'sh',
+  щ: 'shch',
+  ъ: '',
+  ы: 'y',
+  ь: '',
+  э: 'e',
+  ю: 'yu',
+  я: 'ya',
+  ё: 'e',
+  і: 'i',
+  ї: 'yi',
+  є: 'ye',
+  ґ: 'g',
+  ј: 'j',
+  ђ: 'dj',
+  ћ: 'c',
+  // Cyrillic, uppercase
+  А: 'A',
+  Б: 'B',
+  В: 'V',
+  Г: 'G',
+  Д: 'D',
+  Е: 'E',
+  Ж: 'Zh',
+  З: 'Z',
+  И: 'I',
+  Й: 'Y',
+  К: 'K',
+  Л: 'L',
+  М: 'M',
+  Н: 'N',
+  О: 'O',
+  П: 'P',
+  Р: 'R',
+  С: 'S',
+  Т: 'T',
+  У: 'U',
+  Ф: 'F',
+  Х: 'Kh',
+  Ц: 'Ts',
+  Ч: 'Ch',
+  Ш: 'Sh',
+  Щ: 'Shch',
+  Ъ: '',
+  Ы: 'Y',
+  Ь: '',
+  Э: 'E',
+  Ю: 'Yu',
+  Я: 'Ya',
+  Ё: 'E',
+  І: 'I',
+  Ї: 'Yi',
+  Є: 'Ye',
+  Ґ: 'G',
+  Ј: 'J',
+  Ђ: 'Dj',
+  Ћ: 'C',
+  // Greek, lowercase
+  α: 'a',
+  β: 'v',
+  γ: 'g',
+  δ: 'd',
+  ε: 'e',
+  ζ: 'z',
+  η: 'i',
+  θ: 'th',
+  ι: 'i',
+  κ: 'k',
+  λ: 'l',
+  μ: 'm',
+  ν: 'n',
+  ξ: 'x',
+  ο: 'o',
+  π: 'p',
+  ρ: 'r',
+  σ: 's',
+  ς: 's',
+  τ: 't',
+  υ: 'y',
+  φ: 'f',
+  χ: 'ch',
+  ψ: 'ps',
+  ω: 'o',
+  // Greek, uppercase
+  Α: 'A',
+  Β: 'V',
+  Γ: 'G',
+  Δ: 'D',
+  Ε: 'E',
+  Ζ: 'Z',
+  Η: 'I',
+  Θ: 'Th',
+  Ι: 'I',
+  Κ: 'K',
+  Λ: 'L',
+  Μ: 'M',
+  Ν: 'N',
+  Ξ: 'X',
+  Ο: 'O',
+  Π: 'P',
+  Ρ: 'R',
+  Σ: 'S',
+  Τ: 'T',
+  Υ: 'Y',
+  Φ: 'F',
+  Χ: 'Ch',
+  Ψ: 'Ps',
+  Ω: 'O',
+};
+
+const SCRIPT_RE = new RegExp(`[${Object.keys(SCRIPT_MAP).join('')}]`, 'g');
+
+/**
+ * Transliterate Cyrillic/Greek to Latin. See SCRIPT_MAP.
+ * @param {string} str
+ * @returns {string}
+ */
+function transliterateScripts(str) {
+  return str.replace(SCRIPT_RE, (ch) => SCRIPT_MAP[ch]);
+}
+
 // ============================================
 // Storage and Lookup Normalization
 // ============================================
@@ -152,9 +316,13 @@ function normalizeForLookup(value) {
 function normalizeForExternalApi(str) {
   if (!str) return '';
 
-  return transliterateSpecialLetters(normalizeSpecialChars(String(str)))
+  // Strip combining marks first (so precomposed accents AND precomposed
+  // Cyrillic/Greek decompose to base letters), THEN transliterate the remaining
+  // non-ASCII letters (special Latin + Cyrillic/Greek) to ASCII.
+  const stripped = normalizeSpecialChars(String(str))
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u0300-\u036f]/g, '');
+  return transliterateScripts(transliterateSpecialLetters(stripped))
     .replace(/\s+/g, ' ')
     .trim();
 }

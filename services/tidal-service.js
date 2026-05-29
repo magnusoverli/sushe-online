@@ -15,6 +15,7 @@ const {
   extractTrackName,
   matchTrackByName,
 } = require('../utils/track-matching');
+const { generateQueryForms } = require('../utils/entity-matching');
 
 /**
  * @param {Object} deps
@@ -88,6 +89,42 @@ function createTidalService(deps = {}) {
   }
 
   /**
+   * Find a Tidal album id, trying the native spelling first then romanized /
+   * diacritic-folded fallbacks. Tidal indexes Cyrillic/Greek/accented names
+   * under a romanized form, so a native-script query alone returns nothing; for
+   * pure-ASCII names this is a single query — identical to prior behavior.
+   * Returns the first result's id (selection stays first-result), or null.
+   * Throws on a non-OK API response to preserve the existing error contract.
+   *
+   * @param {string} artist - Artist name
+   * @param {string} album - Album name
+   * @param {string} accessToken - Tidal OAuth access token
+   * @param {string} countryCode - Two-letter country code
+   * @returns {Promise<string|null>} Album ID or null if not found
+   */
+  async function findAlbumId(artist, album, accessToken, countryCode) {
+    for (const query of generateQueryForms(`${album} ${artist}`)) {
+      const searchPath = encodeURIComponent(query).replace(/'/g, '%27');
+      const params = new URLSearchParams({ countryCode });
+      const url = `https://openapi.tidal.com/v2/searchResults/${searchPath}/relationships/albums?${params.toString()}`;
+
+      logger.debug('Tidal search URL:', url);
+
+      const resp = await fetch(url, { headers: buildHeaders(accessToken) });
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '<body read failed>');
+        logger.warn('Tidal API request failed:', resp.status, body);
+        throw new Error(`Tidal API error ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      const albumId = data?.data?.[0]?.id;
+      if (albumId) return albumId;
+    }
+    return null;
+  }
+
+  /**
    * Search for an album on Tidal.
    *
    * @param {string} artist - Artist name
@@ -97,23 +134,7 @@ function createTidalService(deps = {}) {
    * @returns {Promise<{ id: string } | null>} Album ID or null if not found
    */
   async function searchAlbum(artist, album, accessToken, countryCode) {
-    const query = `${album} ${artist}`;
-    const searchPath = encodeURIComponent(query).replace(/'/g, '%27');
-    const params = new URLSearchParams({ countryCode });
-    const url = `https://openapi.tidal.com/v2/searchResults/${searchPath}/relationships/albums?${params.toString()}`;
-
-    logger.debug('Tidal search URL:', url);
-
-    const resp = await fetch(url, { headers: buildHeaders(accessToken) });
-
-    if (!resp.ok) {
-      const body = await resp.text().catch(() => '<body read failed>');
-      logger.warn('Tidal API request failed:', resp.status, body);
-      throw new Error(`Tidal API error ${resp.status}`);
-    }
-
-    const data = await resp.json();
-    const albumId = data?.data?.[0]?.id;
+    const albumId = await findAlbumId(artist, album, accessToken, countryCode);
     return albumId ? { id: albumId } : null;
   }
 
@@ -133,18 +154,13 @@ function createTidalService(deps = {}) {
   async function searchTrack(artist, album, track, accessToken, countryCode) {
     const headers = buildHeaders(accessToken);
 
-    // Step 1: Find the album
-    const albumQuery = `${album} ${artist}`;
-    const searchPath = encodeURIComponent(albumQuery).replace(/'/g, '%27');
-    const albumResp = await fetch(
-      `https://openapi.tidal.com/v2/searchResults/${searchPath}/relationships/albums?countryCode=${countryCode}`,
-      { headers }
+    // Step 1: Find the album (native spelling first, romanized fallback)
+    const tidalAlbumId = await findAlbumId(
+      artist,
+      album,
+      accessToken,
+      countryCode
     );
-    if (!albumResp.ok) {
-      throw new Error(`Tidal API error ${albumResp.status}`);
-    }
-    const albumData = await albumResp.json();
-    const tidalAlbumId = albumData?.data?.[0]?.id;
     if (!tidalAlbumId) return null;
 
     // Step 2: Get album tracks

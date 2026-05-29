@@ -167,6 +167,26 @@ test('Normalization Utilities', async (t) => {
       assert.strictEqual(normalizeForExternalApi('MØL'), 'MOL');
     });
 
+    await t.test('should romanize Cyrillic to Latin', () => {
+      // External services index these under a romanized form; a native-script
+      // query returns nothing. Romanizing also yields a non-empty, distinct
+      // match key (the comparison layer is ASCII-only and would otherwise
+      // collapse every Cyrillic name to "").
+      assert.strictEqual(normalizeForExternalApi('Патриархь'), 'Patriarkh');
+      assert.strictEqual(normalizeForExternalApi('Аквариум'), 'Akvarium');
+      assert.strictEqual(normalizeForExternalApi('Кино'), 'Kino');
+      // precomposed Й (И + combining breve) NFD-decomposes before transliteration
+      assert.strictEqual(normalizeForExternalApi('Йол'), 'Iol');
+      // ё (е + combining diaeresis) likewise
+      assert.strictEqual(normalizeForExternalApi('ёж'), 'ezh');
+    });
+
+    await t.test('should romanize Greek to Latin', () => {
+      // accented Greek decomposes via NFD first, then transliterates
+      assert.strictEqual(normalizeForExternalApi('Θάνατος'), 'Thanatos');
+      assert.strictEqual(normalizeForExternalApi('Ελλάδα'), 'Ellada');
+    });
+
     await t.test('should handle Japanese/non-Latin scripts gracefully', () => {
       // Non-Latin scripts are preserved (diacritic stripping only affects combining marks)
       // Note: whitespace may be normalized but characters are preserved

@@ -10,6 +10,7 @@ const {
   normalizeForExternalApi,
   stringSimilarity,
 } = require('../utils/normalization');
+const { generateQueryForms } = require('../utils/entity-matching');
 
 const DEFAULT_STOREFRONT = 'us-en';
 
@@ -87,29 +88,33 @@ function createQobuzService(deps = {}) {
     if (!artist || !album) return null;
 
     const storefront = options.storefront || DEFAULT_STOREFRONT;
-    const query = `${artist} ${album}`.trim();
-    const searchUrl = `https://www.qobuz.com/${storefront}/search?q=${encodeURIComponent(query)}`;
 
-    const resp = await fetch(searchUrl);
-    if (!resp.ok) {
-      logger.warn('Qobuz search request failed', {
-        status: resp.status,
-        storefront,
-      });
-      throw new Error(`Qobuz search failed: ${resp.status}`);
+    // Try the native spelling first, then romanized / diacritic-folded
+    // fallbacks. Qobuz indexes Cyrillic/Greek/accented names under a romanized
+    // form, so a native-script query alone returns nothing. For pure-ASCII
+    // names this yields a single form — identical to the previous behavior.
+    for (const query of generateQueryForms(`${artist} ${album}`)) {
+      const searchUrl = `https://www.qobuz.com/${storefront}/search?q=${encodeURIComponent(query)}`;
+
+      const resp = await fetch(searchUrl);
+      if (!resp.ok) {
+        logger.warn('Qobuz search request failed', {
+          status: resp.status,
+          storefront,
+        });
+        throw new Error(`Qobuz search failed: ${resp.status}`);
+      }
+
+      const html = await resp.text();
+      const candidates = extractAlbumCandidates(html, storefront);
+      const best = pickBestCandidate(candidates, artist, album);
+
+      if (best) {
+        return { id: best.id };
+      }
     }
 
-    const html = await resp.text();
-    const candidates = extractAlbumCandidates(html, storefront);
-    const best = pickBestCandidate(candidates, artist, album);
-
-    if (!best) {
-      return null;
-    }
-
-    return {
-      id: best.id,
-    };
+    return null;
   }
 
   return {
