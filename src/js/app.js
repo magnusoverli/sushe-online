@@ -453,11 +453,11 @@ const getAlbumDisplayModule = createLazyModule(() =>
 );
 
 // Wrapper functions that delegate to the module
-function displayAlbums(albums, options = {}) {
+export function displayAlbums(albums, options = {}) {
   return getAlbumDisplayModule().displayAlbums(albums, options);
 }
 
-function fetchAndDisplayPlaycounts(listId, forceRefresh = false) {
+export function fetchAndDisplayPlaycounts(listId, forceRefresh = false) {
   return getAlbumDisplayModule().fetchAndDisplayPlaycounts(
     listId,
     forceRefresh

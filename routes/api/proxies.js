@@ -321,7 +321,7 @@ module.exports = (app, deps) => {
             fit: 'inside', // Maintain aspect ratio
             withoutEnlargement: true, // Don't upscale small images
           })
-          .jpeg({ quality: 100 }) // Convert to JPEG with maximum quality
+          .jpeg({ quality: 85, mozjpeg: true }) // Visually lossless at a fraction of the size
           .toBuffer();
 
         const base64 = resizedBuffer.toString('base64');
