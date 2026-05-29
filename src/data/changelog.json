@@ -2,6 +2,13 @@
   {
     "date": "2026-05-29",
     "category": "fix",
+    "description": "Fixed playcount updates getting stuck during server refresh",
+    "hash": "9405656007ff2c1747e4af243e206d166a54c977",
+    "commitMessage": "Keep polling playcounts while the server reports a refresh in flight\n\nAfter restoring \"show the cached value while refreshing\", a stale-but-\ncached playcount (e.g. 93) renders as a normal success value rather than\na blank/null. The poll loop's stop heuristic only kept going while values\nwere null/error or had just changed, so once every album showed a cached\nvalue it would stop after MIN_POLLS (~9s) -- before the background refresh\nfinished writing the fresh number. The DB would update to e.g. 116, but\nthe client had already stopped polling and stayed frozen on 93 until a\nmanual reload.\n\nFix: the list-playcounts response already returns `refreshing` (count of\nalbums still queued for a background refresh). Keep polling while that is\n> 0 (capped by MAX_POLLS) so the fresh value is picked up without a reload.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+  },
+  {
+    "date": "2026-05-29",
+    "category": "fix",
     "description": "Fixed Last.fm playcounts disappearing from list views",
     "hash": "ec1c14423506b0cafa2e24567f93f2f3f1ed4251",
     "commitMessage": "Fix Last.fm playcounts disappearing from list views\n\nThe list view stopped showing any playcounts because matchAndFindStale\nhid cached values older than 5 minutes (returning null) and reconnect\nwiped the entire cache, leaving lists blank until a slow background\nre-sync completed.\n\n- Always display the last-known cached playcount while refreshing stale\n  ones in the background (instead of returning null)\n- Preserve cached values on transient Last.fm errors via a non-destructive\n  error upsert (ON CONFLICT DO NOTHING) instead of overwriting with null\n- De-dupe in-flight refreshes so concurrent list views / poll cycles do\n  not pile up overlapping Last.fm fetches and trip the rate limit\n- Canonicalize the cache lookup key with normalizeForExternalApi so\n  accented/special-char names match the write path\n- Stop wiping the playcount cache on reconnect; trigger a background\n  re-sync without deleting so existing values keep showing\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
