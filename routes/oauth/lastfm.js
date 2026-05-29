@@ -14,13 +14,53 @@
 
 const logger = require('../../utils/logger');
 const crypto = require('crypto');
+const {
+  invalidateUserPlaycounts: defaultInvalidateUserPlaycounts,
+  syncUserPlaycounts: defaultSyncUserPlaycounts,
+} = require('../../services/playcount-sync-service');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, userService } = deps;
+  const { ensureAuth, userService, db } = deps;
   const csrfProtection = deps.csrfProtection || ((_req, _res, next) => next());
+  const log = deps.logger || logger;
+  const getLastfmSession =
+    deps.getLastfmSession || require('../../utils/lastfm-auth').getSession;
+  const invalidateUserPlaycounts =
+    deps.invalidateUserPlaycounts || defaultInvalidateUserPlaycounts;
+  const syncUserPlaycounts =
+    deps.syncUserPlaycounts || defaultSyncUserPlaycounts;
 
   if (!userService) {
     throw new Error('lastfm oauth routes require userService');
+  }
+
+  async function clearCachedPlaycounts(userId) {
+    if (!db) return;
+
+    try {
+      await invalidateUserPlaycounts(db, log, userId);
+    } catch (err) {
+      log.warn('Failed to invalidate Last.fm playcount cache', {
+        userId,
+        error: err.message,
+      });
+    }
+  }
+
+  function triggerFullPlaycountRefresh(userId, lastfmUsername) {
+    if (!db || !lastfmUsername) return;
+
+    syncUserPlaycounts(db, log, {
+      _id: userId,
+      username: lastfmUsername,
+      lastfm_username: lastfmUsername,
+    }).catch((err) => {
+      log.warn('Full Last.fm playcount refresh failed after reconnect', {
+        userId,
+        lastfmUsername,
+        error: err.message,
+      });
+    });
   }
 
   // Initiate Last.fm auth flow
@@ -73,8 +113,7 @@ module.exports = (app, deps) => {
     }
 
     try {
-      const { getSession } = require('../../utils/lastfm-auth');
-      const sessionData = await getSession(
+      const sessionData = await getLastfmSession(
         token,
         process.env.LASTFM_API_KEY,
         process.env.LASTFM_SECRET
@@ -94,15 +133,17 @@ module.exports = (app, deps) => {
         lastfmAuth,
         sessionData.username
       );
+      await clearCachedPlaycounts(req.user._id);
+      triggerFullPlaycountRefresh(req.user._id, sessionData.username);
 
-      logger.info('Last.fm connected', {
+      log.info('Last.fm connected', {
         email: req.user.email,
         lastfmUsername: sessionData.username,
         userId: req.user._id,
       });
       req.flash('success', `Connected to Last.fm as ${sessionData.username}`);
     } catch (error) {
-      logger.error('Last.fm auth error', {
+      log.error('Last.fm auth error', {
         error: error.message,
         userId: req.user._id,
       });
@@ -131,6 +172,7 @@ module.exports = (app, deps) => {
       try {
         // Await the database update to ensure it completes before redirect
         await userService.clearLastfmAuth(req.user._id);
+        await clearCachedPlaycounts(req.user._id);
 
         req.flash('success', 'Disconnected from Last.fm');
         return res.json({ success: true });

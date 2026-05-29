@@ -129,15 +129,78 @@ test('Last.fm callback rejects invalid auth state', async () => {
   assert.match(flashes[0][1], /invalid state/);
 });
 
+test('Last.fm callback invalidates cache and starts a full playcount refresh', async () => {
+  const app = createAppRecorder();
+  const calls = [];
+  const flashes = [];
+  registerLastfmRoutes(app, {
+    ensureAuth: (_req, _res, next) => next(),
+    db: {},
+    getLastfmSession: async () => ({
+      session_key: 'session-key',
+      username: 'listener',
+    }),
+    invalidateUserPlaycounts: async (_db, _logger, userId) => {
+      calls.push(['invalidate', userId]);
+      return 2;
+    },
+    syncUserPlaycounts: async (_db, _logger, user) => {
+      calls.push(['sync', user]);
+      return { synced: 2 };
+    },
+    userService: {
+      setLastfmAuth: async (userId, auth, username) => {
+        calls.push(['setAuth', userId, auth.session_key, username]);
+      },
+      clearLastfmAuth: async () => {},
+    },
+  });
+
+  const route = app.find('GET', '/auth/lastfm/callback/:state');
+  const req = {
+    params: { state: 'expected-state' },
+    query: { token: 'token' },
+    session: { lastfmAuthState: 'expected-state' },
+    user: { _id: 'user1', email: 'user@example.test' },
+    flash: (...args) => flashes.push(args),
+  };
+  const res = createResponse();
+
+  await runHandlers(route.handlers, req, res);
+
+  assert.strictEqual(res.redirectedTo, '/');
+  assert.deepStrictEqual(calls[0], [
+    'setAuth',
+    'user1',
+    'session-key',
+    'listener',
+  ]);
+  assert.deepStrictEqual(calls[1], ['invalidate', 'user1']);
+  assert.deepStrictEqual(calls[2], [
+    'sync',
+    {
+      _id: 'user1',
+      username: 'listener',
+      lastfm_username: 'listener',
+    },
+  ]);
+  assert.match(flashes[0][1], /Connected to Last\.fm/);
+});
+
 test('Last.fm disconnect uses POST and GET does not mutate auth', async () => {
   const app = createAppRecorder();
   let clearCalls = 0;
   let csrfCalls = 0;
+  let invalidateCalls = 0;
   registerLastfmRoutes(app, {
     ensureAuth: (_req, _res, next) => next(),
     csrfProtection: (_req, _res, next) => {
       csrfCalls++;
       next();
+    },
+    db: {},
+    invalidateUserPlaycounts: async () => {
+      invalidateCalls++;
     },
     userService: {
       setLastfmAuth: async () => {},
@@ -170,5 +233,6 @@ test('Last.fm disconnect uses POST and GET does not mutate auth', async () => {
 
   assert.strictEqual(csrfCalls, 1);
   assert.strictEqual(clearCalls, 1);
+  assert.strictEqual(invalidateCalls, 1);
   assert.deepStrictEqual(postRes.jsonBody, { success: true });
 });

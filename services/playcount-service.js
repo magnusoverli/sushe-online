@@ -11,8 +11,8 @@
  * Tests can inject a mock refreshAlbumPlaycount; production uses the default.
  */
 
-/** Staleness threshold: only refresh albums older than 2 hours */
-const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+/** Staleness threshold for values shown in list views. */
+const STALE_THRESHOLD_MS = 5 * 60 * 1000;
 const { ensureDb } = require('../db/postgres');
 
 /**
@@ -72,7 +72,14 @@ function matchAndFindStale(
     const key = normalizeAlbumKey(item.artist, item.album);
     const cached = statsMap.get(key);
 
-    if (cached) {
+    const needsRefresh =
+      forceRefresh ||
+      !cached ||
+      !cached.lastfm_updated_at ||
+      cached.lastfm_status === 'error' ||
+      new Date(cached.lastfm_updated_at) < staleThreshold;
+
+    if (cached && !needsRefresh) {
       playcounts[item._id] = {
         playcount: cached.lastfm_playcount,
         status: cached.lastfm_status || null,
@@ -80,13 +87,6 @@ function matchAndFindStale(
     } else {
       playcounts[item._id] = null;
     }
-
-    const needsRefresh =
-      forceRefresh ||
-      !cached ||
-      !cached.lastfm_updated_at ||
-      cached.lastfm_status === 'error' ||
-      new Date(cached.lastfm_updated_at) < staleThreshold;
 
     if (needsRefresh) {
       albumsToRefresh.push({

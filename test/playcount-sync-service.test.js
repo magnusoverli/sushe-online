@@ -3,6 +3,7 @@ const assert = require('node:assert');
 
 const {
   createPlaycountSyncService,
+  invalidateUserPlaycounts,
 } = require('../services/playcount-sync-service');
 const { createMockLogger, createMockPool } = require('./helpers');
 
@@ -50,6 +51,21 @@ describe('playcount-sync-service', () => {
       const params = pool.query.mock.calls[0].arguments[1];
       assert.strictEqual(params[0], 50);
       assert.strictEqual(params[1], 24 * 60 * 60);
+    });
+  });
+
+  describe('invalidateUserPlaycounts', () => {
+    it('deletes cached playcounts for one user', async () => {
+      const pool = createMockPool([{ rows: [], rowCount: 3 }]);
+      const logger = createMockLogger();
+
+      const deleted = await invalidateUserPlaycounts(pool, logger, 'user1');
+
+      assert.strictEqual(deleted, 3);
+      const [query, params] = pool.query.mock.calls[0].arguments;
+      assert.ok(query.includes('DELETE FROM user_album_stats'));
+      assert.deepStrictEqual(params, ['user1']);
+      assert.strictEqual(logger.info.mock.calls.length, 1);
     });
   });
 });

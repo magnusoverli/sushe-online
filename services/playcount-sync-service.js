@@ -4,7 +4,7 @@
  * Background service for periodically syncing Last.fm playcounts for all user albums.
  * Uses a three-tier refresh strategy:
  *   - Tier 1: Background job runs every 24 hours for all albums
- *   - Tier 2: List view refreshes only stale albums (>2 hours old)
+ *   - Tier 2: List view refreshes stale albums (>5 minutes old)
  *   - Tier 3: Interaction-triggered refreshes (play, add album)
  */
 
@@ -101,6 +101,24 @@ async function getUserAlbums(db, userId) {
 
   const result = await db.raw(query, [userId]);
   return result.rows;
+}
+
+async function invalidateUserPlaycounts(db, log, userId) {
+  const datastore = ensureDb(
+    db,
+    'playcount-sync-service.invalidateUserPlaycounts'
+  );
+  const result = await datastore.raw(
+    `DELETE FROM user_album_stats WHERE user_id = $1`,
+    [userId]
+  );
+
+  log.info('Invalidated Last.fm playcount cache', {
+    userId,
+    deleted: result.rowCount || 0,
+  });
+
+  return result.rowCount || 0;
 }
 
 // ============================================
@@ -580,4 +598,6 @@ function createPlaycountSyncService(deps = {}) {
 module.exports = {
   createPlaycountSyncService,
   refreshAlbumPlaycount,
+  invalidateUserPlaycounts,
+  syncUserPlaycounts,
 };

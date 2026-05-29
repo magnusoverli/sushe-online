@@ -465,12 +465,67 @@ describe('playcount-service', () => {
       });
 
       assert.strictEqual(result.refreshing, 1);
-      assert.strictEqual(result.playcounts.item1.playcount, 42);
+      assert.strictEqual(result.playcounts.item1, null);
       assert.strictEqual(mockRefresh.mock.calls.length, 1);
       assert.strictEqual(
         mockRefresh.mock.calls[0].arguments[4].album_id,
         'album-1'
       );
+    });
+
+    it('should not display stale cached stats while refreshing', async () => {
+      const mockLogger = createMockLogger();
+      const staleUpdatedAt = new Date(
+        Date.now() - 10 * 60 * 1000
+      ).toISOString();
+      const mockPool = createMockPool([
+        { rows: [{ _id: 'list1' }] },
+        {
+          rows: [
+            {
+              _id: 'item1',
+              album_id: 'album-1',
+              artist: 'Marianas Rest',
+              album: 'The Bereaved',
+            },
+          ],
+        },
+        {
+          rows: [
+            {
+              artist: 'marianas rest',
+              album_name: 'the bereaved',
+              album_id: 'album-1',
+              normalized_key: 'marianas rest::bereaved',
+              lastfm_playcount: 93,
+              lastfm_status: 'success',
+              lastfm_updated_at: staleUpdatedAt,
+            },
+          ],
+        },
+      ]);
+      const mockRefresh = mock.fn(async () => ({
+        playcount: 116,
+        status: 'success',
+      }));
+
+      const { getListPlaycounts } = createPlaycountService({
+        refreshAlbumPlaycount: mockRefresh,
+      });
+
+      const result = await getListPlaycounts({
+        listId: 'list1',
+        userId: 'user1',
+        lastfmUsername: 'lfm-user',
+        db: mockPool,
+        logger: mockLogger,
+        normalizeAlbumKey: (artist, album) =>
+          `${artist}`.toLowerCase() + `::${album}`.toLowerCase(),
+      });
+
+      assert.strictEqual(result.refreshing, 1);
+      assert.strictEqual(result.playcounts.item1, null);
+      assert.strictEqual(mockRefresh.mock.calls.length, 1);
     });
 
     it('should skip stats query when list items have no lookup keys', async () => {
