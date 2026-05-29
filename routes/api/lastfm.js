@@ -3,17 +3,19 @@
  *
  * Handles Last.fm integration:
  * - Top albums
- * - Album playcounts
  * - Scrobbling
  * - Now playing
  * - Similar artists
  * - Recent tracks
- * - List playcounts
+ * - List playcounts (cached, with background refresh)
  */
 
 const { createAsyncHandler } = require('../../middleware/async-handler');
 const { createPlaycountService } = require('../../services/playcount-service');
-const { normalizeForExternalApi } = require('../../utils/normalization');
+const {
+  canonicalAlbumKey: buildCanonicalAlbumKey,
+} = require('../../utils/playcount-key');
+const { claimAlbumsForRefresh } = require('../../services/playcount-engine');
 
 /**
  * Register Last.fm routes
@@ -30,7 +32,6 @@ module.exports = (app, deps) => {
     requireLastfmAuth,
     requireLastfmSessionKey,
     getLastfmTopAlbums,
-    getLastfmAlbumInfo,
     lastfmScrobble,
     lastfmUpdateNowPlaying,
     getLastfmSimilarArtists,
@@ -44,10 +45,7 @@ module.exports = (app, deps) => {
   // Canonical album key consistent with the playcount cache write path, so
   // accented/special-char names (e.g. "Sigur Rós") match reliably.
   const canonicalAlbumKey = (artist, album) =>
-    normalizeAlbumKey(
-      normalizeForExternalApi(artist).toLowerCase().trim(),
-      normalizeForExternalApi(album).toLowerCase().trim()
-    );
+    buildCanonicalAlbumKey(normalizeAlbumKey, artist, album);
 
   function getLastfmWriteConfigError() {
     if (!process.env.LASTFM_API_KEY || !process.env.LASTFM_SECRET) {
@@ -147,13 +145,27 @@ module.exports = (app, deps) => {
         return {};
       }
 
-      return await refreshPlaycountsInBackground(
+      // Skip albums already being refreshed by another tier (e.g. a concurrent
+      // list view) so a scrobble doesn't spawn a duplicate Last.fm fetch.
+      const { toLaunch, release } = claimAlbumsForRefresh(
         user._id,
-        user.lastfmUsername,
-        matchingAlbums,
-        db,
-        logger
+        matchingAlbums
       );
+      if (toLaunch.length === 0) {
+        return {};
+      }
+
+      try {
+        return await refreshPlaycountsInBackground(
+          user._id,
+          user.lastfmUsername,
+          toLaunch,
+          db,
+          logger
+        );
+      } finally {
+        release();
+      }
     } catch (err) {
       logger.warn('Failed to refresh playcount after Last.fm scrobble', {
         userId: user._id,
@@ -243,127 +255,6 @@ module.exports = (app, deps) => {
 
       res.json({ albums: formatted });
     }, 'fetching Last.fm top albums')
-  );
-
-  // GET /api/lastfm/album-playcount - Get playcount for a specific album
-  app.get(
-    '/api/lastfm/album-playcount',
-    ensureAuthAPI,
-    requireLastfmAuth,
-    asyncHandler(async (req, res) => {
-      const { artist, album, albumId } = req.query;
-
-      if (!artist || !album) {
-        return res.status(400).json({ error: 'artist and album are required' });
-      }
-
-      const artistCandidates = await getLastfmArtistCandidates(artist, albumId);
-
-      let info = null;
-      let matchedArtist = null;
-
-      for (const artistCandidate of artistCandidates) {
-        const candidateInfo = await getLastfmAlbumInfo(
-          artistCandidate,
-          album,
-          req.user.lastfmUsername,
-          process.env.LASTFM_API_KEY
-        );
-
-        if (!candidateInfo?.notFound) {
-          info = candidateInfo;
-          matchedArtist = artistCandidate;
-          break;
-        }
-      }
-
-      if (!info) {
-        info = { userplaycount: '0', playcount: '0', listeners: '0' };
-      }
-
-      if (
-        externalIdentityService &&
-        matchedArtist &&
-        matchedArtist !== artist
-      ) {
-        await externalIdentityService
-          .upsertArtistAlias({
-            service: 'lastfm',
-            canonicalArtist: artist,
-            serviceArtist: matchedArtist,
-            sourceAlbumId: albumId || null,
-          })
-          .catch((err) => {
-            logger.warn('Failed to persist Last.fm artist alias', {
-              artist,
-              matchedArtist,
-              albumId,
-              error: err.message,
-            });
-          });
-      }
-
-      res.json({
-        playcount: parseInt(info.userplaycount || 0),
-        globalPlaycount: parseInt(info.playcount || 0),
-        listeners: parseInt(info.listeners || 0),
-      });
-    }, 'fetching Last.fm album playcount')
-  );
-
-  // POST /api/lastfm/batch-playcounts - Get playcounts for multiple albums
-  app.post(
-    '/api/lastfm/batch-playcounts',
-    ensureAuthAPI,
-    requireLastfmAuth,
-    asyncHandler(async (req, res) => {
-      const { albums, mode } = req.body;
-
-      if (!albums || !Array.isArray(albums)) {
-        return res.status(400).json({ error: 'albums array is required' });
-      }
-
-      const albumsToFetch = albums.slice(0, 50);
-      const isFastMode = mode === 'fast';
-      const BATCH_SIZE = isFastMode ? 10 : 5;
-      const DELAY_MS = isFastMode ? 0 : 1100;
-      const results = [];
-
-      for (let i = 0; i < albumsToFetch.length; i += BATCH_SIZE) {
-        const batch = albumsToFetch.slice(i, i + BATCH_SIZE);
-
-        const batchResults = await Promise.allSettled(
-          batch.map(async (album) => {
-            const info = await getLastfmAlbumInfo(
-              album.artist,
-              album.title,
-              req.user.lastfmUsername,
-              process.env.LASTFM_API_KEY
-            );
-            return {
-              artist: album.artist,
-              title: album.title,
-              playcount: parseInt(info.userplaycount || 0),
-            };
-          })
-        );
-
-        results.push(...batchResults);
-
-        if (DELAY_MS > 0 && i + BATCH_SIZE < albumsToFetch.length) {
-          await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
-        }
-      }
-
-      const playcounts = results
-        .filter((r) => r.status === 'fulfilled')
-        .map((r) => r.value);
-
-      res.json({
-        playcounts,
-        mode: isFastMode ? 'fast' : 'balanced',
-      });
-    }, 'fetching Last.fm batch playcounts')
   );
 
   // POST /api/lastfm/scrobble - Submit a scrobble to Last.fm
@@ -595,36 +486,5 @@ module.exports = (app, deps) => {
         refreshing: result.refreshing,
       });
     }, 'fetching Last.fm list playcounts')
-  );
-
-  // POST /api/lastfm/refresh-playcounts - Force refresh playcounts for specific albums
-  app.post(
-    '/api/lastfm/refresh-playcounts',
-    ensureAuthAPI,
-    requireLastfmAuth,
-    asyncHandler(async (req, res) => {
-      const { albums } = req.body;
-
-      if (!albums || !Array.isArray(albums) || albums.length === 0) {
-        return res.status(400).json({ error: 'albums array is required' });
-      }
-
-      const toRefresh = albums.slice(0, 50).map((a) => ({
-        itemId: a.itemId,
-        artist: a.artist,
-        album: a.album,
-        album_id: a.album_id || a.albumId,
-      }));
-
-      const results = await refreshPlaycountsInBackground(
-        req.user._id,
-        req.user.lastfmUsername,
-        toRefresh,
-        db,
-        logger
-      );
-
-      res.json({ updated: results });
-    }, 'refreshing Last.fm playcounts')
   );
 };

@@ -1,43 +1,41 @@
 /**
- * Playcount Sync Service
+ * Playcount Sync Service (Tier 1)
  *
- * Background service for periodically syncing Last.fm playcounts for all user albums.
- * Uses a three-tier refresh strategy:
- *   - Tier 1: Background job runs every 24 hours for all albums
- *   - Tier 2: List view refreshes stale albums (>5 minutes old)
- *   - Tier 3: Interaction-triggered refreshes (play, add album)
+ * Background scheduler that periodically re-syncs Last.fm playcounts for all
+ * users with stale data. The actual Last.fm fetch + cache write lives in
+ * playcount-engine.js; this module owns the cron-style cycle, user selection,
+ * and per-user orchestration.
+ *
+ * Three-tier refresh strategy:
+ *   - Tier 1: this background job (every 24h, for users with stale data)
+ *   - Tier 2: list view refreshes stale albums (see playcount-service.js)
+ *   - Tier 3: interaction-triggered refreshes (scrobble, add album)
  */
 
 const logger = require('../utils/logger');
 const { ensureDb } = require('../db/postgres');
-const {
-  getAlbumInfo: getLastfmAlbumInfo,
-  normalizeForLastfm,
-} = require('../utils/lastfm-auth');
-const { normalizeAlbumKey } = require('../utils/fuzzy-match');
+const { runInBatches } = require('../utils/batch');
 const { recordPlaycountSync } = require('../utils/metrics');
 const {
-  createExternalIdentityService,
-} = require('./external-identity-service');
-
-// Default intervals
-const DEFAULT_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const DEFAULT_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
-const RATE_LIMIT_DELAY_MS = 2000; // 2 seconds between users
-const STARTUP_DELAY_MS = 60000; // 60 seconds after startup
-const BATCH_SIZE = 5; // Albums per batch
-const BATCH_DELAY_MS = 1100; // 1.1 seconds between batches
+  SYNC_INTERVAL_MS,
+  BACKGROUND_SYNC_STALE_MS,
+  RATE_LIMIT_DELAY_MS,
+  STARTUP_DELAY_MS,
+  BATCH_SIZE,
+  BATCH_DELAY_MS,
+} = require('./playcount-constants');
+const {
+  refreshAlbumPlaycount,
+  invalidateUserPlaycounts,
+} = require('./playcount-engine');
 
 // ============================================
 // DATABASE HELPERS
 // ============================================
 
 /**
- * Get users who need playcount sync (have Last.fm connected)
- * @param {Object} pool - Database pool
- * @param {number} staleThresholdMs - Stale threshold in ms
- * @param {number} limit - Maximum users to return
- * @returns {Promise<Array>} Users needing sync
+ * Get users who need playcount sync (Last.fm connected and either stale or
+ * missing coverage for some album in their lists).
  */
 async function getUsersNeedingSync(db, staleThresholdMs, limit = 50) {
   const staleIntervalSeconds = Math.floor(staleThresholdMs / 1000);
@@ -81,10 +79,7 @@ async function getUsersNeedingSync(db, staleThresholdMs, limit = 50) {
 }
 
 /**
- * Get all albums for a user across all their lists
- * @param {Object} pool - Database pool
- * @param {string} userId - User ID
- * @returns {Promise<Array>} Albums with artist, album name, and album_id
+ * Get all distinct albums for a user across all their lists.
  */
 async function getUserAlbums(db, userId) {
   const query = `
@@ -104,275 +99,9 @@ async function getUserAlbums(db, userId) {
   return result.rows;
 }
 
-async function invalidateUserPlaycounts(db, log, userId) {
-  const datastore = ensureDb(
-    db,
-    'playcount-sync-service.invalidateUserPlaycounts'
-  );
-  const result = await datastore.raw(
-    `DELETE FROM user_album_stats WHERE user_id = $1`,
-    [userId]
-  );
-
-  log.info('Invalidated Last.fm playcount cache', {
-    userId,
-    deleted: result.rowCount || 0,
-  });
-
-  return result.rowCount || 0;
-}
-
-// ============================================
-// PLAYCOUNT REFRESH HELPERS
-// ============================================
-
 /**
- * Upsert playcount into user_album_stats
- * @param {Object} pool - Database pool
- * @param {string} userId - User ID
- * @param {Object} album - Album object
- * @param {number|null} playcount - Playcount value (null for not_found)
- * @param {string} status - 'success' or 'not_found'
- */
-function canonicalizeAlbum(album) {
-  const canonicalArtist = normalizeForLastfm(album.artist).toLowerCase().trim();
-  const canonicalAlbum = normalizeForLastfm(album.album).toLowerCase().trim();
-  const normalizedKey = normalizeAlbumKey(canonicalArtist, canonicalAlbum);
-  const albumId = album.album_id || album.albumId || null;
-  return { canonicalArtist, canonicalAlbum, normalizedKey, albumId };
-}
-
-async function upsertPlaycount(db, userId, album, playcount, status) {
-  const { canonicalArtist, canonicalAlbum, normalizedKey, albumId } =
-    canonicalizeAlbum(album);
-
-  await db.raw(
-    `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-     ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
-     DO UPDATE SET
-       album_id = COALESCE(EXCLUDED.album_id, user_album_stats.album_id),
-       normalized_key = EXCLUDED.normalized_key,
-       lastfm_playcount = EXCLUDED.lastfm_playcount,
-       lastfm_status = EXCLUDED.lastfm_status,
-       lastfm_updated_at = NOW(),
-       updated_at = NOW()`,
-    [
-      userId,
-      albumId,
-      canonicalArtist,
-      canonicalAlbum,
-      normalizedKey,
-      playcount,
-      status,
-    ]
-  );
-}
-
-/**
- * Record a transient fetch failure WITHOUT clobbering a previously cached
- * value. If a row already exists (success/not_found/error) it is left
- * untouched so the last-known playcount keeps displaying; only brand-new
- * albums get an 'error' marker so they stay eligible for retry. This prevents
- * a momentary Last.fm hiccup from wiping good playcounts.
- *
- * @param {Object} db - Canonical datastore
- * @param {string} userId - User ID
- * @param {Object} album - Album object
- */
-async function upsertPlaycountError(db, userId, album) {
-  const { canonicalArtist, canonicalAlbum, normalizedKey, albumId } =
-    canonicalizeAlbum(album);
-
-  await db.raw(
-    `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, NULL, 'error', NOW(), NOW())
-     ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
-     DO NOTHING`,
-    [userId, albumId, canonicalArtist, canonicalAlbum, normalizedKey]
-  );
-}
-
-async function getLastfmArtistCandidates(db, log, album) {
-  const canonicalArtist = album?.artist;
-  const albumId = album?.album_id || album?.albumId || null;
-
-  if (!canonicalArtist) {
-    return [];
-  }
-
-  const candidates = [canonicalArtist];
-
-  try {
-    const externalIdentityService = createExternalIdentityService({
-      db,
-      logger: log,
-    });
-
-    if (albumId) {
-      const lastfmMapping =
-        await externalIdentityService.getAlbumServiceMapping('lastfm', albumId);
-      if (lastfmMapping?.external_artist) {
-        candidates.unshift(lastfmMapping.external_artist);
-      }
-
-      const spotifyMapping =
-        await externalIdentityService.getAlbumServiceMapping(
-          'spotify',
-          albumId
-        );
-      if (spotifyMapping?.external_artist) {
-        candidates.push(spotifyMapping.external_artist);
-      }
-    }
-
-    const aliases = await externalIdentityService.getArtistAliasCandidates(
-      'lastfm',
-      canonicalArtist,
-      { includeCrossService: true }
-    );
-    candidates.push(...aliases);
-  } catch (err) {
-    log.warn('Failed to load Last.fm artist alias candidates', {
-      artist: canonicalArtist,
-      albumId,
-      error: err.message,
-    });
-  }
-
-  return [...new Set(candidates.filter(Boolean))];
-}
-
-/**
- * Refresh playcount for a single album
- * @param {Object} pool - Database pool
- * @param {Object} log - Logger instance
- * @param {string} userId - User ID
- * @param {string} lastfmUsername - Last.fm username
- * @param {Object} album - Album object with artist, album, album_id
- * @returns {Promise<{playcount: number|null, status: string}|null>} Result or null on failure
- */
-async function refreshAlbumPlaycount(db, log, userId, lastfmUsername, album) {
-  try {
-    const datastore = ensureDb(
-      db,
-      'playcount-sync-service.refreshAlbumPlaycount'
-    );
-    const albumId = album.album_id || album.albumId || null;
-    const artistCandidates = await getLastfmArtistCandidates(
-      datastore,
-      log,
-      album
-    );
-
-    let info = null;
-    let matchedArtist = album.artist;
-
-    for (const artistCandidate of artistCandidates) {
-      const candidateInfo = await getLastfmAlbumInfo(
-        artistCandidate,
-        album.album,
-        lastfmUsername,
-        process.env.LASTFM_API_KEY
-      );
-
-      if (!candidateInfo?.notFound) {
-        info = candidateInfo;
-        matchedArtist = artistCandidate;
-        break;
-      }
-
-      if (!info) {
-        info = candidateInfo;
-      }
-    }
-
-    if (!info) {
-      info = {
-        userplaycount: '0',
-        playcount: '0',
-        listeners: '0',
-        notFound: true,
-      };
-    }
-
-    if (matchedArtist !== album.artist) {
-      try {
-        const externalIdentityService = createExternalIdentityService({
-          db: datastore,
-          logger: log,
-        });
-
-        await externalIdentityService.upsertArtistAlias({
-          service: 'lastfm',
-          canonicalArtist: album.artist,
-          serviceArtist: matchedArtist,
-          sourceAlbumId: albumId,
-        });
-
-        if (albumId) {
-          await externalIdentityService.upsertAlbumServiceMapping({
-            albumId,
-            service: 'lastfm',
-            externalArtist: matchedArtist,
-            externalAlbum: album.album,
-            strategy: 'alias_fallback',
-          });
-        }
-      } catch (err) {
-        log.warn('Failed to persist Last.fm alias mapping', {
-          artist: album.artist,
-          matchedArtist,
-          albumId,
-          error: err.message,
-        });
-      }
-    }
-
-    // Check if album was not found on Last.fm
-    if (info.notFound) {
-      log.debug('Album not found on Last.fm', {
-        artist: album.artist,
-        album: album.album,
-      });
-      await upsertPlaycount(datastore, userId, album, null, 'not_found');
-      return { playcount: null, status: 'not_found' };
-    }
-
-    const playcount = parseInt(info.userplaycount || 0);
-    await upsertPlaycount(datastore, userId, album, playcount, 'success');
-    return { playcount, status: 'success' };
-  } catch (err) {
-    log.warn('Failed to fetch playcount for album', {
-      artist: album.artist,
-      album: album.album,
-      error: err.message,
-    });
-
-    // Mark as errored so we retry later — but preserve any existing cached
-    // value rather than overwriting it with null.
-    try {
-      const datastore = ensureDb(
-        db,
-        'playcount-sync-service.refreshAlbumPlaycount'
-      );
-      await upsertPlaycountError(datastore, userId, album);
-    } catch (dbErr) {
-      log.error('Failed to store error status', {
-        error: dbErr.message,
-      });
-    }
-
-    return null;
-  }
-}
-
-/**
- * Sync all playcounts for a single user
- * @param {Object} pool - Database pool
- * @param {Object} log - Logger instance
- * @param {Object} user - User object with _id, lastfm_username
- * @returns {Promise<Object>} Sync result
+ * Sync all playcounts for a single user.
+ * @returns {Promise<Object>} Sync result { userId, success, synced, failed, duration }
  */
 async function syncUserPlaycounts(db, log, user) {
   const userId = user._id;
@@ -392,14 +121,10 @@ async function syncUserPlaycounts(db, log, user) {
     return { userId, success: true, synced: 0, failed: 0, duration: 0 };
   }
 
-  let synced = 0;
-  let failed = 0;
-
-  // Process in batches with rate limiting
-  for (let i = 0; i < albums.length; i += BATCH_SIZE) {
-    const batch = albums.slice(i, i + BATCH_SIZE);
-
-    const batchPromises = batch.map(async (album) => {
+  const outcomes = await runInBatches(
+    albums,
+    { batchSize: BATCH_SIZE, delayMs: BATCH_DELAY_MS },
+    async (album) => {
       const result = await refreshAlbumPlaycount(
         db,
         log,
@@ -407,21 +132,12 @@ async function syncUserPlaycounts(db, log, user) {
         lastfmUsername,
         album
       );
-      if (result !== null) {
-        synced++;
-      } else {
-        failed++;
-      }
-    });
-
-    await Promise.all(batchPromises);
-
-    // Rate limit delay between batches
-    if (i + BATCH_SIZE < albums.length) {
-      await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+      return result !== null;
     }
-  }
+  );
 
+  const synced = outcomes.filter(Boolean).length;
+  const failed = outcomes.length - synced;
   const duration = Date.now() - startTime;
 
   log.info('Playcount sync complete for user', {
@@ -441,29 +157,24 @@ async function syncUserPlaycounts(db, log, user) {
 // ============================================
 
 /**
- * Create playcount sync service with injected dependencies
- * @param {Object} deps - Dependencies
+ * Create the Tier-1 playcount sync scheduler.
+ * @param {Object} deps
  * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
- * @param {Object} deps.logger - Logger instance (optional)
- * @param {number} deps.syncIntervalMs - Sync interval in ms (optional, default 24h)
- * @param {number} deps.staleThresholdMs - Stale data threshold in ms (optional, default 24h)
+ * @param {Object} [deps.logger]
+ * @param {number} [deps.syncIntervalMs]
+ * @param {number} [deps.staleThresholdMs]
  */
 function createPlaycountSyncService(deps = {}) {
   const log = deps.logger || logger;
   const db = ensureDb(deps.db, 'playcount-sync-service');
 
-  const syncIntervalMs = deps.syncIntervalMs || DEFAULT_SYNC_INTERVAL_MS;
-  const staleThresholdMs = deps.staleThresholdMs || DEFAULT_STALE_THRESHOLD_MS;
+  const syncIntervalMs = deps.syncIntervalMs || SYNC_INTERVAL_MS;
+  const staleThresholdMs = deps.staleThresholdMs || BACKGROUND_SYNC_STALE_MS;
   let syncInterval = null;
   let isRunning = false;
 
   /**
-   * Refresh playcount for a single album (for interaction-triggered refreshes)
-   * @param {string} userId - User ID
-   * @param {string} lastfmUsername - Last.fm username
-   * @param {Object} album - Album object with artist, album, albumId
-   * @param {number} delayMs - Delay before fetching (optional)
-   * @returns {Promise<number|null>} Playcount or null on failure
+   * Refresh a single album (for interaction-triggered refreshes).
    */
   async function refreshSingleAlbum(
     userId,
@@ -485,8 +196,7 @@ function createPlaycountSyncService(deps = {}) {
   }
 
   /**
-   * Run a complete sync cycle for all users needing updates
-   * @returns {Promise<Object>} Cycle results
+   * Run a complete sync cycle for all users needing updates.
    */
   async function runSyncCycle() {
     if (isRunning) {
@@ -565,11 +275,6 @@ function createPlaycountSyncService(deps = {}) {
     return results;
   }
 
-  /**
-   * Start the sync service
-   * @param {Object} options - Start options
-   * @param {boolean} options.immediate - Run immediately on start
-   */
   function start(options = {}) {
     if (syncInterval) {
       log.warn('Playcount sync service already running');
@@ -631,7 +336,8 @@ function createPlaycountSyncService(deps = {}) {
 
 module.exports = {
   createPlaycountSyncService,
+  syncUserPlaycounts,
+  // Re-exported from the engine so existing importers keep working.
   refreshAlbumPlaycount,
   invalidateUserPlaycounts,
-  syncUserPlaycounts,
 };

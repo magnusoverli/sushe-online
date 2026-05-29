@@ -1,3 +1,5 @@
+const { claimAlbumsForRefresh } = require('../playcount-engine');
+
 function triggerPlaycountRefresh(ctx, user, addedItems) {
   if (
     addedItems.length === 0 ||
@@ -23,16 +25,24 @@ function triggerPlaycountRefresh(ctx, user, addedItems) {
         album_id: album.album_id,
       }));
 
+      // Skip albums already being refreshed by another tier so adding albums
+      // doesn't spawn duplicate Last.fm fetches.
+      const { toLaunch, release } = claimAlbumsForRefresh(
+        user._id,
+        albumsToRefresh
+      );
+      if (toLaunch.length === 0) return;
+
       ctx.logger?.debug('Triggering playcount refresh for added albums', {
         userId: user._id,
-        albumCount: albumsToRefresh.length,
+        albumCount: toLaunch.length,
       });
 
       ctx
         .refreshPlaycountsInBackground(
           user._id,
           user.lastfmUsername,
-          albumsToRefresh,
+          toLaunch,
           ctx.db,
           ctx.logger
         )
@@ -40,7 +50,8 @@ function triggerPlaycountRefresh(ctx, user, addedItems) {
           ctx.logger?.warn('Playcount refresh for added albums failed', {
             error: err.message,
           });
-        });
+        })
+        .finally(release);
     })
     .catch((err) => {
       ctx.logger?.warn('Failed to look up albums for playcount refresh', {

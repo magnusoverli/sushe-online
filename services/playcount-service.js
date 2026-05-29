@@ -1,54 +1,39 @@
 /**
- * Playcount Service
+ * Playcount Service (Tier 2 — list view)
  *
- * Handles background refreshing of Last.fm play counts for albums.
- * Uses rate limiting to respect Last.fm API limits.
+ * Reads cached Last.fm play counts for a list, decides which are stale, and
+ * launches a background refresh for those. Cached values are ALWAYS displayed
+ * regardless of age; staleness only governs how often we ask Last.fm for
+ * fresher numbers.
  *
- * Delegates to shared helpers in playcount-sync-service for upsert
- * and single-album refresh logic (DRY).
+ * The Last.fm fetch, cache writes, batching and in-flight dedup all live in
+ * playcount-engine.js — this module only does read/match/launch.
  *
- * Uses dependency injection via createPlaycountService(deps) factory.
- * Tests can inject a mock refreshAlbumPlaycount; production uses the default.
+ * Uses a createPlaycountService(deps) factory so tests can inject a mock
+ * refreshAlbumPlaycount; production uses the engine default.
  */
 
-/**
- * Staleness threshold for triggering a background refresh. Cached values are
- * ALWAYS displayed regardless of age — this only controls how often we ask
- * Last.fm for fresher numbers.
- */
-const STALE_THRESHOLD_MS = 5 * 60 * 1000;
 const { ensureDb } = require('../db/postgres');
-const { normalizeForExternalApi } = require('../utils/normalization');
+const { normalizeAlbumKey } = require('../utils/fuzzy-match');
+const { canonicalAlbumKey } = require('../utils/playcount-key');
+const { LIST_VIEW_STALE_MS } = require('./playcount-constants');
+const {
+  refreshAlbumPlaycount: defaultRefreshAlbumPlaycount,
+  refreshAlbumsBatched,
+  claimAlbumsForRefresh,
+} = require('./playcount-engine');
 
 /**
- * Build the canonical cache key for a list item, matching exactly how the
- * write path (upsertPlaycount) computes `normalized_key`: canonicalize for
- * external APIs (strips diacritics, normalizes punctuation), lowercase, then
- * apply normalizeAlbumKey. Without this, accented names like "Sigur Rós" are
- * stored under one key but looked up under another and never match.
- *
- * @param {Function} normalizeAlbumKey - Album key function
- * @param {string} artist
- * @param {string} album
- * @returns {string}
- */
-function buildCanonicalKey(normalizeAlbumKey, artist, album) {
-  return normalizeAlbumKey(
-    normalizeForExternalApi(artist).toLowerCase().trim(),
-    normalizeForExternalApi(album).toLowerCase().trim()
-  );
-}
-
-/**
- * Build a lookup map of normalized artist+album keys to cached stats.
- * When duplicate keys exist, keeps the row with the highest playcount
- * (or most recent update as tiebreaker).
+ * Build a lookup map of cache key -> cached stats row. When duplicate keys
+ * exist, keeps the row with the highest playcount (most recent update as
+ * tiebreaker). Rows already carry a canonical `normalized_key`; the raw
+ * normalizeAlbumKey fallback only covers legacy rows written before that
+ * column existed (their artist/album_name are already canonicalized).
  *
  * @param {Array} statsRows - Rows from user_album_stats
- * @param {Function} normalizeAlbumKey - Normalization function
  * @returns {Map<string, Object>}
  */
-function buildStatsMap(statsRows, normalizeAlbumKey) {
+function buildStatsMap(statsRows) {
   const statsMap = new Map();
   for (const row of statsRows) {
     const key =
@@ -76,24 +61,20 @@ function buildStatsMap(statsRows, normalizeAlbumKey) {
  * Match list items to cached stats and determine which need refreshing.
  *
  * @param {Array} listItems - Rows with _id, album_id, artist, album
- * @param {Map} statsMap - Normalized stats lookup
- * @param {Function} normalizeAlbumKey - Normalization function
+ * @param {Map} statsMap - Cache-key -> stats lookup
+ * @param {Function} keyOf - Canonical cache-key function (artist, album) => key
+ * @param {boolean} [forceRefresh=false]
  * @returns {{ playcounts: Object, albumsToRefresh: Array }}
  */
-function matchAndFindStale(
-  listItems,
-  statsMap,
-  normalizeAlbumKey,
-  forceRefresh = false
-) {
+function matchAndFindStale(listItems, statsMap, keyOf, forceRefresh = false) {
   const playcounts = {};
   const albumsToRefresh = [];
-  const staleThreshold = new Date(Date.now() - STALE_THRESHOLD_MS);
+  const staleThreshold = new Date(Date.now() - LIST_VIEW_STALE_MS);
 
   for (const item of listItems) {
     if (!item.artist || !item.album) continue;
 
-    const key = normalizeAlbumKey(item.artist, item.album);
+    const key = keyOf(item.artist, item.album);
     const cached = statsMap.get(key);
 
     const needsRefresh =
@@ -132,10 +113,10 @@ function matchAndFindStale(
  * Build scoped lookup inputs for fetching cached stats for a specific list.
  *
  * @param {Array} listItems - Rows with album_id, artist, album
- * @param {Function} normalizeAlbumKey - Normalization function
+ * @param {Function} keyOf - Canonical cache-key function
  * @returns {{albumIds: string[], normalizedKeys: string[]}}
  */
-function buildStatsLookupInputs(listItems, normalizeAlbumKey) {
+function buildStatsLookupInputs(listItems, keyOf) {
   const albumIds = new Set();
   const normalizedKeys = new Set();
 
@@ -145,7 +126,7 @@ function buildStatsLookupInputs(listItems, normalizeAlbumKey) {
     }
 
     if (item.artist && item.album) {
-      normalizedKeys.add(normalizeAlbumKey(item.artist, item.album));
+      normalizedKeys.add(keyOf(item.artist, item.album));
     }
   }
 
@@ -156,30 +137,19 @@ function buildStatsLookupInputs(listItems, normalizeAlbumKey) {
 }
 
 /**
- * Factory that creates playcount service with injectable dependencies.
+ * Factory that creates the playcount read service with injectable deps.
  *
- * @param {Object} deps - Dependencies
- * @param {Function} deps.refreshAlbumPlaycount - Function to refresh a single album's playcount
+ * @param {Object} deps
+ * @param {Function} [deps.refreshAlbumPlaycount] - single-album refresh (defaults to engine)
  * @returns {{ refreshPlaycountsInBackground: Function, getListPlaycounts: Function }}
  */
 function createPlaycountService(deps = {}) {
   const refreshAlbumPlaycount =
-    deps.refreshAlbumPlaycount ||
-    require('./playcount-sync-service').refreshAlbumPlaycount;
-
-  // Tracks albums currently being refreshed (keyed by `${userId}::${cacheKey}`)
-  // so repeated list views / poll cycles don't spawn duplicate, overlapping
-  // background refreshes that thrash the Last.fm rate limit.
-  const inFlightRefreshes = new Set();
+    deps.refreshAlbumPlaycount || defaultRefreshAlbumPlaycount;
 
   /**
-   * Refresh playcounts for albums in background
-   * @param {string} userId - User ID
-   * @param {string} lastfmUsername - User's Last.fm username
-   * @param {Array} albums - Array of album objects with itemId, artist, album, album_id
-   * @param {import('../db/types').DbFacade} db - Canonical datastore
-   * @param {Object} logger - Logger instance
-   * @returns {Promise<Object>} - Map of itemId -> { playcount, status }
+   * Refresh playcounts for a set of albums in the background.
+   * @returns {Promise<Object>} Map of itemId -> { playcount, status } | null
    */
   async function refreshPlaycountsInBackground(
     userId,
@@ -192,83 +162,28 @@ function createPlaycountService(deps = {}) {
       db,
       'playcount-service.refreshPlaycountsInBackground'
     );
-    const results = {};
-
-    // Process in batches with rate limiting (~5 req/sec for Last.fm)
-    const BATCH_SIZE = 5;
-    const DELAY_MS = 1100; // Just over 1 second between batches
-
-    for (let i = 0; i < albums.length; i += BATCH_SIZE) {
-      const batch = albums.slice(i, i + BATCH_SIZE);
-
-      const batchPromises = batch.map(async (album) => {
-        logger.debug('Fetching Last.fm playcount', {
-          artist: album.artist,
-          album: album.album,
-          lastfmUsername,
-        });
-
-        const result = await refreshAlbumPlaycount(
-          datastore,
-          logger,
-          userId,
-          lastfmUsername,
-          album
-        );
-
-        if (result !== null) {
-          // Log if Last.fm returned a different artist name (indicates potential mismatch).
-          // refreshAlbumPlaycount doesn't log this, so we check here for parity.
-          results[album.itemId] = result;
-
-          if (result.status === 'success') {
-            logger.debug('Fetched playcount', {
-              artist: album.artist,
-              album: album.album,
-              playcount: result.playcount,
-            });
-          }
-        } else {
-          results[album.itemId] = null;
-        }
-      });
-
-      await Promise.all(batchPromises);
-
-      // Rate limit delay between batches (except for last batch)
-      if (i + BATCH_SIZE < albums.length) {
-        await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
-      }
-    }
-
-    const successCount = Object.values(results).filter(
-      (v) => v && v.status === 'success'
-    ).length;
-    const notFoundCount = Object.values(results).filter(
-      (v) => v && v.status === 'not_found'
-    ).length;
-    logger.info('Background playcount refresh completed', {
-      total: albums.length,
-      successful: successCount,
-      notFound: notFoundCount,
-      failed: albums.length - successCount - notFoundCount,
-    });
-
-    return results;
+    return refreshAlbumsBatched(
+      datastore,
+      logger,
+      userId,
+      lastfmUsername,
+      albums,
+      refreshAlbumPlaycount
+    );
   }
 
   /**
-   * Get playcounts for all albums in a list, returning cached data
-   * and triggering background refresh for stale entries.
+   * Get playcounts for all albums in a list, returning cached data and
+   * triggering a background refresh for stale entries.
    *
    * @param {Object} params
-   * @param {string} params.listId - List ID
-   * @param {string} params.userId - User ID
-   * @param {string} params.lastfmUsername - Last.fm username
-   * @param {import('../db/types').DbFacade} params.db - Canonical datastore
-   * @param {Object} params.logger - Logger instance
-   * @param {Function} params.normalizeAlbumKey - Normalization function
-   * @param {boolean} [params.forceRefresh=false] - Refresh all albums regardless of cache age
+   * @param {string} params.listId
+   * @param {string} params.userId
+   * @param {string} params.lastfmUsername
+   * @param {import('../db/types').DbFacade} params.db
+   * @param {Object} params.logger
+   * @param {Function} params.normalizeAlbumKey
+   * @param {boolean} [params.forceRefresh=false]
    * @returns {Promise<{ playcounts: Object, refreshing: number } | { error: Object }>}
    */
   async function getListPlaycounts({
@@ -282,10 +197,10 @@ function createPlaycountService(deps = {}) {
   }) {
     const datastore = ensureDb(db, 'playcount-service.getListPlaycounts');
 
-    // Canonical key used for both cache lookups and de-dup, kept consistent
+    // Canonical key used for both cache lookups and matching, kept consistent
     // with the write path so accented/special-char names match.
     const keyOf = (artist, album) =>
-      buildCanonicalKey(normalizeAlbumKey, artist, album);
+      canonicalAlbumKey(normalizeAlbumKey, artist, album);
 
     // Verify list exists
     const list = await datastore.raw(
@@ -345,7 +260,7 @@ function createPlaycountService(deps = {}) {
       statsRows = statsResult.rows;
     }
 
-    const statsMap = buildStatsMap(statsRows, keyOf);
+    const statsMap = buildStatsMap(statsRows);
     const { playcounts, albumsToRefresh } = matchAndFindStale(
       listItems,
       statsMap,
@@ -353,39 +268,31 @@ function createPlaycountService(deps = {}) {
       forceRefresh
     );
 
-    // Skip albums already being refreshed so concurrent list views / poll
-    // cycles don't pile up duplicate Last.fm fetches.
-    const albumsToLaunch = albumsToRefresh.filter((album) => {
-      const inflightKey = `${userId}::${keyOf(album.artist, album.album)}`;
-      if (inFlightRefreshes.has(inflightKey)) return false;
-      inFlightRefreshes.add(inflightKey);
-      return true;
-    });
+    // Skip albums already being refreshed (by any tier) so concurrent list
+    // views / poll cycles don't pile up duplicate Last.fm fetches.
+    const { toLaunch, release } = claimAlbumsForRefresh(
+      userId,
+      albumsToRefresh
+    );
 
-    if (albumsToLaunch.length > 0) {
+    if (toLaunch.length > 0) {
       logger.debug('Triggering background playcount refresh for stale albums', {
         staleCount: albumsToRefresh.length,
-        launching: albumsToLaunch.length,
+        launching: toLaunch.length,
         totalCount: listItems.length,
         lastfmUsername,
       });
       refreshPlaycountsInBackground(
         userId,
         lastfmUsername,
-        albumsToLaunch,
+        toLaunch,
         datastore,
         logger
       )
         .catch((err) => {
           logger.error('Background playcount refresh failed:', err);
         })
-        .finally(() => {
-          for (const album of albumsToLaunch) {
-            inFlightRefreshes.delete(
-              `${userId}::${keyOf(album.artist, album.album)}`
-            );
-          }
-        });
+        .finally(release);
     }
 
     // Report the full stale count (not just what we launched) so the client

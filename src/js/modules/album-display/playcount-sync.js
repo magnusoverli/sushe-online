@@ -128,8 +128,10 @@ export function createPlaycountSync(deps = {}) {
     pollingControllers.set(listId, controller);
     const { signal } = controller;
 
-    const estimatedBatches = Math.ceil(expectedCount / 3);
-    const estimatedTimeMs = estimatedBatches * 1500 + 3000;
+    // Mirror the server's batch pacing (5 albums per batch, ~1.1s between
+    // batches) so MAX_POLLS is bounded by a realistic completion estimate.
+    const estimatedBatches = Math.ceil(expectedCount / 5);
+    const estimatedTimeMs = estimatedBatches * 1100 + 3000;
 
     const POLL_INTERVAL = 3000;
     const MAX_POLLS = Math.max(
