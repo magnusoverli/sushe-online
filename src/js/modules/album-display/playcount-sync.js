@@ -183,14 +183,21 @@ export function createPlaycountSync(deps = {}) {
             (value) => value === null || (value && value.status === 'error')
           ).length;
 
+          // The server reports how many albums are still queued for a
+          // background refresh. We must keep polling while that is > 0 —
+          // otherwise a stale-but-cached value (which now displays instead of
+          // showing blank) looks "done" and we'd stop before the fresh value
+          // lands, freezing the UI on the stale number.
+          const stillRefreshing = (response.refreshing || 0) > 0;
+
           if (changedCount > 0) {
             logger.log(
-              `Playcounts updated: ${changedCount} changed, ${missingCount} missing`
+              `Playcounts updated: ${changedCount} changed, ${missingCount} missing, ${response.refreshing || 0} refreshing`
             );
           }
 
           if (
-            missingCount === 0 &&
+            !stillRefreshing &&
             changedCount === 0 &&
             pollCount >= MIN_POLLS
           ) {
@@ -201,7 +208,7 @@ export function createPlaycountSync(deps = {}) {
 
           if (pollCount < MAX_POLLS) {
             const interval =
-              changedCount > 0 || missingCount > 0
+              changedCount > 0 || stillRefreshing
                 ? POLL_INTERVAL
                 : POLL_INTERVAL * 1.5;
             schedule(poll, interval);
