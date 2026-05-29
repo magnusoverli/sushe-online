@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-05-29",
+    "category": "feature",
+    "description": "Playcounts now update automatically after Last.fm scrobbles",
+    "hash": "e2c143a08b4efe4247b58494c05df902b60cb13c",
+    "commitMessage": "Refresh Last.fm playcounts after scrobbles"
+  },
+  {
+    "date": "2026-05-29",
     "category": "security",
     "description": "Improved Last.fm connection security and reliability",
     "hash": "4d7dbd00bcdd372e9d7ad234a4ec8d9d024ceff4",
