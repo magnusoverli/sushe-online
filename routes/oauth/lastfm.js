@@ -133,7 +133,10 @@ module.exports = (app, deps) => {
         lastfmAuth,
         sessionData.username
       );
-      await clearCachedPlaycounts(req.user._id);
+      // Re-sync fresh playcounts in the background WITHOUT wiping the cache
+      // first — deleting up front made every list view blank until the
+      // (slow, rate-limited) full refresh finished. Existing values keep
+      // showing and are overwritten per-album as fresh data arrives.
       triggerFullPlaycountRefresh(req.user._id, sessionData.username);
 
       log.info('Last.fm connected', {

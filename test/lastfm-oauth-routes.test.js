@@ -129,10 +129,11 @@ test('Last.fm callback rejects invalid auth state', async () => {
   assert.match(flashes[0][1], /invalid state/);
 });
 
-test('Last.fm callback invalidates cache and starts a full playcount refresh', async () => {
+test('Last.fm callback starts a full playcount refresh without wiping the cache', async () => {
   const app = createAppRecorder();
   const calls = [];
   const flashes = [];
+  let invalidateCalls = 0;
   registerLastfmRoutes(app, {
     ensureAuth: (_req, _res, next) => next(),
     db: {},
@@ -140,8 +141,8 @@ test('Last.fm callback invalidates cache and starts a full playcount refresh', a
       session_key: 'session-key',
       username: 'listener',
     }),
-    invalidateUserPlaycounts: async (_db, _logger, userId) => {
-      calls.push(['invalidate', userId]);
+    invalidateUserPlaycounts: async () => {
+      invalidateCalls++;
       return 2;
     },
     syncUserPlaycounts: async (_db, _logger, user) => {
@@ -169,14 +170,15 @@ test('Last.fm callback invalidates cache and starts a full playcount refresh', a
   await runHandlers(route.handlers, req, res);
 
   assert.strictEqual(res.redirectedTo, '/');
+  // Reconnect must NOT delete cached playcounts (that caused a blank gap).
+  assert.strictEqual(invalidateCalls, 0);
   assert.deepStrictEqual(calls[0], [
     'setAuth',
     'user1',
     'session-key',
     'listener',
   ]);
-  assert.deepStrictEqual(calls[1], ['invalidate', 'user1']);
-  assert.deepStrictEqual(calls[2], [
+  assert.deepStrictEqual(calls[1], [
     'sync',
     {
       _id: 'user1',
