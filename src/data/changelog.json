@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-05-30",
+    "category": "perf",
+    "description": "Faster album adding with instant feedback",
+    "hash": "a4246ea660b44921eff1e50fdf2360dd9f79e6f5",
+    "commitMessage": "Speed up the add-album flow (optimistic add + lazy images)\n\nTake MusicBrainz off the user's critical path in the add-album flow and stop\ndoing image/network work for rows the user never sees.\n\nAdd flow (src/js/musicbrainz.js):\n- Add albums optimistically: render the new row and close the modal immediately,\n  then await only the fast incremental save. Tracks/covers/native names are\n  resolved by the server's existing background queues, so the UI no longer\n  blocks on a synchronous MusicBrainz track fetch (previously up to ~10s+).\n- Reconcile server-merged metadata in the background instead of forcing a full\n  list reload; roll back the optimistic insert if the save fails.\n- Export displayAlbums/fetchAndDisplayPlaycounts from app.js for the above.\n\nImage fetching (src/js/musicbrainz.js):\n- Lazy-load album covers and artist images via IntersectionObserver, so only\n  rows near the viewport fetch images (e.g. ~15 covers instead of ~90+).\n- Demote the Wikidata artist-image provider to a last-resort fallback (it hits\n  the rate-limited MusicBrainz queue). Deezer/iTunes race first; Wikidata runs\n  only if both miss. This frees the MB queue for the album-list fetch.\n\nMisc:\n- Image proxy JPEG quality 100 -> 85 (mozjpeg) for smaller stored covers.\n\nMeasured locally (Buckethead, 90 albums), OLD vs NEW:\n- album list appears: 16.4s -> 0.9s (MB queue no longer clogged by ~14 eager\n  Wikidata lookups)\n- album-add: synchronous tracks call removed; covers fetched 107 -> 15\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+  },
+  {
     "date": "2026-05-29",
     "category": "feature",
     "description": "Added support for Qobuz and Tidal music services",
