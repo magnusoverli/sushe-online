@@ -252,11 +252,11 @@ const artistImageProviders = [
   },
 
   // Wikidata via MusicBrainz - slower but good for notable artists.
-  // Marked `fallback` so it only runs when Deezer/iTunes both miss: it hits the
-  // rate-limited MusicBrainz queue, which we reserve for the album-list fetch.
+  // Marked `lastResort` so it only runs when Deezer/iTunes both miss: it hits
+  // the rate-limited MusicBrainz queue, which we reserve for the album-list fetch.
   {
     name: 'Wikidata',
-    fallback: true,
+    lastResort: true,
     search: async (artistName, artistId, signal) => {
       if (!artistId) return null;
 
@@ -328,8 +328,8 @@ async function searchArtistImageRacing(
     });
   }
 
-  const fastProviders = artistImageProviders.filter((p) => !p.fallback);
-  const fallbackProviders = artistImageProviders.filter((p) => p.fallback);
+  const fastProviders = artistImageProviders.filter((p) => !p.lastResort);
+  const lastResortProviders = artistImageProviders.filter((p) => p.lastResort);
 
   const runProvider = async (provider) => {
     const url = await provider.search(artistName, artistId, controller.signal);
@@ -352,17 +352,17 @@ async function searchArtistImageRacing(
       }
     }
 
-    // Tier 2: only if the fast tier found nothing, try fallback providers
-    // (Wikidata) sequentially. These hit the rate-limited MusicBrainz queue,
-    // so we avoid them unless genuinely needed.
+    // Tier 2: only if the fast tier found nothing, try the last-resort
+    // providers (Wikidata) sequentially. These hit the rate-limited MusicBrainz
+    // queue, so we avoid them unless genuinely needed.
     if (!url && !controller.signal.aborted) {
-      for (const provider of fallbackProviders) {
+      for (const provider of lastResortProviders) {
         if (controller.signal.aborted) break;
         try {
           url = await runProvider(provider);
           if (url) break;
         } catch (_e) {
-          // Try the next fallback provider.
+          // Try the next last-resort provider.
         }
       }
     }
