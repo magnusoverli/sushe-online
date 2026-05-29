@@ -207,12 +207,22 @@ const dbPoolSize = new client.Gauge({
 // ============================================
 
 /**
- * Active user sessions gauge
+ * Active user sessions gauge - pull-based via collect callback querying the DB
  */
 const userSessionsActive = new client.Gauge({
   name: 'sushe_user_sessions_active',
   help: 'Number of active user sessions',
   registers: [register],
+  async collect() {
+    if (_pool) {
+      try {
+        const result = await _pool.query('SELECT COUNT(*) AS cnt FROM session');
+        this.set(parseInt(result.rows[0].cnt, 10) || 0);
+      } catch {
+        // Table may not exist or pool not ready - silently skip
+      }
+    }
+  },
 });
 
 /**
@@ -259,6 +269,113 @@ const claudeRequestsTotal = new client.Counter({
   name: 'sushe_claude_requests_total',
   help: 'Total number of Claude API requests',
   labelNames: ['model', 'status'], // status: 'success', 'error', 'rate_limited'
+  registers: [register],
+});
+
+// ============================================
+// Background Queue Metrics
+// ============================================
+
+/**
+ * Cover/track fetch queue: items added
+ */
+const queueItemsTotal = new client.Counter({
+  name: 'sushe_queue_items_total',
+  help: 'Total items added to background fetch queues',
+  labelNames: ['queue'], // 'cover', 'track'
+  registers: [register],
+});
+
+/**
+ * Cover/track fetch queue: items completed successfully
+ */
+const queueItemsProcessedTotal = new client.Counter({
+  name: 'sushe_queue_items_processed_total',
+  help: 'Total items successfully processed by background fetch queues',
+  labelNames: ['queue'],
+  registers: [register],
+});
+
+/**
+ * Cover/track fetch queue: items failed
+ */
+const queueItemsFailedTotal = new client.Counter({
+  name: 'sushe_queue_items_failed_total',
+  help: 'Total items that failed in background fetch queues',
+  labelNames: ['queue'],
+  registers: [register],
+});
+
+// ============================================
+// Response Cache Metrics
+// ============================================
+
+/**
+ * Response cache hits
+ */
+const cacheHitsTotal = new client.Counter({
+  name: 'sushe_cache_hits_total',
+  help: 'Total response cache hits',
+  registers: [register],
+});
+
+/**
+ * Response cache misses
+ */
+const cacheMissesTotal = new client.Counter({
+  name: 'sushe_cache_misses_total',
+  help: 'Total response cache misses',
+  registers: [register],
+});
+
+// ============================================
+// Rate Limit Metrics
+// ============================================
+
+/**
+ * Rate limit hits counter
+ */
+const rateLimitHitsTotal = new client.Counter({
+  name: 'sushe_rate_limit_hits_total',
+  help: 'Total number of requests blocked by rate limiting',
+  labelNames: ['endpoint'],
+  registers: [register],
+});
+
+// ============================================
+// WebSocket Event Metrics
+// ============================================
+
+/**
+ * WebSocket events emitted counter
+ */
+const websocketEventsTotal = new client.Counter({
+  name: 'sushe_websocket_events_total',
+  help: 'Total WebSocket events broadcast to clients',
+  labelNames: ['event'],
+  registers: [register],
+});
+
+// ============================================
+// Playcount Sync Metrics
+// ============================================
+
+/**
+ * Playcount sync runs counter
+ */
+const playcountSyncRunsTotal = new client.Counter({
+  name: 'sushe_playcount_sync_runs_total',
+  help: 'Total playcount sync job runs',
+  labelNames: ['result'], // 'success', 'error'
+  registers: [register],
+});
+
+/**
+ * Albums synced per playcount run
+ */
+const playcountSyncAlbumsTotal = new client.Counter({
+  name: 'sushe_playcount_sync_albums_total',
+  help: 'Total albums synced by the playcount sync job',
   registers: [register],
 });
 
@@ -379,6 +496,72 @@ function recordAuthAttempt(type, result) {
 }
 
 /**
+ * Increment background queue items added
+ * @param {'cover'|'track'} queue
+ */
+function incQueueItems(queue) {
+  queueItemsTotal.labels(queue).inc();
+}
+
+/**
+ * Increment background queue items processed
+ * @param {'cover'|'track'} queue
+ */
+function incQueueItemsProcessed(queue) {
+  queueItemsProcessedTotal.labels(queue).inc();
+}
+
+/**
+ * Increment background queue items failed
+ * @param {'cover'|'track'} queue
+ */
+function incQueueItemsFailed(queue) {
+  queueItemsFailedTotal.labels(queue).inc();
+}
+
+/**
+ * Increment cache hit counter
+ */
+function incCacheHit() {
+  cacheHitsTotal.inc();
+}
+
+/**
+ * Increment cache miss counter
+ */
+function incCacheMiss() {
+  cacheMissesTotal.inc();
+}
+
+/**
+ * Increment rate limit hit counter
+ * @param {string} endpoint
+ */
+function incRateLimitHit(endpoint) {
+  rateLimitHitsTotal.labels(endpoint || 'unknown').inc();
+}
+
+/**
+ * Increment WebSocket event counter
+ * @param {string} event
+ */
+function incWebsocketEvent(event) {
+  websocketEventsTotal.labels(event).inc();
+}
+
+/**
+ * Record a playcount sync run result
+ * @param {'success'|'error'} result
+ * @param {number} albumsProcessed
+ */
+function recordPlaycountSync(result, albumsProcessed = 0) {
+  playcountSyncRunsTotal.labels(result).inc();
+  if (albumsProcessed > 0) {
+    playcountSyncAlbumsTotal.inc(albumsProcessed);
+  }
+}
+
+/**
  * Increment WebSocket connection count
  */
 function incWebsocketConnections() {
@@ -492,6 +675,15 @@ module.exports = {
   claudeRequestsTotal,
   appInfo,
   appUptime,
+  queueItemsTotal,
+  queueItemsProcessedTotal,
+  queueItemsFailedTotal,
+  cacheHitsTotal,
+  cacheMissesTotal,
+  rateLimitHitsTotal,
+  websocketEventsTotal,
+  playcountSyncRunsTotal,
+  playcountSyncAlbumsTotal,
 
   // Middleware
   metricsMiddleware,
@@ -510,6 +702,14 @@ module.exports = {
   recordClaudeUsage,
   incWebsocketConnections,
   decWebsocketConnections,
+  incQueueItems,
+  incQueueItemsProcessed,
+  incQueueItemsFailed,
+  incCacheHit,
+  incCacheMiss,
+  incRateLimitHit,
+  incWebsocketEvent,
+  recordPlaycountSync,
   setPoolReference,
   updateDbPoolMetrics,
   updateUptime,

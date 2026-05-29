@@ -7,6 +7,7 @@ const { Server } = require('socket.io');
 const {
   incWebsocketConnections,
   decWebsocketConnections,
+  incWebsocketEvent,
 } = require('./metrics');
 const {
   isAllowedOrigin,
@@ -32,6 +33,7 @@ function createBroadcast(getIO, logger) {
     } else {
       io.to(userRoom).emit(event, payload);
     }
+    incWebsocketEvent(event);
   }
 
   return {
@@ -119,6 +121,7 @@ function createBroadcast(getIO, logger) {
       const room = io.sockets.adapter.rooms.get(userRoom);
       const clientCount = room ? room.size : 0;
       io.to(userRoom).emit('album:summary-updated', payload);
+      incWebsocketEvent('album:summary-updated');
       logger.info('Broadcast album:summary-updated', {
         userId,
         albumId,

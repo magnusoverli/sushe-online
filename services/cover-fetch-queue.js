@@ -26,6 +26,11 @@ const {
   processImage,
   upscaleItunesArtworkUrl,
 } = require('../utils/image-processing');
+const {
+  incQueueItems,
+  incQueueItemsProcessed,
+  incQueueItemsFailed,
+} = require('../utils/metrics');
 
 // Per-provider timeout in milliseconds
 const PROVIDER_TIMEOUT_MS = 5000;
@@ -313,11 +318,14 @@ function createCoverFetchQueue(deps = {}) {
     }
 
     logger.debug('Queueing cover fetch', { albumId, artist, album });
+    incQueueItems('cover');
 
     return queue.add(async () => {
       try {
         await fetchAndStoreCover(albumId, artist, album);
+        incQueueItemsProcessed('cover');
       } catch (error) {
+        incQueueItemsFailed('cover');
         logger.warn('Cover fetch failed', {
           albumId,
           artist,

@@ -13,6 +13,11 @@ const { RequestQueue } = require('../utils/request-queue');
 const logger = require('../utils/logger');
 const { normalizeForExternalApi } = require('../utils/normalization');
 const { ensureDb } = require('../db/postgres');
+const {
+  incQueueItems,
+  incQueueItemsProcessed,
+  incQueueItemsFailed,
+} = require('../utils/metrics');
 
 /**
  * Sanitize search query string for API requests
@@ -66,11 +71,14 @@ function createTrackFetchQueue(deps = {}) {
     }
 
     log.debug('Queueing track fetch', { albumId, artist, album });
+    incQueueItems('track');
 
     return queue.add(async () => {
       try {
         await fetchAndStoreTracks(albumId, artist, album);
+        incQueueItemsProcessed('track');
       } catch (error) {
+        incQueueItemsFailed('track');
         log.warn('Track fetch failed', {
           albumId,
           artist,
