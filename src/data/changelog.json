@@ -1,5 +1,19 @@
 [
   {
+    "date": "2026-05-29",
+    "category": "security",
+    "description": "Improved Last.fm connection security and reliability",
+    "hash": "4d7dbd00bcdd372e9d7ad234a4ec8d9d024ceff4",
+    "commitMessage": "Harden Last.fm auth and scrobbling"
+  },
+  {
+    "date": "2026-05-21",
+    "category": "perf",
+    "description": "Faster page loading with updated build system",
+    "hash": "5b3ef9aa96625223f142c5aa59ab6f26da026ceb",
+    "commitMessage": "Migrate to Vite 8 (Rolldown + Oxc)\n\nVite 8 replaces the underlying toolchain: Rolldown replaces Rollup, Oxc\nreplaces esbuild for JS transforms and minification.\n\nConfig changes (vite.config.js):\n- rollupOptions -> rolldownOptions\n- Removed minify: 'esbuild' (Oxc is the default; esbuild is no longer a\n  Vite dependency and must be installed separately to be used)\n- Removed build.commonjsOptions (now a no-op in v8; the workaround for\n  the inlined `module.exports` bug in utils/normalization.js is no longer\n  needed because Rolldown's CJS interop handles it correctly, verified by\n  grepping the built bundle for module.exports / exports. patterns - none\n  found)\n- manualChunks function form retained (deprecated upstream but still\n  functional; migrating to Rolldown's codeSplitting can be a follow-up)\n\nValidated locally:\n- npm run build:js succeeds in ~570ms, producing the expected\n  bundle.js + 5 chunks plus a new rolldown-runtime helper chunk\n- Local docker compose rebuilt clean; bundle.js and chunks are served\n  correctly (HTTP 200) and contain proper ESM, no raw module.exports\n  artifacts\n- 2528/2528 unit + 49/49 integration tests pass against the rebuilt\n  stack with the live local database\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+  },
+  {
     "date": "2026-05-21",
     "category": "fix",
     "description": "Year locks now work correctly for main list only",
