@@ -227,6 +227,79 @@ describe('album-display playcount-sync module', () => {
     assert.strictEqual(apiCall.mock.calls.length, 1);
   });
 
+  it('keeps polling past MIN_POLLS while refreshing > 0, then shows the fresh value', async () => {
+    const desktopEl = createElement();
+    const doc = {
+      querySelector: (selector) =>
+        selector === '[data-playcount="item-1"]' ? desktopEl : null,
+    };
+
+    // Stale value displays first and stays stale across several polls (server
+    // still reports refreshing:1), then the fresh value lands with refreshing:0.
+    const responses = [
+      {
+        playcounts: { 'item-1': { playcount: 93, status: 'success' } },
+        refreshing: 1,
+      }, // initial fetch
+      {
+        playcounts: { 'item-1': { playcount: 93, status: 'success' } },
+        refreshing: 1,
+      }, // poll 1
+      {
+        playcounts: { 'item-1': { playcount: 93, status: 'success' } },
+        refreshing: 1,
+      }, // poll 2
+      {
+        playcounts: { 'item-1': { playcount: 93, status: 'success' } },
+        refreshing: 1,
+      }, // poll 3 (>= MIN_POLLS, unchanged)
+      {
+        playcounts: { 'item-1': { playcount: 116, status: 'success' } },
+        refreshing: 0,
+      }, // poll 4: fresh
+      {
+        playcounts: { 'item-1': { playcount: 116, status: 'success' } },
+        refreshing: 0,
+      }, // poll 5: stop
+    ];
+    let call = 0;
+    const apiCall = mock.fn(
+      async () => responses[Math.min(call++, responses.length - 1)]
+    );
+
+    const scheduled = [];
+    const sync = createPlaycountSync({
+      apiCall,
+      formatPlaycount: (value) => String(value),
+      doc,
+      win: { currentUser: { lastfmUsername: 'listener' } },
+      schedule: (callback) => {
+        scheduled.push(callback);
+        return scheduled.length;
+      },
+    });
+
+    await sync.fetchAndDisplayPlaycounts('list-1');
+
+    // Drive each scheduled poll callback in order (the array grows as polls
+    // schedule their successor).
+    let i = 0;
+    while (i < scheduled.length && i < 10) {
+      await scheduled[i]();
+      i++;
+    }
+
+    // The old stop heuristic (no nulls + no change + pollCount>=MIN_POLLS)
+    // would have stopped at poll 3 and frozen on 93. With the refreshing-aware
+    // condition it keeps polling and picks up 116.
+    assert.strictEqual(sync.getPlaycountCacheEntry('item-1').playcount, 116);
+    assert.match(desktopEl.innerHTML, /116/);
+    assert.ok(
+      apiCall.mock.calls.length >= 5,
+      `expected >=5 poll calls, got ${apiCall.mock.calls.length}`
+    );
+  });
+
   it('aborts polling controllers when cache is cleared', async () => {
     const controllers = [];
     const createAbortController = () => {
