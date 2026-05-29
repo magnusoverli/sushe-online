@@ -2,6 +2,13 @@
   {
     "date": "2026-05-29",
     "category": "fix",
+    "description": "Fixed Last.fm playcounts disappearing from list views",
+    "hash": "ec1c14423506b0cafa2e24567f93f2f3f1ed4251",
+    "commitMessage": "Fix Last.fm playcounts disappearing from list views\n\nThe list view stopped showing any playcounts because matchAndFindStale\nhid cached values older than 5 minutes (returning null) and reconnect\nwiped the entire cache, leaving lists blank until a slow background\nre-sync completed.\n\n- Always display the last-known cached playcount while refreshing stale\n  ones in the background (instead of returning null)\n- Preserve cached values on transient Last.fm errors via a non-destructive\n  error upsert (ON CONFLICT DO NOTHING) instead of overwriting with null\n- De-dupe in-flight refreshes so concurrent list views / poll cycles do\n  not pile up overlapping Last.fm fetches and trip the rate limit\n- Canonicalize the cache lookup key with normalizeForExternalApi so\n  accented/special-char names match the write path\n- Stop wiping the playcount cache on reconnect; trigger a background\n  re-sync without deleting so existing values keep showing\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+  },
+  {
+    "date": "2026-05-29",
+    "category": "fix",
     "description": "Updated play counts appear immediately after reconnecting Last.fm",
     "hash": "ff9d69d7476847010a7287f3b8978ebfe07eebfd",
     "commitMessage": "Refresh Last.fm cache on reconnect"
