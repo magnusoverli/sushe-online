@@ -148,6 +148,80 @@ describe('external-identity-service', () => {
     assert.strictEqual(pool.query.mock.calls.length, 0);
   });
 
+  it('persists external_url and allows a newly-supported service', async () => {
+    const pool = createMockPoolWithQuery(async () => ({ rows: [] }));
+    const service = createExternalIdentityService({
+      db: pool,
+      logger: createMockLogger(),
+    });
+
+    await service.upsertAlbumServiceMapping({
+      albumId: 'album-9',
+      service: 'deezer', // previously rejected by the DB CHECK
+      externalAlbumId: 'dz9',
+      externalUrl: 'https://www.deezer.com/album/9',
+      confidence: 0.95,
+      strategy: 'availability:itunes',
+    });
+
+    assert.strictEqual(pool.query.mock.calls.length, 1);
+    const args = pool.query.mock.calls[0].arguments[1];
+    assert.ok(
+      pool.query.mock.calls[0].arguments[0].includes('external_url'),
+      'INSERT should include external_url column'
+    );
+    assert.strictEqual(args[5], 'https://www.deezer.com/album/9');
+  });
+
+  it('reads all availability rows for an album', async () => {
+    const pool = createMockPoolWithQuery(async () => ({
+      rows: [
+        { service: 'deezer', external_url: 'https://d/1' },
+        { service: 'tidal', external_url: 'https://t/1' },
+      ],
+    }));
+    const service = createExternalIdentityService({
+      db: pool,
+      logger: createMockLogger(),
+    });
+
+    const rows = await service.getAlbumAvailability('album-9');
+
+    assert.strictEqual(rows.length, 2);
+    assert.ok(
+      pool.query.mock.calls[0].arguments[0].includes('ORDER BY service')
+    );
+    assert.strictEqual(pool.query.mock.calls[0].arguments[1][0], 'album-9');
+  });
+
+  it('bulk-reads availability with ANY($1)', async () => {
+    const pool = createMockPoolWithQuery(async () => ({ rows: [] }));
+    const service = createExternalIdentityService({
+      db: pool,
+      logger: createMockLogger(),
+    });
+
+    await service.getAlbumAvailabilityBulk(['a', 'b']);
+
+    assert.ok(pool.query.mock.calls[0].arguments[0].includes('ANY($1)'));
+    assert.deepStrictEqual(pool.query.mock.calls[0].arguments[1][0], [
+      'a',
+      'b',
+    ]);
+  });
+
+  it('returns empty without a network/db call for empty availability input', async () => {
+    const pool = createMockPoolWithQuery(async () => ({ rows: [] }));
+    const service = createExternalIdentityService({
+      db: pool,
+      logger: createMockLogger(),
+    });
+
+    assert.deepStrictEqual(await service.getAlbumAvailability(''), []);
+    assert.deepStrictEqual(await service.getAlbumAvailabilityBulk([]), []);
+    assert.strictEqual(pool.query.mock.calls.length, 0);
+  });
+
   it('normalizes canonical/service keys when upserting artist aliases', async () => {
     const pool = createMockPoolWithQuery(async () => ({ rows: [] }));
     const service = createExternalIdentityService({
