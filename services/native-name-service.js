@@ -29,6 +29,21 @@ const MB_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const MB_RELEASE_GROUP_URL = 'https://musicbrainz.org/ws/2/release-group';
+const MB_FETCH_TIMEOUT_MS = 15000;
+
+/**
+ * Fetch with a hard timeout. A stalled MusicBrainz request must never block the
+ * caller indefinitely (the live queue and the backfill both rely on this).
+ */
+async function fetchWithTimeout(fetchFn, url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetchFn(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Determine whether a string is a MusicBrainz UUID (vs a Spotify/other id).
@@ -76,9 +91,12 @@ async function resolveNativeAlbumName({ albumId, artist, album }, deps = {}) {
   let group;
   try {
     const url = `${MB_RELEASE_GROUP_URL}/${albumId}?inc=artist-credits&fmt=json`;
-    const resp = await fetchFn(url, {
-      headers: { 'User-Agent': SUSHE_USER_AGENT },
-    });
+    const resp = await fetchWithTimeout(
+      fetchFn,
+      url,
+      { headers: { 'User-Agent': SUSHE_USER_AGENT } },
+      MB_FETCH_TIMEOUT_MS
+    );
     if (!resp.ok) {
       return { action: 'skip', reason: `mb-status-${resp.status}` };
     }

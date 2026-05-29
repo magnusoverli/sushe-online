@@ -60,7 +60,8 @@ async function main() {
     let skip = 0;
     let applied = 0;
 
-    for (const row of rows) {
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
       let res;
       try {
         res = await resolveNativeAlbumName(
@@ -73,6 +74,12 @@ async function main() {
           error: err.message,
         });
         res = { action: 'skip', reason: 'error' };
+      }
+
+      if ((i + 1) % 25 === 0 || i + 1 === rows.length) {
+        console.log(
+          `  ...${i + 1}/${rows.length} (rewrite ${rewrites.length}, review ${reviews.length}, noop ${noop}, skip ${skip})`
+        );
       }
 
       if (res.action === 'rewrite') {
