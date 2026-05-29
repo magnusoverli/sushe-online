@@ -1,6 +1,20 @@
 [
   {
     "date": "2026-05-29",
+    "category": "feature",
+    "description": "Added support for Qobuz and Tidal music services",
+    "hash": "831cda5b9f5e00e035cc8b3d038acfdfb55d5893",
+    "commitMessage": "Romanize non-Latin scripts; extend entity-matching to Qobuz/Tidal\n\nnormalizeForExternalApi now transliterates Cyrillic and Greek to Latin.\nOrder is NFD-strip first (so precomposed accents AND precomposed\nCyrillic/Greek decompose to base letters), then fold non-decomposable\nspecial Latin letters, then romanize Cyrillic/Greek. This closes two\ngaps for non-Latin-script names:\n\n- Spotify/iTunes/Deezer index these under a romanized form, so a\n  native-script query returned nothing. Romanizing yields a usable\n  query and a usable match key.\n- The comparison layer is ASCII-only, so every Cyrillic/Greek name\n  previously collapsed to \"\" and any two compared as identical (false\n  1.0 similarity). Romanized keys are non-empty and distinct.\n\nLatin output is unchanged (covered by the existing special-letter\ntests); the change is purely additive for non-Latin input. The\nplaycount cache key self-heals: non-Latin albums (which did not match\nbefore) take a one-time cache miss, then cache under the romanized key.\nNo migration; normalizeForComparison stays frozen.\n\nQobuz and Tidal now build queries via generateQueryForms (native form\nfirst, romanized/diacritic-folded fallback), matching the other\nintegrations. Tidal's album lookup is factored into a shared\nfindAlbumId helper used by both searchAlbum and searchTrack. Qobuz\nkeeps its slug containment scorer (correct for concatenated URL slugs);\nbecause the target runs through normalizeForExternalApi, it now scores\nromanized targets against romanized slugs automatically.\n\nAdds Cyrillic/Greek transliteration tests, entity-matching regression\ntests for the false-equality bug, and a new tidal-service test.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+  },
+  {
+    "date": "2026-05-29",
+    "category": "feature",
+    "description": "Artist and album names now show in original language",
+    "hash": "f62077fa38c6b8fd046ca435a2e3e4c73653af33",
+    "commitMessage": "Restore native artist/album spelling (server-authoritative)\n\nAlbums added via the browser extension were stored from the RateYourMusic\nURL slug, which ASCII-folds the name (diacritics stripped, apostrophes\nremoved): \"De l'Abime Nait l'Aube\" was stored as \"De Labime Nait Laube\".\nMake the server authoritative for the native spelling instead of trusting\nclient names, so the data is correct regardless of extension version (the\nmulti-day extension rollout window stops mattering) and no extension change\nis required.\n\n- services/native-name-service.js: resolveNativeAlbumName looks up the native\n  artist/title from the album's MusicBrainz id and returns rewrite/noop/\n  review/skip. Gated by the shared entity-matching key (externalMatchKey) so\n  it only re-spells the SAME album; a wrong album_id yields differing keys and\n  is flagged for review, never auto-applied.\n- services/native-name-queue.js: background queue (mirrors the track/cover\n  queues, serialized for MusicBrainz rate limits) that rewrites albums.artist/\n  album. Cheap pre-filter: only MusicBrainz-id + pure-ASCII names (possible\n  slug victims) hit the network.\n- Wired into the post-add enrichment seam (routes/api/_helpers.js) for\n  newly-inserted albums; initialized in config/startup-services.js.\n- scripts/backfill-native-names.js: one-time repair of existing rows, dry-run\n  by default, --apply to write. Only albums.artist/album change (album_id is\n  never touched), so list_items / user_album_stats and playcount matching are\n  unaffected.\n\nAdds test/native-name-service.test.js. Full unit suite (2583) and lint pass;\nno schema changes.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+  },
+  {
+    "date": "2026-05-29",
     "category": "fix",
     "description": "Fixed playcount updates getting stuck during server refresh",
     "hash": "9405656007ff2c1747e4af243e206d166a54c977",
