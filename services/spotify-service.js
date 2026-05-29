@@ -542,12 +542,20 @@ function scheduleSpotifyPlaycountRefresh(logger, params) {
     lastfmUsername,
     db,
     refreshPlaycountsInBackground,
+    schedule = setTimeout,
   } = params;
   const PLAY_REFRESH_DELAY_MS = 60000;
 
-  db.raw(`SELECT album_id, artist, album FROM albums WHERE spotify_id = $1`, [
-    spotifyAlbumId,
-  ])
+  db.raw(
+    `SELECT a.album_id, a.artist, a.album
+     FROM album_service_mappings asm
+     JOIN albums a ON a.album_id = asm.album_id
+     WHERE asm.service = 'spotify'
+       AND asm.external_album_id = $1
+     ORDER BY asm.updated_at DESC NULLS LAST
+     LIMIT 1`,
+    [spotifyAlbumId]
+  )
     .then((result) => {
       if (result.rows.length > 0) {
         const albumRow = result.rows[0];
@@ -557,7 +565,7 @@ function scheduleSpotifyPlaycountRefresh(logger, params) {
           delayMs: PLAY_REFRESH_DELAY_MS,
         });
 
-        setTimeout(() => {
+        schedule(() => {
           refreshPlaycountsInBackground(
             userId,
             lastfmUsername,
@@ -566,7 +574,7 @@ function scheduleSpotifyPlaycountRefresh(logger, params) {
                 itemId: albumRow.album_id,
                 artist: albumRow.artist,
                 album: albumRow.album,
-                albumId: albumRow.album_id,
+                album_id: albumRow.album_id,
               },
             ],
             db,

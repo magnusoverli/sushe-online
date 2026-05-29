@@ -102,6 +102,35 @@ describe('app-api-client module', () => {
     assert.strictEqual(logger.error.mock.calls.length, 1);
   });
 
+  it('does not log expected optional service auth errors', async () => {
+    const win = { csrfToken: null, location: { href: '/app' } };
+    const fetchImpl = mock.fn(async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({
+        code: 'NOT_AUTHENTICATED',
+        service: 'lastfm',
+        error: 'Last.fm not connected',
+      }),
+    }));
+    const logger = { error: mock.fn() };
+    const client = createAppApiClient({
+      getRealtimeSyncModuleInstance: () => null,
+      fetchImpl,
+      win,
+      logger,
+    });
+
+    await assert.rejects(
+      () => client.apiCall('/api/lastfm/list-playcounts/1'),
+      {
+        message: 'Last.fm not connected',
+      }
+    );
+    assert.strictEqual(win.location.href, '/app');
+    assert.strictEqual(logger.error.mock.calls.length, 0);
+  });
+
   it('redirects instead of parsing HTML login responses as JSON', async () => {
     const win = { csrfToken: null, location: { href: '/app' } };
     const fetchImpl = mock.fn(async () => ({

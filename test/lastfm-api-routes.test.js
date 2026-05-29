@@ -120,6 +120,78 @@ test('Last.fm scrobble returns structured 503 when server credentials are missin
   }
 });
 
+test('Last.fm scrobble refreshes matching album playcounts', async () => {
+  const previousApiKey = process.env.LASTFM_API_KEY;
+  const previousSecret = process.env.LASTFM_SECRET;
+  process.env.LASTFM_API_KEY = 'api-key';
+  process.env.LASTFM_SECRET = 'api-secret';
+
+  try {
+    const raw = mock.fn(async () => ({
+      rows: [
+        {
+          itemId: 'item-1',
+          album_id: 'album-1',
+          artist: 'Marianas Rest',
+          album: 'The Bereaved',
+        },
+        {
+          itemId: 'item-2',
+          album_id: 'album-2',
+          artist: 'Other Artist',
+          album: 'Other Album',
+        },
+      ],
+    }));
+    const refreshPlaycountsInBackground = mock.fn(async () => ({
+      'item-1': { playcount: 116, status: 'success' },
+    }));
+    const { app } = registerRoutes({
+      db: createMockDb(raw),
+      refreshPlaycountsInBackground,
+    });
+    const res = createResponse();
+
+    await runHandlers(
+      app.find('POST', '/api/lastfm/scrobble').handlers,
+      createLastfmReq({
+        artist: 'Marianas Rest',
+        track: 'The Millennialist',
+        album: 'The Bereaved',
+      }),
+      res
+    );
+
+    assert.strictEqual(res.statusCode, 200);
+    assert.deepStrictEqual(res.body.playcounts, {
+      'item-1': { playcount: 116, status: 'success' },
+    });
+    assert.strictEqual(refreshPlaycountsInBackground.mock.calls.length, 1);
+    assert.deepStrictEqual(
+      refreshPlaycountsInBackground.mock.calls[0].arguments[2],
+      [
+        {
+          itemId: 'item-1',
+          artist: 'Marianas Rest',
+          album: 'The Bereaved',
+          album_id: 'album-1',
+        },
+      ]
+    );
+  } finally {
+    if (previousApiKey === undefined) {
+      delete process.env.LASTFM_API_KEY;
+    } else {
+      process.env.LASTFM_API_KEY = previousApiKey;
+    }
+    if (previousSecret === undefined) {
+      delete process.env.LASTFM_SECRET;
+    } else {
+      process.env.LASTFM_SECRET = previousSecret;
+    }
+  }
+});
+
 test('Last.fm now-playing maps invalid API key errors to non-retryable 503', async () => {
   const previousApiKey = process.env.LASTFM_API_KEY;
   const previousSecret = process.env.LASTFM_SECRET;
@@ -161,4 +233,32 @@ test('Last.fm now-playing maps invalid API key errors to non-retryable 503', asy
       process.env.LASTFM_SECRET = previousSecret;
     }
   }
+});
+
+test('Last.fm list playcounts returns a quiet empty response when disconnected', async () => {
+  const { app } = registerRoutes({
+    requireLastfmAuth: () => {
+      throw new Error('list playcounts should not require Last.fm auth');
+    },
+  });
+  const req = createLastfmReq();
+  req.params = { listId: 'list1' };
+  req.query = {};
+  req.user.lastfmUsername = null;
+  const res = createResponse();
+
+  await runHandlers(
+    app.find('GET', '/api/lastfm/list-playcounts/:listId').handlers,
+    req,
+    res
+  );
+
+  assert.strictEqual(res.statusCode, 200);
+  assert.deepStrictEqual(res.body, {
+    error: 'Last.fm not connected',
+    code: 'NOT_AUTHENTICATED',
+    service: 'lastfm',
+    playcounts: {},
+    refreshing: 0,
+  });
 });

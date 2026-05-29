@@ -117,6 +117,116 @@ describe('album-display playcount-sync module', () => {
     ]);
   });
 
+  it('skips playcount fetches when Last.fm is disconnected', async () => {
+    const logger = {
+      warn: mock.fn(),
+      log: mock.fn(),
+    };
+    const apiCall = mock.fn(async () => {
+      throw new Error('should not call api');
+    });
+
+    const sync = createPlaycountSync({
+      apiCall,
+      formatPlaycount: () => '',
+      logger,
+      win: { currentUser: { lastfmUsername: null } },
+    });
+
+    await sync.fetchAndDisplayPlaycounts('list-disconnected');
+
+    assert.strictEqual(apiCall.mock.calls.length, 0);
+    assert.strictEqual(logger.warn.mock.calls.length, 0);
+  });
+
+  it('silences expected Last.fm disconnected fetch errors', async () => {
+    const logger = {
+      warn: mock.fn(),
+      log: mock.fn(),
+    };
+    const error = new Error('Last.fm not connected');
+    error.data = {
+      code: 'NOT_AUTHENTICATED',
+      service: 'lastfm',
+      error: 'Last.fm not connected',
+    };
+
+    const sync = createPlaycountSync({
+      apiCall: async () => {
+        throw error;
+      },
+      formatPlaycount: () => '',
+      logger,
+      win: { currentUser: { lastfmUsername: 'listener' } },
+    });
+
+    await sync.fetchAndDisplayPlaycounts('list-disconnected');
+
+    assert.strictEqual(logger.warn.mock.calls.length, 0);
+  });
+
+  it('applies playcount updates from Last.fm scrobble events', () => {
+    const desktopEl = createElement();
+    const mobileEl = createElement();
+    let updateHandler = null;
+    const win = {
+      currentUser: { lastfmUsername: 'listener' },
+      addEventListener: (eventName, handler) => {
+        if (eventName === 'lastfm-playcounts-updated') {
+          updateHandler = handler;
+        }
+      },
+    };
+    const doc = {
+      querySelector: (selector) => {
+        if (selector === '[data-playcount="item-1"]') return desktopEl;
+        if (selector === '[data-playcount-mobile="item-1"]') return mobileEl;
+        return null;
+      },
+    };
+
+    const sync = createPlaycountSync({
+      apiCall: async () => ({}),
+      formatPlaycount: (value) => String(value),
+      doc,
+      win,
+    });
+
+    updateHandler({
+      detail: {
+        playcounts: {
+          'item-1': { playcount: 116, status: 'success' },
+        },
+      },
+    });
+
+    assert.strictEqual(sync.getPlaycountCacheEntry('item-1').playcount, 116);
+    assert.match(desktopEl.innerHTML, /116/);
+    assert.match(mobileEl.innerHTML, /116/);
+  });
+
+  it('stops scheduled playcount polling after Last.fm disconnects', async () => {
+    const win = { currentUser: { lastfmUsername: 'listener' } };
+    const scheduled = [];
+    const apiCall = mock.fn(async () => ({ playcounts: {}, refreshing: 1 }));
+
+    const sync = createPlaycountSync({
+      apiCall,
+      formatPlaycount: () => '',
+      win,
+      schedule: (callback) => {
+        scheduled.push(callback);
+        return 0;
+      },
+    });
+
+    await sync.fetchAndDisplayPlaycounts('list-refresh');
+    win.currentUser.lastfmUsername = null;
+    await scheduled[0]();
+
+    assert.strictEqual(apiCall.mock.calls.length, 1);
+  });
+
   it('aborts polling controllers when cache is cleared', async () => {
     const controllers = [];
     const createAbortController = () => {

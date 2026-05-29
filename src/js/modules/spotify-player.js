@@ -183,7 +183,8 @@ async function lastfmApiCall(endpoint, body, trackId, onSuccess, logLabel) {
     });
 
     if (response.ok) {
-      onSuccess(trackId);
+      const data = await response.json().catch(() => ({}));
+      onSuccess(trackId, data);
       scrobbleConsecutiveFailures = 0;
       console.log(`Last.fm ${logLabel}:`, body.track);
       return true;
@@ -212,6 +213,16 @@ async function lastfmApiCall(endpoint, body, trackId, onSuccess, logLabel) {
   }
 
   return false;
+}
+
+function emitLastfmPlaycountUpdates(playcounts) {
+  if (!playcounts || Object.keys(playcounts).length === 0) return;
+
+  window.dispatchEvent(
+    new CustomEvent('lastfm-playcounts-updated', {
+      detail: { playcounts },
+    })
+  );
 }
 
 /**
@@ -258,8 +269,9 @@ async function submitLastfmScrobble(track, timestamp) {
       timestamp: Math.floor(timestamp / 1000), // Unix timestamp in seconds
     },
     trackId,
-    (id) => {
+    (id, data) => {
       lastfmScrobbledTrack = id;
+      emitLastfmPlaycountUpdates(data?.playcounts);
     },
     'scrobbled'
   );

@@ -4,6 +4,7 @@ export function createPlaycountSync(deps = {}) {
     formatPlaycount,
     logger = console,
     doc = globalThis.document,
+    win = typeof window !== 'undefined' ? window : null,
     createAbortController = () => new AbortController(),
     schedule = (callback, delay) => setTimeout(callback, delay),
   } = deps;
@@ -35,6 +36,20 @@ export function createPlaycountSync(deps = {}) {
       controller.abort();
       pollingControllers.delete(listId);
     }
+  }
+
+  function hasLastfmConnection() {
+    if (!win?.currentUser) return true;
+    return !!win.currentUser.lastfmUsername;
+  }
+
+  function isLastfmNotConnectedError(err) {
+    const data = err?.data || err;
+    return (
+      data?.service === 'lastfm' &&
+      data?.code === 'NOT_AUTHENTICATED' &&
+      data?.error === 'Last.fm not connected'
+    );
   }
 
   function updateDesktopElement(itemId, playcount, status) {
@@ -94,6 +109,18 @@ export function createPlaycountSync(deps = {}) {
     }
   }
 
+  function applyPlaycountUpdates(playcounts) {
+    if (!playcounts || typeof playcounts !== 'object') return;
+    Object.assign(playcountCache, playcounts);
+    updatePlaycountElements(playcounts);
+  }
+
+  if (win?.addEventListener) {
+    win.addEventListener('lastfm-playcounts-updated', (event) => {
+      applyPlaycountUpdates(event.detail?.playcounts);
+    });
+  }
+
   async function pollForRefreshedPlaycounts(listId, expectedCount) {
     cancelPollingForList(listId);
 
@@ -116,6 +143,11 @@ export function createPlaycountSync(deps = {}) {
 
     const poll = async () => {
       if (signal.aborted) {
+        return;
+      }
+
+      if (!hasLastfmConnection()) {
+        pollingControllers.delete(listId);
         return;
       }
 
@@ -144,8 +176,7 @@ export function createPlaycountSync(deps = {}) {
             }
           }
 
-          Object.assign(playcountCache, response.playcounts);
-          updatePlaycountElements(response.playcounts);
+          applyPlaycountUpdates(response.playcounts);
           previousPlaycounts = JSON.parse(JSON.stringify(response.playcounts));
 
           const missingCount = Object.values(response.playcounts).filter(
@@ -205,6 +236,11 @@ export function createPlaycountSync(deps = {}) {
   async function fetchAndDisplayPlaycounts(listId, forceRefresh = false) {
     if (!listId || playcountFetchInProgress) return;
 
+    if (!hasLastfmConnection()) {
+      clearPlaycountCache();
+      return;
+    }
+
     playcountFetchInProgress = true;
 
     try {
@@ -221,13 +257,17 @@ export function createPlaycountSync(deps = {}) {
 
       const { playcounts, refreshing } = response;
 
-      Object.assign(playcountCache, playcounts);
-      updatePlaycountElements(playcounts);
+      applyPlaycountUpdates(playcounts);
 
       if (refreshing > 0) {
         pollForRefreshedPlaycounts(listId, refreshing);
       }
     } catch (err) {
+      if (isLastfmNotConnectedError(err)) {
+        clearPlaycountCache();
+        return;
+      }
+
       logger.warn('Playcount fetch error:', err);
     } finally {
       playcountFetchInProgress = false;

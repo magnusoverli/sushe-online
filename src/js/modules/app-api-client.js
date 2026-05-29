@@ -52,6 +52,10 @@ export function createAppApiClient(deps = {}) {
     return await response.json();
   }
 
+  function isExpectedServiceAuthError(error) {
+    return error?.data?.code === 'NOT_AUTHENTICATED' && !!error.data.service;
+  }
+
   async function apiCall(url, options = {}) {
     try {
       const socketId = getRealtimeSyncModuleInstance()?.getSocket?.()?.id;
@@ -140,7 +144,7 @@ export function createAppApiClient(deps = {}) {
 
       return await readJsonResponse(response);
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (error.name !== 'AbortError' && !isExpectedServiceAuthError(error)) {
         logger.error('API call failed:', error);
       }
       throw error;

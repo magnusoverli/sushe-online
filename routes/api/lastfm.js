@@ -107,6 +107,55 @@ module.exports = (app, deps) => {
     });
   }
 
+  async function refreshScrobbledAlbumPlaycounts(user, artist, album) {
+    if (!user?.lastfmUsername || !artist || !album) {
+      return {};
+    }
+
+    try {
+      const targetKey = normalizeAlbumKey(artist, album);
+      const result = await db.raw(
+        `SELECT li._id AS "itemId", a.album_id, a.artist, a.album
+         FROM list_items li
+         JOIN lists l ON l._id = li.list_id
+         JOIN albums a ON a.album_id = li.album_id
+         WHERE l.user_id = $1
+           AND a.artist IS NOT NULL
+           AND a.album IS NOT NULL`,
+        [user._id]
+      );
+
+      const matchingAlbums = result.rows
+        .filter((row) => normalizeAlbumKey(row.artist, row.album) === targetKey)
+        .map((row) => ({
+          itemId: row.itemId,
+          artist: row.artist,
+          album: row.album,
+          album_id: row.album_id,
+        }));
+
+      if (matchingAlbums.length === 0) {
+        return {};
+      }
+
+      return await refreshPlaycountsInBackground(
+        user._id,
+        user.lastfmUsername,
+        matchingAlbums,
+        db,
+        logger
+      );
+    } catch (err) {
+      logger.warn('Failed to refresh playcount after Last.fm scrobble', {
+        userId: user._id,
+        artist,
+        album,
+        error: err.message,
+      });
+      return {};
+    }
+  }
+
   async function getLastfmArtistCandidates(artist, albumId = null) {
     if (!artist) return [];
 
@@ -349,7 +398,13 @@ module.exports = (app, deps) => {
         return res.status(400).json({ error: result.message });
       }
 
-      res.json({ success: true, scrobbles: result.scrobbles });
+      const accepted = parseInt(result.scrobbles?.['@attr']?.accepted || 0, 10);
+      const playcounts =
+        accepted > 0
+          ? await refreshScrobbledAlbumPlaycounts(req.user, artist, album)
+          : {};
+
+      res.json({ success: true, scrobbles: result.scrobbles, playcounts });
     }, 'scrobbling to Last.fm')
   );
 
@@ -499,8 +554,17 @@ module.exports = (app, deps) => {
   app.get(
     '/api/lastfm/list-playcounts/:listId',
     ensureAuthAPI,
-    requireLastfmAuth,
     asyncHandler(async (req, res) => {
+      if (!req.user.lastfmUsername) {
+        return res.json({
+          error: 'Last.fm not connected',
+          code: 'NOT_AUTHENTICATED',
+          service: 'lastfm',
+          playcounts: {},
+          refreshing: 0,
+        });
+      }
+
       const result = await playcountService.getListPlaycounts({
         listId: req.params.listId,
         userId: req.user._id,
