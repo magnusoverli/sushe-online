@@ -133,11 +133,17 @@ async function invalidateUserPlaycounts(db, log, userId) {
  * @param {number|null} playcount - Playcount value (null for not_found)
  * @param {string} status - 'success' or 'not_found'
  */
-async function upsertPlaycount(db, userId, album, playcount, status) {
+function canonicalizeAlbum(album) {
   const canonicalArtist = normalizeForLastfm(album.artist).toLowerCase().trim();
   const canonicalAlbum = normalizeForLastfm(album.album).toLowerCase().trim();
   const normalizedKey = normalizeAlbumKey(canonicalArtist, canonicalAlbum);
   const albumId = album.album_id || album.albumId || null;
+  return { canonicalArtist, canonicalAlbum, normalizedKey, albumId };
+}
+
+async function upsertPlaycount(db, userId, album, playcount, status) {
+  const { canonicalArtist, canonicalAlbum, normalizedKey, albumId } =
+    canonicalizeAlbum(album);
 
   await db.raw(
     `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
@@ -159,6 +165,30 @@ async function upsertPlaycount(db, userId, album, playcount, status) {
       playcount,
       status,
     ]
+  );
+}
+
+/**
+ * Record a transient fetch failure WITHOUT clobbering a previously cached
+ * value. If a row already exists (success/not_found/error) it is left
+ * untouched so the last-known playcount keeps displaying; only brand-new
+ * albums get an 'error' marker so they stay eligible for retry. This prevents
+ * a momentary Last.fm hiccup from wiping good playcounts.
+ *
+ * @param {Object} db - Canonical datastore
+ * @param {string} userId - User ID
+ * @param {Object} album - Album object
+ */
+async function upsertPlaycountError(db, userId, album) {
+  const { canonicalArtist, canonicalAlbum, normalizedKey, albumId } =
+    canonicalizeAlbum(album);
+
+  await db.raw(
+    `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, NULL, 'error', NOW(), NOW())
+     ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
+     DO NOTHING`,
+    [userId, albumId, canonicalArtist, canonicalAlbum, normalizedKey]
   );
 }
 
@@ -318,13 +348,14 @@ async function refreshAlbumPlaycount(db, log, userId, lastfmUsername, album) {
       error: err.message,
     });
 
-    // Store as error state so we retry later
+    // Mark as errored so we retry later — but preserve any existing cached
+    // value rather than overwriting it with null.
     try {
       const datastore = ensureDb(
         db,
         'playcount-sync-service.refreshAlbumPlaycount'
       );
-      await upsertPlaycount(datastore, userId, album, null, 'error');
+      await upsertPlaycountError(datastore, userId, album);
     } catch (dbErr) {
       log.error('Failed to store error status', {
         error: dbErr.message,

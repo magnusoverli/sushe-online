@@ -465,7 +465,8 @@ describe('playcount-service', () => {
       });
 
       assert.strictEqual(result.refreshing, 1);
-      assert.strictEqual(result.playcounts.item1, null);
+      // forceRefresh queues a refresh but the cached value is still shown.
+      assert.strictEqual(result.playcounts.item1.playcount, 42);
       assert.strictEqual(mockRefresh.mock.calls.length, 1);
       assert.strictEqual(
         mockRefresh.mock.calls[0].arguments[4].album_id,
@@ -473,7 +474,7 @@ describe('playcount-service', () => {
       );
     });
 
-    it('should not display stale cached stats while refreshing', async () => {
+    it('should display stale cached stats while refreshing in the background', async () => {
       const mockLogger = createMockLogger();
       const staleUpdatedAt = new Date(
         Date.now() - 10 * 60 * 1000
@@ -496,7 +497,7 @@ describe('playcount-service', () => {
               artist: 'marianas rest',
               album_name: 'the bereaved',
               album_id: 'album-1',
-              normalized_key: 'marianas rest::bereaved',
+              normalized_key: 'marianas rest::the bereaved',
               lastfm_playcount: 93,
               lastfm_status: 'success',
               lastfm_updated_at: staleUpdatedAt,
@@ -523,8 +524,9 @@ describe('playcount-service', () => {
           `${artist}`.toLowerCase() + `::${album}`.toLowerCase(),
       });
 
+      // Stale value is still shown immediately, and a refresh is queued.
       assert.strictEqual(result.refreshing, 1);
-      assert.strictEqual(result.playcounts.item1, null);
+      assert.strictEqual(result.playcounts.item1.playcount, 93);
       assert.strictEqual(mockRefresh.mock.calls.length, 1);
     });
 

@@ -13,6 +13,7 @@
 
 const { createAsyncHandler } = require('../../middleware/async-handler');
 const { createPlaycountService } = require('../../services/playcount-service');
+const { normalizeForExternalApi } = require('../../utils/normalization');
 
 /**
  * Register Last.fm routes
@@ -39,6 +40,14 @@ module.exports = (app, deps) => {
 
   const asyncHandler = createAsyncHandler(logger);
   const playcountService = createPlaycountService();
+
+  // Canonical album key consistent with the playcount cache write path, so
+  // accented/special-char names (e.g. "Sigur Rós") match reliably.
+  const canonicalAlbumKey = (artist, album) =>
+    normalizeAlbumKey(
+      normalizeForExternalApi(artist).toLowerCase().trim(),
+      normalizeForExternalApi(album).toLowerCase().trim()
+    );
 
   function getLastfmWriteConfigError() {
     if (!process.env.LASTFM_API_KEY || !process.env.LASTFM_SECRET) {
@@ -113,7 +122,7 @@ module.exports = (app, deps) => {
     }
 
     try {
-      const targetKey = normalizeAlbumKey(artist, album);
+      const targetKey = canonicalAlbumKey(artist, album);
       const result = await db.raw(
         `SELECT li._id AS "itemId", a.album_id, a.artist, a.album
          FROM list_items li
@@ -126,7 +135,7 @@ module.exports = (app, deps) => {
       );
 
       const matchingAlbums = result.rows
-        .filter((row) => normalizeAlbumKey(row.artist, row.album) === targetKey)
+        .filter((row) => canonicalAlbumKey(row.artist, row.album) === targetKey)
         .map((row) => ({
           itemId: row.itemId,
           artist: row.artist,
