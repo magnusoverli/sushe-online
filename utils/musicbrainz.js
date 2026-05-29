@@ -2,6 +2,7 @@
 // Server-side MusicBrainz API utilities for artist metadata lookups
 
 const logger = require('./logger');
+const { selectBestCandidate } = require('./entity-matching');
 
 const MUSICBRAINZ_API = 'https://musicbrainz.org/ws/2';
 const USER_AGENT = 'SusheOnline/1.0 (https://sushe.online)';
@@ -370,9 +371,16 @@ function createMusicBrainz(deps = {}) {
         (a) => a.name.toLowerCase() === normalizedSearch
       );
 
-      // If no exact match, use the first result (MusicBrainz ranks by relevance)
+      // If no exact match, score candidates by diacritic/&-insensitive name
+      // similarity; fall back to the first result (MusicBrainz relevance order)
+      // when none is confident, so we never do worse than before.
       if (!bestMatch) {
-        bestMatch = data.artists[0];
+        const { best, isConfident } = selectBestCandidate({
+          target: { artist: artistName },
+          candidates: data.artists,
+          getArtist: (a) => a.name,
+        });
+        bestMatch = isConfident ? best.candidate : data.artists[0];
       }
 
       const countryCode =

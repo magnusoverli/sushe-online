@@ -12,7 +12,25 @@
 const { RequestQueue } = require('../utils/request-queue');
 const logger = require('../utils/logger');
 const { normalizeForExternalApi } = require('../utils/normalization');
+const { selectBestCandidate } = require('../utils/entity-matching');
 const { ensureDb } = require('../db/postgres');
+
+/**
+ * Pick the result whose album/artist best matches the request, falling back to
+ * the first result when nothing scores confidently. This lifts iTunes/Deezer
+ * from blind take-first-result to scored selection without ever doing worse
+ * than before.
+ */
+function pickBestOrFirst(results, artist, album, getArtist, getAlbum) {
+  if (!Array.isArray(results) || results.length === 0) return null;
+  const { best, isConfident } = selectBestCandidate({
+    target: { artist, album },
+    candidates: results,
+    getArtist,
+    getAlbum,
+  });
+  return isConfident ? best.candidate : results[0];
+}
 const {
   incQueueItems,
   incQueueItemsProcessed,
@@ -106,8 +124,14 @@ function createTrackFetchQueue(deps = {}) {
       if (!resp.ok) return null;
       const data = await resp.json();
       if (!data.results || !data.results.length) return null;
-      const best = data.results[0];
-      if (!best.collectionId) return null;
+      const best = pickBestOrFirst(
+        data.results,
+        artistClean,
+        albumClean,
+        (r) => r.artistName,
+        (r) => r.collectionName
+      );
+      if (!best || !best.collectionId) return null;
       const lookup = await fetchFn(
         `https://itunes.apple.com/lookup?id=${best.collectionId}&entity=song`
       );
@@ -142,7 +166,14 @@ function createTrackFetchQueue(deps = {}) {
       );
       if (!searchResp.ok) return null;
       const data = await searchResp.json();
-      const deezerAlbumId = data.data && data.data[0] && data.data[0].id;
+      const bestMatch = pickBestOrFirst(
+        data.data,
+        artistClean,
+        albumClean,
+        (r) => r.artist?.name,
+        (r) => r.title
+      );
+      const deezerAlbumId = bestMatch && bestMatch.id;
       if (!deezerAlbumId) return null;
       const albumResp = await fetchFn(
         `https://api.deezer.com/album/${deezerAlbumId}`

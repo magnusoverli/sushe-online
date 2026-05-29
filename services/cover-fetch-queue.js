@@ -18,10 +18,8 @@
 const { RequestQueue } = require('../utils/request-queue');
 const { ensureDb } = require('../db/postgres');
 const logger = require('../utils/logger');
-const {
-  normalizeForExternalApi,
-  stringSimilarity,
-} = require('../utils/normalization');
+const { normalizeForExternalApi } = require('../utils/normalization');
+const { nameSimilarity } = require('../utils/entity-matching');
 const {
   processImage,
   upscaleItunesArtworkUrl,
@@ -156,11 +154,8 @@ function createCoverProviders(fetchFn) {
           for (const result of data.results) {
             if (!result.artworkUrl100) continue;
 
-            const artistScore = stringSimilarity(
-              artist,
-              result.artistName || ''
-            );
-            const albumScore = stringSimilarity(
+            const artistScore = nameSimilarity(artist, result.artistName || '');
+            const albumScore = nameSimilarity(
               album,
               result.collectionName || ''
             );

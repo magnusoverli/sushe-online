@@ -7,6 +7,7 @@ const {
   normalizeForExternalApi,
   stripEditionSuffix,
 } = require('./normalization');
+const { generateQueryForms, externalMatchKey } = require('./entity-matching');
 
 const API_URL = 'https://ws.audioscrobbler.com/2.0/';
 
@@ -120,11 +121,9 @@ const EDITION_KEYWORD_PATTERN =
   /\b(deluxe|remaster(?:ed)?|expanded|special|anniversary|bonus|collector|legacy|edition)\b/i;
 
 function compactAlbumForCompare(value) {
-  return normalizeForLastfm(value)
-    .toLowerCase()
-    .replace(/[^\w\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  // Shared canonical key: diacritic-insensitive and treats `&` ≡ `and`, so
+  // "Endarkenment, Being & Death" matches "Endarkenment Being And Death".
+  return externalMatchKey(value || '');
 }
 
 function isSafeAlbumVariantMatch(resultAlbumName, targetAlbumName) {
@@ -293,55 +292,60 @@ async function getAlbumInfoWithVariants(
   username,
   apiKey
 ) {
-  const normalizedArtist = normalizeForLastfm(artist);
-  const normalizedAlbum = normalizeForLastfm(album);
-  const strippedAlbum = stripEditionSuffix(normalizedAlbum);
+  // Ordered query forms to try (diacritic-PRESERVED first, then `&`/`and`
+  // swaps, then diacritic-stripped). Last.fm usually stores the accented
+  // spelling, so stripping it first (the old behavior) could resolve to a
+  // bogus 0-listener entry — see "Caminhos de Água".
+  const artistForms = generateQueryForms(artist);
+  const albumForms = generateQueryForms(album);
+  // Single representative for edition-suffix fallbacks (diacritic-stripped,
+  // edition-stripped) — kept ASCII to match generateAlbumVariations output.
+  const strippedAlbum = stripEditionSuffix(normalizeForExternalApi(album));
+  const fallbackArtist = normalizeForExternalApi(artist);
   const fetchExact = (a, b) =>
     fetchAlbumInfoExact(fetchFn, log, a, b, username, apiKey);
 
-  // Find all album variants via artist.getTopAlbums and sum playcounts
-  const artistAlbums = await findAlbumByArtist(
-    fetchFn,
-    log,
-    normalizedArtist,
-    strippedAlbum,
-    apiKey,
-    true
-  );
-
-  if (artistAlbums && artistAlbums.length > 0) {
-    const combined = await combineVariantPlaycounts(
-      fetchExact,
-      artistAlbums,
-      log
+  // Primary: find album variants via artist.getTopAlbums and sum playcounts.
+  // Try each artist spelling form until one yields matches.
+  for (const artistForm of artistForms) {
+    const artistAlbums = await findAlbumByArtist(
+      fetchFn,
+      log,
+      artistForm,
+      strippedAlbum,
+      apiKey,
+      true
     );
-    if (combined) return combined;
+
+    if (artistAlbums && artistAlbums.length > 0) {
+      const combined = await combineVariantPlaycounts(
+        fetchExact,
+        artistAlbums,
+        log
+      );
+      if (combined) return combined;
+    }
   }
 
-  // Fallback: try exact match first
-  const exactResult = await tryFetchWithPlaycount(
-    fetchExact,
-    normalizedArtist,
-    normalizedAlbum
-  );
-  if (exactResult) return exactResult;
-
-  // Try without edition suffix if different
-  if (strippedAlbum !== normalizedAlbum) {
-    const strippedResult = await tryFetchWithPlaycount(
-      fetchExact,
-      normalizedArtist,
-      strippedAlbum
-    );
-    if (strippedResult) return strippedResult;
+  // Fallback: exact album.getInfo across artist × album forms (preserved
+  // first), returning the first variant that has plays.
+  for (const artistForm of artistForms) {
+    for (const albumForm of albumForms) {
+      const result = await tryFetchWithPlaycount(
+        fetchExact,
+        artistForm,
+        albumForm
+      );
+      if (result) return result;
+    }
   }
 
-  // Try common variations (Deluxe Edition, Remastered, etc.)
+  // Try common edition variations (Deluxe Edition, Remastered, etc.)
   const variations = generateAlbumVariations(strippedAlbum);
   for (const variation of variations) {
     const varResult = await tryFetchWithPlaycount(
       fetchExact,
-      normalizedArtist,
+      fallbackArtist,
       variation
     );
     if (varResult) {
@@ -355,7 +359,7 @@ async function getAlbumInfoWithVariants(
   }
 
   // Return whatever we found (even with 0 plays) or not found
-  const fallbackData = await fetchExact(normalizedArtist, normalizedAlbum);
+  const fallbackData = await fetchExact(fallbackArtist, strippedAlbum);
   if (!fallbackData.error && fallbackData.album) return fallbackData.album;
 
   log.debug('Last.fm album not found', { artist, album });
@@ -666,6 +670,22 @@ function createDiscoveryMethods(fetchFn, log, env, lastfmGet) {
     return data.topalbums?.album || [];
   }
 
+  /**
+   * Fuzzy search albums by title. Used for bootstrap-from-failure discovery:
+   * when a known artist+album never resolves (e.g. the artist name is
+   * misspelled in our data), searching by title surfaces the real artist
+   * spelling. Returns [{ name, artist }].
+   */
+  async function searchAlbums(album, limit = 10, apiKey) {
+    const data = await lastfmGet({
+      method: 'album.search',
+      params: { album, limit: String(limit), api_key: apiKey },
+      notFoundValue: { results: { albummatches: { album: [] } } },
+    });
+    const matches = data.results?.albummatches?.album || [];
+    return matches.map((m) => ({ name: m.name, artist: m.artist }));
+  }
+
   return {
     getSimilarArtists,
     getArtistTopTags,
@@ -673,6 +693,7 @@ function createDiscoveryMethods(fetchFn, log, env, lastfmGet) {
     getTagTopArtists,
     getTagTopAlbums,
     getArtistTopAlbums,
+    searchAlbums,
   };
 }
 
@@ -944,6 +965,7 @@ function createLastfmAuth(deps = {}) {
     getArtistTopAlbums: discovery.getArtistTopAlbums,
     getArtistTopTags: discovery.getArtistTopTags,
     getArtistTagsBatch: discovery.getArtistTagsBatch,
+    searchAlbums: discovery.searchAlbums,
     // Write operations
     scrobble: write.scrobble,
     updateNowPlaying: write.updateNowPlaying,
@@ -979,6 +1001,7 @@ module.exports = {
   getArtistTopAlbums: defaultInstance.getArtistTopAlbums,
   getArtistTopTags: defaultInstance.getArtistTopTags,
   getArtistTagsBatch: defaultInstance.getArtistTagsBatch,
+  searchAlbums: defaultInstance.searchAlbums,
   // Write operations
   scrobble: defaultInstance.scrobble,
   updateNowPlaying: defaultInstance.updateNowPlaying,

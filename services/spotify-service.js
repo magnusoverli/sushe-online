@@ -15,8 +15,11 @@
 const {
   normalizeForExternalApi,
   normalizeArtistName,
-  stringSimilarity,
 } = require('../utils/normalization');
+const {
+  generateQueryForms,
+  nameSimilarity,
+} = require('../utils/entity-matching');
 const {
   matchTrackByNumber,
   extractTrackName,
@@ -74,14 +77,14 @@ function scoreSpotifyAlbumCandidate(candidate, artist, album, releaseDate) {
 
   for (const artistEntry of candidateArtists) {
     const candidateArtistName = artistEntry?.name || '';
-    const score = stringSimilarity(artist, candidateArtistName);
+    const score = nameSimilarity(artist, candidateArtistName);
     if (score > bestArtistScore) {
       bestArtistScore = score;
       bestArtistName = candidateArtistName;
     }
   }
 
-  const albumScore = stringSimilarity(album, candidate?.name || '');
+  const albumScore = nameSimilarity(album, candidate?.name || '');
   const requestedYear = getReleaseYear(releaseDate);
   const candidateYear = getReleaseYear(candidate?.release_date);
   const yearBonus =
@@ -171,16 +174,29 @@ async function getSpotifyArtistCandidates(
 }
 
 function buildSpotifyAlbumQueries(artistCandidates, artist, album) {
-  const normalizedAlbum = normalizeForExternalApi(album);
+  // Try multiple album spelling forms (diacritic-preserved first, then `&`/`and`
+  // swaps, then stripped) so accented/ampersand titles resolve. For the common
+  // case (no diacritics/`&`) this yields a single form — same as before.
+  const albumForms = generateQueryForms(album);
   const queries = new Set();
 
   for (const candidateArtist of artistCandidates) {
-    const normalizedArtist = normalizeForExternalApi(candidateArtist);
-    queries.add(`album:${normalizedAlbum} artist:${normalizedArtist}`);
+    const artistForm =
+      generateQueryForms(candidateArtist)[0] || candidateArtist;
+    for (const albumForm of albumForms) {
+      queries.add(`album:${albumForm} artist:${artistForm}`);
+    }
   }
 
-  queries.add(`album:${normalizedAlbum}`);
-  queries.add(`${normalizedAlbum} ${normalizeForExternalApi(artist)}`);
+  // Album-only queries double as discovery for a wrong/misspelled artist:
+  // a strong album match with a loose artist still resolves (and seeds an
+  // alias) via the confidence rule in pickBestSpotifyAlbumCandidate.
+  for (const albumForm of albumForms) {
+    queries.add(`album:${albumForm}`);
+  }
+
+  const primaryArtistForm = generateQueryForms(artist)[0] || artist;
+  queries.add(`${albumForms[0]} ${primaryArtistForm}`);
 
   return [...queries];
 }

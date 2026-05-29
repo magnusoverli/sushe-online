@@ -432,6 +432,93 @@ test('getAlbumInfo should not substring-match short generic album titles', async
   assert.ok(albumInfoCalls > 0);
 });
 
+test('getAlbumInfo matches "&" vs "And" album-title variants (Speglas regression)', async () => {
+  // Last.fm stores "Endarkenment, Being & Death"; our DB has "...Being And Death".
+  const topAlbumsResponse = {
+    topalbums: {
+      album: [{ name: 'Endarkenment, Being & Death' }],
+      '@attr': { artist: 'Speglas' },
+    },
+  };
+  const albumInfoResponse = {
+    album: {
+      name: 'Endarkenment, Being & Death',
+      artist: 'Speglas',
+      userplaycount: '37',
+      playcount: '1000',
+      listeners: '1847',
+    },
+  };
+
+  const mockFetch = async (url) => {
+    if (url.includes('artist.getTopAlbums')) {
+      return { json: async () => topAlbumsResponse };
+    }
+    return { json: async () => albumInfoResponse };
+  };
+
+  const { getAlbumInfo } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const info = await getAlbumInfo(
+    'Speglas',
+    'Endarkenment Being And Death',
+    'testuser',
+    'apikey'
+  );
+
+  assert.strictEqual(info.userplaycount, '37');
+});
+
+// =============================================================================
+// searchAlbums tests (used by bootstrap-from-failure discovery)
+// =============================================================================
+
+test('searchAlbums returns name/artist pairs from album.search', async () => {
+  const mockResponse = {
+    results: {
+      albummatches: {
+        album: [
+          { name: 'Caminhos de Água', artist: 'Kaatayra' },
+          { name: 'Caminhos', artist: 'Other' },
+        ],
+      },
+    },
+  };
+
+  const mockFetch = async (url) => {
+    assert.ok(url.includes('album.search'), 'should call album.search');
+    return { json: async () => mockResponse };
+  };
+
+  const { searchAlbums } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const matches = await searchAlbums('Caminhos de Agua', 10, 'apikey');
+  assert.strictEqual(matches.length, 2);
+  assert.deepStrictEqual(matches[0], {
+    name: 'Caminhos de Água',
+    artist: 'Kaatayra',
+  });
+});
+
+test('searchAlbums returns [] when no matches', async () => {
+  const mockResponse = { results: { albummatches: { album: [] } } };
+  const mockFetch = async () => ({ json: async () => mockResponse });
+
+  const { searchAlbums } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const matches = await searchAlbums('Nonexistent Album', 10, 'apikey');
+  assert.deepStrictEqual(matches, []);
+});
+
 // =============================================================================
 // getRecentTracks tests
 // =============================================================================

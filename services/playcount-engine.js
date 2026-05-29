@@ -19,10 +19,15 @@
 const { ensureDb } = require('../db/postgres');
 const {
   getAlbumInfo: getLastfmAlbumInfo,
+  searchAlbums: searchLastfmAlbums,
   normalizeForLastfm,
 } = require('../utils/lastfm-auth');
 const { normalizeAlbumKey } = require('../utils/fuzzy-match');
 const { canonicalAlbumKey } = require('../utils/playcount-key');
+const {
+  generateQueryForms,
+  selectBestCandidate,
+} = require('../utils/entity-matching');
 const { runInBatches } = require('../utils/batch');
 const { BATCH_SIZE, BATCH_DELAY_MS } = require('./playcount-constants');
 const {
@@ -178,6 +183,67 @@ async function getLastfmArtistCandidates(db, log, album) {
 }
 
 /**
+ * Bootstrap-from-failure: when a known artist+album never resolves on Last.fm
+ * (e.g. the artist is misspelled in our data — "Kaataira" vs "Kaatayra"), search
+ * Last.fm by album TITLE and look for a result whose album matches strongly and
+ * whose artist is plausibly our (possibly-wrong) artist. If found and the
+ * playcount re-fetches with that artist, return it so the caller can seed the
+ * alias and use the result. Runs only on the failure path (one extra search).
+ *
+ * @returns {Promise<{ artist: string, info: Object } | null>}
+ */
+async function discoverArtistByAlbumSearch(log, album, lastfmUsername) {
+  try {
+    let matches = [];
+    for (const form of generateQueryForms(album.album)) {
+      matches = await searchLastfmAlbums(form, 10, process.env.LASTFM_API_KEY);
+      if (matches.length) break;
+    }
+    if (!matches.length) return null;
+
+    const { best, isConfident } = selectBestCandidate({
+      target: { artist: album.artist, album: album.album },
+      candidates: matches,
+      getArtist: (m) => m.artist,
+      getAlbum: (m) => m.name,
+      // Strict: the album title must match very closely; the artist only needs
+      // to be plausibly similar (it may be the misspelling we are healing).
+      thresholds: {
+        minAlbum: 0.9,
+        minCombined: 0.6,
+        strongAlbum: 0.92,
+        strongAlbumArtistFloor: 0.3,
+      },
+    });
+    if (!best || !isConfident || !best.candidate.artist) return null;
+
+    const discoveredArtist = best.candidate.artist;
+    const info = await getLastfmAlbumInfo(
+      discoveredArtist,
+      album.album,
+      lastfmUsername,
+      process.env.LASTFM_API_KEY
+    );
+    if (!info || info.notFound) return null;
+
+    log.info('Last.fm discovery matched album title to a different artist', {
+      requestedArtist: album.artist,
+      discoveredArtist,
+      album: album.album,
+      albumScore: best.albumScore,
+      artistScore: best.artistScore,
+    });
+    return { artist: discoveredArtist, info };
+  } catch (err) {
+    log.warn('Last.fm discovery search failed', {
+      album: album.album,
+      error: err.message,
+    });
+    return null;
+  }
+}
+
+/**
  * Refresh playcount for a single album.
  * @returns {Promise<{playcount: number|null, status: string}|null>} Result or null on failure
  */
@@ -222,6 +288,22 @@ async function refreshAlbumPlaycount(db, log, userId, lastfmUsername, album) {
       };
     }
 
+    // Bootstrap-from-failure: nothing matched our (possibly-misspelled) artist,
+    // so discover the real artist by searching the album title.
+    let matchStrategy = 'alias_fallback';
+    if (info.notFound) {
+      const discovered = await discoverArtistByAlbumSearch(
+        log,
+        album,
+        lastfmUsername
+      );
+      if (discovered) {
+        info = discovered.info;
+        matchedArtist = discovered.artist;
+        matchStrategy = 'discovery';
+      }
+    }
+
     if (matchedArtist !== album.artist) {
       try {
         const externalIdentityService = createExternalIdentityService({
@@ -242,7 +324,7 @@ async function refreshAlbumPlaycount(db, log, userId, lastfmUsername, album) {
             service: 'lastfm',
             externalArtist: matchedArtist,
             externalAlbum: album.album,
-            strategy: 'alias_fallback',
+            strategy: matchStrategy,
           });
         }
       } catch (err) {
