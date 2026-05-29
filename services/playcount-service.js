@@ -56,7 +56,12 @@ function buildStatsMap(statsRows, normalizeAlbumKey) {
  * @param {Function} normalizeAlbumKey - Normalization function
  * @returns {{ playcounts: Object, albumsToRefresh: Array }}
  */
-function matchAndFindStale(listItems, statsMap, normalizeAlbumKey) {
+function matchAndFindStale(
+  listItems,
+  statsMap,
+  normalizeAlbumKey,
+  forceRefresh = false
+) {
   const playcounts = {};
   const albumsToRefresh = [];
   const staleThreshold = new Date(Date.now() - STALE_THRESHOLD_MS);
@@ -77,6 +82,7 @@ function matchAndFindStale(listItems, statsMap, normalizeAlbumKey) {
     }
 
     const needsRefresh =
+      forceRefresh ||
       !cached ||
       !cached.lastfm_updated_at ||
       cached.lastfm_status === 'error' ||
@@ -230,6 +236,7 @@ function createPlaycountService(deps = {}) {
    * @param {import('../db/types').DbFacade} params.db - Canonical datastore
    * @param {Object} params.logger - Logger instance
    * @param {Function} params.normalizeAlbumKey - Normalization function
+   * @param {boolean} [params.forceRefresh=false] - Refresh all albums regardless of cache age
    * @returns {Promise<{ playcounts: Object, refreshing: number } | { error: Object }>}
    */
   async function getListPlaycounts({
@@ -239,6 +246,7 @@ function createPlaycountService(deps = {}) {
     db,
     logger,
     normalizeAlbumKey,
+    forceRefresh = false,
   }) {
     const datastore = ensureDb(db, 'playcount-service.getListPlaycounts');
 
@@ -304,7 +312,8 @@ function createPlaycountService(deps = {}) {
     const { playcounts, albumsToRefresh } = matchAndFindStale(
       listItems,
       statsMap,
-      normalizeAlbumKey
+      normalizeAlbumKey,
+      forceRefresh
     );
 
     if (albumsToRefresh.length > 0) {

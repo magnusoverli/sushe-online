@@ -19,7 +19,10 @@ export function createSettingsPreferenceActions(deps = {}) {
   } = deps;
 
   async function handleDisconnect(service) {
-    const serviceName = service.charAt(0).toUpperCase() + service.slice(1);
+    const serviceName =
+      service === 'lastfm'
+        ? 'Last.fm'
+        : service.charAt(0).toUpperCase() + service.slice(1);
     const confirmed = await showConfirmation(
       `Disconnect ${serviceName}`,
       `Are you sure you want to disconnect ${serviceName}?`,
@@ -30,6 +33,19 @@ export function createSettingsPreferenceActions(deps = {}) {
     if (!confirmed) return;
 
     try {
+      if (service === 'lastfm') {
+        await apiCall('/auth/lastfm/disconnect', { method: 'POST' });
+        if (categoryData.integrations?.lastfm) {
+          categoryData.integrations.lastfm.connected = false;
+        }
+        if (win.currentUser) {
+          win.currentUser.lastfmUsername = null;
+        }
+        showToast('Last.fm disconnected successfully', 'success');
+        await loadCategoryData('integrations');
+        return;
+      }
+
       win.location.href = `/auth/${service}/disconnect`;
     } catch (error) {
       console.error('Error disconnecting service:', error);

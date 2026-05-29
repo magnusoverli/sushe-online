@@ -20,7 +20,7 @@ function triggerPlaycountRefresh(ctx, user, addedItems) {
         itemId: album.album_id,
         artist: album.artist,
         album: album.album,
-        albumId: album.album_id,
+        album_id: album.album_id,
       }));
 
       ctx.logger?.debug('Triggering playcount refresh for added albums', {

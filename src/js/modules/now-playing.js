@@ -20,11 +20,17 @@ import { normalizeForMatch } from './normalization.js';
  * @returns {Object} Now playing module API
  */
 export function createNowPlaying(deps = {}) {
-  const { getListData, getCurrentList } = deps;
+  const { getListData, getCurrentList, logger = console, debug = false } = deps;
 
   // Module-level state
   let currentNowPlayingElements = [];
   let lastKnownPlayback = null;
+
+  function debugLog(...args) {
+    if (debug) {
+      logger.debug(...args);
+    }
+  }
 
   /**
    * Find the album cover DOM element for a given album index
@@ -66,13 +72,13 @@ export function createNowPlaying(deps = {}) {
 
     // Exit if no playback or playback stopped (not paused)
     if (!playbackDetail || !playbackDetail.hasPlayback) {
-      console.log('[Now Playing] No playback or stopped');
+      debugLog('[Now Playing] No playback or stopped');
       return;
     }
 
     const currentList = getCurrentList();
 
-    console.log('[Now Playing] Looking for:', {
+    debugLog('[Now Playing] Looking for:', {
       album: playbackDetail.albumName,
       artist: playbackDetail.artistName,
       currentList,
@@ -81,7 +87,7 @@ export function createNowPlaying(deps = {}) {
     // Get current list albums
     const albums = getListData(currentList);
     if (!albums || !Array.isArray(albums)) {
-      console.log('[Now Playing] No albums in current list');
+      debugLog('[Now Playing] No albums in current list');
       return;
     }
 
@@ -97,7 +103,7 @@ export function createNowPlaying(deps = {}) {
       ) {
         matchCount++;
         const coverEl = findAlbumCoverElement(index);
-        console.log(
+        debugLog(
           '[Now Playing] Match found at index',
           index,
           '- element:',
@@ -111,7 +117,7 @@ export function createNowPlaying(deps = {}) {
     });
 
     if (matchCount === 0) {
-      console.log(
+      debugLog(
         '[Now Playing] No matches in',
         albums.length,
         'albums. Sample album:',

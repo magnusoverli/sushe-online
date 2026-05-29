@@ -10,6 +10,15 @@ const {
 
 const API_URL = 'https://ws.audioscrobbler.com/2.0/';
 
+class LastfmApiError extends Error {
+  constructor(data, method) {
+    super(data.message || `Failed: ${method}`);
+    this.name = 'LastfmApiError';
+    this.lastfmCode = data.error;
+    this.method = method;
+  }
+}
+
 /**
  * Wrap fetch function with metrics tracking
  * @param {Function} fetchFn - Original fetch function
@@ -107,6 +116,41 @@ function generateAlbumVariations(albumName) {
   return variations;
 }
 
+const EDITION_KEYWORD_PATTERN =
+  /\b(deluxe|remaster(?:ed)?|expanded|special|anniversary|bonus|collector|legacy|edition)\b/i;
+
+function compactAlbumForCompare(value) {
+  return normalizeForLastfm(value)
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isSafeAlbumVariantMatch(resultAlbumName, targetAlbumName) {
+  const resultAlbum = compactAlbumForCompare(resultAlbumName || '');
+  const resultStripped = compactAlbumForCompare(
+    stripEditionSuffix(resultAlbumName || '')
+  );
+  const targetAlbum = compactAlbumForCompare(targetAlbumName || '');
+
+  if (!resultAlbum || !targetAlbum) return false;
+  if (resultAlbum === targetAlbum || resultStripped === targetAlbum) {
+    return true;
+  }
+
+  // Avoid broad substring matches for short/generic titles like "IV" or "Live".
+  // Only accept containment when Last.fm clearly returned an edition/remaster variant.
+  if (
+    targetAlbum.length < 8 ||
+    !EDITION_KEYWORD_PATTERN.test(resultAlbumName)
+  ) {
+    return false;
+  }
+
+  return resultAlbum.startsWith(`${targetAlbum} `);
+}
+
 /**
  * Find album on Last.fm using artist.getTopAlbums
  * Used to find album variants (e.g., "Album" and "Album (Deluxe Edition)")
@@ -141,26 +185,11 @@ async function findAlbumByArtist(
   // Get the corrected artist name from the response
   const correctedArtist = data.topalbums?.['@attr']?.artist || artistName;
 
-  // Normalize for comparison (strip edition suffixes for matching)
-  const normalizeStr = (s) =>
-    s
-      .toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .trim();
-  const targetAlbum = normalizeStr(albumName);
   const matches = [];
 
   // Find all albums that match (base name matches)
   for (const album of albums) {
-    const resultAlbum = normalizeStr(album.name || '');
-    const resultStripped = normalizeStr(stripEditionSuffix(album.name || ''));
-
-    // Match if: normalized names match, or one contains the other
-    if (
-      resultStripped === targetAlbum ||
-      resultAlbum.includes(targetAlbum) ||
-      targetAlbum.includes(resultStripped)
-    ) {
+    if (isSafeAlbumVariantMatch(album.name, albumName)) {
       matches.push({ artist: correctedArtist, album: album.name });
     }
   }
@@ -473,30 +502,35 @@ const ALL_PERIODS = [
 function createBatchUserDataMethods(coreMethods) {
   const { getTopArtists, getTopAlbums } = coreMethods;
 
-  async function getAllTopArtists(username, limitPerPeriod = 50, apiKey) {
-    const results = await Promise.all(
-      ALL_PERIODS.map((period) =>
-        getTopArtists(username, period, limitPerPeriod, apiKey)
-      )
-    );
-
+  async function collectByPeriod(fetchForPeriod) {
     const output = {};
-    ALL_PERIODS.forEach((period, index) => {
-      output[period] = results[index].artists;
-    });
+    for (const period of ALL_PERIODS) {
+      output[period] = await fetchForPeriod(period);
+    }
     return output;
   }
 
-  async function getAllTopAlbums(username, limitPerPeriod = 50, apiKey) {
-    const results = await Promise.all(
-      ALL_PERIODS.map((period) =>
-        getTopAlbums(username, period, limitPerPeriod, apiKey)
-      )
-    );
+  async function getAllTopArtists(username, limitPerPeriod = 50, apiKey) {
+    return collectByPeriod(async (period) => {
+      const result = await getTopArtists(
+        username,
+        period,
+        limitPerPeriod,
+        apiKey
+      );
+      return result.artists;
+    });
+  }
 
-    const output = {};
-    ALL_PERIODS.forEach((period, index) => {
-      output[period] = (results[index] || []).map((album) => ({
+  async function getAllTopAlbums(username, limitPerPeriod = 50, apiKey) {
+    return collectByPeriod(async (period) => {
+      const albums = await getTopAlbums(
+        username,
+        period,
+        limitPerPeriod,
+        apiKey
+      );
+      return (albums || []).map((album) => ({
         name: album.name,
         artist: album.artist?.name || album.artist || 'Unknown',
         playcount: parseInt(album.playcount, 10) || 0,
@@ -505,7 +539,6 @@ function createBatchUserDataMethods(coreMethods) {
         rank: parseInt(album['@attr']?.rank, 10) || 0,
       }));
     });
-    return output;
   }
 
   return { getAllTopArtists, getAllTopAlbums };
@@ -674,8 +707,7 @@ function createWriteMethods(
     };
 
     if (normalizedAlbum) params.album = normalizedAlbum;
-    if (trackData.duration)
-      params.duration = String(Math.floor(trackData.duration / 1000));
+    if (trackData.duration) params.duration = String(trackData.duration);
     if (trackData.trackNumber)
       params.trackNumber = String(trackData.trackNumber);
 
@@ -714,8 +746,7 @@ function createWriteMethods(
     };
 
     if (normalizedAlbum) params.album = normalizedAlbum;
-    if (trackData.duration)
-      params.duration = String(Math.floor(trackData.duration / 1000));
+    if (trackData.duration) params.duration = String(trackData.duration);
 
     return lastfmSignedPost({
       method: 'track.updateNowPlaying',
@@ -836,7 +867,7 @@ function createLastfmAuth(deps = {}) {
         error: data.error,
         message: data.message,
       });
-      throw new Error(data.message || `Failed: ${method}`);
+      throw new LastfmApiError(data, method);
     }
     return data;
   }
@@ -874,7 +905,7 @@ function createLastfmAuth(deps = {}) {
         error: data.error,
         message: data.message,
       });
-      throw new Error(data.message || `Failed: ${method}`);
+      throw new LastfmApiError(data, method);
     }
     return data;
   }
@@ -925,6 +956,7 @@ const defaultInstance = createLastfmAuth();
 module.exports = {
   // Factory for testing
   createLastfmAuth,
+  LastfmApiError,
   // String normalization for Last.fm (used by API requests and by api.js when comparing artist names)
   normalizeForLastfm,
   // Default instance exports for app usage

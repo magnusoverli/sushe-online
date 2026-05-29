@@ -8,7 +8,12 @@ import { showToast } from './utils.js';
 import { isAlbumMatchingPlayback } from './playback-utils.js';
 import { getDeviceIcon } from '../utils/device-icons.js';
 import { formatTime } from './time-utils.js';
-import { getTrackId, buildLastfmBody } from './spotify-lastfm-utils.js';
+import {
+  getTrackId,
+  buildLastfmBody,
+  hasLastfmConnection,
+  isTerminalLastfmErrorCode,
+} from './spotify-lastfm-utils.js';
 import { getCurrentListId, getListData } from './app-state.js';
 
 // ============ MODULE STATE ============
@@ -32,6 +37,8 @@ const pendingActions = new Set();
 // Last.fm scrobbling state
 let lastfmNowPlayingSent = null; // Track ID for which we sent "now playing"
 let lastfmScrobbledTrack = null; // Track ID we already scrobbled
+let lastfmScrobbleAttemptedTrack = null; // Track ID we already attempted to scrobble
+let lastfmScrobblingDisabled = false; // Permanent failure for this page session
 let trackPlayStartTime = 0; // When current track started playing
 let accumulatedPlayTime = 0; // Total play time for current track (handles pause/resume)
 let scrobbleConsecutiveFailures = 0; // Track consecutive failures for user notification
@@ -165,6 +172,8 @@ function handleScrobbleFailure(context, err) {
  * @param {string} logLabel - Label for console.log on success (e.g., 'now playing')
  */
 async function lastfmApiCall(endpoint, body, trackId, onSuccess, logLabel) {
+  if (lastfmScrobblingDisabled) return false;
+
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -177,18 +186,40 @@ async function lastfmApiCall(endpoint, body, trackId, onSuccess, logLabel) {
       onSuccess(trackId);
       scrobbleConsecutiveFailures = 0;
       console.log(`Last.fm ${logLabel}:`, body.track);
+      return true;
     } else {
+      let errorData = null;
+      try {
+        errorData = await response.json();
+      } catch {
+        // Response may not be JSON; fall through to generic failure handling.
+      }
+
+      if (isTerminalLastfmErrorCode(errorData?.code)) {
+        lastfmScrobblingDisabled = true;
+        scrobbleConsecutiveFailures = 0;
+        console.info('Last.fm scrobbling disabled:', {
+          code: errorData.code,
+          message: errorData.error,
+        });
+        return false;
+      }
+
       handleScrobbleFailure(logLabel);
     }
   } catch (err) {
     handleScrobbleFailure(logLabel, err);
   }
+
+  return false;
 }
 
 /**
  * Send "now playing" update to Last.fm
  */
 async function sendLastfmNowPlaying(track) {
+  if (!hasLastfmConnection()) return;
+
   const trackId = getTrackId(track);
   if (!trackId || lastfmNowPlayingSent === trackId) return;
 
@@ -207,8 +238,18 @@ async function sendLastfmNowPlaying(track) {
  * Submit a scrobble to Last.fm
  */
 async function submitLastfmScrobble(track, timestamp) {
+  if (!hasLastfmConnection()) return;
+
   const trackId = getTrackId(track);
-  if (!trackId || lastfmScrobbledTrack === trackId) return;
+  if (
+    !trackId ||
+    lastfmScrobbledTrack === trackId ||
+    lastfmScrobbleAttemptedTrack === trackId
+  ) {
+    return;
+  }
+
+  lastfmScrobbleAttemptedTrack = trackId;
 
   await lastfmApiCall(
     '/api/lastfm/scrobble',
@@ -243,6 +284,7 @@ function checkAndScrobble(state, previousState) {
   if (trackId !== previousTrackIdVal) {
     lastfmNowPlayingSent = null;
     lastfmScrobbledTrack = null;
+    lastfmScrobbleAttemptedTrack = null;
     trackPlayStartTime = Date.now() - position; // Estimate when track started
     accumulatedPlayTime = position;
 
@@ -283,6 +325,7 @@ function checkAndScrobble(state, previousState) {
 function resetScrobbleState() {
   lastfmNowPlayingSent = null;
   lastfmScrobbledTrack = null;
+  lastfmScrobbleAttemptedTrack = null;
   trackPlayStartTime = 0;
   accumulatedPlayTime = 0;
   scrobbleConsecutiveFailures = 0;

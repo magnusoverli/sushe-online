@@ -416,6 +416,63 @@ describe('playcount-service', () => {
       ]);
     });
 
+    it('should refresh fresh cached stats when forceRefresh is true', async () => {
+      const mockLogger = createMockLogger();
+      const mockPool = createMockPool([
+        { rows: [{ _id: 'list1' }] },
+        {
+          rows: [
+            {
+              _id: 'item1',
+              album_id: 'album-1',
+              artist: 'Bicep',
+              album: 'Isles',
+            },
+          ],
+        },
+        {
+          rows: [
+            {
+              artist: 'bicep',
+              album_name: 'isles',
+              album_id: 'album-1',
+              normalized_key: 'bicep::isles',
+              lastfm_playcount: 42,
+              lastfm_status: 'success',
+              lastfm_updated_at: new Date().toISOString(),
+            },
+          ],
+        },
+      ]);
+      const mockRefresh = mock.fn(async () => ({
+        playcount: 43,
+        status: 'success',
+      }));
+
+      const { getListPlaycounts } = createPlaycountService({
+        refreshAlbumPlaycount: mockRefresh,
+      });
+
+      const result = await getListPlaycounts({
+        listId: 'list1',
+        userId: 'user1',
+        lastfmUsername: 'lfm-user',
+        db: mockPool,
+        logger: mockLogger,
+        normalizeAlbumKey: (artist, album) =>
+          `${artist}`.toLowerCase() + `::${album}`.toLowerCase(),
+        forceRefresh: true,
+      });
+
+      assert.strictEqual(result.refreshing, 1);
+      assert.strictEqual(result.playcounts.item1.playcount, 42);
+      assert.strictEqual(mockRefresh.mock.calls.length, 1);
+      assert.strictEqual(
+        mockRefresh.mock.calls[0].arguments[4].album_id,
+        'album-1'
+      );
+    });
+
     it('should skip stats query when list items have no lookup keys', async () => {
       const mockLogger = createMockLogger();
       const mockPool = createMockPool([

@@ -119,7 +119,7 @@ async function upsertPlaycount(db, userId, album, playcount, status) {
   const canonicalArtist = normalizeForLastfm(album.artist).toLowerCase().trim();
   const canonicalAlbum = normalizeForLastfm(album.album).toLowerCase().trim();
   const normalizedKey = normalizeAlbumKey(canonicalArtist, canonicalAlbum);
-  const albumId = album.album_id || null;
+  const albumId = album.album_id || album.albumId || null;
 
   await db.raw(
     `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
@@ -146,7 +146,7 @@ async function upsertPlaycount(db, userId, album, playcount, status) {
 
 async function getLastfmArtistCandidates(db, log, album) {
   const canonicalArtist = album?.artist;
-  const albumId = album?.album_id || null;
+  const albumId = album?.album_id || album?.albumId || null;
 
   if (!canonicalArtist) {
     return [];
@@ -209,7 +209,7 @@ async function refreshAlbumPlaycount(db, log, userId, lastfmUsername, album) {
       db,
       'playcount-sync-service.refreshAlbumPlaycount'
     );
-    const albumId = album.album_id || null;
+    const albumId = album.album_id || album.albumId || null;
     const artistCandidates = await getLastfmArtistCandidates(
       datastore,
       log,

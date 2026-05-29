@@ -13,9 +13,11 @@
  */
 
 const logger = require('../../utils/logger');
+const crypto = require('crypto');
 
 module.exports = (app, deps) => {
   const { ensureAuth, userService } = deps;
+  const csrfProtection = deps.csrfProtection || ((_req, _res, next) => next());
 
   if (!userService) {
     throw new Error('lastfm oauth routes require userService');
@@ -31,7 +33,10 @@ module.exports = (app, deps) => {
       return res.redirect('/');
     }
 
-    const callbackUrl = `${process.env.BASE_URL}/auth/lastfm/callback`;
+    const state = crypto.randomBytes(16).toString('hex');
+    req.session.lastfmAuthState = state;
+
+    const callbackUrl = `${process.env.BASE_URL}/auth/lastfm/callback/${state}`;
     const authUrl = `https://www.last.fm/api/auth/?api_key=${apiKey}&cb=${encodeURIComponent(callbackUrl)}`;
 
     logger.info('Starting Last.fm auth flow', {
@@ -42,7 +47,23 @@ module.exports = (app, deps) => {
   });
 
   // Handle Last.fm auth callback
-  app.get('/auth/lastfm/callback', ensureAuth, async (req, res) => {
+  app.get('/auth/lastfm/callback', ensureAuth, (req, res) => {
+    req.flash('error', 'Last.fm authorization failed - missing state');
+    res.redirect('/');
+  });
+
+  app.get('/auth/lastfm/callback/:state', ensureAuth, async (req, res) => {
+    const expectedState = req.session.lastfmAuthState;
+    delete req.session.lastfmAuthState;
+
+    if (!expectedState || req.params.state !== expectedState) {
+      logger.warn('Last.fm callback received invalid state', {
+        userId: req.user._id,
+      });
+      req.flash('error', 'Last.fm authorization failed - invalid state');
+      return res.redirect('/');
+    }
+
     const { token } = req.query;
 
     if (!token) {
@@ -92,25 +113,37 @@ module.exports = (app, deps) => {
   });
 
   // Disconnect Last.fm account
-  app.get('/auth/lastfm/disconnect', ensureAuth, async (req, res) => {
-    logger.info('Disconnecting Last.fm', {
-      email: req.user.email,
-      userId: req.user._id,
-    });
-
-    try {
-      // Await the database update to ensure it completes before redirect
-      await userService.clearLastfmAuth(req.user._id);
-
-      req.flash('success', 'Disconnected from Last.fm');
-    } catch (err) {
-      logger.error('Last.fm disconnect error', {
-        error: err.message,
-        userId: req.user._id,
-      });
-      req.flash('error', 'Failed to disconnect from Last.fm');
-    }
-
+  app.get('/auth/lastfm/disconnect', ensureAuth, (req, res) => {
+    req.flash('error', 'Please disconnect Last.fm from settings');
     res.redirect('/');
   });
+
+  app.post(
+    '/auth/lastfm/disconnect',
+    ensureAuth,
+    csrfProtection,
+    async (req, res) => {
+      logger.info('Disconnecting Last.fm', {
+        email: req.user.email,
+        userId: req.user._id,
+      });
+
+      try {
+        // Await the database update to ensure it completes before redirect
+        await userService.clearLastfmAuth(req.user._id);
+
+        req.flash('success', 'Disconnected from Last.fm');
+        return res.json({ success: true });
+      } catch (err) {
+        logger.error('Last.fm disconnect error', {
+          error: err.message,
+          userId: req.user._id,
+        });
+        req.flash('error', 'Failed to disconnect from Last.fm');
+        return res
+          .status(500)
+          .json({ error: 'Failed to disconnect from Last.fm' });
+      }
+    }
+  );
 };

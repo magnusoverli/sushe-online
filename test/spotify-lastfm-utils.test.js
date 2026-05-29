@@ -4,11 +4,15 @@ const assert = require('node:assert');
 describe('spotify lastfm helpers', () => {
   let getTrackId;
   let buildLastfmBody;
+  let hasLastfmConnection;
+  let isTerminalLastfmErrorCode;
 
   beforeEach(async () => {
     const module = await import('../src/js/modules/spotify-lastfm-utils.js');
     getTrackId = module.getTrackId;
     buildLastfmBody = module.buildLastfmBody;
+    hasLastfmConnection = module.hasLastfmConnection;
+    isTerminalLastfmErrorCode = module.isTerminalLastfmErrorCode;
   });
 
   it('prefers spotify track id when present', () => {
@@ -44,5 +48,27 @@ describe('spotify lastfm helpers', () => {
       album: 'Album X',
       duration: 198,
     });
+  });
+
+  it('detects whether Last.fm is connected', () => {
+    assert.strictEqual(
+      hasLastfmConnection({ currentUser: { lastfmUsername: 'listener' } }),
+      true
+    );
+    assert.strictEqual(hasLastfmConnection({ currentUser: {} }), false);
+    assert.strictEqual(hasLastfmConnection(null), false);
+  });
+
+  it('classifies terminal Last.fm scrobbling errors', () => {
+    assert.strictEqual(
+      isTerminalLastfmErrorCode('SERVICE_NOT_CONFIGURED'),
+      true
+    );
+    assert.strictEqual(
+      isTerminalLastfmErrorCode('LASTFM_INVALID_API_KEY'),
+      true
+    );
+    assert.strictEqual(isTerminalLastfmErrorCode('LASTFM_RATE_LIMITED'), false);
+    assert.strictEqual(isTerminalLastfmErrorCode(undefined), false);
   });
 });

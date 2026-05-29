@@ -113,10 +113,8 @@ async function syncLastfmDataForUser(user, lastfmAuth, log) {
   // Probe with a single request first so invalid app configuration fails once
   // instead of spawning many parallel Last.fm requests that all return the same error.
   const userInfo = await lastfmAuth.getUserInfo(username);
-  const [topArtists, topAlbums] = await Promise.all([
-    lastfmAuth.getAllTopArtists(username, 50),
-    lastfmAuth.getAllTopAlbums(username, 50),
-  ]);
+  const topArtists = await lastfmAuth.getAllTopArtists(username, 50);
+  const topAlbums = await lastfmAuth.getAllTopAlbums(username, 50);
 
   let artistTags = new Map();
   const overallArtists = topArtists?.overall || [];

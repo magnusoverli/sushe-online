@@ -40,6 +40,73 @@ module.exports = (app, deps) => {
   const asyncHandler = createAsyncHandler(logger);
   const playcountService = createPlaycountService();
 
+  function getLastfmWriteConfigError() {
+    if (!process.env.LASTFM_API_KEY || !process.env.LASTFM_SECRET) {
+      return {
+        status: 503,
+        code: 'SERVICE_NOT_CONFIGURED',
+        error: 'Last.fm is not configured on this server',
+        retryable: false,
+      };
+    }
+    return null;
+  }
+
+  function mapLastfmWriteError(err) {
+    if (err.lastfmCode === 9) {
+      return {
+        status: 401,
+        code: 'LASTFM_SESSION_INVALID',
+        error: 'Last.fm session is invalid. Reconnect Last.fm.',
+        retryable: false,
+      };
+    }
+
+    if (err.lastfmCode === 4 || err.lastfmCode === 10) {
+      return {
+        status: 503,
+        code: 'LASTFM_INVALID_API_KEY',
+        error: 'Last.fm server credentials are invalid',
+        retryable: false,
+      };
+    }
+
+    if (err.lastfmCode === 29) {
+      return {
+        status: 429,
+        code: 'LASTFM_RATE_LIMITED',
+        error: 'Last.fm rate limit exceeded',
+        retryable: true,
+      };
+    }
+
+    return {
+      status: 502,
+      code: 'LASTFM_UPSTREAM_ERROR',
+      error: 'Last.fm request failed',
+      retryable: true,
+    };
+  }
+
+  function sendLastfmWriteError(res, err, context) {
+    const response = mapLastfmWriteError(err);
+    const logLevel = response.retryable ? 'warn' : 'info';
+    logger[logLevel]('Last.fm write operation failed', {
+      action: context.action,
+      userId: context.userId,
+      status: response.status,
+      code: response.code,
+      lastfmCode: err.lastfmCode,
+      error: err.message,
+    });
+    return res.status(response.status).json({
+      error: response.error,
+      code: response.code,
+      service: 'lastfm',
+      retryable: response.retryable,
+    });
+  }
+
   async function getLastfmArtistCandidates(artist, albumId = null) {
     if (!artist) return [];
 
@@ -253,12 +320,30 @@ module.exports = (app, deps) => {
         return res.status(400).json({ error: 'artist and track are required' });
       }
 
-      const result = await lastfmScrobble(
-        { artist, track, album, duration, timestamp },
-        req.user.lastfmAuth.session_key,
-        process.env.LASTFM_API_KEY,
-        process.env.LASTFM_SECRET
-      );
+      const configError = getLastfmWriteConfigError();
+      if (configError) {
+        return res.status(configError.status).json({
+          error: configError.error,
+          code: configError.code,
+          service: 'lastfm',
+          retryable: configError.retryable,
+        });
+      }
+
+      let result;
+      try {
+        result = await lastfmScrobble(
+          { artist, track, album, duration, timestamp },
+          req.user.lastfmAuth.session_key,
+          process.env.LASTFM_API_KEY,
+          process.env.LASTFM_SECRET
+        );
+      } catch (err) {
+        return sendLastfmWriteError(res, err, {
+          action: 'scrobble',
+          userId: req.user._id,
+        });
+      }
 
       if (result.error) {
         return res.status(400).json({ error: result.message });
@@ -280,12 +365,30 @@ module.exports = (app, deps) => {
         return res.status(400).json({ error: 'artist and track are required' });
       }
 
-      const result = await lastfmUpdateNowPlaying(
-        { artist, track, album, duration },
-        req.user.lastfmAuth.session_key,
-        process.env.LASTFM_API_KEY,
-        process.env.LASTFM_SECRET
-      );
+      const configError = getLastfmWriteConfigError();
+      if (configError) {
+        return res.status(configError.status).json({
+          error: configError.error,
+          code: configError.code,
+          service: 'lastfm',
+          retryable: configError.retryable,
+        });
+      }
+
+      let result;
+      try {
+        result = await lastfmUpdateNowPlaying(
+          { artist, track, album, duration },
+          req.user.lastfmAuth.session_key,
+          process.env.LASTFM_API_KEY,
+          process.env.LASTFM_SECRET
+        );
+      } catch (err) {
+        return sendLastfmWriteError(res, err, {
+          action: 'now-playing',
+          userId: req.user._id,
+        });
+      }
 
       res.json({ success: true, nowplaying: result.nowplaying });
     }, 'updating Last.fm now playing')
@@ -402,6 +505,7 @@ module.exports = (app, deps) => {
         listId: req.params.listId,
         userId: req.user._id,
         lastfmUsername: req.user.lastfmUsername,
+        forceRefresh: req.query.refresh === 'true',
         db,
         logger,
         normalizeAlbumKey,
@@ -436,7 +540,7 @@ module.exports = (app, deps) => {
         itemId: a.itemId,
         artist: a.artist,
         album: a.album,
-        albumId: a.albumId,
+        album_id: a.album_id || a.albumId,
       }));
 
       const results = await refreshPlaycountsInBackground(

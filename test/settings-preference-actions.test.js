@@ -85,6 +85,41 @@ describe('settings preference actions', () => {
     assert.match(prompts[0][0], /Disconnect Spotify/);
   });
 
+  it('disconnects Last.fm with a CSRF-protected POST API call', async () => {
+    const win = { currentUser: { lastfmUsername: 'listener' } };
+    const categoryData = { integrations: { lastfm: { connected: true } } };
+    const apiCalls = [];
+    const toasts = [];
+    const loadCalls = [];
+
+    const { handleDisconnect } = createSettingsPreferenceActions({
+      doc: createDocument(),
+      win,
+      categoryData,
+      showConfirmation: async () => true,
+      apiCall: async (...args) => {
+        apiCalls.push(args);
+        return { success: true };
+      },
+      showToast: (...args) => toasts.push(args),
+      loadCategoryData: async (category) => loadCalls.push(category),
+    });
+
+    await handleDisconnect('lastfm');
+
+    assert.deepStrictEqual(apiCalls[0], [
+      '/auth/lastfm/disconnect',
+      { method: 'POST' },
+    ]);
+    assert.strictEqual(categoryData.integrations.lastfm.connected, false);
+    assert.strictEqual(win.currentUser.lastfmUsername, null);
+    assert.deepStrictEqual(toasts[0], [
+      'Last.fm disconnected successfully',
+      'success',
+    ]);
+    assert.deepStrictEqual(loadCalls, ['integrations']);
+  });
+
   it('updates music service cache and current user on success', async () => {
     const categoryData = { integrations: { musicService: '' } };
     const win = { currentUser: { musicService: null } };

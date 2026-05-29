@@ -11,3 +11,18 @@ export function buildLastfmBody(track) {
     duration: Math.floor((track.duration_ms || 0) / 1000),
   };
 }
+
+export function hasLastfmConnection(win = globalThis.window) {
+  return !!win?.currentUser?.lastfmUsername;
+}
+
+const TERMINAL_LASTFM_ERROR_CODES = new Set([
+  'NOT_AUTHENTICATED',
+  'SERVICE_NOT_CONFIGURED',
+  'LASTFM_INVALID_API_KEY',
+  'LASTFM_SESSION_INVALID',
+]);
+
+export function isTerminalLastfmErrorCode(code) {
+  return TERMINAL_LASTFM_ERROR_CODES.has(code);
+}

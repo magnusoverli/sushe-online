@@ -361,6 +361,77 @@ test('getAlbumInfo should return zeros when artist.getTopAlbums fails and album.
   assert.strictEqual(info.notFound, true);
 });
 
+test('getAlbumInfo should match clear edition variants', async () => {
+  const topAlbumsResponse = {
+    topalbums: {
+      album: [{ name: 'Test Album (Deluxe Edition)' }],
+      '@attr': { artist: 'Test Artist' },
+    },
+  };
+  const albumInfoResponse = {
+    album: {
+      name: 'Test Album (Deluxe Edition)',
+      artist: 'Test Artist',
+      userplaycount: '7',
+      playcount: '1000',
+      listeners: '500',
+    },
+  };
+
+  const mockFetch = async (url) => {
+    if (url.includes('artist.getTopAlbums')) {
+      return { json: async () => topAlbumsResponse };
+    }
+    return { json: async () => albumInfoResponse };
+  };
+
+  const { getAlbumInfo } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const info = await getAlbumInfo(
+    'Test Artist',
+    'Test Album',
+    'testuser',
+    'apikey'
+  );
+
+  assert.strictEqual(info.userplaycount, '7');
+});
+
+test('getAlbumInfo should not substring-match short generic album titles', async () => {
+  const topAlbumsResponse = {
+    topalbums: {
+      album: [{ name: 'IV and More' }],
+      '@attr': { artist: 'Test Artist' },
+    },
+  };
+  const notFoundResponse = {
+    error: 6,
+    message: 'Album not found',
+  };
+  let albumInfoCalls = 0;
+
+  const mockFetch = async (url) => {
+    if (url.includes('artist.getTopAlbums')) {
+      return { json: async () => topAlbumsResponse };
+    }
+    albumInfoCalls++;
+    return { json: async () => notFoundResponse };
+  };
+
+  const { getAlbumInfo } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const info = await getAlbumInfo('Test Artist', 'IV', 'testuser', 'apikey');
+
+  assert.strictEqual(info.notFound, true);
+  assert.ok(albumInfoCalls > 0);
+});
+
 // =============================================================================
 // getRecentTracks tests
 // =============================================================================
@@ -439,7 +510,7 @@ test('scrobble should POST to Last.fm API with correct parameters', async () => 
       artist: 'Test Artist',
       track: 'Test Track',
       album: 'Test Album',
-      duration: 180000,
+      duration: 180,
     },
     'session_key',
     'api_key',
@@ -449,6 +520,7 @@ test('scrobble should POST to Last.fm API with correct parameters', async () => 
   assert.ok(capturedBody.includes('artist=Test+Artist'));
   assert.ok(capturedBody.includes('track=Test+Track'));
   assert.ok(capturedBody.includes('album=Test+Album'));
+  assert.ok(capturedBody.includes('duration=180'));
   assert.ok(capturedBody.includes('method=track.scrobble'));
   assert.strictEqual(result.scrobbles['@attr'].accepted, 1);
 });
@@ -1045,11 +1117,17 @@ test('getUserInfo should throw on API errors', async () => {
 // getAllTopArtists tests
 // =============================================================================
 
-test('getAllTopArtists should fetch all time periods in parallel', async () => {
+test('getAllTopArtists should fetch all time periods sequentially', async () => {
   const fetchCalls = [];
+  let activeCalls = 0;
+  let maxActiveCalls = 0;
 
   const mockFetch = async (url) => {
+    activeCalls++;
+    maxActiveCalls = Math.max(maxActiveCalls, activeCalls);
     fetchCalls.push(url);
+    await Promise.resolve();
+    activeCalls--;
     const period = url.match(/period=([^&]+)/)?.[1] || 'overall';
     return {
       json: async () => ({
@@ -1069,6 +1147,7 @@ test('getAllTopArtists should fetch all time periods in parallel', async () => {
   const result = await getAllTopArtists('testuser', 50, 'apikey');
 
   assert.strictEqual(fetchCalls.length, 6);
+  assert.strictEqual(maxActiveCalls, 1);
   assert.ok(result['7day']);
   assert.ok(result['1month']);
   assert.ok(result['3month']);
