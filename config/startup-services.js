@@ -29,6 +29,11 @@ function initializeQueues(db) {
     initializeTrackFetchQueue,
   } = require('../services/track-fetch-queue');
   initializeTrackFetchQueue(db);
+
+  const {
+    initializeNativeNameQueue,
+  } = require('../services/native-name-queue');
+  initializeNativeNameQueue(db);
 }
 
 /**
