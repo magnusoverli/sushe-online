@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-05-29",
+    "category": "fix",
+    "description": "Updated play counts appear immediately after reconnecting Last.fm",
+    "hash": "ff9d69d7476847010a7287f3b8978ebfe07eebfd",
+    "commitMessage": "Refresh Last.fm cache on reconnect"
+  },
+  {
+    "date": "2026-05-29",
     "category": "feature",
     "description": "Playcounts now update automatically after Last.fm scrobbles",
     "hash": "e2c143a08b4efe4247b58494c05df902b60cb13c",
