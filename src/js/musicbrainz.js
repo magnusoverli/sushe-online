@@ -13,7 +13,6 @@ import {
   getCurrentListId,
   getListData,
   setListData,
-  getListMetadata,
   isViewingRecommendations,
   getCurrentRecommendationsYear,
   getAvailableCountries,
@@ -22,7 +21,8 @@ import {
   apiCall,
   saveList,
   selectList,
-  fetchTracksForAlbum,
+  displayAlbums,
+  fetchAndDisplayPlaycounts,
   selectRecommendations,
   showReasoningModal,
 } from './app.js';
@@ -251,9 +251,12 @@ const artistImageProviders = [
     },
   },
 
-  // Wikidata via MusicBrainz - slower but good for notable artists
+  // Wikidata via MusicBrainz - slower but good for notable artists.
+  // Marked `fallback` so it only runs when Deezer/iTunes both miss: it hits the
+  // rate-limited MusicBrainz queue, which we reserve for the album-list fetch.
   {
     name: 'Wikidata',
+    fallback: true,
     search: async (artistName, artistId, signal) => {
       if (!artistId) return null;
 
@@ -325,43 +328,57 @@ async function searchArtistImageRacing(
     });
   }
 
-  const providerPromises = artistImageProviders.map(async (provider) => {
-    try {
-      const url = await provider.search(
-        artistName,
-        artistId,
-        controller.signal
-      );
-      if (url) {
-        console.log(
-          `📊 [ARTIST] ✅ ${provider.name} loaded image for "${artistName}"`
-        );
-        return { name: provider.name, url };
-      }
-      return null;
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        // Silent fail for individual providers
-      }
-      return null;
-    }
-  });
+  const fastProviders = artistImageProviders.filter((p) => !p.fallback);
+  const fallbackProviders = artistImageProviders.filter((p) => p.fallback);
+
+  const runProvider = async (provider) => {
+    const url = await provider.search(artistName, artistId, controller.signal);
+    if (!url) throw new Error('No result');
+    console.log(
+      `📊 [ARTIST] ✅ ${provider.name} loaded image for "${artistName}"`
+    );
+    return url;
+  };
 
   try {
-    const result = await Promise.any(
-      providerPromises.map((p) =>
-        p.then((r) => {
-          if (r?.url) return r;
-          throw new Error('No result');
-        })
-      )
-    );
+    let url = null;
 
-    controller.abort();
-    artistImageCache.set(cacheKey, result.url);
-    return result.url;
+    // Tier 1: race the fast providers (Deezer, iTunes) - no MusicBrainz.
+    if (fastProviders.length > 0) {
+      try {
+        url = await Promise.any(fastProviders.map(runProvider));
+      } catch (_e) {
+        url = null;
+      }
+    }
+
+    // Tier 2: only if the fast tier found nothing, try fallback providers
+    // (Wikidata) sequentially. These hit the rate-limited MusicBrainz queue,
+    // so we avoid them unless genuinely needed.
+    if (!url && !controller.signal.aborted) {
+      for (const provider of fallbackProviders) {
+        if (controller.signal.aborted) break;
+        try {
+          url = await runProvider(provider);
+          if (url) break;
+        } catch (_e) {
+          // Try the next fallback provider.
+        }
+      }
+    }
+
+    controller.abort(); // cancel any stragglers
+
+    if (url) {
+      artistImageCache.set(cacheKey, url);
+      return url;
+    }
+    // Don't cache a miss if we were aborted - might succeed on retry.
+    if (!externalSignal?.aborted) {
+      artistImageCache.set(cacheKey, null);
+    }
+    return null;
   } catch (_error) {
-    // Don't cache if aborted - might succeed on retry
     if (!externalSignal?.aborted) {
       artistImageCache.set(cacheKey, null);
     }
@@ -625,6 +642,97 @@ async function loadAlbumCover(
     );
     showCoverPlaceholder(imgElement);
   }
+}
+
+// =============================================================================
+// LAZY IMAGE LOADING
+// Defer artist-image and album-cover fetches until the row nears the viewport.
+// Avoids firing dozens-to-hundreds of image/API requests (and, for artist
+// images, rate-limited MusicBrainz queue traffic) for rows never scrolled to.
+// =============================================================================
+
+let albumCoverObserver = null;
+let artistImageObserver = null;
+
+/**
+ * Create a one-shot lazy loader backed by an IntersectionObserver.
+ * `loadFn(ctx)` runs once, the first time the observed element nears the root.
+ * Falls back to eager loading where IntersectionObserver is unavailable.
+ *
+ * @param {(ctx: any) => void} loadFn - Called once per element when it nears view
+ * @param {Element|null} root - Scroll container to observe within (null = viewport)
+ * @returns {{ observe: (el: Element, ctx: any) => void, disconnect: () => void }}
+ */
+function createLazyLoader(loadFn, root = null) {
+  if (typeof IntersectionObserver === 'undefined') {
+    return { observe: (_el, ctx) => loadFn(ctx), disconnect() {} };
+  }
+
+  const ctxByEl = new WeakMap();
+  const observer = new IntersectionObserver(
+    (entries, obs) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        obs.unobserve(entry.target);
+        const ctx = ctxByEl.get(entry.target);
+        ctxByEl.delete(entry.target);
+        if (ctx) loadFn(ctx);
+      }
+    },
+    { root, rootMargin: '300px 0px' }
+  );
+
+  return {
+    observe(el, ctx) {
+      ctxByEl.set(el, ctx);
+      observer.observe(el);
+    },
+    disconnect() {
+      observer.disconnect();
+    },
+  };
+}
+
+/** Scroll container that wraps the artist/album result lists. */
+function resultsScrollRoot() {
+  return (
+    modalElements.albumResults?.parentElement ||
+    modalElements.artistResults?.parentElement ||
+    null
+  );
+}
+
+/** Replace the album-cover lazy loader, disconnecting any previous one. */
+function resetAlbumCoverObserver() {
+  if (albumCoverObserver) albumCoverObserver.disconnect();
+  albumCoverObserver = createLazyLoader(
+    (ctx) =>
+      loadAlbumCover(
+        ctx.img,
+        ctx.artistName,
+        ctx.albumTitle,
+        ctx.releaseGroupId,
+        ctx.index
+      ),
+    resultsScrollRoot()
+  );
+}
+
+/** Replace the artist-image lazy loader, disconnecting any previous one. */
+function resetArtistImageObserver() {
+  if (artistImageObserver) artistImageObserver.disconnect();
+  artistImageObserver = createLazyLoader(
+    loadArtistImageInto,
+    resultsScrollRoot()
+  );
+}
+
+/** Stop all pending lazy image work (e.g. when the modal closes). */
+function disconnectImageObservers() {
+  if (albumCoverObserver) albumCoverObserver.disconnect();
+  if (artistImageObserver) artistImageObserver.disconnect();
+  albumCoverObserver = null;
+  artistImageObserver = null;
 }
 
 // Modal management
@@ -970,6 +1078,8 @@ async function displayDirectAlbumResults(releaseGroups) {
 
   currentReleaseGroups = releaseGroups;
 
+  resetAlbumCoverObserver();
+
   modalElements.albumList.className = 'space-y-3';
 
   const currentYear = new Date().getFullYear().toString();
@@ -1062,10 +1172,16 @@ async function displayDirectAlbumResults(releaseGroups) {
 
     modalElements.albumList.appendChild(albumEl);
 
-    // Trigger cover loading via provider system
+    // Lazy-load the cover via the provider system once the row nears view
     const img = albumEl.querySelector('img');
     if (img) {
-      loadAlbumCover(img, artistDisplay, rg.title, rg.id, index);
+      albumCoverObserver.observe(img, {
+        img,
+        artistName: artistDisplay,
+        albumTitle: rg.title,
+        releaseGroupId: rg.id,
+        index,
+      });
     }
   }
 }
@@ -1249,6 +1365,7 @@ function updateSearchMode(mode) {
 
 // Unified function to clear search results
 function clearSearchResults() {
+  disconnectImageObservers();
   modalElements.artistResults.classList.add('hidden');
   modalElements.albumResults.classList.add('hidden');
   modalElements.searchLoading.classList.add('hidden');
@@ -1547,37 +1664,15 @@ async function finishManualAdd(album) {
     }
     setListData(currentListId, currentListData);
 
-    if (!Array.isArray(resolved.tracks) || resolved.tracks.length === 0) {
-      try {
-        await fetchTracksForAlbum(resolved);
-      } catch (_err) {
-        // Auto track fetch failed - not critical
-      }
-    }
-
-    await saveList(currentListId, currentListData);
-
-    // Force refresh from server to get merged album data
-    const listMetadata = getListMetadata(currentListId);
-    if (listMetadata) {
-      listMetadata._data = null;
-    }
-
-    selectList(currentListId);
-    closeAddAlbumModal();
-
     const suffix = usedExisting ? ' (using existing album)' : ' to the list';
-    showToast(`Added "${resolved.album}" by ${resolved.artist}${suffix}`);
+    await persistAddedAlbum(
+      currentListId,
+      currentListData,
+      `Added "${resolved.album}" by ${resolved.artist}${suffix}`
+    );
   } catch (_error) {
     showToast('Error adding album to list', 'error');
-
-    const currentListData = getListData(currentListId);
-    if (currentListData) {
-      currentListData.pop();
-      if (currentListId) {
-        setListData(currentListId, currentListData);
-      }
-    }
+    rollbackOptimisticAdd(currentListId);
   }
 }
 
@@ -1597,6 +1692,8 @@ function closeAddAlbumModal() {
 }
 
 function resetModalState() {
+  disconnectImageObservers();
+
   modalElements.artistResults.classList.add('hidden');
   modalElements.albumResults.classList.add('hidden');
   modalElements.searchLoading.classList.add('hidden');
@@ -1672,10 +1769,18 @@ async function displayArtistResults(artists) {
   artistImageAbortController = new AbortController();
   const imageSignal = artistImageAbortController.signal;
 
+  resetArtistImageObserver();
+
   modalElements.artistList.innerHTML = '';
 
   // Desktop now uses the same list-style layout as mobile
   modalElements.artistList.className = 'space-y-3';
+
+  // Reveal the list before observing so the IntersectionObserver can fire for
+  // rows that are visible immediately (it won't fire reliably on a later
+  // display:none -> visible transition). The rows below are built synchronously,
+  // so there is no empty-list flash before paint.
+  showArtistResults();
 
   // Render artists immediately with placeholders, then lazy-load images
   for (const artist of artists) {
@@ -1743,49 +1848,69 @@ async function displayArtistResults(artists) {
 
     modalElements.artistList.appendChild(artistEl);
 
-    // Lazy-load artist image using parallel provider racing
+    // Lazy-load the artist image only once the row nears the viewport.
     const searchName =
       displayName.original && !displayName.warning
         ? displayName.primary
         : artist.name;
-    searchArtistImageRacing(searchName, artist.id, imageSignal)
-      .then((imageUrl) => {
-        if (imageUrl) {
-          const imageContainer = artistEl.querySelector(
-            '.artist-image-container'
-          );
-          if (imageContainer) {
-            imageContainer.innerHTML = `
-              <img 
-                src="${imageUrl}" 
-                alt="${displayName.primary}" 
-                class="w-16 h-16 rounded-full object-cover"
-                onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><path d=\\'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\\'></path><circle cx=\\'12\\' cy=\\'7\\' r=\\'4\\'></circle></svg></div>'"
-              >
-            `;
-          }
-        } else {
-          // No image found, remove pulse animation
-          const imageContainer = artistEl.querySelector(
-            '.artist-image-container div'
-          );
-          if (imageContainer) {
-            imageContainer.classList.remove('animate-pulse');
-          }
+    artistImageObserver.observe(artistEl, {
+      artistEl,
+      displayName,
+      searchName,
+      artistId: artist.id,
+      signal: imageSignal,
+    });
+  }
+}
+
+/**
+ * Lazy callback: fetch an artist image via provider racing and swap it in for
+ * the placeholder. Mirrors the behaviour previously run eagerly per row.
+ *
+ * @param {Object} ctx - { artistEl, displayName, searchName, artistId, signal }
+ */
+function loadArtistImageInto({
+  artistEl,
+  displayName,
+  searchName,
+  artistId,
+  signal,
+}) {
+  searchArtistImageRacing(searchName, artistId, signal)
+    .then((imageUrl) => {
+      if (imageUrl) {
+        const imageContainer = artistEl.querySelector(
+          '.artist-image-container'
+        );
+        if (imageContainer) {
+          imageContainer.innerHTML = `
+            <img
+              src="${imageUrl}"
+              alt="${displayName.primary}"
+              class="w-16 h-16 rounded-full object-cover"
+              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><path d=\\'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\\'></path><circle cx=\\'12\\' cy=\\'7\\' r=\\'4\\'></circle></svg></div>'"
+            >
+          `;
         }
-      })
-      .catch(() => {
-        // Error loading image, remove pulse animation
+      } else {
+        // No image found, remove pulse animation
         const imageContainer = artistEl.querySelector(
           '.artist-image-container div'
         );
         if (imageContainer) {
           imageContainer.classList.remove('animate-pulse');
         }
-      });
-  }
-
-  showArtistResults();
+      }
+    })
+    .catch(() => {
+      // Error loading image, remove pulse animation
+      const imageContainer = artistEl.querySelector(
+        '.artist-image-container div'
+      );
+      if (imageContainer) {
+        imageContainer.classList.remove('animate-pulse');
+      }
+    });
 }
 
 async function selectArtist(artist) {
@@ -1793,6 +1918,10 @@ async function selectArtist(artist) {
   if (artistImageAbortController) {
     artistImageAbortController.abort();
     artistImageAbortController = null;
+  }
+  if (artistImageObserver) {
+    artistImageObserver.disconnect();
+    artistImageObserver = null;
   }
 
   // Use the enhanced artist with display name
@@ -1929,6 +2058,8 @@ function displayAlbumResultsWithProvider(albums, providerName) {
 
   currentReleaseGroups = normalizedAlbums;
 
+  resetAlbumCoverObserver();
+
   modalElements.albumList.className = 'space-y-3';
 
   const currentYear = new Date().getFullYear().toString();
@@ -2011,11 +2142,17 @@ function displayAlbumResultsWithProvider(albums, providerName) {
       };
     }
 
-    // If no cover from provider, use cover art provider system
+    // If no cover from provider, lazy-load via the cover art provider system
     if (!hasCover) {
       const img = albumEl.querySelector('img');
       if (img) {
-        loadAlbumCover(img, currentArtist.name, album.title, album.id, index);
+        albumCoverObserver.observe(img, {
+          img,
+          artistName: currentArtist.name,
+          albumTitle: album.title,
+          releaseGroupId: album.id,
+          index,
+        });
       }
     }
   });
@@ -2140,44 +2277,77 @@ async function addAlbumToCurrentList(album) {
       return;
     }
 
-    currentListData.push(resolved);
     if (!currentListId) {
       showToast('No list selected', 'error');
       return;
     }
+
+    currentListData.push(resolved);
     setListData(currentListId, currentListData);
 
-    if (!Array.isArray(resolved.tracks) || resolved.tracks.length === 0) {
-      try {
-        await fetchTracksForAlbum(resolved);
-      } catch (_err) {
-        // Auto track fetch failed - not critical
-      }
-    }
-
-    await saveList(currentListId, currentListData);
-
-    // Force refresh from server to get merged album data
-    const listMetadata = getListMetadata(currentListId);
-    if (listMetadata) {
-      listMetadata._data = null;
-    }
-
-    selectList(currentListId);
-    closeAddAlbumModal();
-
-    showToast(`Added "${resolved.album}" by ${resolved.artist} to the list`);
+    await persistAddedAlbum(
+      currentListId,
+      currentListData,
+      `Added "${resolved.album}" by ${resolved.artist} to the list`
+    );
   } catch (_error) {
     showToast('Error adding album to list', 'error');
-
-    const currentListData = getListData(currentListId);
-    if (currentListData) {
-      currentListData.pop();
-      if (currentListId) {
-        setListData(currentListId, currentListData);
-      }
-    }
+    rollbackOptimisticAdd(currentListId);
   }
+}
+
+/**
+ * Persist a just-added album with an optimistic UI.
+ *
+ * The album is rendered and the modal closed immediately; we then await only
+ * the fast, MusicBrainz-free incremental save. Tracks, covers and native
+ * spellings are resolved by the server's background queues (see
+ * `triggerAlbumBackgroundFetches`), so the user is never blocked on MusicBrainz.
+ * Server-merged metadata is reconciled afterwards without blocking.
+ *
+ * @param {string} listId - Current list ID
+ * @param {Array} listData - List array that already contains the new album
+ * @param {string} successMessage - Toast shown once the save succeeds
+ */
+async function persistAddedAlbum(listId, listData, successMessage) {
+  displayAlbums(listData, { forceFullRebuild: true });
+  closeAddAlbumModal();
+
+  await saveList(listId, listData);
+  showToast(successMessage);
+
+  reconcileListFromServer(listId).catch(() => {});
+}
+
+/**
+ * Undo an optimistic add when the save fails: drop the last-pushed album and
+ * re-render so the UI matches persisted state.
+ *
+ * @param {string} listId - Current list ID
+ */
+function rollbackOptimisticAdd(listId) {
+  const data = getListData(listId);
+  if (!data) return;
+  data.pop();
+  if (listId) {
+    setListData(listId, data);
+    displayAlbums(data, { forceFullRebuild: true });
+  }
+}
+
+/**
+ * Re-fetch the list from the server to pick up server-merged metadata
+ * (canonical names, resolved country names, native spellings) and refresh
+ * playcounts. Runs in the background; bails if the user navigated away.
+ *
+ * @param {string} listId - List ID to reconcile
+ */
+async function reconcileListFromServer(listId) {
+  const data = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
+  if (getCurrentListId() !== listId) return;
+  setListData(listId, data);
+  displayAlbums(data, { forceFullRebuild: true });
+  fetchAndDisplayPlaycounts(listId).catch(() => {});
 }
 
 /**
