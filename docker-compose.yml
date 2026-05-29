@@ -1,6 +1,9 @@
 services:
   app:
     image: ghcr.io/magnusoverli/sushe-online:latest
+    # Always re-pull :latest on `up` so a deploy can never silently run a
+    # stale cached image (the CI only builds/pushes; deploy is manual).
+    pull_policy: always
     container_name: sushe-online
     ports:
       - '3000:3000'
