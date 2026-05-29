@@ -152,6 +152,21 @@ test('Normalization Utilities', async (t) => {
       assert.strictEqual(normalizeForExternalApi('Über'), 'Uber');
     });
 
+    await t.test('should fold non-decomposable special Latin letters', () => {
+      // These have no NFD decomposition, so plain diacritic stripping misses
+      // them; they must be transliterated explicitly.
+      assert.strictEqual(
+        normalizeForExternalApi('Det hjemsøkte hjertet'),
+        'Det hjemsokte hjertet'
+      );
+      assert.strictEqual(normalizeForExternalApi('Blodørn'), 'Blodorn');
+      assert.strictEqual(normalizeForExternalApi('Kjærlighet'), 'Kjaerlighet');
+      assert.strictEqual(normalizeForExternalApi('Mgła'), 'Mgla');
+      assert.strictEqual(normalizeForExternalApi('Þú'), 'Thu');
+      assert.strictEqual(normalizeForExternalApi('Straße'), 'Strasse');
+      assert.strictEqual(normalizeForExternalApi('MØL'), 'MOL');
+    });
+
     await t.test('should handle Japanese/non-Latin scripts gracefully', () => {
       // Non-Latin scripts are preserved (diacritic stripping only affects combining marks)
       // Note: whitespace may be normalized but characters are preserved

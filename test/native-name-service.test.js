@@ -153,5 +153,26 @@ describe('native-name-service', () => {
       assert.strictEqual(result.album, 'Caminhos de Água');
       assert.strictEqual(result.artist, 'Kaatayra');
     });
+
+    it('now rewrites a ø-album that special-letter folding bridges (Panopticon)', async () => {
+      // Previously this was flagged "review" because ø did not fold to o;
+      // with special-letter transliteration the keys match -> safe rewrite.
+      const fetch = mbFetch({
+        title: 'Det hjemsøkte hjertet',
+        'artist-credit': [{ name: 'Panopticon' }],
+      });
+
+      const result = await resolveNativeAlbumName(
+        {
+          albumId: MB_ID,
+          artist: 'Panopticon',
+          album: 'Det Hjemsokte Hjertet',
+        },
+        { fetch, logger: createMockLogger() }
+      );
+
+      assert.strictEqual(result.action, 'rewrite');
+      assert.strictEqual(result.album, 'Det hjemsøkte hjertet');
+    });
   });
 });

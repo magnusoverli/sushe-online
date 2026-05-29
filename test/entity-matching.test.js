@@ -32,6 +32,17 @@ describe('externalMatchKey', () => {
     );
   });
 
+  it('folds non-decomposable letters (ø→o, æ→ae) so they bridge to ASCII', () => {
+    assert.strictEqual(
+      externalMatchKey('Det hjemsøkte hjertet'),
+      externalMatchKey('Det hjemsokte hjertet')
+    );
+    assert.strictEqual(
+      externalMatchKey('Blodørn'),
+      externalMatchKey('Blodorn')
+    );
+  });
+
   it('does not strip leading articles (conservative exact key)', () => {
     assert.notStrictEqual(
       externalMatchKey('The Wall'),
@@ -50,6 +61,15 @@ describe('generateQueryForms', () => {
     );
     assert.ok(
       forms.indexOf('Caminhos de Água') < forms.indexOf('Caminhos de Agua')
+    );
+  });
+
+  it('adds an ASCII fallback for non-decomposable letters (ø→o)', () => {
+    const forms = generateQueryForms('Det hjemsøkte hjertet');
+    assert.strictEqual(forms[0], 'Det hjemsøkte hjertet'); // native first
+    assert.ok(
+      forms.includes('Det hjemsokte hjertet'),
+      'folded ASCII fallback present'
     );
   });
 
@@ -85,6 +105,11 @@ describe('nameSimilarity', () => {
 
   it('scores &/and variants as identical', () => {
     assert.strictEqual(nameSimilarity('Being & Death', 'Being and Death'), 1);
+  });
+
+  it('scores ø/o and æ/ae variants as identical', () => {
+    assert.strictEqual(nameSimilarity('Blodørn', 'Blodorn'), 1);
+    assert.strictEqual(nameSimilarity('Kjærlighet', 'Kjaerlighet'), 1);
   });
 
   it('returns 0 when either side is empty', () => {

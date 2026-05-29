@@ -42,6 +42,55 @@ function normalizeSpecialChars(str) {
   );
 }
 
+/**
+ * Non-decomposable Latin letters \u2192 ASCII transliteration.
+ *
+ * NFD-based diacritic stripping only handles precomposed accents (\u00e1\u2192a, \u00fc\u2192u).
+ * It does NOT touch distinct letters that have no canonical decomposition
+ * (\u00f8, \u00e6, \u00e5, \u00f0, \u00fe, \u00df, \u0142, \u2026). Those slip through unchanged, so an external query
+ * or match key for "Blod\u00f8rn" / "Det hjems\u00f8kte hjertet" never bridges to the
+ * ASCII "Blodorn" / "hjemsokte" that other sources (and slug-folded data) use.
+ * This map folds them explicitly (standard unidecode-style transliterations).
+ */
+const SPECIAL_LETTER_MAP = {
+  '\u00f8': 'o', // \u00f8
+  '\u00d8': 'O', // \u00d8
+  '\u00e6': 'ae', // \u00e6
+  '\u00c6': 'Ae', // \u00c6
+  '\u00e5': 'a', // \u00e5
+  '\u00c5': 'A', // \u00c5
+  '\u0153': 'oe', // \u0153
+  '\u0152': 'Oe', // \u0152
+  '\u00f0': 'd', // \u00f0
+  '\u00d0': 'D', // \u00d0
+  '\u00fe': 'th', // \u00fe
+  '\u00de': 'Th', // \u00de
+  '\u00df': 'ss', // \u00df
+  '\u0142': 'l', // \u0142
+  '\u0141': 'L', // \u0141
+  '\u0111': 'd', // \u0111
+  '\u0110': 'D', // \u0110
+  '\u0167': 't', // \u0167
+  '\u0166': 'T', // \u0166
+  '\u0131': 'i', // \u0131 (dotless i)
+  '\u0130': 'I', // \u0130
+};
+
+const SPECIAL_LETTER_RE = new RegExp(
+  `[${Object.keys(SPECIAL_LETTER_MAP).join('')}]`,
+  'g'
+);
+
+/**
+ * Fold non-decomposable special Latin letters to ASCII (\u00f8\u2192o, \u00e6\u2192ae, \u2026),
+ * preserving case where it maps cleanly.
+ * @param {string} str
+ * @returns {string}
+ */
+function transliterateSpecialLetters(str) {
+  return str.replace(SPECIAL_LETTER_RE, (ch) => SPECIAL_LETTER_MAP[ch]);
+}
+
 // ============================================
 // Storage and Lookup Normalization
 // ============================================
@@ -86,12 +135,15 @@ function normalizeForLookup(value) {
 /**
  * Normalize string for external API calls (Last.fm, Spotify search, iTunes, etc.)
  *
- * This function strips diacritics to improve matching with external services
+ * This function strips diacritics AND folds non-decomposable special Latin
+ * letters (ø, æ, å, ð, þ, ß, ł, …) to improve matching with external services
  * that may not handle special characters consistently.
  *
  * Examples:
  * - "Exxûl" → "Exxul" (diacritics stripped)
  * - "Mötley Crüe" → "Motley Crue" (diacritics stripped)
+ * - "Det hjemsøkte hjertet" → "Det hjemsokte hjertet" (ø folded)
+ * - "Kjærlighet" → "Kjaerlighet" (æ folded)
  * - "…and Oceans" → "...and Oceans" (ellipsis normalized)
  *
  * @param {string|null|undefined} str - String to normalize
@@ -100,7 +152,7 @@ function normalizeForLookup(value) {
 function normalizeForExternalApi(str) {
   if (!str) return '';
 
-  return normalizeSpecialChars(String(str))
+  return transliterateSpecialLetters(normalizeSpecialChars(String(str)))
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ')
