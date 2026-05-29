@@ -34,6 +34,11 @@ function initializeQueues(db) {
     initializeNativeNameQueue,
   } = require('../services/native-name-queue');
   initializeNativeNameQueue(db);
+
+  const {
+    initializeAvailabilityFetchQueue,
+  } = require('../services/availability-fetch-queue');
+  initializeAvailabilityFetchQueue(db);
 }
 
 /**

@@ -193,6 +193,25 @@ function createHelpers(deps) {
       }
     }
 
+    // Resolve which platforms provide this album (cached; one-time per album).
+    if (album.artist && album.album) {
+      const {
+        getAvailabilityFetchQueue,
+      } = require('../../services/availability-fetch-queue');
+      try {
+        getAvailabilityFetchQueue().add(
+          result.albumId,
+          album.artist,
+          album.album
+        );
+      } catch (error) {
+        logger.warn('Availability fetch queue not available', {
+          albumId: result.albumId,
+          error: error.message,
+        });
+      }
+    }
+
     return result.albumId;
   }
 
@@ -236,9 +255,13 @@ function createHelpers(deps) {
     const { getCoverFetchQueue } = require('../../services/cover-fetch-queue');
     const { getTrackFetchQueue } = require('../../services/track-fetch-queue');
     const { getNativeNameQueue } = require('../../services/native-name-queue');
+    const {
+      getAvailabilityFetchQueue,
+    } = require('../../services/availability-fetch-queue');
     let coverQueue;
     let trackQueue;
     let nativeNameQueue;
+    let availabilityQueue;
     try {
       coverQueue = getCoverFetchQueue();
     } catch (error) {
@@ -257,6 +280,13 @@ function createHelpers(deps) {
       nativeNameQueue = getNativeNameQueue();
     } catch (error) {
       logger.warn('Native name queue not available for batch', {
+        error: error.message,
+      });
+    }
+    try {
+      availabilityQueue = getAvailabilityFetchQueue();
+    } catch (error) {
+      logger.warn('Availability fetch queue not available for batch', {
         error: error.message,
       });
     }
@@ -289,6 +319,11 @@ function createHelpers(deps) {
       // name looks slug-folded and the id is a MusicBrainz UUID).
       if (result.wasInserted && artist && album && nativeNameQueue) {
         nativeNameQueue.add(result.albumId, artist, album);
+      }
+
+      // Resolve platform availability (cached; one-time per album).
+      if (artist && album && availabilityQueue) {
+        availabilityQueue.add(result.albumId, artist, album);
       }
     });
 

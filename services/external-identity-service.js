@@ -4,8 +4,7 @@ const {
   normalizeArtistName,
   sanitizeForStorage,
 } = require('../utils/normalization');
-
-const SUPPORTED_SERVICES = new Set(['spotify', 'tidal', 'lastfm']);
+const { SUPPORTED_SERVICES } = require('./availability/platforms');
 const LAST_USED_TOUCH_INTERVAL_SQL = "INTERVAL '1 hour'";
 
 function normalizeService(service) {
@@ -20,6 +19,49 @@ function normalizeArtistKey(name) {
 
 function isSupportedService(service) {
   return SUPPORTED_SERVICES.has(normalizeService(service));
+}
+
+/**
+ * All stored platform availability rows for one album.
+ * @param {import('../db/types').DbFacade} db
+ * @param {string} albumId
+ * @returns {Promise<Array<{service:string, external_album_id:string|null,
+ *   external_url:string|null, confidence:number|null, strategy:string|null}>>}
+ */
+async function fetchAlbumAvailability(db, albumId) {
+  if (!albumId) return [];
+
+  const result = await db.raw(
+    `SELECT service, external_album_id, external_url, confidence, strategy
+       FROM album_service_mappings
+      WHERE album_id = $1
+      ORDER BY service`,
+    [albumId],
+    { name: 'external-identity-get-album-availability', retryable: true }
+  );
+
+  return result.rows;
+}
+
+/**
+ * Availability rows for many albums at once (caller groups by album_id).
+ * @param {import('../db/types').DbFacade} db
+ * @param {string[]} albumIds
+ * @returns {Promise<Array<Object>>}
+ */
+async function fetchAlbumAvailabilityBulk(db, albumIds) {
+  if (!Array.isArray(albumIds) || albumIds.length === 0) return [];
+
+  const result = await db.raw(
+    `SELECT album_id, service, external_album_id, external_url, confidence, strategy
+       FROM album_service_mappings
+      WHERE album_id = ANY($1)
+      ORDER BY album_id, service`,
+    [albumIds],
+    { name: 'external-identity-get-album-availability-bulk', retryable: true }
+  );
+
+  return result.rows;
 }
 
 function createExternalIdentityService(deps = {}) {
@@ -66,13 +108,14 @@ function createExternalIdentityService(deps = {}) {
     await db.raw(
       `INSERT INTO album_service_mappings (
          album_id, service, external_album_id, external_artist, external_album,
-         confidence, strategy, created_at, updated_at, last_used_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), NOW())
+         external_url, confidence, strategy, created_at, updated_at, last_used_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW(), NOW())
        ON CONFLICT (album_id, service)
        DO UPDATE SET
          external_album_id = COALESCE(EXCLUDED.external_album_id, album_service_mappings.external_album_id),
          external_artist = COALESCE(EXCLUDED.external_artist, album_service_mappings.external_artist),
          external_album = COALESCE(EXCLUDED.external_album, album_service_mappings.external_album),
+         external_url = COALESCE(EXCLUDED.external_url, album_service_mappings.external_url),
          confidence = COALESCE(EXCLUDED.confidence, album_service_mappings.confidence),
          strategy = COALESCE(EXCLUDED.strategy, album_service_mappings.strategy),
          updated_at = NOW(),
@@ -87,11 +130,17 @@ function createExternalIdentityService(deps = {}) {
         mapping.externalAlbum
           ? sanitizeForStorage(mapping.externalAlbum)
           : null,
+        mapping.externalUrl || null,
         mapping.confidence || null,
         mapping.strategy || null,
       ]
     );
   }
+
+  // Availability reads delegate to module-scope helpers to keep the factory lean.
+  const getAlbumAvailability = (albumId) => fetchAlbumAvailability(db, albumId);
+  const getAlbumAvailabilityBulk = (albumIds) =>
+    fetchAlbumAvailabilityBulk(db, albumIds);
 
   async function getArtistAlias(service, canonicalArtist) {
     const normalizedService = normalizeService(service);
@@ -233,6 +282,8 @@ function createExternalIdentityService(deps = {}) {
   return {
     getAlbumServiceMapping,
     upsertAlbumServiceMapping,
+    getAlbumAvailability,
+    getAlbumAvailabilityBulk,
     getArtistAlias,
     getArtistAliasCandidates,
     upsertArtistAlias,
