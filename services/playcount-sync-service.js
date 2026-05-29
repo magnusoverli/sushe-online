@@ -15,6 +15,7 @@ const {
   normalizeForLastfm,
 } = require('../utils/lastfm-auth');
 const { normalizeAlbumKey } = require('../utils/fuzzy-match');
+const { recordPlaycountSync } = require('../utils/metrics');
 const {
   createExternalIdentityService,
 } = require('./external-identity-service');
@@ -552,9 +553,11 @@ function createPlaycountSyncService(deps = {}) {
         totalAlbums: results.totalAlbums,
         duration: `${cycleDuration}ms`,
       });
+      recordPlaycountSync('success', results.totalAlbums);
     } catch (err) {
       log.error('Playcount sync cycle failed', { error: err.message });
       results.errors.push({ source: 'cycle', error: err.message });
+      recordPlaycountSync('error', 0);
     } finally {
       isRunning = false;
     }

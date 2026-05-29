@@ -14,6 +14,7 @@
 
 const rateLimit = require('express-rate-limit');
 const logger = require('../utils/logger');
+const { incRateLimitHit } = require('../utils/metrics');
 
 // Check if rate limiting is disabled globally
 const isRateLimitingDisabled = process.env.DISABLE_RATE_LIMITING === 'true';
@@ -24,6 +25,7 @@ const noopMiddleware = (_req, _res, next) => next();
 // Helper to create standardized rate limit handler
 function createRateLimitHandler(message) {
   return (_req, res) => {
+    incRateLimitHit(_req.path);
     logger.warn('Rate limit exceeded', {
       ip: _req.ip,
       path: _req.path,

@@ -1,4 +1,5 @@
 const logger = require('../utils/logger');
+const { incCacheHit, incCacheMiss } = require('../utils/metrics');
 
 class ResponseCache {
   constructor(options = {}) {
@@ -125,6 +126,7 @@ function createCacheMiddleware(options = {}) {
 
     if (cached) {
       // Cache hit
+      incCacheHit();
       if (onHit) onHit(req, cacheKey);
 
       // Set cache headers
@@ -140,6 +142,7 @@ function createCacheMiddleware(options = {}) {
     }
 
     // Cache miss - intercept response
+    incCacheMiss();
     if (onMiss) onMiss(req, cacheKey);
 
     const originalJson = res.json;
