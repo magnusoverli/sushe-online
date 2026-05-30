@@ -231,11 +231,11 @@
     width: 100%;
   }
 
-  /* Push the availability badge row toward the bottom of the cell. Combined
-     with the row's bottom padding this centres it visually between the release
-     date and the row's bottom border. */
+  /* Center the availability badge row vertically in the space between the
+     release date and the bottom of the cell. */
   .album-row > .album-cell > div.album-availability {
     margin-top: auto;
+    margin-bottom: auto;
   }
 }
 
