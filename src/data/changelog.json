@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-05-30",
+    "category": "ui",
+    "description": "Improved availability badge positioning for better visual alignment",
+    "hash": "95ae1b3eaaf4df4031806af15f79eab6fb0492c7",
+    "commitMessage": "Center availability badges between release date and cell bottom\n\nThe desktop album cell stretches to the full row height, so the\navailability badge row sat tight under the release date with all the\nslack below it. Give the badge row auto top/bottom margins so it\ncenters vertically in the free space between the date and the cell's\nbottom edge, independent of how many badges are present.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+  },
+  {
+    "date": "2026-05-30",
     "category": "feature",
     "description": "Added streaming platform badges to album lists on desktop",
     "hash": "17f86289e5e27851bef759a102bf032e3a8833f6",
