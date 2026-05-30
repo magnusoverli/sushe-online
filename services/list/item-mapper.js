@@ -5,6 +5,10 @@
  * can focus on orchestration and validation.
  */
 
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 function mapListRowToItem(row, recommendationMap = null) {
   const recommendation = recommendationMap?.get(row.album_id) || null;
 
@@ -28,6 +32,7 @@ function mapListRowToItem(row, recommendationMap = null) {
     cover_image_updated_at: row.cover_image_updated_at,
     summary: row.summary || '',
     summary_source: row.summary_source || '',
+    availability: asArray(row.availability),
     recommended_by: recommendation?.recommendedBy || null,
     recommended_at: recommendation?.recommendedAt || null,
   };
@@ -62,6 +67,7 @@ function mapAlbumDataItemToResponse(item, options = {}) {
     cover_image_updated_at: item.coverImageUpdatedAt || null,
     summary: item.summary || '',
     summary_source: item.summarySource || '',
+    availability: asArray(item.availability),
     recommended_by: recommendation?.recommendedBy || null,
     recommended_at: recommendation?.recommendedAt || null,
   };

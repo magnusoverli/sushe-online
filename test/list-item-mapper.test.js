@@ -31,6 +31,7 @@ test('mapListRowToItem maps row fields and recommendation metadata', () => {
       cover_image_updated_at: '2026-05-11T10:20:34.794Z',
       summary: 'Summary',
       summary_source: 'claude',
+      availability: ['spotify', 'deezer'],
     },
     recommendationMap
   );
@@ -55,6 +56,7 @@ test('mapListRowToItem maps row fields and recommendation metadata', () => {
     cover_image_updated_at: '2026-05-11T10:20:34.794Z',
     summary: 'Summary',
     summary_source: 'claude',
+    availability: ['spotify', 'deezer'],
     recommended_by: 'alice',
     recommended_at: '2025-01-01',
   });
@@ -85,6 +87,7 @@ test('mapAlbumDataItemToResponse maps non-export response with cover image URL',
       coverImageUpdatedAt: coverDate,
       summary: null,
       summarySource: null,
+      availability: ['spotify', 'apple_music'],
     },
     {
       recommendationMap,
@@ -98,6 +101,7 @@ test('mapAlbumDataItemToResponse maps non-export response with cover image URL',
     result.cover_image_url,
     `/api/albums/album-2/cover?v=${coverDate.getTime()}`
   );
+  assert.deepStrictEqual(result.availability, ['spotify', 'apple_music']);
   assert.strictEqual(result.track_pick, 'Song 1');
   assert.strictEqual(result.comments_2, '');
   assert.strictEqual(result.recommended_by, 'bob');

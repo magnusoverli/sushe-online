@@ -44,7 +44,13 @@ function createListFetchers(deps = {}) {
           a.cover_image_format,
           a.cover_image_updated_at,
           a.summary,
-         a.summary_source
+         a.summary_source,
+         COALESCE((
+           SELECT json_agg(m.service)
+           FROM album_service_mappings m
+           WHERE m.album_id = li.album_id
+             AND m.strategy LIKE 'availability:%'
+         ), '[]'::json) AS availability
        FROM lists l
        LEFT JOIN list_items li ON li.list_id = l._id
        LEFT JOIN albums a ON li.album_id = a.album_id
@@ -189,7 +195,13 @@ function createListFetchers(deps = {}) {
               a.cover_image_format,
               a.cover_image_updated_at,
               a.summary,
-              a.summary_source
+              a.summary_source,
+              COALESCE((
+                SELECT json_agg(m.service)
+                FROM album_service_mappings m
+                WHERE m.album_id = li.album_id
+                  AND m.strategy LIKE 'availability:%'
+              ), '[]'::json) AS availability
        FROM list_items li
        LEFT JOIN albums a ON li.album_id = a.album_id
        WHERE li.list_id = $1
@@ -218,6 +230,7 @@ function createListFetchers(deps = {}) {
       coverImageUpdatedAt: row.cover_image_updated_at || null,
       summary: row.summary || '',
       summarySource: row.summary_source || '',
+      availability: row.availability || [],
     }));
     const recMaps = await fetchRecommendationMaps(
       list.year ? [list.year] : [],

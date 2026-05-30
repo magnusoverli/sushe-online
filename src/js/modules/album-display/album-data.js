@@ -150,6 +150,10 @@ export function createAlbumDataProcessor(deps = {}) {
     const recommendedBy = album.recommended_by || null;
     const recommendedAt = album.recommended_at || null;
 
+    const availability = Array.isArray(album.availability)
+      ? album.availability
+      : [];
+
     const itemId = album._id || '';
     const cachedData = getPlaycountCacheEntry(itemId);
     const playcount = cachedData?.playcount ?? null;
@@ -197,6 +201,7 @@ export function createAlbumDataProcessor(deps = {}) {
       playcountDisplay,
       summary,
       summarySource,
+      availability,
       recommendedBy,
       recommendedAt,
     };
