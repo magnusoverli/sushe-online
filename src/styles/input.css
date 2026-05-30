@@ -2738,6 +2738,9 @@ body.now-playing-bar-visible #addAlbumFAB {
   display: flex;
   align-items: center;
   gap: 3px;
+  /* Tight under the release date. The cell is top-anchored (justify-start), so
+     the title/date keep a fixed position whether or not badges are present, and
+     the badges sit just below the date. */
   margin-top: 3px;
 }
 

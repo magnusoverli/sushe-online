@@ -175,6 +175,13 @@
 @media (min-width: 1024px) {
   .album-row > .album-cell {
     position: relative;
+    /* Stretch to the full row height (overriding the grid's align-items:center)
+       and top-anchor, so the title/date keep a fixed position whether or not the
+       availability badge row is present (the date flows in normal order below
+       the title, with badges below that). */
+    align-self: stretch;
+    justify-content: flex-start;
+    padding-top: 0.5rem;
   }
 
   /* Album name - centered on cover, slightly larger font */
@@ -218,11 +225,17 @@
     min-height: 2.5rem; /* Match track cell height */
   }
 
-  /* Release date - positioned below album name, not affecting centering */
+  /* Release date flows directly below the album title (normal order); badges,
+     when present, follow below the date. */
   .album-row > .album-cell > div.release-date-display {
-    position: absolute;
-    top: calc(50% + 1rem);
-    left: 0;
+    width: 100%;
+  }
+
+  /* Push the availability badge row toward the bottom of the cell. Combined
+     with the row's bottom padding this centres it visually between the release
+     date and the row's bottom border. */
+  .album-row > .album-cell > div.album-availability {
+    margin-top: auto;
   }
 }
 
