@@ -2,6 +2,13 @@
   {
     "date": "2026-05-30",
     "category": "feature",
+    "description": "Added streaming platform badges to album lists on desktop",
+    "hash": "17f86289e5e27851bef759a102bf032e3a8833f6",
+    "commitMessage": "Add streaming platform badges and order them in the album cell in album lists on desktop."
+  },
+  {
+    "date": "2026-05-30",
+    "category": "feature",
     "description": "Added streaming platform badges to album listings",
     "hash": "5383145b821c0a9a9fe8d4786e48679cc1f16cf5",
     "commitMessage": "Show platform-availability badges in the album column\n\nRender small, icon-only, brand-coloured squares for the platforms that provide\neach album, along the bottom edge of the album cell (below the release date).\nVisual only; ordered by a fixed priority and capped at 6 so they fit one line.\n\nRead path: the per-album availability (services with an 'availability:%' mapping)\nis aggregated into the list payload via a correlated subquery in both list\nfetchers, threaded through the item mappers, and exposed as `availability` on\neach item. No extra per-album requests.\n\nFrontend:\n- New services/availability/-style render module\n  src/js/modules/album-display/availability-badges.js (platform icon/color map,\n  priority order, cap 6, initial-letter for platforms without a brand icon).\n- processAlbumData carries `availability`; the desktop album cell renders the\n  badge row after the release date (the third row shifts the title/date up\n  within the centered cell, no row-height change).\n- Badge styling in input.css.\n\nBackend mapper complexity kept under the lint ceiling via an asArray() helper.\n\nVerified locally: list payload includes availability; badges render in the DOM\nend-to-end (add album -> background resolve -> reload), with correct platforms\nand styling. Lint, structural baseline, build, 2634 unit + 64 e2e tests green.\n\nNote: the list response cache (5-min) means a just-added album's badges appear\nafter the cache expires or the next list write; backfilled/existing albums show\nimmediately on load. Mobile card badges are a deliberate follow-up.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
