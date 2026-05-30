@@ -18,6 +18,12 @@
  *   node scripts/backfill-availability.js --apply         # write
  *   node scripts/backfill-availability.js --limit=10      # bound candidates
  *   node scripts/backfill-availability.js --apply --pace=12000  # slow pacing
+ *   node scripts/backfill-availability.js --apply --all   # re-resolve resolved
+ *
+ * By default only albums not yet availability-resolved are candidates. Pass
+ * --all to reconsider every album, re-resolving the already-resolved ones too.
+ * Re-resolution is non-destructive: the upsert refreshes/adds service rows and
+ * never deletes a previously-found one.
  */
 
 require('dotenv').config();
@@ -104,6 +110,7 @@ async function resolveOne(resolution, row, apply) {
 
 async function main() {
   const apply = process.argv.includes('--apply');
+  const all = process.argv.includes('--all');
   const limit = parseLimit();
 
   if (!process.env.DATABASE_URL) {
@@ -119,18 +126,23 @@ async function main() {
       `SELECT a.album_id, a.artist, a.album
          FROM albums a
         WHERE a.artist IS NOT NULL AND a.album IS NOT NULL
-          AND NOT EXISTS (
+          ${
+            all
+              ? ''
+              : `AND NOT EXISTS (
             SELECT 1 FROM album_service_mappings m
              WHERE m.album_id = a.album_id
                AND m.strategy LIKE 'availability:%'
-          )
+          )`
+          }
         ORDER BY a.artist, a.album
         ${limit ? `LIMIT ${limit}` : ''}`
     );
 
     console.log(
       `\nResolving availability for ${rows.length} album(s) ` +
-        `(${apply ? 'APPLY' : 'DRY-RUN'}, pace ${PACE_MS}ms)...\n`
+        `(${apply ? 'APPLY' : 'DRY-RUN'}, ${all ? 'ALL' : 'unresolved-only'}, ` +
+        `pace ${PACE_MS}ms)...\n`
     );
 
     const entries = rows.map((row) => ({ row, res: null }));
