@@ -2732,6 +2732,36 @@ body.now-playing-bar-visible #addAlbumFAB {
   color: #d97706; /* Orange/amber color for Claude */
 }
 
+/* Platform availability badges (album column, below the release date).
+   Small, icon-only, brand-coloured squares. Visual only. */
+.album-availability {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.availability-badge {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.availability-badge i,
+.availability-badge-letter {
+  font-size: 9px;
+}
+
+.availability-badge-letter {
+  font-weight: 700;
+}
+
 /* Mobile-specific summary badge styles */
 .summary-badge-mobile {
   width: 24px;

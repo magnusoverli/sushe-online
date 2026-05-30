@@ -37,6 +37,7 @@ import {
   formatPlaycount,
 } from './album-display/album-data.js';
 import { createPlaycountSync } from './album-display/playcount-sync.js';
+import { renderAvailabilityBadges } from './album-display/availability-badges.js';
 
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
@@ -354,6 +355,7 @@ export function createAlbumDisplay(deps = {}) {
           }
         </div>
         <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
+        ${renderAvailabilityBadges(data.availability)}
       </div>`,
       artist: `<div class="artist-cell flex items-center">
         <span class="album-cell-text ${data.artist ? 'text-gray-200' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${data.artist}</span>
