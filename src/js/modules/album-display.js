@@ -343,7 +343,7 @@ export function createAlbumDisplay(deps = {}) {
           ${recommendationBadgeHtml}
         </div>
       </div>`,
-      album: `<div class="album-cell flex flex-col justify-center">
+      album: `<div class="album-cell flex flex-col justify-start">
         <div class="flex items-center gap-2">
           <span class="album-name font-semibold text-gray-200 truncate">${data.albumName}</span>
           ${

@@ -17,6 +17,7 @@
  *   node scripts/backfill-availability.js                 # dry-run
  *   node scripts/backfill-availability.js --apply         # write
  *   node scripts/backfill-availability.js --limit=10      # bound candidates
+ *   node scripts/backfill-availability.js --apply --pace=12000  # slow pacing
  */
 
 require('dotenv').config();
@@ -54,6 +55,18 @@ function parseLimit() {
   const n = parseInt(arg.split('=')[1], 10);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+
+// Per-album pacing. Defaults to the Odesli rate limit; `--pace=<ms>` raises it
+// when the aggregator is throttling a long sustained run.
+function parsePace() {
+  const arg = process.argv.find((a) => a.startsWith('--pace='));
+  const n = arg ? parseInt(arg.split('=')[1], 10) : NaN;
+  return Number.isFinite(n) && n > ODESLI_RATE_LIMIT_MS
+    ? n
+    : ODESLI_RATE_LIMIT_MS;
+}
+
+const PACE_MS = parsePace();
 
 function buildResolution(pool) {
   const db = { raw: (sql, params) => pool.query(sql, params) };
@@ -117,7 +130,7 @@ async function main() {
 
     console.log(
       `\nResolving availability for ${rows.length} album(s) ` +
-        `(${apply ? 'APPLY' : 'DRY-RUN'})...\n`
+        `(${apply ? 'APPLY' : 'DRY-RUN'}, pace ${PACE_MS}ms)...\n`
     );
 
     const entries = rows.map((row) => ({ row, res: null }));
@@ -128,9 +141,9 @@ async function main() {
         `  ${i + 1}/${entries.length}  ${r.action}` +
           (r.services ? ` [${r.services.join(', ')}]` : '') +
           (r.reason ? ` (${r.reason})` : '') +
-          `  ${entries[i].row.artist} — ${entries[i].row.album}`
+          `  ${entries[i].row.artist} - ${entries[i].row.album}`
       );
-      await sleep(ODESLI_RATE_LIMIT_MS);
+      await sleep(PACE_MS);
     }
 
     for (let round = 1; round <= MAX_RETRY_ROUNDS; round++) {
@@ -142,7 +155,7 @@ async function main() {
       await sleep(RETRY_PAUSE_MS);
       for (const entry of pending) {
         entry.res = await resolveOne(resolution, entry.row, apply);
-        await sleep(ODESLI_RATE_LIMIT_MS);
+        await sleep(PACE_MS);
       }
     }
 
