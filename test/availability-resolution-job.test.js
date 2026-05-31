@@ -66,6 +66,29 @@ describe('availability-resolution-job', () => {
     assert.strictEqual(job.getProgress(), null);
   });
 
+  it('keeps the last completed summary for polling clients', async () => {
+    const job = createAvailabilityResolutionJob({
+      db: createDb({ candidates: ALBUMS.slice(0, 1) }),
+      logger: createMockLogger(),
+      resolution: {
+        resolveAvailability: async () => ({
+          action: 'resolved',
+          services: ['spotify'],
+        }),
+      },
+      rateLimitMs: 0,
+    });
+
+    assert.strictEqual(job.getLastSummary(), null);
+
+    const summary = await job.resolveAll();
+    const lastSummary = job.getLastSummary();
+
+    assert.deepStrictEqual(lastSummary, summary);
+    lastSummary.resolved = 99;
+    assert.strictEqual(job.getLastSummary().resolved, 1);
+  });
+
   it('counts a throwing resolution as a failure without aborting the run', async () => {
     const job = createAvailabilityResolutionJob({
       db: createDb({ candidates: ALBUMS }),

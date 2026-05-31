@@ -136,7 +136,8 @@ export function createSettingsAvailabilityActions(deps = {}) {
   async function pollAvailabilityProgress() {
     try {
       const response = await apiCall('/api/admin/availability/progress');
-      const { isRunning, progress } = response;
+      const { isRunning, progress, lastSummary } = response;
+      const hadPollInterval = availabilityPollInterval !== null;
 
       updateAvailabilityUI(isRunning, progress);
       availabilityPollCount++;
@@ -145,15 +146,47 @@ export function createSettingsAvailabilityActions(deps = {}) {
         await refreshAvailabilityStatsOnly();
       }
 
-      if (!isRunning && availabilityPollInterval) {
-        clearIntervalFn(availabilityPollInterval);
+      if (!isRunning && hadPollInterval) {
+        if (availabilityPollInterval) {
+          clearIntervalFn(availabilityPollInterval);
+        }
         availabilityPollInterval = null;
         availabilityPollCount = 0;
+        if (lastSummary) {
+          showAvailabilitySummary(lastSummary);
+        }
         await loadAvailabilityStats();
       }
     } catch (error) {
       console.error('Error polling availability progress:', error);
     }
+  }
+
+  function showAvailabilitySummary(summary) {
+    const resultEl = doc.getElementById('availabilityResult');
+    const resultTextEl = doc.getElementById('availabilityResultText');
+    const duration = formatDuration(summary.durationSeconds);
+
+    if (resultTextEl) {
+      resultTextEl.innerHTML = `
+        <div class="font-semibold text-white mb-2">
+          ${summary.stoppedEarly ? 'Resolution Stopped Early' : 'Resolution Complete'}
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-sm">
+          <div><span class="text-gray-400">Total:</span> ${summary.total}</div>
+          <div><span class="text-gray-400">Duration:</span> ${duration}</div>
+          <div><span class="text-green-400">Resolved:</span> ${summary.resolved}</div>
+          <div><span class="text-yellow-400">Skipped:</span> ${summary.skipped}</div>
+          <div><span class="text-red-400">Failed:</span> ${summary.failed}</div>
+        </div>
+      `;
+    }
+    resultEl?.classList.remove('hidden');
+
+    showToast(
+      `Availability ${summary.stoppedEarly ? 'stopped' : 'completed'}: ${summary.resolved} resolved, ${summary.skipped} skipped, ${summary.failed} failed`,
+      summary.stoppedEarly ? 'warning' : 'success'
+    );
   }
 
   async function refreshAvailabilityStatsOnly() {
@@ -182,7 +215,7 @@ export function createSettingsAvailabilityActions(deps = {}) {
     const resolveBtn = doc.getElementById('resolveAvailabilityBtn');
     const reresolveBtn = doc.getElementById('reresolveAvailabilityBtn');
     const resultEl = doc.getElementById('availabilityResult');
-    const resultTextEl = doc.getElementById('availabilityResultText');
+    let started = false;
 
     const confirmed = await showConfirmation(
       all ? 'Re-resolve All Availability' : 'Resolve Streaming Availability',
@@ -218,31 +251,10 @@ export function createSettingsAvailabilityActions(deps = {}) {
         body: JSON.stringify({ all }),
       });
 
+      started = response.success === true;
+
       if (response.success && response.summary) {
-        const s = response.summary;
-        const duration = formatDuration(s.durationSeconds);
-
-        if (resultTextEl) {
-          resultTextEl.innerHTML = `
-            <div class="font-semibold text-white mb-2">
-              ${s.stoppedEarly ? 'Resolution Stopped Early' : 'Resolution Complete'}
-            </div>
-            <div class="grid grid-cols-2 gap-2 text-sm">
-              <div><span class="text-gray-400">Total:</span> ${s.total}</div>
-              <div><span class="text-gray-400">Duration:</span> ${duration}</div>
-              <div><span class="text-green-400">Resolved:</span> ${s.resolved}</div>
-              <div><span class="text-yellow-400">Skipped:</span> ${s.skipped}</div>
-              <div><span class="text-red-400">Failed:</span> ${s.failed}</div>
-            </div>
-          `;
-        }
-        resultEl?.classList.remove('hidden');
-
-        showToast(
-          `Availability ${s.stoppedEarly ? 'stopped' : 'completed'}: ${s.resolved} resolved, ${s.skipped} skipped, ${s.failed} failed`,
-          s.stoppedEarly ? 'warning' : 'success'
-        );
-
+        showAvailabilitySummary(response.summary);
         await loadAvailabilityStats();
       }
     } catch (error) {
@@ -251,7 +263,9 @@ export function createSettingsAvailabilityActions(deps = {}) {
     } finally {
       if (resolveBtn) resolveBtn.disabled = false;
       if (reresolveBtn) reresolveBtn.disabled = false;
-      updateAvailabilityUI(false);
+      if (!started) {
+        updateAvailabilityUI(false);
+      }
     }
   }
 

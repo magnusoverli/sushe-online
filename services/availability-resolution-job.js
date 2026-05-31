@@ -35,6 +35,7 @@ function createAvailabilityResolutionJob(deps = {}) {
   let isRunning = false;
   let shouldStop = false;
   let currentProgress = null;
+  let lastSummary = null;
 
   /**
    * Catalog-wide availability coverage.
@@ -81,6 +82,10 @@ function createAvailabilityResolutionJob(deps = {}) {
     return { ...currentProgress };
   }
 
+  function getLastSummary() {
+    return lastSummary ? { ...lastSummary } : null;
+  }
+
   /**
    * Candidate albums to resolve. By default only those not yet
    * availability-resolved; `all` reconsiders every album (non-destructive
@@ -121,6 +126,7 @@ function createAvailabilityResolutionJob(deps = {}) {
     const all = options.all === true;
     isRunning = true;
     shouldStop = false;
+    lastSummary = null;
 
     const summary = {
       total: 0,
@@ -196,6 +202,7 @@ function createAvailabilityResolutionJob(deps = {}) {
       );
 
       log.info('Availability resolution job completed', summary);
+      lastSummary = { ...summary };
       return summary;
     } finally {
       isRunning = false;
@@ -209,6 +216,7 @@ function createAvailabilityResolutionJob(deps = {}) {
     isJobRunning,
     stopJob,
     getProgress,
+    getLastSummary,
     resolveAll,
   };
 }

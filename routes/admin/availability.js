@@ -12,12 +12,12 @@ const {
 
 module.exports = (app, deps) => {
   const { ensureAuth, ensureAdmin, db } = deps;
-  const logger = require('../../utils/logger');
+  const logger = deps.logger || require('../../utils/logger');
 
-  const availabilityResolutionService = createAvailabilityResolutionJob({
-    db,
-    logger,
-  });
+  const jobFactory =
+    deps.createAvailabilityResolutionJob || createAvailabilityResolutionJob;
+  const availabilityResolutionService =
+    deps.availabilityResolutionService || jobFactory({ db, logger });
 
   app.locals.availabilityResolutionService = availabilityResolutionService;
 
@@ -48,7 +48,10 @@ module.exports = (app, deps) => {
     (req, res) => {
       const isRunning = availabilityResolutionService.isJobRunning();
       const progress = availabilityResolutionService.getProgress();
-      res.json({ isRunning, progress });
+      const lastSummary = isRunning
+        ? null
+        : availabilityResolutionService.getLastSummary?.() || null;
+      res.json({ isRunning, progress, lastSummary });
     }
   );
 
@@ -57,7 +60,7 @@ module.exports = (app, deps) => {
     '/api/admin/availability/resolve',
     ensureAuth,
     ensureAdmin,
-    async (req, res) => {
+    (req, res) => {
       try {
         if (availabilityResolutionService.isJobRunning()) {
           return res.status(409).json({
@@ -66,14 +69,23 @@ module.exports = (app, deps) => {
         }
 
         const all = req.body?.all === true;
+        const adminId = req.user._id;
         logger.info('Admin started availability resolution job', {
           adminUsername: req.user.username,
-          adminId: req.user._id,
+          adminId,
           all,
         });
 
-        const summary = await availabilityResolutionService.resolveAll({ all });
-        res.json({ success: true, summary });
+        void availabilityResolutionService
+          .resolveAll({ all })
+          .catch((error) => {
+            logger.error('Error during availability resolution', {
+              error: error.message,
+              adminId,
+            });
+          });
+
+        res.status(202).json({ success: true, started: true });
       } catch (error) {
         logger.error('Error during availability resolution', {
           error: error.message,
