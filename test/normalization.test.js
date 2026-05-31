@@ -291,6 +291,10 @@ test('Normalization Utilities', async (t) => {
         normalizeAlbumName('OK Computer [Remastered]'),
         'ok computer'
       );
+      assert.strictEqual(
+        normalizeAlbumName('The Mantle (Remastered 2016)'),
+        'mantle'
+      );
     });
 
     await t.test('should handle album names with special characters', () => {

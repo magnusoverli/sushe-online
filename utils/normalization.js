@@ -494,6 +494,9 @@ const EDITION_PATTERNS = [
   /\s*\(\s*(deluxe|special|expanded|remastered|remaster|anniversary|limited|collector'?s?|bonus\s*track)\s*(edition|version|release)?\s*\)$/i,
   /\s*\[\s*(deluxe|special|expanded|remastered|remaster|anniversary|limited|collector'?s?|bonus\s*track)\s*(edition|version|release)?\s*\]$/i,
   /\s*[-:]\s*(deluxe|special|expanded|remastered|remaster|anniversary|limited)\s*(edition|version|release)?$/i,
+  /\s*\(\s*(remastered|remaster)\s+\d{4}\s*\)$/i,
+  /\s*\[\s*(remastered|remaster)\s+\d{4}\s*\]$/i,
+  /\s*[-:]\s*(remastered|remaster)\s+\d{4}\s*$/i,
   /\s*\(\s*\d{4}\s*(remaster|reissue|edition)?\s*\)$/i,
 ];
 

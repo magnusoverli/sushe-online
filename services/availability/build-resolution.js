@@ -20,6 +20,7 @@ const { createOdesliClient } = require('./odesli-client');
 const { createMbUrlRelsSource } = require('./mb-url-rels-source');
 const { createSeedProviders } = require('./seed-providers');
 const { createItunesSource } = require('./itunes-source');
+const { createQobuzSource } = require('./qobuz-source');
 const { createSpotifySource } = require('./spotify-source');
 const {
   createAvailabilityResolutionService,
@@ -45,6 +46,7 @@ function buildAvailabilityResolution(deps = {}) {
     createExternalIdentityService({ db: deps.db, logger });
 
   const itunesSource = createItunesSource({ fetch: fetchFn, logger });
+  const qobuzSource = createQobuzSource({ fetch: fetchFn, logger });
   const spotifySource = createSpotifySource({ fetch: fetchFn, logger });
 
   const resolution = createAvailabilityResolutionService({
@@ -60,6 +62,7 @@ function buildAvailabilityResolution(deps = {}) {
     directSources: [
       { name: 'spotify', getLinks: spotifySource.getLinks },
       { name: 'itunes', getLinks: itunesSource.getLinks },
+      { name: 'qobuz', getLinks: qobuzSource.getLinks },
     ],
   });
 
