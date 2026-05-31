@@ -643,7 +643,8 @@ export function createAlbumDisplay(deps = {}) {
    * │        │   ├─ albumCover (.mobile-album-cover, 80x80)                │
    * │        │   │   ├─ coverImage (75x75, .album-cover-blur)              │
    * │        │   │   └─ summaryBadge (absolute, top-right of cover)        │
-   * │        │   └─ releaseDate (centered below cover)                      │
+   * │        │   ├─ releaseDate (below cover)                              │
+   * │        │   └─ availabilityBadges (.album-availability--mobile)        │
    * │        ├─ infoSection (flex-1, min-w-0 for truncation)               │
    * │        │   ├─ albumName                                               │
    * │        │   ├─ artist + playcount                                      │
@@ -757,7 +758,10 @@ export function createAlbumDisplay(deps = {}) {
       <div class="flex items-stretch h-full">
         
         <!-- COVER SECTION -->
-        <div class="shrink-0 w-[88px] flex flex-col items-center pt-2 pl-1">
+        <!-- self-start pins the column to the top of the row so the cover and
+             release date stay in a fixed position whether or not the
+             availability badges below them are present. -->
+        <div class="shrink-0 w-[88px] flex flex-col items-center self-start pt-1.5 pl-1">
           <!-- Album cover with optional summary badge -->
           <div class="mobile-album-cover relative w-20 h-20 flex items-center justify-center ${!mobileCoverSrc ? 'bg-gray-800 rounded-lg' : ''}">
             ${
@@ -773,12 +777,12 @@ export function createAlbumDisplay(deps = {}) {
             ${mobileRecommendationBadgeHtml}
           </div>
           <!-- Release date -->
-          <div class="flex-1 flex items-center mt-1">
-            <span class="release-date-display text-xs whitespace-nowrap ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}"
-                  ${data.yearMismatch ? `title="${escapeHtml(data.yearMismatchTooltip || '')}"` : ''}>
-              ${data.releaseDate}
-            </span>
-          </div>
+          <span class="release-date-display text-xs mt-1 whitespace-nowrap ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}"
+                ${data.yearMismatch ? `title="${escapeHtml(data.yearMismatchTooltip || '')}"` : ''}>
+            ${data.releaseDate}
+          </span>
+          <!-- Platform availability badges -->
+          ${renderAvailabilityBadges(data.availability, { variant: 'mobile' })}
         </div>
         
         <!-- INFO SECTION -->

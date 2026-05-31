@@ -48,9 +48,12 @@ function badgeInner(meta) {
  * nothing to show (so the album cell keeps its original layout).
  *
  * @param {string[]} availability - canonical service names available for the album
+ * @param {Object} [options]
+ * @param {'mobile'} [options.variant] - 'mobile' renders smaller, centered
+ *   badges sized to fit the narrow cover column on a mobile album card.
  * @returns {string} HTML for the badge row, or ''
  */
-export function renderAvailabilityBadges(availability) {
+export function renderAvailabilityBadges(availability, { variant } = {}) {
   if (!Array.isArray(availability) || availability.length === 0) return '';
 
   const have = new Set(availability);
@@ -67,5 +70,7 @@ export function renderAvailabilityBadges(availability) {
     })
     .join('');
 
-  return `<div class="album-availability">${squares}</div>`;
+  const variantClass =
+    variant === 'mobile' ? ' album-availability--mobile' : '';
+  return `<div class="album-availability${variantClass}">${squares}</div>`;
 }

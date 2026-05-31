@@ -50,4 +50,14 @@ describe('availability-badges', () => {
     assert.ok(html.includes('availability-badge-letter'));
     assert.ok(html.includes('>T<'));
   });
+
+  it('adds the mobile modifier class for the mobile variant only', () => {
+    const desktop = renderAvailabilityBadges(['spotify']);
+    assert.ok(desktop.includes('class="album-availability"'));
+    assert.ok(!desktop.includes('album-availability--mobile'));
+
+    const mobile = renderAvailabilityBadges(['spotify'], { variant: 'mobile' });
+    assert.ok(mobile.includes('album-availability--mobile'));
+    assert.ok(mobile.includes('fa-spotify'));
+  });
 });
