@@ -15,28 +15,26 @@ describe('availability-badges', () => {
     assert.strictEqual(renderAvailabilityBadges(undefined), '');
   });
 
-  it('renders known platforms in priority order (spotify before deezer)', () => {
-    const html = renderAvailabilityBadges(['deezer', 'spotify']);
+  it('renders known platforms in priority order (spotify before qobuz)', () => {
+    const html = renderAvailabilityBadges(['qobuz', 'spotify']);
     assert.ok(html.includes('album-availability'));
     assert.ok(html.includes('fa-spotify'));
-    assert.ok(html.indexOf('Spotify') < html.indexOf('Deezer'));
+    assert.ok(html.indexOf('Spotify') < html.indexOf('Qobuz'));
   });
 
-  it('caps at 6 badges by priority', () => {
+  it('renders only the defined availability platforms', () => {
     const all = [
       'spotify',
-      'apple_music',
+      'itunes',
+      'qobuz',
       'tidal',
-      'deezer',
-      'youtube_music',
       'bandcamp',
       'soundcloud',
       'amazon_music',
     ];
     const html = renderAvailabilityBadges(all);
     const count = (html.match(/availability-badge"/g) || []).length;
-    assert.strictEqual(count, 6);
-    // 7th/8th priority are dropped
+    assert.strictEqual(count, 5);
     assert.ok(!html.includes('SoundCloud'));
     assert.ok(!html.includes('Amazon Music'));
   });

@@ -5,8 +5,8 @@
  *
  * For every album not yet availability-resolved, seed it (existing mapping /
  * MusicBrainz / public search), expand via Odesli, union with MusicBrainz
- * direct links and store one album_service_mappings row per platform. Shares the
- * exact resolution service the live queue uses.
+ * direct links and store one album_service_mappings row per target platform.
+ * Shares the exact resolution service the live queue uses.
  *
  * Dry-run by default (resolves and prints, writes nothing); pass --apply to
  * write. --limit=N bounds the candidate set (handy for a quick check).
@@ -29,7 +29,10 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 const logger = require('../utils/logger');
-const { ODESLI_RATE_LIMIT_MS } = require('../services/availability/platforms');
+const {
+  AVAILABILITY_SERVICES,
+  ODESLI_RATE_LIMIT_MS,
+} = require('../services/availability/platforms');
 const {
   buildAvailabilityResolution,
 } = require('../services/availability/build-resolution');
@@ -97,6 +100,7 @@ async function main() {
   const resolution = buildResolution(pool);
 
   try {
+    const selectParams = all ? [] : [AVAILABILITY_SERVICES];
     const { rows } = await pool.query(
       `SELECT a.album_id, a.artist, a.album
          FROM albums a
@@ -105,13 +109,15 @@ async function main() {
             all
               ? ''
               : `AND NOT EXISTS (
-            SELECT 1 FROM album_service_mappings m
-             WHERE m.album_id = a.album_id
-               AND m.strategy LIKE 'availability:%'
-          )`
+             SELECT 1 FROM album_service_mappings m
+              WHERE m.album_id = a.album_id
+                AND m.strategy LIKE 'availability:%'
+                AND m.service = ANY($1)
+           )`
           }
         ORDER BY a.artist, a.album
-        ${limit ? `LIMIT ${limit}` : ''}`
+        ${limit ? `LIMIT ${limit}` : ''}`,
+      selectParams
     );
 
     console.log(

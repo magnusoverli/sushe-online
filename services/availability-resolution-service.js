@@ -3,8 +3,8 @@
  *
  * Seeds an album (existing mapping / MusicBrainz / public search), expands the
  * seed via Odesli, unions the result with MusicBrainz direct links and any
- * UPC-exact direct sources (Deezer, iTunes, ...), gates by confidence, and
- * persists one album_service_mappings row per platform.
+ * direct sources, gates by confidence, and persists one album_service_mappings
+ * row per target platform.
  *
  * Pure orchestration: no SQL and no HTTP of its own — it composes the injected
  * strategy modules and the external-identity repository.
@@ -14,6 +14,7 @@ const defaultLogger = require('../utils/logger');
 const {
   normalizeOdesliPlatform,
   AVAILABILITY_CONFIDENCE_FLOOR,
+  isAvailabilityService,
 } = require('./availability/platforms');
 
 const MB_LINK_CONFIDENCE = 0.9; // MusicBrainz url-rels are identity-confirmed
@@ -27,18 +28,36 @@ function isTransientStatus(status) {
  * higher-confidence candidate on a conflict and dropping anything below the
  * confidence floor.
  *
- * @param {Array<{service:string, url:string, confidence:number, strategy:string}>} candidates
- * @returns {Array<{service:string, url:string, confidence:number, strategy:string}>}
+ * @param {Array<{service:string, url:string, confidence:number, strategy:string,
+ *   externalAlbumId?:string, externalArtist?:string, externalAlbum?:string}>} candidates
+ * @returns {Array<{service:string, url:string, confidence:number, strategy:string,
+ *   externalAlbumId?:string, externalArtist?:string, externalAlbum?:string}>}
  */
 function mergeCandidates(candidates) {
   const byService = new Map();
 
   for (const cand of candidates) {
-    const { service, url, confidence, strategy } = cand;
-    if (!service || !url) continue;
+    const {
+      service,
+      url,
+      confidence,
+      strategy,
+      externalAlbumId,
+      externalArtist,
+      externalAlbum,
+    } = cand;
+    if (!service || !url || !isAvailabilityService(service)) continue;
     const existing = byService.get(service);
     if (!existing || confidence > existing.confidence) {
-      byService.set(service, { service, url, confidence, strategy });
+      byService.set(service, {
+        service,
+        url,
+        confidence,
+        strategy,
+        externalAlbumId,
+        externalArtist,
+        externalAlbum,
+      });
     }
   }
 
@@ -55,7 +74,9 @@ function mergeCandidates(candidates) {
  * @param {string} params.seedKind
  * @param {number} params.seedConfidence
  * @param {Array<{service:string, url:string}>} params.mbLinks
- * @param {Array<{name:string, links:Array<{service:string, url:string, confidence:number}>}>} params.directContributions
+ * @param {Array<{name:string, links:Array<{service:string, url:string,
+ *   confidence:number, externalAlbumId?:string, externalArtist?:string,
+ *   externalAlbum?:string}>}>} params.directContributions
  */
 function buildCandidates({
   odesliLinks,
@@ -91,6 +112,9 @@ function buildCandidates({
         url: link.url,
         confidence: link.confidence,
         strategy: `availability:${contribution.name}`,
+        externalAlbumId: link.externalAlbumId,
+        externalArtist: link.externalArtist,
+        externalAlbum: link.externalAlbum,
       });
     }
   }
@@ -120,12 +144,12 @@ function createAvailabilityResolutionService(deps = {}) {
   }
 
   /**
-   * Run every UPC-exact direct source for this album, in parallel. Each source
-   * is self-protecting (returns {links:[]} on a miss or transport error), so the
+   * Run every direct source for this album, in parallel. Each source is
+   * self-protecting (returns {links:[]} on a miss or transport error), so the
    * gathered contributions are always usable.
    */
   async function getDirectContributions(album, upc) {
-    if (!directSources.length || !upc) return [];
+    if (!directSources.length) return [];
     const results = await Promise.all(
       directSources.map(async (entry) => {
         const { links } = await entry.getLinks({
@@ -199,7 +223,9 @@ function createAvailabilityResolutionService(deps = {}) {
         await externalIdentityService.upsertAlbumServiceMapping({
           albumId: album.albumId,
           service: row.service,
-          externalUrl: row.url,
+          externalAlbumId: row.externalAlbumId,
+          externalArtist: row.externalArtist,
+          externalAlbum: row.externalAlbum,
           confidence: row.confidence,
           strategy: row.strategy,
         });

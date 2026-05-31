@@ -32,7 +32,7 @@ describe('availability/mb-url-rels-source', () => {
             },
             {
               type: 'purchase for download',
-              url: { resource: 'https://www.deezer.com/album/2' },
+              url: { resource: 'https://play.qobuz.com/album/2' },
             },
             { type: 'discogs', url: { resource: 'https://discogs.com/x' } },
           ],
@@ -50,8 +50,8 @@ describe('availability/mb-url-rels-source', () => {
     assert.strictEqual(seedUrl, 'https://music.apple.com/us/album/1');
     assert.strictEqual(upc, '886443927087');
     assert.deepStrictEqual(links, [
-      { service: 'apple_music', url: 'https://music.apple.com/us/album/1' },
-      { service: 'deezer', url: 'https://www.deezer.com/album/2' },
+      { service: 'itunes', url: 'https://music.apple.com/us/album/1' },
+      { service: 'qobuz', url: 'https://play.qobuz.com/album/2' },
     ]);
   });
 

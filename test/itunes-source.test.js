@@ -11,7 +11,7 @@ function jsonResponse(body, ok = true) {
 }
 
 describe('availability/itunes-source', () => {
-  it('returns an apple_music link (query stripped) on an exact UPC hit', async () => {
+  it('returns an iTunes link (query stripped) on an exact UPC hit', async () => {
     let requested = null;
     const source = createItunesSource({
       fetch: async (url) => {
@@ -40,7 +40,7 @@ describe('availability/itunes-source', () => {
     assert.ok(requested.includes('entity=album'));
     assert.deepStrictEqual(links, [
       {
-        service: 'apple_music',
+        service: 'itunes',
         url: 'https://music.apple.com/us/album/random-access-memories/617154241',
         confidence: ITUNES_UPC_CONFIDENCE,
       },

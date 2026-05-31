@@ -10,32 +10,14 @@
 // Platforms without a brand icon render their initial letter instead.
 const PLATFORM_BADGES = {
   spotify: { label: 'Spotify', icon: 'fa-spotify', color: '#1db954' },
-  apple_music: { label: 'Apple Music', icon: 'fa-apple', color: '#fa243c' },
+  itunes: { label: 'iTunes', icon: 'fa-apple', color: '#fa243c' },
+  qobuz: { label: 'Qobuz', icon: null, color: '#1f1f1f' },
   tidal: { label: 'Tidal', icon: null, color: '#33b6c9' },
-  deezer: { label: 'Deezer', icon: 'fa-deezer', color: '#a238ff' },
-  youtube_music: {
-    label: 'YouTube Music',
-    icon: 'fa-youtube',
-    color: '#ff0000',
-  },
   bandcamp: { label: 'Bandcamp', icon: 'fa-bandcamp', color: '#629aa9' },
-  soundcloud: { label: 'SoundCloud', icon: 'fa-soundcloud', color: '#ff5500' },
-  amazon_music: { label: 'Amazon Music', icon: 'fa-amazon', color: '#25d1da' },
 };
 
-// Order badges are shown in; only the first MAX_BADGES present are rendered.
-const PLATFORM_PRIORITY = [
-  'spotify',
-  'apple_music',
-  'tidal',
-  'deezer',
-  'youtube_music',
-  'bandcamp',
-  'soundcloud',
-  'amazon_music',
-];
-
-const MAX_BADGES = 6;
+// Order badges are shown in.
+const PLATFORM_PRIORITY = ['spotify', 'itunes', 'qobuz', 'tidal', 'bandcamp'];
 
 function badgeInner(meta) {
   return meta.icon
@@ -57,10 +39,7 @@ export function renderAvailabilityBadges(availability, { variant } = {}) {
   if (!Array.isArray(availability) || availability.length === 0) return '';
 
   const have = new Set(availability);
-  const chosen = PLATFORM_PRIORITY.filter((service) => have.has(service)).slice(
-    0,
-    MAX_BADGES
-  );
+  const chosen = PLATFORM_PRIORITY.filter((service) => have.has(service));
   if (chosen.length === 0) return '';
 
   const squares = chosen

@@ -148,7 +148,7 @@ describe('external-identity-service', () => {
     assert.strictEqual(pool.query.mock.calls.length, 0);
   });
 
-  it('persists external_url and allows a newly-supported service', async () => {
+  it('persists external_url and allows target availability services', async () => {
     const pool = createMockPoolWithQuery(async () => ({ rows: [] }));
     const service = createExternalIdentityService({
       db: pool,
@@ -157,9 +157,9 @@ describe('external-identity-service', () => {
 
     await service.upsertAlbumServiceMapping({
       albumId: 'album-9',
-      service: 'deezer', // previously rejected by the DB CHECK
-      externalAlbumId: 'dz9',
-      externalUrl: 'https://www.deezer.com/album/9',
+      service: 'qobuz',
+      externalAlbumId: 'qb9',
+      externalUrl: 'https://play.qobuz.com/album/9',
       confidence: 0.95,
       strategy: 'availability:itunes',
     });
@@ -170,13 +170,13 @@ describe('external-identity-service', () => {
       pool.query.mock.calls[0].arguments[0].includes('external_url'),
       'INSERT should include external_url column'
     );
-    assert.strictEqual(args[5], 'https://www.deezer.com/album/9');
+    assert.strictEqual(args[5], 'https://play.qobuz.com/album/9');
   });
 
-  it('reads all availability rows for an album', async () => {
+  it('reads target availability rows for an album', async () => {
     const pool = createMockPoolWithQuery(async () => ({
       rows: [
-        { service: 'deezer', external_url: 'https://d/1' },
+        { service: 'qobuz', external_url: 'https://q/1' },
         { service: 'tidal', external_url: 'https://t/1' },
       ],
     }));
@@ -192,6 +192,13 @@ describe('external-identity-service', () => {
       pool.query.mock.calls[0].arguments[0].includes('ORDER BY service')
     );
     assert.strictEqual(pool.query.mock.calls[0].arguments[1][0], 'album-9');
+    assert.deepStrictEqual(pool.query.mock.calls[0].arguments[1][1], [
+      'spotify',
+      'itunes',
+      'qobuz',
+      'tidal',
+      'bandcamp',
+    ]);
   });
 
   it('bulk-reads availability with ANY($1)', async () => {

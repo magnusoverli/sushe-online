@@ -2,8 +2,8 @@
  * Availability resolution wiring (single assembly point).
  *
  * Composes the external-identity repository, the Odesli client, the MusicBrainz
- * url-rels source, the seed providers, and the UPC-exact direct sources
- * (Deezer, iTunes) into a ready-to-use resolution service. The live fetch queue,
+ * url-rels source, the seed providers, and the direct sources (Spotify,
+ * iTunes) into a ready-to-use resolution service. The live fetch queue,
  * the backfill CLI, and the admin resolution job all build through here so they
  * share one source set — adding a source updates every caller at once.
  */
@@ -19,8 +19,8 @@ const {
 const { createOdesliClient } = require('./odesli-client');
 const { createMbUrlRelsSource } = require('./mb-url-rels-source');
 const { createSeedProviders } = require('./seed-providers');
-const { createDeezerSource } = require('./deezer-source');
 const { createItunesSource } = require('./itunes-source');
+const { createSpotifySource } = require('./spotify-source');
 const {
   createAvailabilityResolutionService,
 } = require('../availability-resolution-service');
@@ -44,8 +44,8 @@ function buildAvailabilityResolution(deps = {}) {
     deps.externalIdentityService ||
     createExternalIdentityService({ db: deps.db, logger });
 
-  const deezerSource = createDeezerSource({ fetch: fetchFn, logger });
   const itunesSource = createItunesSource({ fetch: fetchFn, logger });
+  const spotifySource = createSpotifySource({ fetch: fetchFn, logger });
 
   const resolution = createAvailabilityResolutionService({
     logger,
@@ -58,7 +58,7 @@ function buildAvailabilityResolution(deps = {}) {
       externalIdentityService,
     }),
     directSources: [
-      { name: 'deezer', getLinks: deezerSource.getLinks },
+      { name: 'spotify', getLinks: spotifySource.getLinks },
       { name: 'itunes', getLinks: itunesSource.getLinks },
     ],
   });

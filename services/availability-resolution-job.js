@@ -4,8 +4,8 @@
  * Admin-triggered bulk resolution of streaming-platform availability across the
  * album catalog. Mirrors the image-refetch job: in-memory state, a stoppable
  * loop, and a polled progress snapshot. Shares the exact resolution graph the
- * live fetch queue and the backfill CLI use (Odesli + MusicBrainz + UPC-exact
- * Deezer/iTunes sources), so a manual run and the automatic queue stay in sync.
+ * live fetch queue and the backfill CLI use (Odesli + MusicBrainz + target
+ * direct sources), so a manual run and the automatic queue stay in sync.
  *
  * Resolution is serialized and Odesli-paced, so a full run is long; progress is
  * exposed for 1.5 s polling and the loop checks the stop flag every album.
@@ -14,7 +14,10 @@
 const { ensureDb } = require('../db/postgres');
 const logger = require('../utils/logger');
 const { wait } = require('../utils/request-queue');
-const { ODESLI_RATE_LIMIT_MS } = require('./availability/platforms');
+const {
+  AVAILABILITY_SERVICES,
+  ODESLI_RATE_LIMIT_MS,
+} = require('./availability/platforms');
 const {
   buildAvailabilityResolution,
 } = require('./availability/build-resolution');
@@ -38,13 +41,17 @@ function createAvailabilityResolutionJob(deps = {}) {
    * @returns {Promise<{totalAlbums:number, resolved:number, unresolved:number}>}
    */
   async function getStats() {
-    const result = await db.raw(`
+    const result = await db.raw(
+      `
       SELECT
         (SELECT COUNT(*) FROM albums
           WHERE artist IS NOT NULL AND album IS NOT NULL) AS total,
         (SELECT COUNT(DISTINCT m.album_id) FROM album_service_mappings m
-          WHERE m.strategy LIKE 'availability:%') AS resolved
-    `);
+          WHERE m.strategy LIKE 'availability:%'
+            AND m.service = ANY($1)) AS resolved
+    `,
+      [AVAILABILITY_SERVICES]
+    );
     const row = result.rows[0] || {};
     const totalAlbums = parseInt(row.total, 10) || 0;
     const resolved = parseInt(row.resolved, 10) || 0;
@@ -80,6 +87,7 @@ function createAvailabilityResolutionJob(deps = {}) {
    * re-resolution, matching the backfill CLI).
    */
   async function selectCandidates(all) {
+    const params = all ? [] : [AVAILABILITY_SERVICES];
     const { rows } = await db.raw(
       `SELECT a.album_id, a.artist, a.album
          FROM albums a
@@ -88,12 +96,14 @@ function createAvailabilityResolutionJob(deps = {}) {
             all
               ? ''
               : `AND NOT EXISTS (
-            SELECT 1 FROM album_service_mappings m
-             WHERE m.album_id = a.album_id
-               AND m.strategy LIKE 'availability:%'
-          )`
+             SELECT 1 FROM album_service_mappings m
+              WHERE m.album_id = a.album_id
+                AND m.strategy LIKE 'availability:%'
+                AND m.service = ANY($1)
+           )`
           }
-        ORDER BY a.artist, a.album`
+        ORDER BY a.artist, a.album`,
+      params
     );
     return rows;
   }

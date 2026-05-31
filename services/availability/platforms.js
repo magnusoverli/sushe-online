@@ -10,27 +10,15 @@
 // Services that prior code already used for cross-platform identity resolution.
 const IDENTITY_SERVICES = ['spotify', 'tidal', 'lastfm'];
 
-// Canonical (snake_case) names for the streaming/store platforms whose
-// availability we resolve and store.
+// Canonical names for the only platforms whose album-level availability we
+// resolve and show. Other services may appear in upstream aggregators, but they
+// are intentionally ignored by this feature.
 const AVAILABILITY_SERVICES = [
   'spotify',
-  'apple_music',
   'itunes',
+  'qobuz',
   'tidal',
-  'deezer',
-  'amazon_music',
-  'amazon_store',
-  'youtube',
-  'youtube_music',
-  'soundcloud',
   'bandcamp',
-  'pandora',
-  'napster',
-  'anghami',
-  'boomplay',
-  'yandex',
-  'audiomack',
-  'audius',
 ];
 
 // Full set the repository accepts on read/write (replaces the dropped DB CHECK).
@@ -42,44 +30,23 @@ const SUPPORTED_SERVICES = new Set([
 // Odesli (song.link) platform keys -> canonical service name.
 const ODESLI_PLATFORM_TO_SERVICE = {
   spotify: 'spotify',
-  appleMusic: 'apple_music',
   itunes: 'itunes',
+  qobuz: 'qobuz',
   tidal: 'tidal',
-  deezer: 'deezer',
-  amazonMusic: 'amazon_music',
-  amazonStore: 'amazon_store',
-  youtube: 'youtube',
-  youtubeMusic: 'youtube_music',
-  soundcloud: 'soundcloud',
   bandcamp: 'bandcamp',
-  pandora: 'pandora',
-  napster: 'napster',
-  anghami: 'anghami',
-  boomplay: 'boomplay',
-  yandex: 'yandex',
-  audiomack: 'audiomack',
-  audius: 'audius',
 };
 
 // MusicBrainz url-rels hostnames -> canonical service. Ordered most-specific
-// first; first substring hit wins (so music.apple.com beats itunes.apple.com,
-// music.youtube.com beats youtube.com).
+// first; first substring hit wins.
 const MB_HOST_MATCHERS = [
-  ['music.apple.com', 'apple_music'],
+  ['music.apple.com', 'itunes'],
   ['itunes.apple.com', 'itunes'],
-  ['music.youtube.com', 'youtube_music'],
-  ['youtube.com', 'youtube'],
-  ['youtu.be', 'youtube'],
-  ['music.amazon', 'amazon_music'],
+  ['play.qobuz.com', 'qobuz'],
+  ['qobuz.com', 'qobuz'],
   ['open.spotify.com', 'spotify'],
   ['spotify.com', 'spotify'],
   ['tidal.com', 'tidal'],
-  ['deezer.com', 'deezer'],
   ['bandcamp.com', 'bandcamp'],
-  ['soundcloud.com', 'soundcloud'],
-  ['anghami.com', 'anghami'],
-  ['boomplay.com', 'boomplay'],
-  ['audiomack.com', 'audiomack'],
 ];
 
 // Odesli request configuration. Rate is held under the free tier's ~10 req/min.
@@ -96,6 +63,10 @@ const AVAILABILITY_CONFIDENCE_FLOOR = 0.5;
  */
 function normalizeOdesliPlatform(platformKey) {
   return ODESLI_PLATFORM_TO_SERVICE[platformKey] || null;
+}
+
+function isAvailabilityService(service) {
+  return AVAILABILITY_SERVICES.includes(String(service || '').toLowerCase());
 }
 
 /**
@@ -127,4 +98,5 @@ module.exports = {
   AVAILABILITY_CONFIDENCE_FLOOR,
   normalizeOdesliPlatform,
   normalizeMusicbrainzUrl,
+  isAvailabilityService,
 };

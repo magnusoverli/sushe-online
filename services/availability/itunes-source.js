@@ -1,11 +1,11 @@
 /**
- * Apple/iTunes availability source (UPC-exact).
+ * iTunes availability source (UPC-exact).
  *
  * Confirms an album on Apple's catalog by an exact barcode lookup
- * (`/lookup?upc=<UPC>&entity=album`), returning the canonical Apple Music album
+ * (`/lookup?upc=<UPC>&entity=album`), returning the canonical collection
  * url. Apple matches barcodes broadly, so the hit-rate on MusicBrainz UPCs is
  * good. Acts only on a UPC — the no-UPC path is already covered by Odesli plus
- * the iTunes / Deezer text seed-providers.
+ * the iTunes text seed-provider.
  *
  * Pure adapter: returns normalized links on a hit, an empty list otherwise, and
  * never throws (a transient transport problem degrades to "no links").
@@ -62,7 +62,7 @@ function createItunesSource(deps = {}) {
       return {
         links: [
           {
-            service: 'apple_music',
+            service: 'itunes',
             url: cleanAppleUrl(collection.collectionViewUrl),
             confidence: ITUNES_UPC_CONFIDENCE,
           },

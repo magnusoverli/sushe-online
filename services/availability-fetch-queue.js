@@ -11,7 +11,10 @@
 const { RequestQueue } = require('../utils/request-queue');
 const logger = require('../utils/logger');
 const { ensureDb } = require('../db/postgres');
-const { ODESLI_RATE_LIMIT_MS } = require('./availability/platforms');
+const {
+  ODESLI_RATE_LIMIT_MS,
+  isAvailabilityService,
+} = require('./availability/platforms');
 const {
   buildAvailabilityResolution,
 } = require('./availability/build-resolution');
@@ -65,8 +68,10 @@ function createAvailabilityFetchQueue(deps = {}) {
           await externalIdentityService.getAlbumAvailability(albumId);
         // Skip only when availability was already resolved here. A prior
         // Spotify/Tidal identity mapping (from playback/export) does not count.
-        const alreadyResolved = existing.some((row) =>
-          String(row.strategy || '').startsWith('availability:')
+        const alreadyResolved = existing.some(
+          (row) =>
+            String(row.strategy || '').startsWith('availability:') &&
+            isAvailabilityService(row.service)
         );
         if (alreadyResolved) return;
       } catch (err) {

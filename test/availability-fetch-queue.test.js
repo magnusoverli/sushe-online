@@ -58,6 +58,14 @@ describe('availability-fetch-queue', () => {
     assert.strictEqual(resolveAvailability.mock.calls.length, 1);
   });
 
+  it('still resolves when only a non-target availability mapping exists', async () => {
+    const { queue, resolveAvailability } = build({
+      existing: [{ service: 'deezer', strategy: 'availability:deezer' }],
+    });
+    await queue.add('alb-1', 'Metallica', '72 Seasons');
+    assert.strictEqual(resolveAvailability.mock.calls.length, 1);
+  });
+
   it('swallows resolution errors without throwing', async () => {
     const { queue } = build({
       resolve: async () => {

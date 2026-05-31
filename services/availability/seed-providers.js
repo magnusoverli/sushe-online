@@ -4,7 +4,7 @@
  * Returns the highest-confidence seed available, tried cheapest-first:
  *   (a) an existing Spotify/Tidal mapping (zero extra network calls),
  *   (b) a MusicBrainz streaming url passed in by the orchestrator,
- *   (c) a public iTunes/Deezer search, each gated by the shared entity-matching
+ *   (c) a public iTunes search, gated by the shared entity-matching
  *       confidence check so a loose text match never seeds a wrong release.
  * This module only *acquires* a seed; it does not call Odesli or persist.
  */
@@ -82,40 +82,12 @@ function createSeedProviders(deps = {}) {
     };
   }
 
-  async function deezerSeed(artist, album) {
-    const q = `${clean(artist)} ${clean(album)}`.trim();
-    const url = `https://api.deezer.com/search/album?q=${encodeURIComponent(q)}&limit=5`;
-    const resp = await fetchFn(url);
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const candidates = data.data || [];
-    const { best, isConfident } = selectBestCandidate({
-      target: { artist, album },
-      candidates,
-      getArtist: (r) => r.artist && r.artist.name,
-      getAlbum: (r) => r.title,
-    });
-    if (!isConfident || !best.candidate.id) return null;
-    return {
-      kind: 'deezer',
-      confidence: best.combined,
-      seed: {
-        url:
-          best.candidate.link ||
-          `https://www.deezer.com/album/${best.candidate.id}`,
-      },
-    };
-  }
-
   async function searchSeed(artist, album) {
     if (!artist || !album) return null;
-    for (const provider of [itunesSeed, deezerSeed]) {
-      try {
-        const result = await provider(artist, album);
-        if (result) return result;
-      } catch (err) {
-        logger.debug?.('search seed provider failed', { error: err.message });
-      }
+    try {
+      return await itunesSeed(artist, album);
+    } catch (err) {
+      logger.debug?.('search seed provider failed', { error: err.message });
     }
     return null;
   }

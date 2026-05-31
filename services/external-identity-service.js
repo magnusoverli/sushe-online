@@ -4,7 +4,10 @@ const {
   normalizeArtistName,
   sanitizeForStorage,
 } = require('../utils/normalization');
-const { SUPPORTED_SERVICES } = require('./availability/platforms');
+const {
+  AVAILABILITY_SERVICES,
+  SUPPORTED_SERVICES,
+} = require('./availability/platforms');
 const LAST_USED_TOUCH_INTERVAL_SQL = "INTERVAL '1 hour'";
 
 function normalizeService(service) {
@@ -22,21 +25,23 @@ function isSupportedService(service) {
 }
 
 /**
- * All stored platform availability rows for one album.
+ * Stored target platform availability rows for one album.
  * @param {import('../db/types').DbFacade} db
  * @param {string} albumId
  * @returns {Promise<Array<{service:string, external_album_id:string|null,
- *   external_url:string|null, confidence:number|null, strategy:string|null}>>}
+ *   confidence:number|null, strategy:string|null}>>}
  */
 async function fetchAlbumAvailability(db, albumId) {
   if (!albumId) return [];
 
   const result = await db.raw(
-    `SELECT service, external_album_id, external_url, confidence, strategy
+    `SELECT service, external_album_id, confidence, strategy
        FROM album_service_mappings
       WHERE album_id = $1
+        AND strategy LIKE 'availability:%'
+        AND service = ANY($2)
       ORDER BY service`,
-    [albumId],
+    [albumId, AVAILABILITY_SERVICES],
     { name: 'external-identity-get-album-availability', retryable: true }
   );
 
@@ -53,11 +58,13 @@ async function fetchAlbumAvailabilityBulk(db, albumIds) {
   if (!Array.isArray(albumIds) || albumIds.length === 0) return [];
 
   const result = await db.raw(
-    `SELECT album_id, service, external_album_id, external_url, confidence, strategy
+    `SELECT album_id, service, external_album_id, confidence, strategy
        FROM album_service_mappings
       WHERE album_id = ANY($1)
+        AND strategy LIKE 'availability:%'
+        AND service = ANY($2)
       ORDER BY album_id, service`,
-    [albumIds],
+    [albumIds, AVAILABILITY_SERVICES],
     { name: 'external-identity-get-album-availability-bulk', retryable: true }
   );
 

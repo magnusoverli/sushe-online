@@ -39,7 +39,7 @@ export function renderAvailabilityPanel(payload = {}) {
         <div class="settings-row">
           <div class="settings-row-label">
             <label class="settings-label">Resolve Streaming Availability</label>
-            <p class="settings-description">Resolve which streaming platforms carry each album via Odesli, MusicBrainz, and exact-UPC Deezer/iTunes lookups. Paced by external rate limits, so a full run can take a while. Already-resolved albums are skipped.</p>
+            <p class="settings-description">Resolve album-level availability for Spotify, iTunes, Qobuz, Tidal, and Bandcamp via Odesli, MusicBrainz, and exact-UPC iTunes lookup. Paced by external rate limits, so a full run can take a while. Already-resolved albums are skipped.</p>
           </div>
           <div class="flex gap-2">
             <button id="resolveAvailabilityBtn" class="settings-button">Resolve Missing</button>

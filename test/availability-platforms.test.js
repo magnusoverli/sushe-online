@@ -8,26 +8,23 @@ const {
 
 describe('availability/platforms', () => {
   it('allows identity + availability services', () => {
-    for (const s of ['spotify', 'tidal', 'lastfm', 'deezer', 'apple_music']) {
+    for (const s of ['spotify', 'tidal', 'lastfm', 'itunes', 'qobuz']) {
       assert.ok(SUPPORTED_SERVICES.has(s), `${s} should be supported`);
     }
   });
 
   it('maps Odesli platform keys to canonical services', () => {
-    assert.strictEqual(normalizeOdesliPlatform('appleMusic'), 'apple_music');
-    assert.strictEqual(normalizeOdesliPlatform('amazonMusic'), 'amazon_music');
-    assert.strictEqual(
-      normalizeOdesliPlatform('youtubeMusic'),
-      'youtube_music'
-    );
+    assert.strictEqual(normalizeOdesliPlatform('itunes'), 'itunes');
+    assert.strictEqual(normalizeOdesliPlatform('qobuz'), 'qobuz');
     assert.strictEqual(normalizeOdesliPlatform('tidal'), 'tidal');
+    assert.strictEqual(normalizeOdesliPlatform('amazonMusic'), null);
     assert.strictEqual(normalizeOdesliPlatform('unknownThing'), null);
   });
 
   it('maps MusicBrainz hosts to canonical services (most-specific first)', () => {
     assert.strictEqual(
       normalizeMusicbrainzUrl('https://music.apple.com/us/album/1655432387'),
-      'apple_music'
+      'itunes'
     );
     assert.strictEqual(
       normalizeMusicbrainzUrl('https://itunes.apple.com/fr/album/id1679530462'),
@@ -42,8 +39,8 @@ describe('availability/platforms', () => {
       'bandcamp'
     );
     assert.strictEqual(
-      normalizeMusicbrainzUrl('https://music.youtube.com/playlist?list=x'),
-      'youtube_music'
+      normalizeMusicbrainzUrl('https://play.qobuz.com/album/x'),
+      'qobuz'
     );
     assert.strictEqual(normalizeMusicbrainzUrl('not a url'), null);
     assert.strictEqual(normalizeMusicbrainzUrl('https://example.com/x'), null);

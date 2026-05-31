@@ -3,6 +3,7 @@ const {
   mapAlbumDataItemToResponse,
 } = require('./item-mapper');
 const { ensureDb } = require('../../db/postgres');
+const { AVAILABILITY_SERVICES } = require('../availability/platforms');
 
 // eslint-disable-next-line max-lines-per-function -- List fetchers keep related read-path SQL together for shared mapping behavior
 function createListFetchers(deps = {}) {
@@ -48,15 +49,16 @@ function createListFetchers(deps = {}) {
          COALESCE((
            SELECT json_agg(m.service)
            FROM album_service_mappings m
-           WHERE m.album_id = li.album_id
-             AND m.strategy LIKE 'availability:%'
-         ), '[]'::json) AS availability
+            WHERE m.album_id = li.album_id
+              AND m.strategy LIKE 'availability:%'
+              AND m.service = ANY($2)
+          ), '[]'::json) AS availability
        FROM lists l
        LEFT JOIN list_items li ON li.list_id = l._id
        LEFT JOIN albums a ON li.album_id = a.album_id
        WHERE l.user_id = $1
        ORDER BY l.sort_order, l.name, li.position`,
-      [userId],
+      [userId, AVAILABILITY_SERVICES],
       { name: 'list-fetchers-all-user-lists-with-items', retryable: true }
     );
     const allRows = allRowsResult.rows;
@@ -201,12 +203,13 @@ function createListFetchers(deps = {}) {
                 FROM album_service_mappings m
                 WHERE m.album_id = li.album_id
                   AND m.strategy LIKE 'availability:%'
+                  AND m.service = ANY($2)
               ), '[]'::json) AS availability
        FROM list_items li
        LEFT JOIN albums a ON li.album_id = a.album_id
        WHERE li.list_id = $1
        ORDER BY li.position`,
-      [list._id],
+      [list._id, AVAILABILITY_SERVICES],
       { name: 'list-fetchers-list-items-with-album-data', retryable: true }
     );
     const items = itemsResult.rows.map((row) => ({

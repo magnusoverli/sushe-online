@@ -45,7 +45,7 @@ describe('availability-resolution-job', () => {
     const resolveAvailability = mock.fn(async ({ albumId }) =>
       albumId === 'a2'
         ? { action: 'skip', reason: 'no-seed' }
-        : { action: 'resolved', services: ['deezer'] }
+        : { action: 'resolved', services: ['spotify'] }
     );
     const job = createAvailabilityResolutionJob({
       db: createDb({ candidates: ALBUMS }),
@@ -73,7 +73,7 @@ describe('availability-resolution-job', () => {
       resolution: {
         resolveAvailability: async ({ albumId }) => {
           if (albumId === 'a2') throw new Error('boom');
-          return { action: 'resolved', services: ['deezer'] };
+          return { action: 'resolved', services: ['spotify'] };
         },
       },
       rateLimitMs: 0,
