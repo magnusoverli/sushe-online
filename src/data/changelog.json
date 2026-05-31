@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-05-31",
+    "category": "feature",
+    "description": "Added streaming platform badges to mobile album cards",
+    "hash": "a1f63dbe39abda3a99c4729b1ff633860d030331",
+    "commitMessage": "Add streaming platform availability badges to mobile album cards\n\nRender the per-album availability badges in the mobile card UI, below the\nrelease date in the cover column, mirroring the desktop feature.\n\n- renderAvailabilityBadges() gains a `mobile` variant that adds an\n  `album-availability--mobile` modifier: smaller (12px), centered squares\n  sized so all six fit on one row in the narrow cover column.\n- Pin the mobile cover column to the top of the row (self-start) so the\n  cover image and release date hold a fixed position whether or not the\n  badges are present, and align the cover top with the album title.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+  },
+  {
     "date": "2026-05-30",
     "category": "ui",
     "description": "Improved availability badge positioning for better visual alignment",
