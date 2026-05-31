@@ -3,8 +3,9 @@
  *
  * url-rels (streaming / purchase links) live at the RELEASE level, so a
  * release-group id is first resolved to a representative release. Returns the
- * recognized direct links plus a high-confidence streaming url that doubles as
- * an Odesli seed. Reuses the injected, rate-limited `mbFetch` (shared MB queue).
+ * recognized direct links, the release barcode (UPC) for exact catalog lookups,
+ * plus a high-confidence streaming url that doubles as an Odesli seed. Reuses the
+ * injected, rate-limited `mbFetch` (shared MB queue).
  */
 
 const defaultLogger = require('../../utils/logger');
@@ -48,11 +49,11 @@ function createMbUrlRelsSource(deps = {}) {
 
   /**
    * @param {string} albumId - canonical album id (a MusicBrainz UUID)
-   * @returns {Promise<{seedUrl: string|null, links: Array<{service:string, url:string}>}>}
+   * @returns {Promise<{seedUrl: string|null, upc: string|null, links: Array<{service:string, url:string}>}>}
    */
   async function getDirectLinks(albumId) {
     if (!mbFetch || !isMusicbrainzId(albumId)) {
-      return { seedUrl: null, links: [] };
+      return { seedUrl: null, upc: null, links: [] };
     }
 
     const releaseId = await resolveReleaseId(albumId);
@@ -76,12 +77,14 @@ function createMbUrlRelsSource(deps = {}) {
       (r) => /stream/i.test(r.type || '') && r.url && r.url.resource
     );
     const seedUrl = (streaming && streaming.url.resource) || null;
+    const upc = (release.barcode || '').trim() || null;
 
     logger.debug?.('MusicBrainz url-rels resolved', {
       albumId,
       links: links.length,
+      upc,
     });
-    return { seedUrl, links };
+    return { seedUrl, upc, links };
   }
 
   return { getDirectLinks };

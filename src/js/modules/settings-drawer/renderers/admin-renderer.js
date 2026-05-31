@@ -1,4 +1,5 @@
 import { escapeHtml } from '../../html-utils.js';
+import { renderAvailabilityPanel } from './availability-panel.js';
 
 /**
  * Settings drawer admin renderer.
@@ -386,6 +387,9 @@ export function createSettingsAdminRenderer() {
             </div>
           </div>
         </div>
+
+        <!-- Album Availability -->
+        ${renderAvailabilityPanel(data.availabilityStats || {})}
 
         <!-- Catalog Cleanup -->
         <div class="settings-group">

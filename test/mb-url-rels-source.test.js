@@ -24,6 +24,7 @@ describe('availability/mb-url-rels-source', () => {
       }
       if (url.includes('/release/rel-official')) {
         return jsonResponse({
+          barcode: '886443927087',
           relations: [
             {
               type: 'streaming',
@@ -44,9 +45,10 @@ describe('availability/mb-url-rels-source', () => {
       mbFetch,
       logger: createMockLogger(),
     });
-    const { seedUrl, links } = await source.getDirectLinks(MB_ID);
+    const { seedUrl, upc, links } = await source.getDirectLinks(MB_ID);
 
     assert.strictEqual(seedUrl, 'https://music.apple.com/us/album/1');
+    assert.strictEqual(upc, '886443927087');
     assert.deepStrictEqual(links, [
       { service: 'apple_music', url: 'https://music.apple.com/us/album/1' },
       { service: 'deezer', url: 'https://www.deezer.com/album/2' },
@@ -62,6 +64,7 @@ describe('availability/mb-url-rels-source', () => {
     });
     assert.deepStrictEqual(await source.getDirectLinks('spotify:album:x'), {
       seedUrl: null,
+      upc: null,
       links: [],
     });
   });
@@ -82,7 +85,7 @@ describe('availability/mb-url-rels-source', () => {
       logger: createMockLogger(),
     });
     const result = await source.getDirectLinks(MB_ID);
-    assert.deepStrictEqual(result, { seedUrl: null, links: [] });
+    assert.deepStrictEqual(result, { seedUrl: null, upc: null, links: [] });
     assert.ok(seen.some((u) => u.includes(`/release/${MB_ID}`)));
   });
 });

@@ -8,23 +8,13 @@
  * circuit without a network call (and without consuming the pacing delay).
  */
 
-const {
-  RequestQueue,
-  MusicBrainzQueue,
-  createMbFetch,
-} = require('../utils/request-queue');
+const { RequestQueue } = require('../utils/request-queue');
 const logger = require('../utils/logger');
 const { ensureDb } = require('../db/postgres');
 const { ODESLI_RATE_LIMIT_MS } = require('./availability/platforms');
 const {
-  createExternalIdentityService,
-} = require('./external-identity-service');
-const { createOdesliClient } = require('./availability/odesli-client');
-const { createMbUrlRelsSource } = require('./availability/mb-url-rels-source');
-const { createSeedProviders } = require('./availability/seed-providers');
-const {
-  createAvailabilityResolutionService,
-} = require('./availability-resolution-service');
+  buildAvailabilityResolution,
+} = require('./availability/build-resolution');
 
 function createAvailabilityFetchQueue(deps = {}) {
   const maxConcurrent = deps.maxConcurrent || 1; // serialize for the Odesli limit
@@ -37,29 +27,23 @@ function createAvailabilityFetchQueue(deps = {}) {
     deps.db !== undefined && deps.db !== null
       ? ensureDb(deps.db, 'availability-fetch-queue')
       : null;
-  const mbFetch =
-    deps.mbFetch || createMbFetch(new MusicBrainzQueue({ fetch: fetchFn }));
 
   // Tests may inject a ready-made repository + resolution service; otherwise the
   // dependency graph is assembled from db (production startup path).
-  const externalIdentityService =
-    deps.externalIdentityService ||
-    (db ? createExternalIdentityService({ db, logger: log }) : null);
-  const resolutionService =
-    deps.resolutionService ||
-    (externalIdentityService
-      ? createAvailabilityResolutionService({
-          logger: log,
-          externalIdentityService,
-          odesliClient: createOdesliClient({ fetch: fetchFn, logger: log }),
-          mbUrlRelsSource: createMbUrlRelsSource({ mbFetch, logger: log }),
-          seedProviders: createSeedProviders({
-            fetch: fetchFn,
-            logger: log,
-            externalIdentityService,
-          }),
-        })
-      : null);
+  let externalIdentityService = deps.externalIdentityService || null;
+  let resolutionService = deps.resolutionService || null;
+  if ((!externalIdentityService || !resolutionService) && db) {
+    const built = buildAvailabilityResolution({
+      db,
+      fetch: fetchFn,
+      logger: log,
+      mbFetch: deps.mbFetch,
+      externalIdentityService,
+    });
+    externalIdentityService =
+      externalIdentityService || built.externalIdentityService;
+    resolutionService = resolutionService || built.resolution;
+  }
 
   async function pace() {
     if (rateLimitMs > 0) {

@@ -18,8 +18,10 @@ export function createSettingsAdminHandlers(deps = {}) {
     getAlbumSummaryPollInterval,
     setAlbumSummaryPollInterval,
     loadAlbumImageStats,
+    loadAvailabilityStats,
     applySummaryStatsPayload,
     applyImageStatsPayload,
+    applyAvailabilityStatsPayload,
     categoryData,
     handleAdminEventAction,
     handleConfigureTelegram,
@@ -45,6 +47,9 @@ export function createSettingsAdminHandlers(deps = {}) {
     handleStopAlbumSummaries,
     handleRefetchAlbumImages,
     handleStopRefetchImages,
+    handleResolveAvailability,
+    handleReresolveAvailability,
+    handleStopAvailability,
     handleScanDuplicates,
     handleAuditManualAlbums,
   } = deps;
@@ -386,6 +391,37 @@ export function createSettingsAdminHandlers(deps = {}) {
       applyImageStatsPayload(initialImagePayload);
     } else {
       loadAlbumImageStats();
+    }
+
+    const resolveAvailabilityBtn = doc.getElementById('resolveAvailabilityBtn');
+    const reresolveAvailabilityBtn = doc.getElementById(
+      'reresolveAvailabilityBtn'
+    );
+    const stopAvailabilityBtn = doc.getElementById('stopAvailabilityBtn');
+
+    if (resolveAvailabilityBtn) {
+      resolveAvailabilityBtn.addEventListener(
+        'click',
+        handleResolveAvailability
+      );
+    }
+
+    if (reresolveAvailabilityBtn) {
+      reresolveAvailabilityBtn.addEventListener(
+        'click',
+        handleReresolveAvailability
+      );
+    }
+
+    if (stopAvailabilityBtn) {
+      stopAvailabilityBtn.addEventListener('click', handleStopAvailability);
+    }
+
+    const initialAvailabilityPayload = categoryData?.admin?.availabilityStats;
+    if (initialAvailabilityPayload?.stats && applyAvailabilityStatsPayload) {
+      applyAvailabilityStatsPayload(initialAvailabilityPayload);
+    } else if (loadAvailabilityStats) {
+      loadAvailabilityStats();
     }
 
     const cleanupMinAgeInput = doc.getElementById('catalogCleanupMinAgeDays');

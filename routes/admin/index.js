@@ -14,6 +14,7 @@
  * - duplicates.js: Duplicate scanning and merging
  * - audit.js: Aggregate list audit and manual album reconciliation
  * - images.js: Image refetch service
+ * - availability.js: Streaming-platform availability resolution job
  * - reidentify.js: MusicBrainz album re-identification
  * - catalog-cleanup.js: orphan album preview and cleanup
  */
@@ -28,6 +29,7 @@ const registerAlbumSummaryRoutes = require('./album-summaries');
 const registerDuplicateRoutes = require('./duplicates');
 const registerAuditRoutes = require('./audit');
 const registerImageRoutes = require('./images');
+const registerAvailabilityRoutes = require('./availability');
 const registerReidentifyRoutes = require('./reidentify');
 const registerBootstrapRoutes = require('./bootstrap');
 const registerCatalogCleanupRoutes = require('./catalog-cleanup');
@@ -41,6 +43,7 @@ module.exports = (app, deps) => {
   registerDuplicateRoutes(app, deps);
   registerAuditRoutes(app, deps);
   registerImageRoutes(app, deps);
+  registerAvailabilityRoutes(app, deps);
   registerReidentifyRoutes(app, deps);
   registerCatalogCleanupRoutes(app, deps);
 

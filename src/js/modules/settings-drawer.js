@@ -25,6 +25,7 @@ import { createSettingsTelegramActions } from './settings-drawer/handlers/telegr
 import { createSettingsAdminActions } from './settings-drawer/handlers/admin-actions.js';
 import { createSettingsAlbumSummaryActions } from './settings-drawer/handlers/album-summary-actions.js';
 import { createSettingsAlbumImageActions } from './settings-drawer/handlers/album-image-actions.js';
+import { createSettingsAvailabilityActions } from './settings-drawer/handlers/availability-actions.js';
 import { createSettingsAdminUserActions } from './settings-drawer/handlers/admin-user-actions.js';
 import { createSettingsAggregateActions } from './settings-drawer/handlers/aggregate-actions.js';
 import { createSettingsContributorManagerActions } from './settings-drawer/handlers/contributor-manager-actions.js';
@@ -232,6 +233,19 @@ export function createSettingsDrawer(deps = {}) {
     categoryData,
   });
 
+  const {
+    loadAvailabilityStats,
+    handleResolveAvailability,
+    handleReresolveAvailability,
+    handleStopAvailability,
+    applyAvailabilityStatsPayload,
+  } = createSettingsAvailabilityActions({
+    apiCall,
+    showToast,
+    showConfirmation,
+    categoryData,
+  });
+
   const { handleShowContributorManager } =
     createSettingsContributorManagerActions({
       apiCall,
@@ -281,8 +295,10 @@ export function createSettingsDrawer(deps = {}) {
       albumSummaryPollInterval = value;
     },
     loadAlbumImageStats,
+    loadAvailabilityStats,
     applySummaryStatsPayload,
     applyImageStatsPayload,
+    applyAvailabilityStatsPayload,
     categoryData,
     handleAdminEventAction,
     handleConfigureTelegram,
@@ -308,6 +324,9 @@ export function createSettingsDrawer(deps = {}) {
     handleStopAlbumSummaries,
     handleRefetchAlbumImages,
     handleStopRefetchImages,
+    handleResolveAvailability,
+    handleReresolveAvailability,
+    handleStopAvailability,
     handleScanDuplicates,
     handleAuditManualAlbums,
   });

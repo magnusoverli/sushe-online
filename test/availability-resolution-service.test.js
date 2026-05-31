@@ -2,13 +2,14 @@ const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
 const {
   createAvailabilityResolutionService,
-  mergeLinks,
+  mergeCandidates,
+  buildCandidates,
 } = require('../services/availability-resolution-service');
 const { createMockLogger } = require('./helpers');
 
 const album = { albumId: 'alb-1', artist: 'Metallica', album: '72 Seasons' };
 
-function build({ seed, odesli, mb }) {
+function build({ seed, odesli, mb, directSources }) {
   const upsert = mock.fn(async () => {});
   const service = createAvailabilityResolutionService({
     logger: createMockLogger(),
@@ -21,34 +22,75 @@ function build({ seed, odesli, mb }) {
       },
     },
     mbUrlRelsSource: {
-      getDirectLinks: async () => mb || { seedUrl: null, links: [] },
+      getDirectLinks: async () => mb || { seedUrl: null, upc: null, links: [] },
     },
+    directSources,
   });
   return { service, upsert };
 }
 
 describe('availability-resolution-service', () => {
-  it('mergeLinks unions sources and keeps higher confidence; applies floor', () => {
-    const rows = mergeLinks(
-      [
-        { platform: 'appleMusic', url: 'https://am/1' },
-        { platform: 'spotify', url: 'https://sp/1' },
-      ],
-      [{ service: 'apple_music', url: 'https://mb-am/1' }],
-      'existing',
-      0.95
+  it('merge unions sources and keeps higher confidence; applies floor', () => {
+    const rows = mergeCandidates(
+      buildCandidates({
+        odesliLinks: [
+          { platform: 'appleMusic', url: 'https://am/1' },
+          { platform: 'spotify', url: 'https://sp/1' },
+        ],
+        seedKind: 'existing',
+        seedConfidence: 0.95,
+        mbLinks: [{ service: 'apple_music', url: 'https://mb-am/1' }],
+        directContributions: [],
+      })
     );
     const apple = rows.find((r) => r.service === 'apple_music');
     assert.strictEqual(apple.url, 'https://am/1'); // 0.95 odesli beats 0.9 mb
     assert.ok(rows.find((r) => r.service === 'spotify'));
 
-    const floored = mergeLinks(
-      [{ platform: 'spotify', url: 'https://sp/1' }],
-      [],
-      'itunes',
-      0.3 // below floor
+    const floored = mergeCandidates(
+      buildCandidates({
+        odesliLinks: [{ platform: 'spotify', url: 'https://sp/1' }],
+        seedKind: 'itunes',
+        seedConfidence: 0.3, // below floor
+        mbLinks: [],
+        directContributions: [],
+      })
     );
     assert.strictEqual(floored.length, 0);
+  });
+
+  it('folds UPC-exact direct sources into the merged rows', () => {
+    const rows = mergeCandidates(
+      buildCandidates({
+        odesliLinks: [{ platform: 'spotify', url: 'https://sp/1' }],
+        seedKind: 'itunes',
+        seedConfidence: 0.6,
+        mbLinks: [],
+        directContributions: [
+          {
+            name: 'deezer',
+            links: [
+              { service: 'deezer', url: 'https://dz/1', confidence: 0.97 },
+            ],
+          },
+          {
+            name: 'itunes',
+            links: [
+              {
+                service: 'apple_music',
+                url: 'https://music.apple.com/us/album/1',
+                confidence: 0.97,
+              },
+            ],
+          },
+        ],
+      })
+    );
+    const deezer = rows.find((r) => r.service === 'deezer');
+    assert.strictEqual(deezer.url, 'https://dz/1');
+    assert.strictEqual(deezer.strategy, 'availability:deezer');
+    const apple = rows.find((r) => r.service === 'apple_music');
+    assert.strictEqual(apple.strategy, 'availability:itunes');
   });
 
   it('skips when there is no seed and no MusicBrainz links', async () => {
@@ -111,6 +153,33 @@ describe('availability-resolution-service', () => {
       reason: 'odesli-error',
       transient: true,
     });
+  });
+
+  it('resolves via a UPC-exact direct source when there is no seed', async () => {
+    const { service, upsert } = build({
+      seed: null,
+      odesli: [],
+      mb: { seedUrl: null, upc: '886443927087', links: [] },
+      directSources: [
+        {
+          name: 'deezer',
+          getLinks: async ({ upc }) => ({
+            links: upc
+              ? [{ service: 'deezer', url: 'https://dz/1', confidence: 0.97 }]
+              : [],
+          }),
+        },
+      ],
+    });
+
+    const result = await service.resolveAvailability(album);
+    assert.strictEqual(result.action, 'resolved');
+    assert.deepStrictEqual(result.services, ['deezer']);
+    assert.strictEqual(upsert.mock.calls.length, 1);
+    assert.strictEqual(
+      upsert.mock.calls[0].arguments[0].strategy,
+      'availability:deezer'
+    );
   });
 
   it('does not persist in dry-run mode', async () => {

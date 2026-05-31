@@ -53,6 +53,8 @@ module.exports = (app, deps) => {
         app.locals.telegramNotifier || createTelegramNotifier({ db, logger });
       const albumSummaryService = app.locals.albumSummaryService;
       const imageRefetchService = app.locals.imageRefetchService;
+      const availabilityResolutionService =
+        app.locals.availabilityResolutionService;
       const catalogCleanupService = app.locals.catalogCleanupService;
 
       const [
@@ -71,13 +73,21 @@ module.exports = (app, deps) => {
         aggregateListService.getYearsWithMainLists(),
       ]);
 
-      const [statusByYear, recByYear, summaryStats, imageStats] =
-        await Promise.all([
-          adminBootstrapService.getAggregateStatuses(years),
-          adminBootstrapService.getRecommendationStatuses(years, req.user._id),
-          albumSummaryService ? albumSummaryService.getStats() : null,
-          imageRefetchService ? imageRefetchService.getStats() : null,
-        ]);
+      const [
+        statusByYear,
+        recByYear,
+        summaryStats,
+        imageStats,
+        availabilityStatsData,
+      ] = await Promise.all([
+        adminBootstrapService.getAggregateStatuses(years),
+        adminBootstrapService.getRecommendationStatuses(years, req.user._id),
+        albumSummaryService ? albumSummaryService.getStats() : null,
+        imageRefetchService ? imageRefetchService.getStats() : null,
+        availabilityResolutionService
+          ? availabilityResolutionService.getStats()
+          : null,
+      ]);
 
       let catalogCleanupPreview = null;
       if (catalogCleanupService) {
@@ -106,6 +116,10 @@ module.exports = (app, deps) => {
 
       const imageIsRunning = imageRefetchService
         ? imageRefetchService.isJobRunning()
+        : false;
+
+      const availabilityIsRunning = availabilityResolutionService
+        ? availabilityResolutionService.isJobRunning()
         : false;
 
       res.json({
@@ -153,6 +167,14 @@ module.exports = (app, deps) => {
           progress:
             imageRefetchService && imageIsRunning
               ? imageRefetchService.getProgress()
+              : null,
+        },
+        availabilityStats: {
+          stats: availabilityStatsData || null,
+          isRunning: availabilityIsRunning,
+          progress:
+            availabilityResolutionService && availabilityIsRunning
+              ? availabilityResolutionService.getProgress()
               : null,
         },
         catalogCleanupPreview,

@@ -29,23 +29,10 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 const logger = require('../utils/logger');
-const { MusicBrainzQueue, createMbFetch } = require('../utils/request-queue');
 const { ODESLI_RATE_LIMIT_MS } = require('../services/availability/platforms');
 const {
-  createExternalIdentityService,
-} = require('../services/external-identity-service');
-const {
-  createOdesliClient,
-} = require('../services/availability/odesli-client');
-const {
-  createMbUrlRelsSource,
-} = require('../services/availability/mb-url-rels-source');
-const {
-  createSeedProviders,
-} = require('../services/availability/seed-providers');
-const {
-  createAvailabilityResolutionService,
-} = require('../services/availability-resolution-service');
+  buildAvailabilityResolution,
+} = require('../services/availability/build-resolution');
 
 const MAX_RETRY_ROUNDS = 5;
 const RETRY_PAUSE_MS = 8000;
@@ -76,20 +63,8 @@ const PACE_MS = parsePace();
 
 function buildResolution(pool) {
   const db = { raw: (sql, params) => pool.query(sql, params) };
-  const fetchFn = fetch;
-  const mbFetch = createMbFetch(new MusicBrainzQueue({ fetch: fetchFn }));
-  const externalIdentityService = createExternalIdentityService({ db, logger });
-  return createAvailabilityResolutionService({
-    logger,
-    externalIdentityService,
-    odesliClient: createOdesliClient({ fetch: fetchFn, logger }),
-    mbUrlRelsSource: createMbUrlRelsSource({ mbFetch, logger }),
-    seedProviders: createSeedProviders({
-      fetch: fetchFn,
-      logger,
-      externalIdentityService,
-    }),
-  });
+  const { resolution } = buildAvailabilityResolution({ db, fetch, logger });
+  return resolution;
 }
 
 async function resolveOne(resolution, row, apply) {
