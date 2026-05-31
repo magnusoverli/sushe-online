@@ -190,4 +190,5 @@ code_groups.md
 debloat_plan.md
 .claude/settings.local.json
 .claude/agent-memory/
+.claude/*.lock
 DESIGN.md
