@@ -48,12 +48,6 @@ async function fetchAlbumAvailability(db, albumId) {
   return result.rows;
 }
 
-/**
- * Availability rows for many albums at once (caller groups by album_id).
- * @param {import('../db/types').DbFacade} db
- * @param {string[]} albumIds
- * @returns {Promise<Array<Object>>}
- */
 async function fetchAlbumAvailabilityBulk(db, albumIds) {
   if (!Array.isArray(albumIds) || albumIds.length === 0) return [];
 
