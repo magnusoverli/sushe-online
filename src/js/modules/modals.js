@@ -119,7 +119,6 @@ export function showConfirmation(
     confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
   }
 
-  // If onConfirm is provided, use callback style
   if (onConfirm) {
     setupConfirmationModal({
       modal,
@@ -133,7 +132,6 @@ export function showConfirmation(
     return;
   }
 
-  // Otherwise return a promise for async/await style
   return new Promise((resolve) => {
     setupConfirmationModal({
       modal,
@@ -147,9 +145,6 @@ export function showConfirmation(
   });
 }
 
-/**
- * Hide the confirmation modal
- */
 export function hideConfirmation() {
   const modal = document.getElementById('confirmationModal');
   modal.classList.add('hidden');
@@ -246,9 +241,6 @@ export function showReasoningModal(
   });
 }
 
-/**
- * Hide the reasoning modal
- */
 export function hideReasoningModal() {
   const modal = document.getElementById('recommendReasoningModal');
   if (modal) {
