@@ -1,5 +1,19 @@
 [
   {
+    "date": "2026-06-02",
+    "category": "feature",
+    "description": "Better recommendation notifications via Telegram",
+    "hash": "0783f5af74c76512a9fa28794bf26a6fe32bf195",
+    "commitMessage": "Improve recommendation Telegram notifications"
+  },
+  {
+    "date": "2026-05-31",
+    "category": "feature",
+    "description": "Added Qobuz streaming availability checking",
+    "hash": "cfef4108ed65b4aacb77c4aa8e0bd24d03a57651",
+    "commitMessage": "Add direct Qobuz availability lookup"
+  },
+  {
     "date": "2026-05-31",
     "category": "feature",
     "description": "Added streaming platform badges to mobile album cards",
