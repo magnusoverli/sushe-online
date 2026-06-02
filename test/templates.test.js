@@ -5,6 +5,9 @@
 
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
+const {
+  createSpotifyComponents,
+} = require('../templates/spotify-components.js');
 
 describe('templates utilities', () => {
   let templates;
@@ -205,6 +208,21 @@ describe('templates utilities', () => {
     it('should handle paths with dots', () => {
       const result = templates.asset('/styles/app.min.css');
       assert.strictEqual(result, '/styles/app.min.css?v=test-version-123');
+    });
+  });
+
+  describe('spotify components', () => {
+    it('should limit recommendation reasoning to Telegram caption length', () => {
+      const { modalPortalComponent } = createSpotifyComponents({
+        modalShell: ({ id, title, body, footer }) =>
+          `<div id="${id}"><h3>${title}</h3>${body}${footer}</div>`,
+        menuItem: () => '',
+      });
+
+      const html = modalPortalComponent();
+
+      assert.match(html, /id="reasoningText"[^>]*maxlength="300"/);
+      assert.match(html, /id="reasoningCharCount">0<\/span> \/ 300/);
     });
   });
 

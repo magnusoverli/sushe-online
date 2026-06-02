@@ -653,13 +653,13 @@ function createSpotifyComponents(deps) {
           <label class="block text-gray-400 text-sm font-medium mb-2" for="reasoningText">
             Your reasoning <span class="text-red-500">*</span>
           </label>
-          <textarea id="reasoningText" rows="4" maxlength="500"
+          <textarea id="reasoningText" rows="4" maxlength="300"
             class="form-input-modal rounded-lg resize-none"
             placeholder="Tell others why they should listen to this album..."
           ></textarea>
           <div class="flex justify-between mt-2">
             <p id="reasoningError" class="text-red-400 text-sm hidden">Reasoning is required</p>
-            <p class="text-gray-500 text-xs ml-auto"><span id="reasoningCharCount">0</span> / 500</p>
+            <p class="text-gray-500 text-xs ml-auto"><span id="reasoningCharCount">0</span> / 300</p>
           </div>
         </div>
     `,

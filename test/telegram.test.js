@@ -113,7 +113,7 @@ const createMockPool = (config = null) => {
   return { query: impl, raw: impl };
 };
 
-const createRecommendationMockPool = () => {
+const createRecommendationMockPool = ({ availabilityRows = [] } = {}) => {
   let storedConfig = null;
   const threadsByYear = new Map();
 
@@ -175,6 +175,10 @@ const createRecommendationMockPool = () => {
           created_at: new Date(),
         }));
       return { rows };
+    }
+
+    if (sql.includes('FROM album_service_mappings')) {
+      return { rows: availabilityRows };
     }
 
     if (sql.includes('telegram_admins')) {
@@ -594,7 +598,15 @@ test('disconnect should remove config and webhook', async () => {
 test('sendRecommendationNotification should create thread and send message', async () => {
   const logger = createMockLogger();
   const encryptionKey = 'test-key-that-is-at-least-32-chars!';
-  const pool = createRecommendationMockPool();
+  const pool = createRecommendationMockPool({
+    availabilityRows: [
+      {
+        service: 'spotify',
+        external_url: 'https://open.spotify.com/album/test-album',
+      },
+      { service: 'itunes', external_url: null },
+    ],
+  });
   let createForumTopicCalls = 0;
   let sendMessageBody = null;
 
@@ -642,6 +654,7 @@ test('sendRecommendationNotification should create thread and send message', asy
   const result = await notifier.sendRecommendationNotification({
     artist: 'Test Artist',
     album: 'Test Album',
+    album_id: 'album-1',
     year: 2025,
     release_date: '2025-02-03',
     recommended_by: 'alice',
@@ -653,6 +666,17 @@ test('sendRecommendationNotification should create thread and send message', asy
   assert.ok(sendMessageBody);
   assert.strictEqual(sendMessageBody.message_thread_id, 4242);
   assert.ok(sendMessageBody.text.includes('Test Album'));
+  assert.ok(
+    sendMessageBody.text.includes(
+      'https://rateyourmusic.com/search?searchterm=Test+Album+Test+Artist&searchtype=a'
+    )
+  );
+  assert.ok(
+    sendMessageBody.text.includes(
+      '🎧 Available on: 【Spotify】 · 【Apple Music】'
+    )
+  );
+  assert.ok(!sendMessageBody.text.includes('open.spotify.com/album'));
 });
 
 test('getRecommendationThreads should return year-sorted threads', async () => {

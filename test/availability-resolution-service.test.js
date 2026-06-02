@@ -122,7 +122,7 @@ describe('availability-resolution-service', () => {
     const first = upsert.mock.calls[0].arguments[0];
     assert.strictEqual(first.albumId, 'alb-1');
     assert.ok(first.strategy.startsWith('availability:existing'));
-    assert.strictEqual(first.externalUrl, undefined);
+    assert.ok(['https://sp/1', 'https://td/1'].includes(first.externalUrl));
   });
 
   it('falls through to MusicBrainz links when Odesli errors', async () => {
@@ -219,6 +219,7 @@ describe('availability-resolution-service', () => {
       externalAlbumId: 'sp1',
       externalArtist: 'Metallica',
       externalAlbum: '72 Seasons',
+      externalUrl: 'https://open.spotify.com/album/sp1',
       confidence: 0.97,
       strategy: 'availability:spotify',
     });

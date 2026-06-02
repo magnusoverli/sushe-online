@@ -8,6 +8,16 @@ function createRecommendationsNotifier(
   configManager,
   log
 ) {
+  const { AVAILABILITY_SERVICES } = require('../availability/platforms');
+
+  const PLATFORM_LABELS = {
+    spotify: 'Spotify',
+    itunes: 'Apple Music',
+    qobuz: 'Qobuz',
+    tidal: 'Tidal',
+    bandcamp: 'Bandcamp',
+  };
+
   async function getThreads() {
     if (!db) return [];
 
@@ -67,6 +77,23 @@ function createRecommendationsNotifier(
     }
   }
 
+  async function getAlbumAvailability(albumId) {
+    if (!db || !albumId) return [];
+
+    const result = await db.raw(
+      `SELECT service
+         FROM album_service_mappings
+        WHERE album_id = $1
+          AND strategy LIKE 'availability:%'
+          AND service = ANY($2)
+        ORDER BY array_position($2::text[], service), service`,
+      [albumId, AVAILABILITY_SERVICES],
+      { name: 'telegram-recommendation-availability', retryable: true }
+    );
+
+    return result.rows;
+  }
+
   async function sendNotification(rec, coverImage = null) {
     try {
       const config = await configManager.getConfig(true);
@@ -90,7 +117,8 @@ function createRecommendationsNotifier(
         return { success: false, error: 'Failed to get/create thread' };
       }
 
-      const message = formatRecommendationMessage(rec);
+      const availability = await getAlbumAvailability(rec.album_id);
+      const message = formatRecommendationMessage(rec, availability);
 
       if (coverImage?.buffer) {
         try {
@@ -132,7 +160,7 @@ function createRecommendationsNotifier(
     }
   }
 
-  function formatRecommendationMessage(rec) {
+  function formatRecommendationMessage(rec, availability = []) {
     let dateDisplay = rec.year;
     if (rec.release_date) {
       const date = new Date(rec.release_date);
@@ -144,8 +172,11 @@ function createRecommendationsNotifier(
       }
     }
 
-    const rymSearchTerm = encodeURIComponent(`${rec.artist} ${rec.album}`);
-    const rymUrl = `https://rateyourmusic.com/search?searchterm=${rymSearchTerm}&searchtype=l`;
+    const rymSearchParams = new URLSearchParams({
+      searchterm: `${rec.album} ${rec.artist}`,
+      searchtype: 'a',
+    });
+    const rymUrl = `https://rateyourmusic.com/search?${rymSearchParams.toString()}`;
 
     const lines = [
       '🎉 *New Recommendation* 🎉',
@@ -169,7 +200,28 @@ function createRecommendationsNotifier(
 
     lines.push(`👤 Recommended by ${escapeMarkdown(rec.recommended_by)}`);
 
+    const availabilityLine = formatAvailabilityLine(availability);
+    if (availabilityLine) {
+      lines.push('');
+      lines.push(availabilityLine);
+    }
+
     return lines.join('\n');
+  }
+
+  function formatAvailabilityLine(availability) {
+    if (!Array.isArray(availability) || availability.length === 0) return '';
+
+    const badges = availability
+      .map((row) => {
+        const label = PLATFORM_LABELS[row.service];
+        if (!label) return null;
+        return `【${escapeMarkdown(label)}】`;
+      })
+      .filter(Boolean);
+
+    if (badges.length === 0) return '';
+    return `🎧 Available on: ${badges.join(' · ')}`;
   }
 
   function escapeMarkdown(text) {

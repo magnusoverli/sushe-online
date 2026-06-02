@@ -219,12 +219,20 @@ export function showReasoningModal(
     // Track character count
     modalController.addListener(textareaEl, 'input', () => {
       charCountEl.textContent = textareaEl.value.length.toString();
+      errorEl.classList.add('hidden');
     });
 
     // Handle submit - resolve before close so onClose's resolve(null) is a no-op
     modalController.addListener(submitBtn, 'click', () => {
       const reasoning = textareaEl.value.trim();
       if (!reasoning) {
+        errorEl.textContent = 'Reasoning is required';
+        errorEl.classList.remove('hidden');
+        textareaEl.focus();
+        return;
+      }
+      if (reasoning.length > textareaEl.maxLength) {
+        errorEl.textContent = `Reasoning must be ${textareaEl.maxLength} characters or less`;
         errorEl.classList.remove('hidden');
         textareaEl.focus();
         return;

@@ -226,6 +226,7 @@ function createAvailabilityResolutionService(deps = {}) {
           externalAlbumId: row.externalAlbumId,
           externalArtist: row.externalArtist,
           externalAlbum: row.externalAlbum,
+          externalUrl: row.url,
           confidence: row.confidence,
           strategy: row.strategy,
         });
