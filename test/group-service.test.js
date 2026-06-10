@@ -316,6 +316,28 @@ describe('group-service', () => {
     assert.strictEqual(lockChecks.length, 1);
   });
 
+  it('deleteGroup refuses to delete the auto-managed Uncategorized collection', async () => {
+    const logger = createMockLogger();
+    const { pool } = createTransactionPool(async (sql) => {
+      if (sql.includes('FROM list_groups')) {
+        return { rows: [{ id: 5, name: 'Uncategorized', year: null }] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+
+    const service = createGroupService({ db: pool, logger });
+
+    await assert.rejects(
+      () => service.deleteGroup('user1', 'uncat', true),
+      (err) => {
+        assert.ok(err instanceof TransactionAbort);
+        assert.strictEqual(err.statusCode, 400);
+        assert.match(err.body.error, /managed automatically/i);
+        return true;
+      }
+    );
+  });
+
   it('deleteGroup (force) blocks with a clear message on a name collision', async () => {
     const logger = createMockLogger();
     const { pool } = createTransactionPool(async (sql) => {

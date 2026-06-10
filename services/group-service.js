@@ -250,6 +250,17 @@ function createGroupService(deps = {}) {
         });
       }
 
+      // The "Uncategorized" collection is created on demand (when a non-empty
+      // collection is deleted) and removed automatically once its last list is
+      // gone, so it must not be deleted manually — doing so would move its
+      // lists into itself and then delete the group out from under them.
+      if (group.name === 'Uncategorized') {
+        throw new TransactionAbort(400, {
+          error:
+            'The "Uncategorized" collection is managed automatically and cannot be deleted.',
+        });
+      }
+
       // Check if any main lists in the group are in locked years
       const mainListsWithYears = await client.query(
         `SELECT year FROM lists WHERE group_id = $1 AND year IS NOT NULL AND is_main = TRUE`,

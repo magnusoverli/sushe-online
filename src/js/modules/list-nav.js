@@ -266,16 +266,17 @@ export function createListNav(deps = {}) {
     isExpanded,
     isYearGroup,
     isMobile = false,
-    groupId = ''
+    groupId = '',
+    showMenu = false
   ) {
     const chevronClass = isExpanded ? 'fa-chevron-down' : 'fa-chevron-right';
     const iconClass = isYearGroup ? 'fa-calendar-alt' : 'fa-folder';
 
     // For mobile: show menu button (menu accessed via click)
     // For desktop: no right-side element (menu accessed via right-click)
-    // Don't show menu button for virtual "Uncategorized" group (orphaned lists)
+    // The menu is hidden for auto-managed sections (see hasGroupMenu).
     const rightSide =
-      isMobile && groupId && groupId !== 'orphaned'
+      isMobile && showMenu
         ? `<button data-category-menu-btn="${groupId}" class="p-1 text-gray-400 active:text-gray-200 no-drag shrink-0 category-menu-btn" aria-label="Category options">
           <i class="fas fa-ellipsis-v text-xs"></i>
         </button>`
@@ -506,6 +507,12 @@ export function createListNav(deps = {}) {
     const stateKey = _id || name; // Use ID if available, fall back to name
     const isExpanded = expandState[stateKey] !== false; // Default to expanded
 
+    // The virtual "orphaned" section and the auto-managed "Uncategorized"
+    // collection have no user actions: both are created/removed automatically,
+    // so renaming or deleting them via the menu is meaningless. Hide the menu.
+    const isUncategorized = !isYearGroup && name === 'Uncategorized';
+    const hasGroupMenu = Boolean(_id) && _id !== 'orphaned' && !isUncategorized;
+
     const section = document.createElement('div');
     section.className = `group-section ${isYearGroup ? 'year-group' : 'collection-group'}`;
     section.setAttribute('data-group-section', stateKey);
@@ -522,7 +529,8 @@ export function createListNav(deps = {}) {
       isExpanded,
       isYearGroup,
       isMobile,
-      _id || ''
+      _id || '',
+      hasGroupMenu
     );
 
     // Click handler for expand/collapse (not on the menu button)
@@ -535,9 +543,8 @@ export function createListNav(deps = {}) {
       toggleGroupSection(stateKey, container);
     };
 
-    // Desktop: right-click context menu on header
-    // Don't show context menu for virtual "Uncategorized" group (orphaned lists)
-    if (!isMobile && _id && _id !== 'orphaned') {
+    // Desktop: right-click context menu on header (hidden for managed sections)
+    if (!isMobile && hasGroupMenu) {
       header.oncontextmenu = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -549,9 +556,8 @@ export function createListNav(deps = {}) {
 
     headerWrapper.appendChild(header);
 
-    // Mobile: attach click handler to menu button
-    // Don't show menu button for virtual "Uncategorized" group (orphaned lists)
-    if (isMobile && _id && _id !== 'orphaned') {
+    // Mobile: attach click handler to menu button (hidden for managed sections)
+    if (isMobile && hasGroupMenu) {
       // Use event delegation - attach handler after appending to section
       setTimeout(() => {
         const menuBtn = header.querySelector(
