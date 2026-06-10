@@ -9,6 +9,18 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+/**
+ * Build the cover-image URL for an album, or '' when there is no album id.
+ * Lets list payloads carry a lightweight URL instead of inlining BYTEA blobs.
+ */
+function coverImageUrl(albumId, coverImageUpdatedAt) {
+  if (!albumId) return '';
+  const version = coverImageUpdatedAt
+    ? `?v=${new Date(coverImageUpdatedAt).getTime()}`
+    : '';
+  return `/api/albums/${encodeURIComponent(albumId)}/cover${version}`;
+}
+
 function mapListRowToItem(row, recommendationMap = null) {
   const recommendation = recommendationMap?.get(row.album_id) || null;
 
@@ -27,7 +39,7 @@ function mapListRowToItem(row, recommendationMap = null) {
     comments: row.comments || '',
     comments_2: row.comments_2 || '',
     tracks: row.tracks || null,
-    cover_image: row.cover_image || '',
+    cover_image_url: coverImageUrl(row.album_id, row.cover_image_updated_at),
     cover_image_format: row.cover_image_format || '',
     cover_image_updated_at: row.cover_image_updated_at,
     summary: row.summary || '',

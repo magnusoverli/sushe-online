@@ -412,7 +412,12 @@ function metricsMiddleware() {
 
     res.on('finish', () => {
       const duration = Number(process.hrtime.bigint() - start) / 1e9; // Convert to seconds
-      const route = normalizeRoute(req.route?.path || req.path);
+      // Only label by a matched route pattern; collapse unmatched paths
+      // (scanners, typos, 404s) to a single label so prom-client time-series
+      // cardinality cannot grow unbounded from arbitrary request paths.
+      const route = req.route?.path
+        ? normalizeRoute(req.route.path)
+        : 'unmatched';
       const method = req.method;
       const statusCode = res.statusCode.toString();
 

@@ -17,7 +17,7 @@ describe('image-processing', () => {
   describe('constants', () => {
     it('should have expected values', () => {
       assert.strictEqual(TARGET_SIZE, 512);
-      assert.strictEqual(JPEG_QUALITY, 100);
+      assert.strictEqual(JPEG_QUALITY, 85);
       assert.strictEqual(ITUNES_IMAGE_SIZE, 600);
     });
   });

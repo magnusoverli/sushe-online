@@ -9,7 +9,7 @@
  *
  * All images are processed to a consistent format:
  * - Resized to 512x512 (maintaining aspect ratio, no upscaling)
- * - Converted to JPEG at 100% quality
+ * - Converted to JPEG at 85% quality
  */
 
 const sharp = require('sharp');
@@ -17,8 +17,12 @@ const sharp = require('sharp');
 /** Target size in pixels for processed images */
 const TARGET_SIZE = 512;
 
-/** JPEG quality for processed images (0-100) */
-const JPEG_QUALITY = 100;
+/**
+ * JPEG quality for processed images (0-100).
+ * 85 is visually indistinguishable from 100 at the 512px display size while
+ * producing markedly smaller files; raising it disables most JPEG compression.
+ */
+const JPEG_QUALITY = 85;
 
 /** Maximum decoded bytes accepted for manual cover uploads (5 MB). */
 const MAX_UPLOAD_IMAGE_BYTES = 5 * 1024 * 1024;

@@ -51,7 +51,7 @@ test('mapListRowToItem maps row fields and recommendation metadata', () => {
     comments: 'Great',
     comments_2: 'Second',
     tracks: ['Track A', 'Track B'],
-    cover_image: 'base64-image',
+    cover_image_url: `/api/albums/album-1/cover?v=${new Date('2026-05-11T10:20:34.794Z').getTime()}`,
     cover_image_format: 'jpeg',
     cover_image_updated_at: '2026-05-11T10:20:34.794Z',
     summary: 'Summary',
@@ -60,6 +60,7 @@ test('mapListRowToItem maps row fields and recommendation metadata', () => {
     recommended_by: 'alice',
     recommended_at: '2025-01-01',
   });
+  assert.strictEqual('cover_image' in result, false);
 });
 
 test('mapAlbumDataItemToResponse maps non-export response with cover image URL', () => {

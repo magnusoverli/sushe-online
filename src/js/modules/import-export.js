@@ -8,7 +8,9 @@
  */
 
 import { showToast, getAlbumKey, apiCall } from './utils.js';
-import { jsPDF } from 'jspdf';
+// jsPDF is imported dynamically inside downloadListAsPDF so the ~127KB-gzipped
+// PDF library stays out of the eagerly-loaded bundle and is fetched only when
+// a user actually exports a list as PDF.
 
 /**
  * Trigger a browser file download from a Blob.
@@ -103,6 +105,9 @@ export async function downloadListAsPDF(listId) {
       // _unusedComments and _unusedPoints are intentionally unused (filtered out)
       return albumData;
     });
+
+    // Load the PDF library on demand (keeps it out of the boot bundle)
+    const { jsPDF } = await import('jspdf');
 
     // Create PDF document
     const doc = new jsPDF({

@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
+/* Fonts load via a non-blocking <link> in the page <head> (Cinzel only; the
+   Inter family was declared here but never applied anywhere). Loading them
+   from CSS @import forced a render-blocking request discovered only after this
+   stylesheet had already downloaded and parsed. */
 
 /* Main header soft edge - desktop only */
 @media (min-width: 1024px) {

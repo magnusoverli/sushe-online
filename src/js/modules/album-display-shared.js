@@ -153,7 +153,7 @@ export function createAlbumDisplayShared(deps = {}) {
       position:
         row.querySelector('[data-position-element="true"]') ||
         row.querySelector('.position-display'),
-      albumName: row.querySelector('.font-semibold.text-gray-100'),
+      albumName: row.querySelector('.album-name'),
       releaseDate: row.querySelector('.release-date-display'),
       artist: row.querySelector('.artist-cell span'),
       countryCell: row.querySelector('.country-cell'),

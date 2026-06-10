@@ -41,7 +41,6 @@ function createListFetchers(deps = {}) {
          a.genre_1,
          a.genre_2,
          a.tracks,
-          a.cover_image,
           a.cover_image_format,
           a.cover_image_updated_at,
           a.summary,
