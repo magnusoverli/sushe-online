@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-06-10",
+    "category": "perf",
+    "description": "Faster app loading and smoother performance throughout",
+    "hash": "6885f85576babeb8d8be352e99e0e505b256898b",
+    "commitMessage": "Implement top five performance fixes from latency audit\n\n- Mount compression() before express.static so JS/CSS ship gzipped\n- Break musicbrainz.js <-> app.js static import cycle (new api-client.js\n  and list-actions.js bridge); musicbrainz code is now a ~39KB chunk\n  loaded only on demand instead of a 1.16MB eagerly parsed chunk\n- Select cover_image BYTEA only for export in list queries; drop it from\n  the playlist item query entirely\n- Share one 11-field album fingerprint between renderer and update\n  detector so incremental list updates work; stop forcing full DOM\n  rebuilds on add/reconcile and cover-unchanged mobile edits\n- Route all MusicBrainz traffic through one shared priority queue\n  (utils/mb-queue-singleton.js) so background jobs no longer trigger\n  503s that stall interactive album search"
+  },
+  {
     "date": "2026-06-02",
     "category": "feature",
     "description": "Better recommendation notifications via Telegram",
