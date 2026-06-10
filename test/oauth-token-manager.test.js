@@ -214,6 +214,33 @@ test('refreshToken should keep old refresh_token if not returned', async () => {
   assert.strictEqual(result.token_type, 'Bearer');
 });
 
+test('refreshToken should default expires_in when missing from response', async () => {
+  const mockFetch = async () => ({
+    ok: true,
+    json: async () => ({ access_token: 'new_access_token' }),
+  });
+
+  const { refreshToken, tokenNeedsRefresh } = createTestManager(
+    {},
+    { fetch: mockFetch }
+  );
+
+  const result = await refreshToken({ refresh_token: 'old_refresh' });
+
+  assert.ok(result);
+  assert.strictEqual(result.expires_in, 3600);
+  // A NaN expires_at would make tokenNeedsRefresh treat the token as
+  // never expiring, so it must always be a finite timestamp
+  assert.ok(Number.isFinite(result.expires_at));
+  assert.strictEqual(
+    tokenNeedsRefresh(
+      { access_token: 'x', expires_at: result.expires_at },
+      3700 * 1000
+    ),
+    true
+  );
+});
+
 test('refreshToken should call fetch with correct parameters', async () => {
   let fetchCalledWith = null;
 

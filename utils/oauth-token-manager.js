@@ -95,11 +95,22 @@ function createOAuthTokenManager(config, deps = {}) {
 
       const newToken = await resp.json();
 
+      // A missing/invalid expires_in would make expires_at NaN, which
+      // tokenNeedsRefresh treats as "never expires" — fall back to 1 hour
+      let expiresInSec = Number(newToken.expires_in);
+      if (!Number.isFinite(expiresInSec) || expiresInSec <= 0) {
+        log.warn(
+          `${serviceName} token response missing valid expires_in, defaulting to 3600s`,
+          { expires_in: newToken.expires_in }
+        );
+        expiresInSec = 3600;
+      }
+
       const result = {
         access_token: newToken.access_token,
         token_type: newToken.token_type || 'Bearer',
-        expires_in: newToken.expires_in,
-        expires_at: Date.now() + newToken.expires_in * 1000,
+        expires_in: expiresInSec,
+        expires_at: Date.now() + expiresInSec * 1000,
         refresh_token: newToken.refresh_token || auth.refresh_token,
         scope: newToken.scope || auth.scope,
       };

@@ -24,20 +24,21 @@ if [ -z "$STAGED_FILES" ]; then
 fi
 
 # Check if we're in a Docker environment
+# Commands are bash arrays so multi-word invocations expand safely
 if [ -f "/.dockerenv" ] || [ -f "/run/.containerenv" ]; then
   # We're inside Docker, use npm directly
-  NPM_CMD="npm"
-  NODE_CMD="node"
+  NPM_CMD=(npm)
+  NODE_CMD=(node)
 else
   # We're on host, check if Docker Compose is available
   if command -v docker &> /dev/null && [ -f "docker-compose.local.yml" ]; then
     # Use Docker Compose
-    NPM_CMD="docker compose -f docker-compose.local.yml exec -T app npm"
-    NODE_CMD="docker compose -f docker-compose.local.yml exec -T app node"
+    NPM_CMD=(docker compose -f docker-compose.local.yml exec -T app npm)
+    NODE_CMD=(docker compose -f docker-compose.local.yml exec -T app node)
   elif command -v npm &> /dev/null; then
     # Use host npm
-    NPM_CMD="npm"
-    NODE_CMD="node"
+    NPM_CMD=(npm)
+    NODE_CMD=(node)
   else
     echo "⚠️  Warning: npm not found and Docker not available. Skipping checks."
     exit 0
@@ -56,16 +57,16 @@ fi
 echo "📝 Checking Prettier formatting on staged files..."
 # Use npx or npm exec with -- to properly pass flags to prettier
 if command -v npx &> /dev/null; then
-  PRETTIER_CMD="npx prettier"
+  PRETTIER_CMD=(npx prettier)
 else
-  PRETTIER_CMD="$NPM_CMD exec -- prettier"
+  PRETTIER_CMD=("${NPM_CMD[@]}" exec -- prettier)
 fi
 
-if ! echo "$SOURCE_FILES" | xargs -r $PRETTIER_CMD --check 2>&1; then
+if ! echo "$SOURCE_FILES" | xargs -r "${PRETTIER_CMD[@]}" --check 2>&1; then
   echo ""
   echo "❌ Prettier formatting issues found in staged files!"
   echo "💡 Fix with: npm run format"
-  echo "   Or auto-fix staged files: echo \"$SOURCE_FILES\" | xargs $PRETTIER_CMD --write && git add $SOURCE_FILES"
+  echo "   Or auto-fix staged files: echo \"$SOURCE_FILES\" | xargs ${PRETTIER_CMD[*]} --write && git add $SOURCE_FILES"
   exit 1
 fi
 
@@ -76,11 +77,11 @@ if [ -n "$JS_FILES" ]; then
   echo "🔎 Checking ESLint rules on staged files (--max-warnings 0)..."
   # eslint accepts multiple files, use xargs for efficiency
   # Use -- to properly pass flags to eslint
-  if ! echo "$JS_FILES" | xargs -r $NPM_CMD exec -- eslint --max-warnings 0 2>&1; then
+  if ! echo "$JS_FILES" | xargs -r "${NPM_CMD[@]}" exec -- eslint --max-warnings 0 2>&1; then
     echo ""
     echo "❌ ESLint issues found in staged files!"
     echo "💡 Fix with: npm run lint:fix"
-    echo "   Or fix specific files: echo \"$JS_FILES\" | xargs $NPM_CMD exec -- eslint --fix"
+    echo "   Or fix specific files: echo \"$JS_FILES\" | xargs ${NPM_CMD[*]} exec -- eslint --fix"
     exit 1
   fi
 fi

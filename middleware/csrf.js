@@ -70,8 +70,6 @@ function createCsrfProtection() {
         secretPreview: req.session?.csrfSecret?.substring(0, 8) + '...',
         userAgent: req.get('User-Agent'),
         sessionId: req.sessionID,
-        tokenFull: token, // Log full token for debugging
-        secretFull: req.session?.csrfSecret, // Log full secret for debugging
       });
       const err = new Error('Invalid CSRF token');
       err.code = 'EBADCSRFTOKEN';

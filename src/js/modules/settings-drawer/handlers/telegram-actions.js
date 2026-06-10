@@ -4,6 +4,8 @@
  * Owns Telegram setup wizard and notification toggles.
  */
 
+import { escapeHtmlAttr } from '../../html-utils.js';
+
 export function createSettingsTelegramActions(deps = {}) {
   const doc =
     deps.doc || (typeof document !== 'undefined' ? document : undefined);
@@ -261,7 +263,7 @@ export function createSettingsTelegramActions(deps = {}) {
         telegramModalState.botInfo = response.botInfo;
 
         feedbackEl.className = 'telegram-feedback success mt-2';
-        feedbackEl.innerHTML = `<i class="fas fa-check-circle"></i>Token validated! Bot: @${response.botInfo.username || 'unknown'}`;
+        feedbackEl.innerHTML = `<i class="fas fa-check-circle"></i>Token validated! Bot: @${escapeHtmlAttr(response.botInfo.username || 'unknown')}`;
         feedbackEl.classList.remove('hidden');
 
         enableTelegramStep(2);
@@ -274,7 +276,7 @@ export function createSettingsTelegramActions(deps = {}) {
       const errorMsg =
         error.data?.error || error.message || 'Failed to validate token';
       feedbackEl.className = 'telegram-feedback error mt-2';
-      feedbackEl.innerHTML = `<i class="fas fa-exclamation-circle"></i>${errorMsg}`;
+      feedbackEl.innerHTML = `<i class="fas fa-exclamation-circle"></i>${escapeHtmlAttr(errorMsg)}`;
       feedbackEl.classList.remove('hidden');
     } finally {
       validateBtn.disabled = false;
@@ -335,7 +337,7 @@ export function createSettingsTelegramActions(deps = {}) {
       const errorMsg =
         error.data?.error || error.message || 'Failed to detect groups';
       feedbackEl.className = 'telegram-feedback error mt-2';
-      feedbackEl.innerHTML = `<i class="fas fa-exclamation-circle"></i>${errorMsg}`;
+      feedbackEl.innerHTML = `<i class="fas fa-exclamation-circle"></i>${escapeHtmlAttr(errorMsg)}`;
       feedbackEl.classList.remove('hidden');
     } finally {
       detectBtn.disabled = false;
@@ -395,7 +397,7 @@ export function createSettingsTelegramActions(deps = {}) {
         updateTelegramModalStep(3);
 
         feedbackEl.className = 'telegram-feedback success mt-2';
-        feedbackEl.innerHTML = `<i class="fas fa-check-circle"></i>Group selected: ${response.title}. This is a forum group - select a topic below.`;
+        feedbackEl.innerHTML = `<i class="fas fa-check-circle"></i>Group selected: ${escapeHtmlAttr(response.title)}. This is a forum group - select a topic below.`;
         feedbackEl.classList.remove('hidden');
       } else {
         if (step3El) {
@@ -405,7 +407,7 @@ export function createSettingsTelegramActions(deps = {}) {
         updateTelegramModalStep(4);
 
         feedbackEl.className = 'telegram-feedback success mt-2';
-        feedbackEl.innerHTML = `<i class="fas fa-check-circle"></i>Group selected: ${response.title}. You can now test and save.`;
+        feedbackEl.innerHTML = `<i class="fas fa-check-circle"></i>Group selected: ${escapeHtmlAttr(response.title)}. You can now test and save.`;
         feedbackEl.classList.remove('hidden');
       }
     } catch (error) {
@@ -413,7 +415,7 @@ export function createSettingsTelegramActions(deps = {}) {
       const errorMsg =
         error.data?.error || error.message || 'Failed to get group info';
       feedbackEl.className = 'telegram-feedback error mt-2';
-      feedbackEl.innerHTML = `<i class="fas fa-exclamation-circle"></i>${errorMsg}`;
+      feedbackEl.innerHTML = `<i class="fas fa-exclamation-circle"></i>${escapeHtmlAttr(errorMsg)}`;
       feedbackEl.classList.remove('hidden');
     }
   }
@@ -481,7 +483,7 @@ export function createSettingsTelegramActions(deps = {}) {
       const errorMsg =
         error.data?.error || error.message || 'Failed to send test message';
       feedbackEl.className = 'telegram-feedback error mb-3';
-      feedbackEl.innerHTML = `<i class="fas fa-exclamation-circle"></i>${errorMsg}`;
+      feedbackEl.innerHTML = `<i class="fas fa-exclamation-circle"></i>${escapeHtmlAttr(errorMsg)}`;
       feedbackEl.classList.remove('hidden');
     } finally {
       testBtn.disabled = false;
@@ -553,7 +555,7 @@ export function createSettingsTelegramActions(deps = {}) {
       const errorMsg =
         error.data?.error || error.message || 'Failed to save configuration';
       feedbackEl.className = 'telegram-feedback error mb-3';
-      feedbackEl.innerHTML = `<i class="fas fa-exclamation-circle"></i>${errorMsg}`;
+      feedbackEl.innerHTML = `<i class="fas fa-exclamation-circle"></i>${escapeHtmlAttr(errorMsg)}`;
       feedbackEl.classList.remove('hidden');
       saveBtn.disabled = false;
       saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save & Enable';
