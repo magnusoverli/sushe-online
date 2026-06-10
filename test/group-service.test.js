@@ -315,4 +315,43 @@ describe('group-service', () => {
     );
     assert.strictEqual(lockChecks.length, 1);
   });
+
+  it('deleteGroup (force) blocks with a clear message on a name collision', async () => {
+    const logger = createMockLogger();
+    const { pool } = createTransactionPool(async (sql) => {
+      if (sql.includes('DELETE FROM list_groups')) return { rows: [] };
+      if (sql.includes('FROM list_groups')) {
+        return { rows: [{ id: 7, name: 'Collection', year: null }] };
+      }
+      if (sql.includes('year IS NOT NULL AND is_main = TRUE')) {
+        return { rows: [] };
+      }
+      if (sql.includes('COUNT(*) as count FROM lists')) {
+        return { rows: [{ count: '2' }] };
+      }
+      if (sql.includes('EXISTS')) {
+        // A list being moved shares a name with one already in Uncategorized.
+        return { rows: [{ name: 'Greatest Hits' }] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+
+    const service = createGroupService({
+      db: pool,
+      logger,
+      findOrCreateUncategorizedGroup: async () => 99,
+    });
+
+    await assert.rejects(
+      () => service.deleteGroup('user1', 'group1', true),
+      (err) => {
+        assert.ok(err instanceof TransactionAbort);
+        assert.strictEqual(err.statusCode, 409);
+        assert.strictEqual(err.body.nameConflict, true);
+        assert.match(err.body.error, /Greatest Hits/);
+        assert.match(err.body.error, /Rename it/i);
+        return true;
+      }
+    );
+  });
 });

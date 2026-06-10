@@ -310,9 +310,53 @@ function createGroupService(deps = {}) {
           userId
         );
 
+        // Block (don't silently rename) if a list being moved would collide
+        // by name with one already in Uncategorized — that would violate
+        // unique_user_group_name (user_id, name, group_id).
+        const nameConflict = await client.query(
+          `SELECT l.name
+             FROM lists l
+            WHERE l.group_id = $1
+              AND EXISTS (
+                SELECT 1 FROM lists u
+                 WHERE u.group_id = $2
+                   AND u.user_id = l.user_id
+                   AND u.name = l.name
+              )
+            ORDER BY l.name
+            LIMIT 1`,
+          [group.id, uncategorizedId]
+        );
+        if (nameConflict.rows.length > 0) {
+          const conflictName = nameConflict.rows[0].name;
+          throw new TransactionAbort(409, {
+            error: `A list named "${conflictName}" already exists in "Uncategorized". Rename it before deleting this collection.`,
+            nameConflict: true,
+            conflictName,
+          });
+        }
+
+        // Append the moved lists after any already in Uncategorized by
+        // reassigning sort_order. Keeping their original values would collide
+        // with the lists_group_sort_order_unique (group_id, sort_order) index.
         await client.query(
-          `UPDATE lists SET group_id = $1, is_main = FALSE, year = NULL, updated_at = NOW()
-           WHERE group_id = $2`,
+          `WITH target AS (
+             SELECT COALESCE(MAX(sort_order), -1) AS max_so
+             FROM lists WHERE group_id = $1
+           ),
+           moving AS (
+             SELECT id,
+                    ROW_NUMBER() OVER (ORDER BY sort_order NULLS LAST, id) AS rn
+             FROM lists WHERE group_id = $2
+           )
+           UPDATE lists l
+           SET group_id = $1,
+               is_main = FALSE,
+               year = NULL,
+               sort_order = target.max_so + moving.rn,
+               updated_at = NOW()
+           FROM moving, target
+           WHERE l.id = moving.id`,
           [uncategorizedId, group.id]
         );
       }
