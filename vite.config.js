@@ -22,9 +22,6 @@ export default defineConfig({
           if (id.includes('import-export')) {
             return 'import-export';
           }
-          if (id.includes('musicbrainz')) {
-            return 'album-editing';
-          }
           if (id.includes('sortablejs')) {
             return 'vendor-sortable';
           }

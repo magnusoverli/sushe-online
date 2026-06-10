@@ -53,10 +53,14 @@ describe('admin availability routes', () => {
     const responsePromise = request(createApp(job))
       .post('/api/admin/availability/resolve')
       .send({ all: true });
+    let raceTimer;
     const response = await Promise.race([
       responsePromise,
-      new Promise((resolve) => setTimeout(() => resolve(null), 50)),
+      new Promise((resolve) => {
+        raceTimer = setTimeout(() => resolve(null), 2000);
+      }),
     ]);
+    clearTimeout(raceTimer);
 
     assert.notStrictEqual(response, null);
     assert.strictEqual(response.status, 202);

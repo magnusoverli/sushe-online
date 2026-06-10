@@ -16,11 +16,14 @@
  * swap it for a different one — a wrong album_id yields differing keys and is
  * reported for review instead.
  *
- * Pure resolver: one MusicBrainz fetch per call, no internal rate limiting —
- * callers (the backfill script, the on-add background queue) handle pacing.
+ * Pure resolver: one MusicBrainz fetch per call. By default the request rides
+ * the shared process-wide MusicBrainz queue at low priority (which paces and
+ * aborts stalled requests); an injected fetch (tests, the backfill CLI)
+ * bypasses the queue and keeps the local hard timeout, with callers pacing.
  */
 
 const defaultLogger = require('../utils/logger');
+const { mbFetch } = require('../utils/mb-queue-singleton');
 const { SUSHE_USER_AGENT } = require('../utils/musicbrainz-helpers');
 const { externalMatchKey } = require('../utils/entity-matching');
 const { sanitizeForStorage } = require('../utils/normalization');
@@ -81,8 +84,11 @@ function joinArtistCredit(credit) {
  *   | {action: 'skip', reason: string}>}
  */
 async function resolveNativeAlbumName({ albumId, artist, album }, deps = {}) {
-  const fetchFn = deps.fetch || fetch;
   const logger = deps.logger || defaultLogger;
+  const doFetch = deps.fetch
+    ? (url, options) =>
+        fetchWithTimeout(deps.fetch, url, options, MB_FETCH_TIMEOUT_MS)
+    : (url, options) => mbFetch(url, options, 'low');
 
   if (!isMusicbrainzId(albumId)) {
     return { action: 'skip', reason: 'non-mb-id' };
@@ -91,17 +97,19 @@ async function resolveNativeAlbumName({ albumId, artist, album }, deps = {}) {
   let group;
   try {
     const url = `${MB_RELEASE_GROUP_URL}/${albumId}?inc=artist-credits&fmt=json`;
-    const resp = await fetchWithTimeout(
-      fetchFn,
-      url,
-      { headers: { 'User-Agent': SUSHE_USER_AGENT } },
-      MB_FETCH_TIMEOUT_MS
-    );
+    const resp = await doFetch(url, {
+      headers: { 'User-Agent': SUSHE_USER_AGENT },
+    });
     if (!resp.ok) {
       return { action: 'skip', reason: `mb-status-${resp.status}` };
     }
     group = await resp.json();
   } catch (err) {
+    // The shared queue rejects non-OK responses with err.status set; keep the
+    // status-specific skip reason the direct path produces.
+    if (err.status) {
+      return { action: 'skip', reason: `mb-status-${err.status}` };
+    }
     logger.warn('native-name: MusicBrainz lookup failed', {
       albumId,
       error: err.message,

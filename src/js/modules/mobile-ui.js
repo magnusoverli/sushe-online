@@ -1000,20 +1000,26 @@ export function createMobileUI(deps = {}) {
         return;
       }
 
-      const albumsToSave = getListData(currentList);
-      if (!albumsToSave) {
+      const existingAlbums = getListData(currentList);
+      if (!existingAlbums) {
         showToast('Error: List data not found', 'error');
         return;
       }
+      // New array reference so displayAlbums sees a fresh fingerprint
+      // and can apply the edit as an incremental field update
+      const albumsToSave = [...existingAlbums];
       albumsToSave[index] = updatedAlbum;
+      setListData(currentList, albumsToSave, false);
 
       editModal.remove();
       window.scrollTo(0, 0);
       document.body.scrollTop = 0;
 
-      // Force full rebuild to ensure cover image changes are displayed
-      // (incremental updates don't update cover images)
-      displayAlbums(albumsToSave, { forceFullRebuild: true });
+      // Cover changes need a full rebuild; incremental updates skip covers
+      displayAlbums(
+        albumsToSave,
+        pendingCoverData ? { forceFullRebuild: true } : {}
+      );
 
       try {
         let albumsForSave = albumsToSave;
@@ -1051,8 +1057,13 @@ export function createMobileUI(deps = {}) {
       } catch (error) {
         console.error('Error saving album:', error);
         showToast('Error saving changes', 'error');
-        albumsToSave[index] = album;
-        displayAlbums(albumsToSave);
+        const revertedAlbums = [...albumsToSave];
+        revertedAlbums[index] = album;
+        setListData(currentList, revertedAlbums, false);
+        displayAlbums(
+          revertedAlbums,
+          pendingCoverData ? { forceFullRebuild: true } : {}
+        );
       }
     };
 

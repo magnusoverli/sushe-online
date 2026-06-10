@@ -29,7 +29,9 @@ const NON_ASCII = /[^\x20-\x7E]/;
 function createNativeNameQueue(deps = {}) {
   const maxConcurrent = deps.maxConcurrent || 1; // serialize for MB rate limit
   const queue = new RequestQueue(maxConcurrent);
-  const fetchFn = deps.fetch || fetch;
+  // When no fetch is injected, the resolver rides the shared process-wide
+  // MusicBrainz queue at low priority.
+  const fetchFn = deps.fetch;
   const log = deps.logger || logger;
   const rateLimitMs =
     deps.rateLimitMs === undefined ? MB_RATE_LIMIT_MS : deps.rateLimitMs;

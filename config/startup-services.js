@@ -9,6 +9,7 @@
  */
 
 const logger = require('../utils/logger');
+const { mbFetch } = require('../utils/mb-queue-singleton');
 const { createPreferenceSyncService } = require('../services/preference-sync');
 const {
   createPlaycountSyncService,
@@ -38,7 +39,7 @@ function initializeQueues(db) {
   const {
     initializeAvailabilityFetchQueue,
   } = require('../services/availability-fetch-queue');
-  initializeAvailabilityFetchQueue(db);
+  initializeAvailabilityFetchQueue(db, { mbFetch });
 }
 
 /**

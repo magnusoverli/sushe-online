@@ -20,6 +20,17 @@ function addRetryParam(url) {
   }
 }
 
+/**
+ * Build the per-album mutable-field fingerprint used by both
+ * extractMutableFingerprints and detectUpdateType. Field order and
+ * separators must stay identical on both sides of the comparison.
+ * @param {Object} album - Album object
+ * @returns {string} Pipe-separated fingerprint string
+ */
+export function albumMutableFingerprint(album) {
+  return `${album._id || ''}|${album.artist || ''}|${album.album || ''}|${album.release_date || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}|${album.primary_track || ''}|${album.secondary_track || ''}`;
+}
+
 function renderCoverPlaceholder(parent) {
   parent.innerHTML = `<div class="album-cover-placeholder rounded-sm bg-gray-800 shadow-lg">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
@@ -232,10 +243,7 @@ export function createAlbumDisplayShared(deps = {}) {
   function extractMutableFingerprints(albums) {
     if (!albums || albums.length === 0) return null;
 
-    return albums.map(
-      (album) =>
-        `${album._id || ''}|${album.artist || ''}|${album.album || ''}|${album.release_date || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}|${album.primary_track || ''}|${album.secondary_track || ''}`
-    );
+    return albums.map((album) => albumMutableFingerprint(album));
   }
 
   function resetFingerprintCache() {

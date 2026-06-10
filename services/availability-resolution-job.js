@@ -29,7 +29,8 @@ function createAvailabilityResolutionJob(deps = {}) {
     deps.rateLimitMs === undefined ? ODESLI_RATE_LIMIT_MS : deps.rateLimitMs;
   const resolution =
     deps.resolution ||
-    buildAvailabilityResolution({ db, logger: log }).resolution;
+    buildAvailabilityResolution({ db, logger: log, mbFetch: deps.mbFetch })
+      .resolution;
 
   // Job state
   let isRunning = false;

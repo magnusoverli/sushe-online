@@ -3,12 +3,10 @@
 
 const logger = require('./logger');
 const { selectBestCandidate } = require('./entity-matching');
+const { mbFetch: sharedMbFetch } = require('./mb-queue-singleton');
 
 const MUSICBRAINZ_API = 'https://musicbrainz.org/ws/2';
 const USER_AGENT = 'SusheOnline/1.0 (https://sushe.online)';
-
-// Rate limiting: MusicBrainz allows 1 request per second
-const MIN_REQUEST_INTERVAL_MS = 1100; // Slightly over 1 second to be safe
 
 // Country code to full name mapping (ISO 3166-1 alpha-2)
 // Complete coverage of all ISO 3166-1 codes for MusicBrainz artist country resolution
@@ -301,33 +299,41 @@ const COUNTRY_CODE_MAP = {
  */
 function createMusicBrainz(deps = {}) {
   const log = deps.logger || logger;
-  const fetchFn = deps.fetch || global.fetch;
-
-  let lastRequestTime = 0;
+  // An injected fetch (tests) is used directly; otherwise requests ride the
+  // shared process-wide MusicBrainz queue at low priority so background
+  // country lookups never delay interactive searches. The queue is the only
+  // rate limiter.
+  const fetchFn =
+    deps.fetch || ((url, options) => sharedMbFetch(url, options, 'low'));
 
   /**
-   * Rate-limited fetch from MusicBrainz API
+   * Fetch JSON from the MusicBrainz API
    * @param {string} endpoint - API endpoint (e.g., 'artist/mbid')
    * @returns {Object} - JSON response
    */
   async function mbFetch(endpoint) {
-    // Enforce rate limiting
-    const now = Date.now();
-    const timeSinceLastRequest = now - lastRequestTime;
-    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL_MS) {
-      await new Promise((r) =>
-        setTimeout(r, MIN_REQUEST_INTERVAL_MS - timeSinceLastRequest)
-      );
-    }
-    lastRequestTime = Date.now();
-
     const url = `${MUSICBRAINZ_API}/${endpoint}`;
-    const response = await fetchFn(url, {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': USER_AGENT,
-      },
-    });
+    let response;
+    try {
+      response = await fetchFn(url, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': USER_AGENT,
+        },
+      });
+    } catch (err) {
+      // The shared queue rejects non-OK responses; map those rejections to
+      // the same results a direct non-OK response produces below.
+      if (err.status === 404) {
+        return null;
+      }
+      if (err.status) {
+        throw new Error(`MusicBrainz API error: ${err.status}`, {
+          cause: err,
+        });
+      }
+      throw err;
+    }
 
     if (!response.ok) {
       if (response.status === 404) {

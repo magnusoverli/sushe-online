@@ -143,6 +143,9 @@ app.use(createHelmetMiddleware());
 // CORS for browser extension support
 app.use(createCorsMiddleware());
 
+// Apply compression for requests above 1KB (before static so assets are compressed too)
+app.use(compression({ threshold: 1024 }));
+
 // Static files
 app.use(express.static('public', { maxAge: '1y', immutable: true }));
 
@@ -189,8 +192,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Apply compression for requests above 1KB
-app.use(compression({ threshold: 1024 }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 app.use(express.json({ limit: '50mb' }));
 

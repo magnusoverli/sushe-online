@@ -16,6 +16,7 @@ const {
   upscaleItunesArtworkUrl,
 } = require('../utils/image-processing');
 const { wait } = require('../utils/request-queue');
+const { mbFetch } = require('../utils/mb-queue-singleton');
 
 // Rate limiting for external APIs
 const RATE_LIMIT_MS = 200; // 200ms between requests (5 req/sec)
@@ -77,16 +78,17 @@ async function fetchFromCoverArtArchive(artist, album) {
     );
     const mbUrl = `https://musicbrainz.org/ws/2/release-group?query=${searchQuery}&limit=1&fmt=json`;
 
-    const mbResponse = await fetch(mbUrl, {
-      headers: {
-        'User-Agent': 'SuSheBot/1.0 (album-art-fetcher)',
+    // Shared process-wide MusicBrainz queue (low priority, 30s abort);
+    // non-OK responses reject and land in the catch below.
+    const mbResponse = await mbFetch(
+      mbUrl,
+      {
+        headers: {
+          'User-Agent': 'SuSheBot/1.0 (album-art-fetcher)',
+        },
       },
-      signal: globalThis.AbortSignal.timeout(10000),
-    });
-
-    if (!mbResponse.ok) {
-      return null;
-    }
+      'low'
+    );
 
     const mbData = await mbResponse.json();
     const releaseGroup = mbData['release-groups']?.[0];

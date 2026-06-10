@@ -193,7 +193,7 @@ function createListFetchers(deps = {}) {
               a.genre_1,
               a.genre_2,
               a.tracks,
-              a.cover_image,
+              ${isExport ? 'a.cover_image,' : ''}
               a.cover_image_format,
               a.cover_image_updated_at,
               a.summary,
@@ -210,7 +210,12 @@ function createListFetchers(deps = {}) {
        WHERE li.list_id = $1
        ORDER BY li.position`,
       [list._id, AVAILABILITY_SERVICES],
-      { name: 'list-fetchers-list-items-with-album-data', retryable: true }
+      {
+        name: isExport
+          ? 'list-fetchers-list-items-with-album-data-export'
+          : 'list-fetchers-list-items-with-album-data',
+        retryable: true,
+      }
     );
     const items = itemsResult.rows.map((row) => ({
       _id: row._id,

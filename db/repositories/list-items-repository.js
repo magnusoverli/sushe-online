@@ -17,7 +17,6 @@ function mapAlbumDataRow(row) {
     comments: row.comments || '',
     comments2: row.comments_2 || '',
     tracks: row.tracks || null,
-    coverImage: row.cover_image || '',
     coverImageFormat: row.cover_image_format || '',
     summary: row.summary || '',
     summarySource: row.summary_source || '',
@@ -85,7 +84,6 @@ function createListItemsRepository(deps = {}) {
          a.genre_1,
          a.genre_2,
          a.tracks,
-         a.cover_image,
          a.cover_image_format,
          a.summary,
          a.summary_source

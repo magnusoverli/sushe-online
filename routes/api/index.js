@@ -10,11 +10,8 @@ const fetch = globalThis.fetch || require('node-fetch');
 const sharp = require('sharp');
 
 // Import queue utilities
-const {
-  MusicBrainzQueue,
-  RequestQueue,
-  createMbFetch,
-} = require('../../utils/request-queue');
+const { RequestQueue } = require('../../utils/request-queue');
+const { mbFetch } = require('../../utils/mb-queue-singleton');
 
 // Deduplication helpers removed - list_items no longer stores album metadata
 
@@ -63,9 +60,8 @@ const {
 // Import helpers
 const { createHelpers } = require('./_helpers');
 
-// Create queue instances (shared across routes)
-const mbQueue = new MusicBrainzQueue({ fetch });
-const mbFetch = createMbFetch(mbQueue);
+// Create queue instances (shared across routes); MusicBrainz traffic rides
+// the process-wide queue from utils/mb-queue-singleton
 const imageProxyQueue = new RequestQueue(10); // Max 10 concurrent image fetches
 const itunesProxyQueue = new RequestQueue(5); // Limit iTunes API concurrency (~20 req/min)
 

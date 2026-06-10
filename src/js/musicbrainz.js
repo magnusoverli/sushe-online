@@ -17,15 +17,15 @@ import {
   getCurrentRecommendationsYear,
   getAvailableCountries,
 } from './modules/app-state.js';
+import { apiCall } from './modules/api-client.js';
 import {
-  apiCall,
   saveList,
   selectList,
   displayAlbums,
   fetchAndDisplayPlaycounts,
   selectRecommendations,
-  showReasoningModal,
-} from './app.js';
+} from './modules/list-actions.js';
+import { showReasoningModal } from './modules/modals.js';
 
 const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
 const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
@@ -2282,12 +2282,14 @@ async function addAlbumToCurrentList(album) {
       return;
     }
 
-    currentListData.push(resolved);
-    setListData(currentListId, currentListData);
+    // New array reference so displayAlbums sees a fresh fingerprint
+    // and classifies the optimistic add as a single-row insert
+    const updatedListData = [...currentListData, resolved];
+    setListData(currentListId, updatedListData);
 
     await persistAddedAlbum(
       currentListId,
-      currentListData,
+      updatedListData,
       `Added "${resolved.album}" by ${resolved.artist} to the list`
     );
   } catch (_error) {
@@ -2310,7 +2312,7 @@ async function addAlbumToCurrentList(album) {
  * @param {string} successMessage - Toast shown once the save succeeds
  */
 async function persistAddedAlbum(listId, listData, successMessage) {
-  displayAlbums(listData, { forceFullRebuild: true });
+  displayAlbums(listData);
   closeAddAlbumModal();
 
   await saveList(listId, listData);
@@ -2327,12 +2329,12 @@ async function persistAddedAlbum(listId, listData, successMessage) {
  */
 function rollbackOptimisticAdd(listId) {
   const data = getListData(listId);
-  if (!data) return;
-  data.pop();
-  if (listId) {
-    setListData(listId, data);
-    displayAlbums(data, { forceFullRebuild: true });
-  }
+  if (!data || !listId) return;
+  // New array reference: popping in place would desync the fingerprint
+  // cached against the optimistic array, silently skipping a retried add
+  const rolledBack = data.slice(0, -1);
+  setListData(listId, rolledBack);
+  displayAlbums(rolledBack, { forceFullRebuild: true });
 }
 
 /**
@@ -2346,7 +2348,7 @@ async function reconcileListFromServer(listId) {
   const data = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
   if (getCurrentListId() !== listId) return;
   setListData(listId, data);
-  displayAlbums(data, { forceFullRebuild: true });
+  displayAlbums(data);
   fetchAndDisplayPlaycounts(listId).catch(() => {});
 }
 

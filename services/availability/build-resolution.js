@@ -9,10 +9,7 @@
  */
 
 const defaultLogger = require('../../utils/logger');
-const {
-  MusicBrainzQueue,
-  createMbFetch,
-} = require('../../utils/request-queue');
+const { mbFetch: sharedMbFetch } = require('../../utils/mb-queue-singleton');
 const {
   createExternalIdentityService,
 } = require('../external-identity-service');
@@ -39,8 +36,7 @@ const {
 function buildAvailabilityResolution(deps = {}) {
   const logger = deps.logger || defaultLogger;
   const fetchFn = deps.fetch || fetch;
-  const mbFetch =
-    deps.mbFetch || createMbFetch(new MusicBrainzQueue({ fetch: fetchFn }));
+  const mbFetch = deps.mbFetch || sharedMbFetch;
   const externalIdentityService =
     deps.externalIdentityService ||
     createExternalIdentityService({ db: deps.db, logger });

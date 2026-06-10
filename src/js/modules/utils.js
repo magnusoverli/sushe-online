@@ -1,5 +1,3 @@
-import { apiCall as appApiCall } from '../app.js';
-
 export { showToast, calculateToastDuration } from './toast.js';
 export {
   showConfirmation,
@@ -10,7 +8,7 @@ export {
   hideViewReasoningModal,
 } from './modals.js';
 export { positionContextMenu } from './context-menu.js';
-export const apiCall = appApiCall;
+export { apiCall } from './api-client.js';
 
 // Re-export album list utilities from standalone module
 export { getAlbumKey, isAlbumInList } from '../utils/album-list-utils.js';

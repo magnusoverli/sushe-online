@@ -116,9 +116,12 @@ function createAvailabilityFetchQueue(deps = {}) {
 // Singleton (initialized with db at startup)
 let availabilityFetchQueue = null;
 
-function initializeAvailabilityFetchQueue(db) {
+function initializeAvailabilityFetchQueue(db, options = {}) {
   if (!availabilityFetchQueue) {
-    availabilityFetchQueue = createAvailabilityFetchQueue({ db });
+    availabilityFetchQueue = createAvailabilityFetchQueue({
+      db,
+      mbFetch: options.mbFetch,
+    });
     logger.info('Availability fetch queue initialized');
   }
   return availabilityFetchQueue;

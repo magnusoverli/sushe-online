@@ -66,7 +66,8 @@ import { createAppDiscoveryImport } from './modules/app-discovery-import.js';
 import { createAppServiceIntegrations } from './modules/app-service-integrations.js';
 import { createMainStatusToggler } from './modules/app-main-status.js';
 import { createAppListOperations } from './modules/app-list-operations.js';
-import { createAppApiClient } from './modules/app-api-client.js';
+import { apiCall } from './modules/api-client.js';
+import { registerListActions } from './modules/list-actions.js';
 
 // Centralized state store
 import {
@@ -140,11 +141,6 @@ function setPendingImportFilenameValue(filename) {
   const pending = getPendingImportState();
   setPendingImportState(pending.data, filename);
 }
-
-const appApiClient = createAppApiClient({
-  getRealtimeSyncModuleInstance,
-  logger: console,
-});
 
 // ============ LOCAL STATE ============
 // State variables scoped to app.js — passed to extracted modules via DI getters/setters.
@@ -837,9 +833,7 @@ async function updatePlaylist(listId, listData = null) {
 }
 
 // API helper functions
-export async function apiCall(url, options = {}) {
-  return appApiClient.apiCall(url, options);
-}
+export { apiCall };
 
 // Load lists from server
 async function loadLists() {
@@ -917,6 +911,14 @@ registerAppWindowGlobals({
   updateListNav,
   collapseGroupsForActiveList,
   displayAlbums,
+});
+
+registerListActions({
+  saveList,
+  selectList,
+  displayAlbums,
+  fetchAndDisplayPlaycounts,
+  selectRecommendations,
 });
 
 function initializeSettingsDrawer() {

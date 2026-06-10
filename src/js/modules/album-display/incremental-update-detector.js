@@ -1,3 +1,5 @@
+import { albumMutableFingerprint } from '../album-display-shared.js';
+
 function getAlbumId(album) {
   return (
     album._id || `${album.artist}::${album.album}::${album.release_date || ''}`
@@ -115,12 +117,8 @@ export function detectUpdateType(
 
     if (oldId !== newId) {
       positionChanges++;
-    } else {
-      const newAlbum = newAlbums[i];
-      const newFp = `${newAlbum._id || ''}|${newAlbum.artist || ''}|${newAlbum.album || ''}|${newAlbum.release_date || ''}|${newAlbum.country || ''}|${newAlbum.genre_1 || ''}|${newAlbum.genre_2 || ''}|${newAlbum.comments || ''}|${newAlbum.comments_2 || ''}|${newAlbum.primary_track || ''}`;
-      if (oldFingerprints[i] !== newFp) {
-        fieldChanges++;
-      }
+    } else if (oldFingerprints[i] !== albumMutableFingerprint(newAlbums[i])) {
+      fieldChanges++;
     }
   }
 
