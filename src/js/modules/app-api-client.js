@@ -56,6 +56,13 @@ export function createAppApiClient(deps = {}) {
     return error?.data?.code === 'NOT_AUTHENTICATED' && !!error.data.service;
   }
 
+  // A 409 that asks the caller to confirm an action (e.g. deleting a collection
+  // that still contains lists) is expected control flow, not a failure: the
+  // caller handles it by prompting the user, so it must not be logged as an error.
+  function isExpectedConfirmationError(error) {
+    return error?.requiresConfirmation === true;
+  }
+
   async function apiCall(url, options = {}) {
     try {
       const socketId = getRealtimeSyncModuleInstance()?.getSocket?.()?.id;
@@ -144,7 +151,11 @@ export function createAppApiClient(deps = {}) {
 
       return await readJsonResponse(response);
     } catch (error) {
-      if (error.name !== 'AbortError' && !isExpectedServiceAuthError(error)) {
+      if (
+        error.name !== 'AbortError' &&
+        !isExpectedServiceAuthError(error) &&
+        !isExpectedConfirmationError(error)
+      ) {
         logger.error('API call failed:', error);
       }
       throw error;

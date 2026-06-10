@@ -58,6 +58,7 @@ export function createMobileListMenus(deps = {}) {
     openRenameCategoryModal,
     showToast,
     apiCall,
+    getLists,
     refreshGroupsAndLists,
     updateListNav,
     showConfirmation,

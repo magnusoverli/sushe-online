@@ -10,6 +10,7 @@
 
 import { escapeHtmlAttr } from './html-utils.js';
 import { setupModalBehavior } from '../utils/modal-helpers.js';
+import { deleteCollection } from '../utils/delete-collection.js';
 
 /**
  * Create the list CRUD module
@@ -98,47 +99,22 @@ export function createListCrud(deps = {}) {
         return;
       }
 
-      try {
-        // First try to delete - API will return 409 if collection has lists
-        await apiCall(`/api/groups/${id}`, { method: 'DELETE' });
-        showToast(`Collection "${name}" deleted`);
-        await refreshGroupsAndLists();
-      } catch (error) {
-        // Check if this is a "has lists" conflict that needs confirmation
-        if (error.requiresConfirmation && error.listCount > 0) {
-          const listWord = error.listCount === 1 ? 'list' : 'lists';
-          const confirmed = await showConfirmation(
-            'Delete Collection',
-            `The collection "${name}" contains ${error.listCount} ${listWord}.`,
-            `Deleting this collection will move the ${listWord} to "Uncategorized". This action cannot be undone.`,
-            'Delete Collection',
-            null,
-            {
-              checkboxLabel: `I understand that ${error.listCount} ${listWord} will be moved to "Uncategorized"`,
-            }
-          );
+      // Count this collection's lists from local state so we don't fire a
+      // delete request we already know the server will reject with a 409.
+      const lists = getLists() || {};
+      const listCount = Object.values(lists).filter(
+        (list) => list && list.groupId === id
+      ).length;
 
-          if (confirmed) {
-            try {
-              // Force delete with confirmation
-              await apiCall(`/api/groups/${id}?force=true`, {
-                method: 'DELETE',
-              });
-              showToast(`Collection "${name}" deleted`);
-              await refreshGroupsAndLists();
-            } catch (forceError) {
-              console.error('Error force-deleting collection:', forceError);
-              showToast(
-                forceError.message || 'Failed to delete collection',
-                'error'
-              );
-            }
-          }
-        } else {
-          console.error('Error deleting collection:', error);
-          showToast(error.message || 'Failed to delete collection', 'error');
-        }
-      }
+      await deleteCollection({
+        id,
+        name,
+        listCount,
+        apiCall,
+        showConfirmation,
+        showToast,
+        refresh: refreshGroupsAndLists,
+      });
 
       setCurrentContextGroup(null);
     };

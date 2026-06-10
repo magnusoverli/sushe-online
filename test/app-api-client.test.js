@@ -131,6 +131,39 @@ describe('app-api-client module', () => {
     assert.strictEqual(logger.error.mock.calls.length, 0);
   });
 
+  it('does not log confirmation-required (409) errors but still throws them with their fields', async () => {
+    const win = { csrfToken: 'token', location: { href: '/app' } };
+    const fetchImpl = mock.fn(async () => ({
+      ok: false,
+      status: 409,
+      json: async () => ({
+        error: 'Collection contains lists',
+        requiresConfirmation: true,
+        listCount: 2,
+      }),
+    }));
+    const logger = { error: mock.fn() };
+    const client = createAppApiClient({
+      getRealtimeSyncModuleInstance: () => null,
+      fetchImpl,
+      win,
+      logger,
+    });
+
+    await assert.rejects(
+      () => client.apiCall('/api/groups/g1', { method: 'DELETE' }),
+      (error) => {
+        assert.strictEqual(error.message, 'Collection contains lists');
+        assert.strictEqual(error.status, 409);
+        assert.strictEqual(error.requiresConfirmation, true);
+        assert.strictEqual(error.listCount, 2);
+        return true;
+      }
+    );
+    // Expected, caller-handled control flow — must not be logged as a failure.
+    assert.strictEqual(logger.error.mock.calls.length, 0);
+  });
+
   it('redirects instead of parsing HTML login responses as JSON', async () => {
     const win = { csrfToken: null, location: { href: '/app' } };
     const fetchImpl = mock.fn(async () => ({
