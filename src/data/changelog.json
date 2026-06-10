@@ -2,6 +2,13 @@
   {
     "date": "2026-06-10",
     "category": "perf",
+    "description": "Faster page loading with optimized fonts and resources",
+    "hash": "c804b0ed4fbc11e36717350306c6de0adde980b4",
+    "commitMessage": "Cut boot JS, self-host fonts, and trim redundant work\n\n- Lazy-load the settings drawer (and its admin code) on first open,\n  removing ~40KB gzipped from the eagerly-loaded bundle\n- Self-host FontAwesome and Material Symbols, dropping two\n  render-blocking cross-origin stylesheets\n- Serve cover 304 responses from metadata without reading the image blob\n- Fetch the target list in parallel with list metadata on load\n- Apply remote list edits and reorders incrementally instead of\n  rebuilding the whole list\n- Run the duplicate-check queries concurrently"
+  },
+  {
+    "date": "2026-06-10",
+    "category": "perf",
     "description": "Faster app loading and improved performance",
     "hash": "a160db55634f63fe2bb0f6146c3434be825551fd",
     "commitMessage": "Reduce first-load weight and trim list payloads\n\n- Replace the 322KB og-image favicon with a 30KB downscaled icon\n- Load jsPDF on demand instead of bundling it into the eager bundle\n- Lower processed cover JPEG quality to 85\n- Load Cinzel via a non-blocking link and drop the unused Inter font\n- Collapse unmatched-route Prometheus labels to bound metric cardinality\n- Fix incremental DOM updates of album titles\n- Drop cover-image bytes from the full list response"
