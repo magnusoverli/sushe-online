@@ -1,6 +1,20 @@
 [
   {
     "date": "2026-06-10",
+    "category": "fix",
+    "description": "Fixed lists moving to Uncategorized when deleting collections",
+    "hash": "9f8b85e9fbc7f3884b46ea91a77cfcbdafb7b096",
+    "commitMessage": "Fix collection force-delete moving lists to Uncategorized\n\n- Reassign sort_order when moving lists so they append after existing\n  Uncategorized lists, instead of colliding on the\n  (group_id, sort_order) unique index and failing with a 500\n- Block with a clear message when a moved list's name already exists in\n  Uncategorized, rather than hitting the (user_id, name, group_id) unique\n  index and failing with a 500"
+  },
+  {
+    "date": "2026-06-10",
+    "category": "perf",
+    "description": "Faster collection deletion",
+    "hash": "c4770cbad85200740d578d61ad1065aba0a97b69",
+    "commitMessage": "Delete collections without a doomed pre-check request\n\n- Decide locally whether a collection has lists and confirm before\n  deleting, instead of probing the server with a delete that 409s\n- Share one collection-delete flow between the desktop and mobile menus\n- Stop logging expected confirmation-required (409) responses as errors"
+  },
+  {
+    "date": "2026-06-10",
     "category": "perf",
     "description": "Faster page loading with optimized fonts and resources",
     "hash": "c804b0ed4fbc11e36717350306c6de0adde980b4",
