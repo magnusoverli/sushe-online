@@ -22,26 +22,39 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     asyncHandler(
       async (req, res) => {
-        const { imageBuffer, contentType, albumId, coverImageUpdatedAt } =
-          await albumService.getCoverImage(req.params.album_id);
+        // Read cheap metadata first so a conditional GET can be answered with a
+        // 304 without ever reading the cover BYTEA out of Postgres.
+        const { contentType, albumId, coverImageUpdatedAt, coverLength } =
+          await albumService.getCoverMeta(req.params.album_id);
         const version = coverImageUpdatedAt
           ? new Date(coverImageUpdatedAt).getTime()
-          : imageBuffer.length;
+          : coverLength;
         const hasVersion = typeof req.query.v === 'string';
 
         res.set({
-          'Content-Type': contentType,
-          'Content-Length': imageBuffer.length,
           'Cache-Control': hasVersion
             ? 'private, max-age=31536000, immutable'
             : 'private, max-age=300, must-revalidate',
-          ETag: `"${albumId}-${version}-${imageBuffer.length}"`,
+          ETag: `"${albumId}-${version}-${coverLength}"`,
         });
 
         if (coverImageUpdatedAt) {
           res.set('Last-Modified', new Date(coverImageUpdatedAt).toUTCString());
         }
 
+        // If the client's cached copy is still valid, skip the blob read.
+        if (req.fresh) {
+          res.status(304).end();
+          return;
+        }
+
+        const { imageBuffer } = await albumService.getCoverImage(
+          req.params.album_id
+        );
+        res.set({
+          'Content-Type': contentType,
+          'Content-Length': imageBuffer.length,
+        });
         res.send(imageBuffer);
       },
       'fetching album cover',

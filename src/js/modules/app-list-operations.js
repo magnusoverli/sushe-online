@@ -86,6 +86,19 @@ export function createAppListOperations(deps = {}) {
       const localLastListId = storage?.getItem?.('lastSelectedList');
       const serverLastListId = win?.lastSelectedList;
 
+      // Optimistically prefetch the most likely target list's items in parallel
+      // with the metadata batch, collapsing two serial round-trips before the
+      // first album paints down to one. The result is used only if this id is
+      // still the chosen target once metadata loads; otherwise it is discarded
+      // and the correct list is fetched. Same endpoint and shape as before, so
+      // the rendered list is identical — only the network timing changes.
+      const candidateTargetId = localLastListId || serverLastListId || null;
+      const candidateDataPromise = candidateTargetId
+        ? apiCall(`/api/lists/${encodeURIComponent(candidateTargetId)}`).catch(
+            () => null
+          )
+        : null;
+
       const metadataPromise = apiCall('/api/lists');
       const groupsPromise = apiCall('/api/groups');
       const recYearsPromise = apiCall('/api/recommendations/years').catch(
@@ -155,9 +168,17 @@ export function createAppListOperations(deps = {}) {
 
       if (targetListId) {
         try {
-          const listData = await apiCall(
-            `/api/lists/${encodeURIComponent(targetListId)}`
-          );
+          // Reuse the in-flight prefetch when it was for this same list;
+          // otherwise fetch the correct one.
+          let listData =
+            targetListId === candidateTargetId && candidateDataPromise
+              ? await candidateDataPromise
+              : null;
+          if (!listData) {
+            listData = await apiCall(
+              `/api/lists/${encodeURIComponent(targetListId)}`
+            );
+          }
           setListData(targetListId, listData);
 
           if (!getCurrentListId()) {

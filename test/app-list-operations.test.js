@@ -171,7 +171,7 @@ describe('app-list-operations module', () => {
     assert.strictEqual(storage.setItem.mock.calls.length, 0);
   });
 
-  it('clears stale last-selected list references without fetching missing list data', async () => {
+  it('clears stale last-selected list references and never selects missing list data', async () => {
     let listsState = {};
     const setListData = mock.fn();
     const selectList = mock.fn();
@@ -235,7 +235,9 @@ describe('app-list-operations module', () => {
 
     await operations.loadLists();
 
-    assert.strictEqual(apiCall.mock.calls.length, 3);
+    // 3 metadata calls + 1 optimistic prefetch for the (stale) candidate id,
+    // whose result is discarded once metadata shows the list no longer exists.
+    assert.strictEqual(apiCall.mock.calls.length, 4);
     assert.strictEqual(setRecommendationYears.mock.calls.length, 1);
     assert.strictEqual(updateGroupsFromServer.mock.calls.length, 1);
     assert.strictEqual(updateListNav.mock.calls.length, 1);

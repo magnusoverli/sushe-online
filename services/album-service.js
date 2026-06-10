@@ -134,6 +134,70 @@ function createAlbumService(deps = {}) {
     return lookupResult.rows[0]?.id || null;
   }
 
+  // Trigger a background cover fetch for an album whose cover is missing.
+  function triggerLazyCoverFetch(albumId, artist, album) {
+    const { getCoverFetchQueue } = require('./cover-fetch-queue');
+    try {
+      getCoverFetchQueue().add(albumId, artist, album);
+      logger.debug('Triggered lazy cover fetch', { albumId, artist, album });
+    } catch (error) {
+      logger.warn('Cover fetch queue not available for lazy fetch', {
+        albumId,
+        error: error.message,
+      });
+    }
+  }
+
+  function coverContentType(format) {
+    return format ? `image/${format.toLowerCase()}` : 'image/jpeg';
+  }
+
+  /**
+   * Get album cover metadata WITHOUT reading the image bytes.
+   * Lets the route compute an ETag and answer conditional GETs (304) cheaply,
+   * skipping the BYTEA read entirely on revalidations. Mirrors getCoverImage's
+   * missing-cover handling (lazy background fetch + 404).
+   * @param {string} albumId
+   * @returns {Promise<Object>} { albumId, contentType, coverImageUpdatedAt, coverLength }
+   */
+  async function getCoverMeta(albumId) {
+    const result = await db.raw(
+      `SELECT cover_image_format,
+              cover_image_updated_at,
+              updated_at,
+              artist,
+              album,
+              octet_length(cover_image) AS cover_length
+       FROM albums WHERE album_id = $1`,
+      [albumId]
+    );
+
+    if (!result.rows.length) {
+      throw new TransactionAbort(404, { error: 'Album not found' });
+    }
+
+    const album = result.rows[0];
+    const coverLength = album.cover_length || 0;
+
+    if (!coverLength && album.artist && album.album) {
+      triggerLazyCoverFetch(albumId, album.artist, album.album);
+      throw new TransactionAbort(404, {
+        error: 'Image not found (fetching in background)',
+      });
+    }
+
+    if (!coverLength) {
+      throw new TransactionAbort(404, { error: 'Image not found' });
+    }
+
+    return {
+      albumId,
+      contentType: coverContentType(album.cover_image_format),
+      coverImageUpdatedAt: album.cover_image_updated_at || album.updated_at,
+      coverLength,
+    };
+  }
+
   /**
    * Get album cover image data.
    * If cover is missing, triggers an async background fetch.
@@ -160,21 +224,7 @@ function createAlbumService(deps = {}) {
 
     // If cover is missing, trigger async fetch
     if (!album.cover_image && album.artist && album.album) {
-      const { getCoverFetchQueue } = require('./cover-fetch-queue');
-      try {
-        const coverQueue = getCoverFetchQueue();
-        coverQueue.add(albumId, album.artist, album.album);
-        logger.debug('Triggered lazy cover fetch', {
-          albumId,
-          artist: album.artist,
-          album: album.album,
-        });
-      } catch (error) {
-        logger.warn('Cover fetch queue not available for lazy fetch', {
-          albumId,
-          error: error.message,
-        });
-      }
+      triggerLazyCoverFetch(albumId, album.artist, album.album);
       throw new TransactionAbort(404, {
         error: 'Image not found (fetching in background)',
       });
@@ -185,13 +235,10 @@ function createAlbumService(deps = {}) {
     }
 
     const imageBuffer = normalizeImageBuffer(album.cover_image);
-    const contentType = album.cover_image_format
-      ? `image/${album.cover_image_format.toLowerCase()}`
-      : 'image/jpeg';
 
     return {
       imageBuffer,
-      contentType,
+      contentType: coverContentType(album.cover_image_format),
       albumId,
       coverImageUpdatedAt: album.cover_image_updated_at || album.updated_at,
     };
@@ -394,16 +441,22 @@ function createAlbumService(deps = {}) {
       });
     }
 
-    const albumsResult = await db.raw(`
-      SELECT album_id, artist, album, cover_image IS NOT NULL as has_cover
-      FROM albums
-      WHERE artist IS NOT NULL AND artist != ''
-        AND album IS NOT NULL AND album != ''
-    `);
-
-    const excludedPairsResult = await db.raw(`
-      SELECT album_id_1, album_id_2 FROM album_distinct_pairs
-    `);
+    // Run the candidate scan and the excluded-pairs lookup concurrently
+    // instead of serially. (A pg_trgm pre-filter on the candidate scan was
+    // considered, but the fuzzy scorer uses Levenshtein/token similarity with
+    // a low 0.35 per-field floor that trigram similarity cannot reproduce
+    // exactly, so pre-filtering risks changing which review candidates surface.)
+    const [albumsResult, excludedPairsResult] = await Promise.all([
+      db.raw(`
+        SELECT album_id, artist, album, cover_image IS NOT NULL as has_cover
+        FROM albums
+        WHERE artist IS NOT NULL AND artist != ''
+          AND album IS NOT NULL AND album != ''
+      `),
+      db.raw(`
+        SELECT album_id_1, album_id_2 FROM album_distinct_pairs
+      `),
+    ]);
 
     const excludePairs = new Set();
     for (const row of excludedPairsResult.rows) {
@@ -508,6 +561,7 @@ function createAlbumService(deps = {}) {
   }
 
   return {
+    getCoverMeta,
     getCoverImage,
     updateCoverImage,
     getSummary,

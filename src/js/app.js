@@ -21,7 +21,8 @@ import {
 import { positionContextMenu } from './modules/context-menu.js';
 import { escapeHtml, escapeHtmlAttr } from './modules/html-utils.js';
 import { checkListSetupStatus } from './modules/list-setup-wizard.js';
-import { createSettingsDrawer } from './modules/settings-drawer.js';
+// settings-drawer.js is loaded on demand (see initializeSettingsDrawer) so its
+// large renderer/handler subtree (incl. admin-only code) stays off the boot path.
 import { initAboutModal } from './modules/about-modal.js';
 import { createActionSheet } from './modules/ui-factories.js';
 import {
@@ -922,17 +923,35 @@ registerListActions({
 });
 
 function initializeSettingsDrawer() {
-  const settingsDrawer = createSettingsDrawer({
-    showToast,
-    showConfirmation,
-    apiCall,
-    refreshLockedYearStatus,
-  });
-
-  settingsDrawer.initialize();
+  // Construct the drawer (and load its chunk) lazily on first open. The gear
+  // button and the music-services "connect" flow both call this, all
+  // user-initiated, so there is no need to parse the settings subtree at boot.
+  let drawerPromise = null;
+  const ensureDrawer = () => {
+    if (!drawerPromise) {
+      drawerPromise = import('./modules/settings-drawer.js').then(
+        ({ createSettingsDrawer }) => {
+          const settingsDrawer = createSettingsDrawer({
+            showToast,
+            showConfirmation,
+            apiCall,
+            refreshLockedYearStatus,
+          });
+          settingsDrawer.initialize();
+          return settingsDrawer;
+        }
+      );
+    }
+    return drawerPromise;
+  };
 
   window.openSettingsDrawer = () => {
-    settingsDrawer.openDrawer();
+    ensureDrawer()
+      .then((settingsDrawer) => settingsDrawer.openDrawer())
+      .catch((error) => {
+        console.error('Failed to open settings drawer', error);
+        showToast('Failed to open settings', 'error');
+      });
   };
 }
 

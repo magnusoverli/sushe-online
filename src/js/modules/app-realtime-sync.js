@@ -43,7 +43,13 @@ export function createAppRealtimeSync(deps = {}) {
           );
           setListData(listId, data);
           if (getCurrentListId() === listId) {
-            displayAlbums(data, { forceFullRebuild: true });
+            // Let the incremental detector apply the remote add/remove/edit/
+            // reorder instead of forcing a full rebuild — this avoids the
+            // row-recreate flicker, SortableJS re-init, and cover
+            // re-observation on second-device edits. list:updated/reordered
+            // only ever carry fingerprinted changes (item add/remove/comment/
+            // track/order), never cover/availability/summary changes.
+            displayAlbums(data);
           }
           return { wasLocalSave: false };
         },
