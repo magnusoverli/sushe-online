@@ -1,6 +1,20 @@
 [
   {
     "date": "2026-06-11",
+    "category": "fix",
+    "description": "Fixed locked year display refreshing properly",
+    "hash": "a61a706275b69f7acba5c07d57aaf4eb5b4f1653",
+    "commitMessage": "Harden locked-year UI refresh"
+  },
+  {
+    "date": "2026-06-11",
+    "category": "perf",
+    "description": "Faster app loading with improved memory caching",
+    "hash": "c292ad1cb87d468b164ab885851d2ef0a54bc21d",
+    "commitMessage": "Add RAM acceleration caches and prewarm"
+  },
+  {
+    "date": "2026-06-11",
     "category": "perf",
     "description": "Faster app startup and album list loading",
     "hash": "8f78188be4189a4cf7c90ccc917d1d0a94c8ee71",
