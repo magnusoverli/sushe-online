@@ -12,8 +12,7 @@ README.md
 data/
 
 # Built assets (will be generated during Docker build)
-public/js/main.js
-public/js/chunks/
+public/js/
 public/styles/output.css
 
 # Test artifacts

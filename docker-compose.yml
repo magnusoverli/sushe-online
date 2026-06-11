@@ -43,7 +43,6 @@ services:
     volumes:
       - sushe-data:/app/data
       - postgres-socket:/var/run/postgresql
-      - ./routes/auth.js:/app/routes/auth.js:ro
     tmpfs:
       - /tmp:size=512m,mode=1777
     depends_on:
