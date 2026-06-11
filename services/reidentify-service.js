@@ -16,15 +16,7 @@ const {
   selectBestRelease,
   extractTracksFromMedia,
 } = require('../utils/musicbrainz-helpers');
-
-/** Count list_items rows referencing an album (for re-identify reporting). */
-async function countListReferences(db, albumId) {
-  const result = await db.raw(
-    `SELECT COUNT(*)::int AS count FROM list_items WHERE album_id = $1`,
-    [albumId]
-  );
-  return result.rows[0].count;
-}
+const { updateAlbumIdentity } = require('./reidentify/update-album-id');
 
 /**
  * Create reidentify service with injected dependencies
@@ -254,29 +246,13 @@ function createReidentifyService(deps = {}) {
       });
     }
 
-    // Count list references up front for reporting — the ON UPDATE CASCADE
-    // FKs (migration 065) move them atomically with the albums UPDATE below.
-    let listItemsUpdated = 0;
-    if (currentAlbumId && currentAlbumId !== newAlbumId) {
-      listItemsUpdated = await countListReferences(db, currentAlbumId);
-    }
-    // Match on the unique album_id when we have it (a name match could hit
-    // multiple variant rows); referencing rows follow via the FK cascade.
-    const updateResult = currentAlbumId
-      ? await db.raw(
-          `UPDATE albums
-           SET album_id = $1, tracks = $2, updated_at = NOW()
-           WHERE album_id = $3
-           RETURNING id, artist, album, album_id`,
-          [newAlbumId, JSON.stringify(tracks), currentAlbumId]
-        )
-      : await db.raw(
-          `UPDATE albums
-           SET album_id = $1, tracks = $2, updated_at = NOW()
-           WHERE LOWER(artist) = LOWER($3) AND LOWER(album) = LOWER($4)
-           RETURNING id, artist, album, album_id`,
-          [newAlbumId, JSON.stringify(tracks), artist, album]
-        );
+    const { updateResult, listItemsUpdated } = await updateAlbumIdentity(db, {
+      currentAlbumId,
+      newAlbumId,
+      tracks,
+      artist,
+      album,
+    });
 
     if (updateResult.rowCount === 0) {
       throw new TransactionAbort(404, {

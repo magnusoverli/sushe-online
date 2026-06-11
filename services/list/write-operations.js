@@ -3,7 +3,7 @@ const {
   LOCK_NAMESPACES,
   acquireTransactionLocks,
 } = require('../../db/advisory-locks');
-const { processUploadedCoverImage } = require('../../utils/image-processing');
+const { prepareExplicitCovers } = require('./cover-preparation');
 
 // eslint-disable-next-line max-lines-per-function -- Coordinates list creation and item mutations around one transactional dependency set
 function createListWriteOperations(deps = {}) {
@@ -40,24 +40,6 @@ function createListWriteOperations(deps = {}) {
     throw new Error('validateMainListNotLocked is required');
   }
 
-  // Run the sharp resize/re-encode of explicit cover payloads BEFORE a write
-  // transaction opens, so the multi-second image work never runs while the
-  // transaction holds row and advisory locks. The processed {buffer, format}
-  // object passes through processUploadedCoverImage untouched later.
-  async function prepareExplicitCovers(albums) {
-    for (const album of albums || []) {
-      if (album && album.cover_image) {
-        try {
-          album.cover_image = await processUploadedCoverImage(
-            album.cover_image
-          );
-        } catch (error) {
-          throw new TransactionAbort(400, { error: error.message });
-        }
-      }
-    }
-  }
-
   async function createList(
     userId,
     { name, groupId: requestGroupId, year, albums: rawAlbums }
@@ -70,7 +52,7 @@ function createListWriteOperations(deps = {}) {
     const listId = crypto.randomBytes(12).toString('hex');
     const timestamp = new Date();
 
-    await prepareExplicitCovers(rawAlbums);
+    await prepareExplicitCovers(rawAlbums, TransactionAbort);
 
     const listYear = await db.withTransaction(async (client) => {
       let resultYear = null;
@@ -158,7 +140,7 @@ function createListWriteOperations(deps = {}) {
     const timestamp = new Date();
     let list;
 
-    await prepareExplicitCovers(rawAlbums);
+    await prepareExplicitCovers(rawAlbums, TransactionAbort);
 
     await db.withTransaction(async (client) => {
       list = await findListByIdOrThrow(
@@ -214,7 +196,7 @@ function createListWriteOperations(deps = {}) {
     const duplicateAlbums = [];
     let list;
 
-    await prepareExplicitCovers(added);
+    await prepareExplicitCovers(added, TransactionAbort);
 
     await db.withTransaction(async (client) => {
       list = await findListByIdOrThrow(
