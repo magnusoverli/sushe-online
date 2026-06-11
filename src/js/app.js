@@ -27,7 +27,6 @@ import { initAboutModal } from './modules/about-modal.js';
 import { createActionSheet } from './modules/ui-factories.js';
 import {
   invalidateLockedYearsCache,
-  invalidateLockedRecommendationYearsCache,
   isListLocked,
   isListLockedSync,
   isYearLockedSync,
@@ -121,10 +120,6 @@ import {
   yearHasRecommendations,
 } from './modules/app-state.js';
 
-// Early window global — needed by year-lock module before consolidated section
-window.invalidateLockedRecommendationYearsCache =
-  invalidateLockedRecommendationYearsCache;
-
 // Re-export UI utilities for backward compatibility
 export { showToast, showConfirmation, showReasoningModal, hideReasoningModal };
 
@@ -162,21 +157,15 @@ const {
   hydrateSidebarFromCachedNames,
 } = createAppStartupUi({ showToast, logger: console });
 
-const { registerDiscoveryAddAlbumHandler, initializeFileImportHandlers } =
-  createAppDiscoveryImport({
-    showToast,
-    getListData,
-    apiCall,
-    saveList,
-    getLists,
-    getCurrentListId,
-    selectList,
-    importList,
-    updateListNav,
-    setPendingImport: setPendingImportData,
-    setPendingImportFilename: setPendingImportFilenameValue,
-    logger: console,
-  });
+const { initializeFileImportHandlers } = createAppDiscoveryImport({
+  showToast,
+  getLists,
+  selectList,
+  importList,
+  updateListNav,
+  setPendingImport: setPendingImportData,
+  setPendingImportFilename: setPendingImportFilenameValue,
+});
 
 const appServiceIntegrations = createAppServiceIntegrations({
   getMusicServicesModule,
@@ -973,7 +962,6 @@ createAppBootstrap({
   getListCrudModule,
   initializeImportConflictHandling,
   initializeRealtimeSync,
-  registerDiscoveryAddAlbumHandler,
   initializeFileImportHandlers,
   checkListSetupStatus,
   showToast,

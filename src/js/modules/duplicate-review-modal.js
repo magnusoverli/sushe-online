@@ -661,11 +661,3 @@ function handleKeyboard(event) {
     handleMergeCluster();
   }
 }
-
-/**
- * Close the modal programmatically.
- */
-export function closeDuplicateReviewModal() {
-  if (!modalElement) return;
-  hideModal();
-}

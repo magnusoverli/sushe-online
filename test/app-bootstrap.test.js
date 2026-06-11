@@ -51,7 +51,6 @@ describe('app-bootstrap module', () => {
       }),
       initializeImportConflictHandling: mock.fn(),
       initializeRealtimeSync: mock.fn(),
-      registerDiscoveryAddAlbumHandler: mock.fn(),
       initializeFileImportHandlers: mock.fn(),
       checkListSetupStatus: mock.fn(() => Promise.resolve()),
       showToast: mock.fn(),
@@ -116,7 +115,6 @@ describe('app-bootstrap module', () => {
     const initializeAlbumContextMenu = mock.fn();
     const initializeImportConflictHandling = mock.fn();
     const initializeRealtimeSync = mock.fn();
-    const registerDiscoveryAddAlbumHandler = mock.fn();
     const initializeFileImportHandlers = mock.fn();
     const checkListSetupStatus = mock.fn(() => Promise.resolve());
     const showToast = mock.fn();
@@ -155,7 +153,6 @@ describe('app-bootstrap module', () => {
       getListCrudModule: () => listCrudInit,
       initializeImportConflictHandling,
       initializeRealtimeSync,
-      registerDiscoveryAddAlbumHandler,
       initializeFileImportHandlers,
       checkListSetupStatus,
       showToast,
@@ -195,7 +192,6 @@ describe('app-bootstrap module', () => {
     assert.strictEqual(listCrudInit.initializeRenameList.mock.calls.length, 1);
     assert.strictEqual(initializeImportConflictHandling.mock.calls.length, 1);
     assert.strictEqual(initializeRealtimeSync.mock.calls.length, 1);
-    assert.strictEqual(registerDiscoveryAddAlbumHandler.mock.calls.length, 1);
     assert.strictEqual(initializeFileImportHandlers.mock.calls.length, 1);
     assert.strictEqual(typeof timeoutHandler, 'function');
 
