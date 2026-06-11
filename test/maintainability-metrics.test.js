@@ -12,6 +12,7 @@ test('shouldIncludeFile excludes generated and non-source files', () => {
     shouldIncludeFile('public/js/chunks/app-abc12345.js'),
     false
   );
+  assert.strictEqual(shouldIncludeFile('public/js/main.js'), false);
   assert.strictEqual(shouldIncludeFile('public/styles/output.css'), false);
   assert.strictEqual(shouldIncludeFile('package-lock.json'), false);
   assert.strictEqual(shouldIncludeFile('README.md'), false);

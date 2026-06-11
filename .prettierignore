@@ -3,7 +3,7 @@ node_modules/
 
 # Build outputs
 dist/
-public/js/bundle.js
+public/js/main.js
 public/js/chunks/
 public/styles/output.css
 

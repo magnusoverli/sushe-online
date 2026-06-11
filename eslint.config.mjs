@@ -27,7 +27,7 @@ export default [
   prettierConfig,
   {
     ignores: [
-      'public/js/bundle.js',
+      'public/js/main.js',
       'public/js/chunks/**',
       'dist/**',
       'node_modules/**',

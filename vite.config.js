@@ -13,7 +13,12 @@ export default defineConfig({
     rolldownOptions: {
       input: path.resolve(__dirname, 'src/js/main.js'),
       output: {
-        entryFileNames: 'bundle.js',
+        // The entry keeps a stable, un-hashed name because chunks statically
+        // import it by this exact URL. It must therefore be referenced from
+        // HTML with the same bare URL (no ?v= query) — otherwise the browser
+        // creates a second module instance — and is served with
+        // Cache-Control: no-cache (see index.js) so it stays fresh.
+        entryFileNames: 'main.js',
         chunkFileNames: 'chunks/[name]-[hash].js',
         manualChunks(id) {
           if (id.includes('music-services')) {

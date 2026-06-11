@@ -177,8 +177,8 @@ describe('templates utilities', () => {
     });
 
     it('should work with js files', () => {
-      const result = templates.asset('/js/bundle.js');
-      assert.strictEqual(result, '/js/bundle.js?v=test-version-123');
+      const result = templates.asset('/js/some-file.js');
+      assert.strictEqual(result, '/js/some-file.js?v=test-version-123');
     });
 
     it('should work with paths without leading slash', () => {
@@ -692,11 +692,13 @@ describe('templates utilities', () => {
       assert.ok(result.includes('null'));
     });
 
-    it('should include bundle.js script', () => {
+    it('should include the main.js module script without a version query', () => {
       const user = { username: 'test' };
       const result = templates.spotifyTemplate(user);
 
-      assert.ok(result.includes('/js/bundle.js'));
+      // Lazy chunks import this exact URL; a ?v= query would split the entry
+      // into two module instances in the browser.
+      assert.ok(result.includes('src="/js/main.js"'));
       assert.ok(result.includes('type="module"'));
     });
 

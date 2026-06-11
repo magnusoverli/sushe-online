@@ -158,7 +158,7 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
-public/js/bundle.js
+public/js/main.js
 cookies.txt
 
 # Test artifacts

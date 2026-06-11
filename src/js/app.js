@@ -939,7 +939,7 @@ function initializeSettingsDrawer() {
       .then((settingsDrawer) => settingsDrawer.openDrawer())
       .catch((error) => {
         console.error('Failed to open settings drawer', error);
-        showToast('Failed to open settings', 'error');
+        showToast('Failed to open settings - try refreshing the page', 'error');
       });
   };
 }

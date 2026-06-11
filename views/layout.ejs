@@ -15,10 +15,11 @@
   <link rel="apple-touch-icon" href="/icons/ios/180.png">
   <link rel="manifest" href="/manifest.json">
   
-  <!-- Fix #8: Preload critical resources for faster page load -->
+  <!-- Fix #8: Preload critical resources for faster page load.
+       No JS preload: pages rendered through this layout (auth pages) never
+       load the app bundle. -->
   <link rel="preload" href="<%= asset('/styles/output.css') %>" as="style">
-  <link rel="preload" href="<%= asset('/js/bundle.js') %>" as="script">
-  
+
   <link href="<%= asset('/styles/output.css') %>" rel="stylesheet">
   <style>
     /* Toast notification styles */

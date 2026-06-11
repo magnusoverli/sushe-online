@@ -146,8 +146,20 @@ app.use(createCorsMiddleware());
 // Apply compression for requests above 1KB (before static so assets are compressed too)
 app.use(compression({ threshold: 1024 }));
 
-// Static files
-app.use(express.static('public', { maxAge: '1y', immutable: true }));
+// Static files. Hashed chunk filenames are immutable, but the entry main.js
+// keeps a stable URL (its lazy chunks import it by that exact URL, so it
+// cannot be query-versioned) and must be revalidated on every load instead.
+app.use(
+  express.static('public', {
+    maxAge: '1y',
+    immutable: true,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(path.join('js', 'main.js'))) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  })
+);
 
 // Handle .well-known requests (Android Asset Links, iOS Universal Links, etc.)
 app.use('/.well-known', (req, res) => {
@@ -157,23 +169,15 @@ app.use('/.well-known', (req, res) => {
   res.status(204).end();
 });
 
-// Smart HTTP caching for static assets
+// Cache headers for dynamic responses. Existing static files are served (and
+// the response ended) by express.static above, so asset-extension paths
+// reaching this middleware are misses headed for the 404 handler — never set
+// long-lived cache headers on those, or a chunk URL that 404s during a deploy
+// window gets cached as permanently missing by browsers.
 app.use((req, res, next) => {
   const reqPath = req.path;
 
-  if (
-    reqPath.match(/\.(js|css|png|jpg|jpeg|gif|webp|svg|woff2?|ttf|eot|ico)$/)
-  ) {
-    res.set({
-      'Cache-Control': 'public, max-age=31536000, immutable',
-      'X-Cache-Strategy': 'static-asset',
-    });
-  } else if (reqPath.match(/\.html?$/)) {
-    res.set({
-      'Cache-Control': 'public, max-age=300',
-      'X-Cache-Strategy': 'html-short',
-    });
-  } else if (reqPath.startsWith('/api/')) {
+  if (reqPath.startsWith('/api/')) {
     res.set({
       'Cache-Control': 'no-store, no-cache, must-revalidate, private',
       Pragma: 'no-cache',
@@ -302,30 +306,22 @@ const { aggregateList } = aggregateListRoutes(app, deps);
 // Store aggregateList instance for use in triggers (e.g., main list updates)
 app.locals.aggregateList = aggregateList;
 
-// Icon routes for iOS/Safari compatibility
-app.get('/favicon.ico', (req, res) => {
-  res.redirect('/icons/ios/32.png');
-});
+// Icon routes for iOS/Safari compatibility. The redirects are as stable as
+// the icons themselves, so cache them just as long.
+const redirectToIcon = (target) => (req, res) => {
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  res.redirect(target);
+};
 
-app.get('/apple-touch-icon.png', (req, res) => {
-  res.redirect('/icons/ios/180.png');
-});
-
-app.get('/apple-touch-icon-precomposed.png', (req, res) => {
-  res.redirect('/icons/ios/180.png');
-});
-
-app.get('/apple-touch-icon-120x120.png', (req, res) => {
-  res.redirect('/icons/ios/120.png');
-});
-
-app.get('/apple-touch-icon-152x152.png', (req, res) => {
-  res.redirect('/icons/ios/152.png');
-});
-
-app.get('/apple-touch-icon-180x180.png', (req, res) => {
-  res.redirect('/icons/ios/180.png');
-});
+app.get('/favicon.ico', redirectToIcon('/icons/ios/32.png'));
+app.get('/apple-touch-icon.png', redirectToIcon('/icons/ios/180.png'));
+app.get(
+  '/apple-touch-icon-precomposed.png',
+  redirectToIcon('/icons/ios/180.png')
+);
+app.get('/apple-touch-icon-120x120.png', redirectToIcon('/icons/ios/120.png'));
+app.get('/apple-touch-icon-152x152.png', redirectToIcon('/icons/ios/152.png'));
+app.get('/apple-touch-icon-180x180.png', redirectToIcon('/icons/ios/180.png'));
 
 // ============ ERROR HANDLING ============
 

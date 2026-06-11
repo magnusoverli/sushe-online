@@ -470,13 +470,16 @@
   <%- modalPortalComponent() %>
   
   <script>
-    // Global state - must be set before bundle.js loads
+    // Global state - must be set before main.js loads
     window.currentUser = <%- safeJsonStringify(user) %>;
     window.lastSelectedList = <%- safeJsonStringify(user.lastSelectedList || null) %>;
     window.csrfToken = <%- safeJsonStringify(csrfToken) %>;
   </script>
   
-  <script type="module" src="<%= asset('/js/bundle.js') %>"></script>
+  <!-- No asset() version query here: lazy chunks import this exact URL, and a
+       ?v= query would make the browser load the entry twice as two separate
+       modules. Freshness comes from Cache-Control: no-cache on this file. -->
+  <script type="module" src="/js/main.js"></script>
 
   <script>
 

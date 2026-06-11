@@ -17,7 +17,7 @@ const DEFAULT_IGNORED_PREFIXES = [
   'package-lock.json',
   'skills-lock.json',
   'public/js/chunks/',
-  'public/js/bundle.js',
+  'public/js/main.js',
   'public/styles/output.css',
   'playwright-report/',
   'test-results/',
