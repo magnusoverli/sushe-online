@@ -54,18 +54,6 @@ function calculateUpdatedTrackPicks(current, trackIdentifier, targetPriority) {
 function createListItemsRepository(deps = {}) {
   const db = ensureDb(deps.db, 'list-items-repository');
 
-  async function findByExternalId(listItemId) {
-    const result = await db.raw(
-      `SELECT _id, list_id, position, album_id, comments, comments_2, primary_track, secondary_track
-       FROM list_items
-       WHERE _id = $1
-       LIMIT 1`,
-      [listItemId],
-      { name: 'list-items-repo-find-by-id', retryable: true }
-    );
-    return result.rows[0] || null;
-  }
-
   async function findWithAlbumData(listId) {
     const result = await db.raw(
       `SELECT
@@ -180,7 +168,6 @@ function createListItemsRepository(deps = {}) {
   }
 
   return {
-    findByExternalId,
     findWithAlbumData,
     findItemWithOwner,
     setTrackPick,

@@ -89,27 +89,6 @@ module.exports = (app, deps) => {
     )
   );
 
-  app.get(
-    '/api/aggregate-list-years',
-    ensureAuthAPI,
-    asyncHandler(handlers.getRevealedYears, 'fetching revealed years', {
-      errorMessage: 'Database error',
-    })
-  );
-
-  app.get(
-    '/api/aggregate-list-years/with-main-lists',
-    ensureAuthAPI,
-    ensureAdmin,
-    asyncHandler(
-      handlers.getYearsWithMainLists,
-      'fetching years with main lists',
-      {
-        errorMessage: 'Database error',
-      }
-    )
-  );
-
   app.post(
     '/api/aggregate-list/:year/recompute',
     ensureAuthAPI,
@@ -144,15 +123,6 @@ module.exports = (app, deps) => {
     ensureAdmin,
     validateYearParam,
     asyncHandler(handlers.resetSeen, 'resetting reveal view status', {
-      errorMessage: 'Database error',
-    })
-  );
-
-  app.get(
-    '/api/aggregate-list/viewed-years',
-    ensureAuthAPI,
-    ensureAdmin,
-    asyncHandler(handlers.getViewedYears, 'fetching viewed years', {
       errorMessage: 'Database error',
     })
   );

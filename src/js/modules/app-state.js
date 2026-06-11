@@ -329,14 +329,6 @@ export function setCurrentRecommendationsYear(year) {
 }
 
 /**
- * Get the set of years that have recommendations
- * @returns {Set<number>}
- */
-export function getRecommendationYears() {
-  return recommendationYears;
-}
-
-/**
  * Set the years that have recommendations (from API response)
  * @param {number[]} years - Array of years
  */

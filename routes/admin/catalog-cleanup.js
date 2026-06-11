@@ -1,7 +1,6 @@
 const logger = require('../../utils/logger');
 const {
   createCatalogCleanupService,
-  DEFAULT_MIN_AGE_DAYS,
 } = require('../../services/catalog-cleanup');
 
 module.exports = (app, deps) => {
@@ -74,15 +73,6 @@ module.exports = (app, deps) => {
           error: 'Failed to execute catalog cleanup',
         });
       }
-    }
-  );
-
-  app.get(
-    '/api/admin/catalog-cleanup/default-age',
-    ensureAuth,
-    ensureAdmin,
-    (req, res) => {
-      res.json({ minAgeDays: DEFAULT_MIN_AGE_DAYS });
     }
   );
 };

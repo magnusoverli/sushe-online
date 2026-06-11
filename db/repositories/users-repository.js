@@ -28,18 +28,6 @@ function createUsersRepository(deps = {}) {
     return mapUserRow(result.rows[0] || null);
   }
 
-  async function findByUsername(username) {
-    const result = await db.raw(
-      `SELECT ${USER_SELECT_COLUMNS}
-       FROM users
-       WHERE username = $1
-       LIMIT 1`,
-      [username],
-      { name: 'users-repo-find-by-username', retryable: true }
-    );
-    return mapUserRow(result.rows[0] || null);
-  }
-
   async function findByResetToken(token, nowMs = Date.now()) {
     const result = await db.raw(
       `SELECT ${USER_SELECT_COLUMNS}
@@ -182,7 +170,6 @@ function createUsersRepository(deps = {}) {
   return {
     findById,
     findByEmail,
-    findByUsername,
     findByResetToken,
     setResetToken,
     resetPasswordByToken,

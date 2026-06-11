@@ -42,43 +42,6 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Get event history
-  app.get(
-    '/api/admin/events/history',
-    ensureAuth,
-    ensureAdmin,
-    async (req, res) => {
-      try {
-        const { type, limit, offset } = req.query;
-        const result = await adminEventService.getEventHistory({
-          type,
-          limit: limit ? parseInt(limit, 10) : 50,
-          offset: offset ? parseInt(offset, 10) : 0,
-        });
-        res.json(result);
-      } catch (error) {
-        logger.error('Error fetching event history', { error: error.message });
-        res.status(500).json({ error: 'Failed to fetch event history' });
-      }
-    }
-  );
-
-  // Get pending event counts (for dashboard badge)
-  app.get(
-    '/api/admin/events/counts',
-    ensureAuth,
-    ensureAdmin,
-    async (req, res) => {
-      try {
-        const counts = await adminEventService.getPendingCountsByPriority();
-        res.json(counts);
-      } catch (error) {
-        logger.error('Error fetching event counts', { error: error.message });
-        res.status(500).json({ error: 'Failed to fetch counts' });
-      }
-    }
-  );
-
   // Get single event by ID
   app.get(
     '/api/admin/events/:eventId',
@@ -133,19 +96,6 @@ module.exports = (app, deps) => {
         });
         res.status(500).json({ error: 'Failed to execute action' });
       }
-    }
-  );
-
-  // Get available actions for an event type
-  app.get(
-    '/api/admin/events/actions/:eventType',
-    ensureAuth,
-    ensureAdmin,
-    (req, res) => {
-      const actions = adminEventService.getAvailableActions(
-        req.params.eventType
-      );
-      res.json({ actions });
     }
   );
 

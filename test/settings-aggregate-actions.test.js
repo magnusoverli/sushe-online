@@ -231,7 +231,6 @@ describe('settings aggregate actions', () => {
   it('unlocks recommendations and re-enables manage button', async () => {
     const apiCalls = [];
     const toasts = [];
-    const invalidateCalls = [];
     const managerCalls = [];
 
     const lockButton = createElement({
@@ -281,11 +280,6 @@ describe('settings aggregate actions', () => {
       handleShowRecommenderManager: async (year) => managerCalls.push(year),
       createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
       doc,
-      win: {
-        invalidateLockedRecommendationYearsCache() {
-          invalidateCalls.push(true);
-        },
-      },
     });
 
     await actions.handleToggleRecommendationLock(2023, true);
@@ -307,7 +301,6 @@ describe('settings aggregate actions', () => {
     );
     await disabledManageButton.replacedWith.listeners.click();
     assert.deepStrictEqual(managerCalls, [2023]);
-    assert.strictEqual(invalidateCalls.length, 1);
   });
 
   it('recomputes aggregate list and refreshes stats grid content', async () => {

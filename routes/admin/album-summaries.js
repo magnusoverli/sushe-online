@@ -124,35 +124,5 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Fetch summary for a single album (for testing/manual trigger)
-  app.post(
-    '/api/admin/album-summaries/fetch-single',
-    ensureAuth,
-    ensureAdmin,
-    async (req, res) => {
-      try {
-        const { albumId } = req.body;
-
-        if (!albumId) {
-          return res.status(400).json({ error: 'albumId is required' });
-        }
-
-        const result = await albumSummaryService.fetchAndStoreSummary(albumId);
-
-        res.json({
-          success: result.success,
-          hasSummary: result.hasSummary,
-          error: result.error,
-        });
-      } catch (error) {
-        logger.error('Error fetching single album summary', {
-          error: error.message,
-          albumId: req.body?.albumId,
-        });
-        res.status(500).json({ error: error.message });
-      }
-    }
-  );
-
   return { albumSummaryService };
 };

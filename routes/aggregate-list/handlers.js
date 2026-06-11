@@ -94,16 +94,6 @@ function createAggregateListHandlers(deps = {}) {
     });
   }
 
-  async function getRevealedYears(req, res) {
-    const years = await aggregateList.getRevealedYears();
-    res.json({ years });
-  }
-
-  async function getYearsWithMainLists(req, res) {
-    const years = await aggregateList.getYearsWithMainLists();
-    res.json({ years });
-  }
-
   async function recompute(req, res) {
     const year = req.validatedYear;
     await aggregateList.recompute(year);
@@ -138,11 +128,6 @@ function createAggregateListHandlers(deps = {}) {
         ? `Reveal view status reset for ${year}`
         : 'No view record found to reset',
     });
-  }
-
-  async function getViewedYears(req, res) {
-    const viewedYears = await aggregateList.getViewedYears(req.user._id);
-    res.json({ viewedYears });
   }
 
   async function getContributors(req, res) {
@@ -256,11 +241,8 @@ function createAggregateListHandlers(deps = {}) {
     getContributors,
     getEligibleUsers,
     getLockedYears,
-    getRevealedYears,
     getStats,
     getStatus,
-    getViewedYears,
-    getYearsWithMainLists,
     hasSeen,
     lockYear,
     markSeen,

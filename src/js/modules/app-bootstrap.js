@@ -24,7 +24,6 @@ export function createAppBootstrap(deps = {}) {
     getListCrudModule,
     initializeImportConflictHandling,
     initializeRealtimeSync,
-    registerDiscoveryAddAlbumHandler,
     initializeFileImportHandlers,
     checkListSetupStatus,
     showToast,
@@ -62,7 +61,6 @@ export function createAppBootstrap(deps = {}) {
     getListCrudModule().initializeRenameList();
     initializeImportConflictHandling();
     initializeRealtimeSync();
-    registerDiscoveryAddAlbumHandler();
     initializeFileImportHandlers();
 
     setTimeoutFn(() => {

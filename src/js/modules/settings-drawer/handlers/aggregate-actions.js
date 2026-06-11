@@ -7,7 +7,6 @@
 export function createSettingsAggregateActions(deps = {}) {
   const doc =
     deps.doc || (typeof document !== 'undefined' ? document : undefined);
-  const win = deps.win || (typeof window !== 'undefined' ? window : undefined);
 
   const {
     showConfirmation,
@@ -229,10 +228,6 @@ export function createSettingsAggregateActions(deps = {}) {
             });
             disabledRecommenderButton.replaceWith(newButton);
           }
-        }
-
-        if (win?.invalidateLockedRecommendationYearsCache) {
-          win.invalidateLockedRecommendationYearsCache();
         }
       }
     } catch (error) {
