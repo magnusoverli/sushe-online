@@ -37,6 +37,19 @@ function createSecurityHandlers(deps = {}) {
         invalidateUserCache(req.user._id);
       }
 
+      // Stolen extension tokens must not outlive the old password
+      try {
+        await authService.revokeAllExtensionTokens(req.user._id);
+      } catch (revokeError) {
+        logger.error(
+          'Failed to revoke extension tokens after password change',
+          {
+            error: revokeError.message,
+            userId: req.user._id,
+          }
+        );
+      }
+
       return respondWithSuccess(req, res, 'Password updated successfully', '/');
     } catch (error) {
       logger.error('Password change error', {

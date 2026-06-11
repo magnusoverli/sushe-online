@@ -153,10 +153,11 @@ export function createSorting(deps = {}) {
         const newIndex = evt.newIndex;
 
         if (oldIndex !== newIndex) {
+          let list = null;
           try {
             // Update the data
             const currentList = getCurrentList();
-            const list = getListData(currentList);
+            list = getListData(currentList);
             if (!list) {
               console.error('List data not found');
               return;
@@ -181,14 +182,19 @@ export function createSorting(deps = {}) {
             if (showToast) {
               showToast('Error saving changes', 'error');
             }
-            // Revert the change on error
-            const items = Array.from(evt.to.children);
-            const itemToMove = items[newIndex];
-            if (oldIndex < items.length) {
-              evt.to.insertBefore(itemToMove, items[oldIndex]);
-            } else {
-              evt.to.appendChild(itemToMove);
+            // Revert the data change too, or the next save would persist
+            // the order the user just saw fail
+            if (list) {
+              const [movedItem] = list.splice(newIndex, 1);
+              list.splice(oldIndex, 0, movedItem);
             }
+            // Put the dragged element itself back at its original index;
+            // sibling indices have shifted, so compute the reference from
+            // the list without the dragged element
+            const others = Array.from(evt.to.children).filter(
+              (el) => el !== evt.item
+            );
+            evt.to.insertBefore(evt.item, others[oldIndex] || null);
             updatePositionNumbers(sortableContainer, isMobile);
           }
         }

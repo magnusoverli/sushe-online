@@ -384,6 +384,24 @@ function createAuthService(deps = {}) {
   }
 
   /**
+   * Revoke every active extension token for a user.
+   * Called when the password changes so stolen tokens die with it.
+   *
+   * @param {string} userId
+   * @returns {Promise<{ revokedCount: number }>}
+   */
+  async function revokeAllExtensionTokens(userId) {
+    const result = await db.raw(
+      `UPDATE extension_tokens
+       SET is_revoked = TRUE
+       WHERE user_id = $1 AND is_revoked = FALSE`,
+      [userId],
+      { name: 'extension-tokens-revoke-all' }
+    );
+    return { revokedCount: result.rowCount };
+  }
+
+  /**
    * List all extension tokens for a user.
    *
    * @param {Object} [_unusedPoolArg]
@@ -413,6 +431,7 @@ function createAuthService(deps = {}) {
     getSessionMaxAge,
     createExtensionToken,
     revokeExtensionToken,
+    revokeAllExtensionTokens,
     listExtensionTokens,
     getUserById,
     getUserByEmail,

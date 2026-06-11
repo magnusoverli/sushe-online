@@ -139,12 +139,15 @@ function createSpotifyPlaylistService(deps) {
             return albumData.tracks[trackNum - 1].uri;
           }
 
-          // Try to match by track name
-          const matchingTrack = albumData.tracks.find(
-            (t) =>
-              t.name.toLowerCase().includes(trackPick.toLowerCase()) ||
-              trackPick.toLowerCase().includes(t.name.toLowerCase())
-          );
+          // Try to match by track name (skip tracks with missing metadata)
+          const pickLower = trackPick.toLowerCase();
+          const matchingTrack = albumData.tracks.find((t) => {
+            if (!t?.name) return false;
+            const nameLower = t.name.toLowerCase();
+            return (
+              nameLower.includes(pickLower) || pickLower.includes(nameLower)
+            );
+          });
           if (matchingTrack) {
             return matchingTrack.uri;
           }
@@ -250,10 +253,17 @@ function createSpotifyPlaylistService(deps) {
       }
 
       const newPlaylist = await createResp.json();
-      playlistId = newPlaylist.id;
-      result.playlistUrl = newPlaylist.external_urls.spotify;
+      playlistId = newPlaylist?.id;
+      if (!playlistId) {
+        throw new Error('Spotify playlist creation returned no playlist id');
+      }
+      result.playlistUrl =
+        newPlaylist.external_urls?.spotify ||
+        `https://open.spotify.com/playlist/${playlistId}`;
     } else {
-      result.playlistUrl = existingPlaylist.external_urls.spotify;
+      result.playlistUrl =
+        existingPlaylist.external_urls?.spotify ||
+        `https://open.spotify.com/playlist/${playlistId}`;
     }
 
     // Collect track URIs with parallel processing

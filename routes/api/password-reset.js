@@ -45,6 +45,13 @@ module.exports = (app, deps) => {
   const getUserByResetToken = authService.getUserByResetToken.bind(authService);
   const resetPasswordByToken =
     authService.resetPasswordByToken.bind(authService);
+  const revokeAllExtensionTokens =
+    authService.revokeAllExtensionTokens.bind(authService);
+
+  // Only the SHA-256 of the token is stored, so a leaked DB row or backup
+  // can't be replayed as a live reset link
+  const hashResetToken = (token) =>
+    crypto.createHash('sha256').update(token).digest('hex');
 
   // Forgot password page
   app.get('/forgot', csrfProtection, (req, res) => {
@@ -88,7 +95,7 @@ module.exports = (app, deps) => {
 
         const numReplaced = await issuePasswordResetToken(
           user._id,
-          token,
+          hashResetToken(token),
           expires
         );
 
@@ -156,7 +163,7 @@ module.exports = (app, deps) => {
   // Reset password page
   app.get('/reset/:token', csrfProtection, async (req, res) => {
     try {
-      const user = await getUserByResetToken(req.params.token);
+      const user = await getUserByResetToken(hashResetToken(req.params.token));
       if (!user) {
         return res.send(
           htmlTemplate(
@@ -187,7 +194,9 @@ module.exports = (app, deps) => {
     csrfProtection,
     async (req, res) => {
       try {
-        const user = await getUserByResetToken(req.params.token);
+        const user = await getUserByResetToken(
+          hashResetToken(req.params.token)
+        );
 
         if (!user) {
           return res.send(
@@ -206,7 +215,7 @@ module.exports = (app, deps) => {
         const hash = await bcrypt.hash(req.body.password, 12);
 
         const numReplaced = await resetPasswordByToken(
-          req.params.token,
+          hashResetToken(req.params.token),
           Date.now(),
           hash
         );
@@ -215,6 +224,16 @@ module.exports = (app, deps) => {
           logger.error('No user updated during password reset');
           req.flash('error', 'Error updating password. Please try again.');
           return res.redirect('/reset/' + req.params.token);
+        }
+
+        // Stolen extension tokens must not outlive the old password
+        try {
+          await revokeAllExtensionTokens(user._id);
+        } catch (revokeError) {
+          logger.error(
+            'Failed to revoke extension tokens after password reset',
+            { error: revokeError.message, userId: user._id }
+          );
         }
 
         logger.info('Password successfully updated for user:', user.email);

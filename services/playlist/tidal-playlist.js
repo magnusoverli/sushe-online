@@ -146,14 +146,16 @@ function createTidalPlaylistService(deps) {
           return albumData.tracks[trackNum - 1].id;
         }
 
-        // Try to match by track name
-        const matchingTrack = albumData.tracks.find(
-          (t) =>
-            t.attributes.title
-              .toLowerCase()
-              .includes(trackPick.toLowerCase()) ||
-            trackPick.toLowerCase().includes(t.attributes.title.toLowerCase())
-        );
+        // Try to match by track name (skip tracks with missing metadata)
+        const pickLower = trackPick.toLowerCase();
+        const matchingTrack = albumData.tracks.find((t) => {
+          const title = t?.attributes?.title;
+          if (!title) return false;
+          const titleLower = title.toLowerCase();
+          return (
+            titleLower.includes(pickLower) || pickLower.includes(titleLower)
+          );
+        });
         if (matchingTrack) {
           return matchingTrack.id;
         }
@@ -243,7 +245,10 @@ function createTidalPlaylistService(deps) {
       }
 
       const newPlaylist = await createResp.json();
-      playlistId = newPlaylist.data.id;
+      playlistId = newPlaylist?.data?.id;
+      if (!playlistId) {
+        throw new Error('Tidal playlist creation returned no playlist id');
+      }
       result.playlistUrl = `https://tidal.com/browse/playlist/${playlistId}`;
     } else {
       result.playlistUrl = `https://tidal.com/browse/playlist/${playlistId}`;
