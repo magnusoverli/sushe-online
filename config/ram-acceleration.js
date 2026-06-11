@@ -19,26 +19,31 @@ const BYTE_UNITS = {
   gb: 1024 * 1024 * 1024,
 };
 
-function parseBoolean(value, fallback = false) {
-  if (value === undefined || value === null || value === '') return fallback;
+function parseBoolean(value, defaultValue = false) {
+  if (value === undefined || value === null || value === '')
+    return defaultValue;
   if (typeof value === 'boolean') return value;
 
   const normalized = String(value).trim().toLowerCase();
   if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
   if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
-  return fallback;
+  return defaultValue;
 }
 
-function parsePositiveInteger(value, fallback) {
-  if (value === undefined || value === null || value === '') return fallback;
+function parsePositiveInteger(value, defaultValue) {
+  if (value === undefined || value === null || value === '')
+    return defaultValue;
   const parsed = Number(String(value).trim());
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : fallback;
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : defaultValue;
 }
 
-function parseBytes(value, fallback) {
-  if (value === undefined || value === null || value === '') return fallback;
+function parseBytes(value, defaultValue) {
+  if (value === undefined || value === null || value === '')
+    return defaultValue;
   if (typeof value === 'number') {
-    return Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback;
+    return Number.isFinite(value) && value >= 0
+      ? Math.floor(value)
+      : defaultValue;
   }
 
   const normalized = String(value).trim().toLowerCase();
@@ -59,13 +64,13 @@ function parseBytes(value, fallback) {
 
   const amountText = normalized.slice(0, valueEnd);
   if (!amountText || amountText[0] === '.' || amountText.endsWith('.')) {
-    return fallback;
+    return defaultValue;
   }
 
   const amount = Number.parseFloat(amountText);
   const unit = normalized.slice(valueEnd).trim() || 'b';
   const multiplier = BYTE_UNITS[unit];
-  if (!Number.isFinite(amount) || !multiplier) return fallback;
+  if (!Number.isFinite(amount) || !multiplier) return defaultValue;
   return Math.floor(amount * multiplier);
 }
 
