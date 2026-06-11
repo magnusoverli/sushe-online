@@ -15,7 +15,7 @@ const { validateYearParam } = require('../../middleware/validate-params');
  */
 module.exports = (appInstance, deps) => {
   const app = appInstance;
-  const { ensureAuthAPI, logger, recommendationService } = deps;
+  const { ensureAuthAPI, logger, recommendationService, responseCache } = deps;
 
   const { createAsyncHandler } = require('../../middleware/async-handler');
   const asyncHandler = createAsyncHandler(logger);
@@ -69,6 +69,8 @@ module.exports = (appInstance, deps) => {
           req.user
         );
 
+        responseCache.invalidate('GET:/api/app-bootstrap');
+
         // Send Telegram notification (fire-and-forget)
         const telegramNotifier = app.locals.telegramNotifier;
         if (telegramNotifier?.sendRecommendationNotification) {
@@ -117,6 +119,8 @@ module.exports = (appInstance, deps) => {
         const { albumId } = req.params;
 
         await recommendationService.removeRecommendation(year, albumId);
+
+        responseCache.invalidate('GET:/api/app-bootstrap');
 
         logger.info('Admin action', {
           action: 'remove_recommendation',

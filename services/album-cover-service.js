@@ -42,10 +42,19 @@ function createAlbumCoverService(deps = {}) {
        SET cover_image = $1,
            cover_image_format = $2,
            cover_image_updated_at = NOW(),
+           cover_thumbnail = $3,
+           cover_thumbnail_format = $4,
+           cover_thumbnail_updated_at = NOW(),
            updated_at = NOW()
-       WHERE album_id = $3
-       RETURNING album_id, cover_image_updated_at`,
-      [processed.buffer, processed.format, albumId]
+       WHERE album_id = $5
+       RETURNING album_id, cover_image_updated_at, cover_thumbnail_updated_at`,
+      [
+        processed.buffer,
+        processed.format,
+        processed.thumbnailBuffer,
+        processed.thumbnailFormat,
+        albumId,
+      ]
     );
 
     if (result.rowCount === 0) {
@@ -62,8 +71,11 @@ function createAlbumCoverService(deps = {}) {
     return {
       albumId: result.rows[0].album_id,
       coverImageUpdatedAt: result.rows[0].cover_image_updated_at,
+      coverThumbnailUpdatedAt: result.rows[0].cover_thumbnail_updated_at,
       size: processed.buffer.length,
+      thumbnailSize: processed.thumbnailBuffer.length,
       format: processed.format,
+      thumbnailFormat: processed.thumbnailFormat,
     };
   }
 

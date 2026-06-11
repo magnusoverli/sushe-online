@@ -303,12 +303,17 @@ function createAlbumCanonical(deps = {}) {
     const sanitizedArtist = sanitizeForStorage(albumData.artist);
     const sanitizedAlbum = sanitizeForStorage(albumData.album);
 
-    // Convert cover image to Buffer if needed
+    // Convert cover image to Buffer if needed. Explicit cover preparation may
+    // pass an object with processed buffers to keep sharp work outside locks.
     let coverImageBuffer = null;
     if (albumData.cover_image) {
-      coverImageBuffer = Buffer.isBuffer(albumData.cover_image)
-        ? albumData.cover_image
-        : Buffer.from(albumData.cover_image, 'base64');
+      if (Buffer.isBuffer(albumData.cover_image)) {
+        coverImageBuffer = albumData.cover_image;
+      } else if (Buffer.isBuffer(albumData.cover_image.buffer)) {
+        coverImageBuffer = albumData.cover_image.buffer;
+      } else {
+        coverImageBuffer = Buffer.from(albumData.cover_image, 'base64');
+      }
     }
 
     // Generate album_id if not provided
@@ -327,7 +332,8 @@ function createAlbumCanonical(deps = {}) {
     const tracks = Array.isArray(albumData.tracks)
       ? JSON.stringify(albumData.tracks)
       : null;
-    const coverFormat = albumData.cover_image_format || '';
+    const coverFormat =
+      albumData.cover_image?.format || albumData.cover_image_format || '';
 
     // Use different conflict strategies based on whether album_id exists
     if (albumData.album_id) {

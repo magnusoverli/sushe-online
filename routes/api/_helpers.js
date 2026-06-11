@@ -340,9 +340,10 @@ function createHelpers(deps) {
   function invalidateListCaches(userId, listId = null, options = {}) {
     const { full = true, groups = false } = options;
     if (listId) {
-      responseCache.invalidate(`GET:/api/lists/${listId}:${userId}`);
+      responseCache.invalidate(`GET:/api/lists/${listId}`);
     }
     responseCache.invalidate(`GET:/api/lists:${userId}`);
+    responseCache.invalidate('GET:/api/app-bootstrap');
     if (full) {
       responseCache.invalidate(`GET:/api/lists?full=true:${userId}`);
     }

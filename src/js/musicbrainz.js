@@ -2214,36 +2214,13 @@ async function addAlbumToList(releaseGroup) {
     }
   }
 
-  // Process cover art if found (already loaded via provider system)
   if (coverArtUrl) {
-    try {
-      // Use the image proxy endpoint to fetch external images
-      const proxyUrl = `/api/proxy/image?url=${encodeURIComponent(coverArtUrl)}`;
-      const response = await fetch(proxyUrl, {
-        credentials: 'same-origin',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch image through proxy');
-      }
-
-      const data = await response.json();
-
-      if (data.data && data.contentType) {
-        album.cover_image = data.data;
-        album.cover_image_format = data.contentType.split('/')[1].toUpperCase();
-      }
-
-      addAlbumToCurrentList(album);
-    } catch (error) {
-      console.warn('Error fetching cover art:', error);
-      // Error fetching cover art - will proceed without
-      addAlbumToCurrentList(album);
-    }
-  } else {
-    // No cover art available
-    addAlbumToCurrentList(album);
+    album.external_cover_url = coverArtUrl;
   }
+
+  // Do not block the optimistic add on image proxying/resizing. The server-side
+  // cover fetch queue resolves and stores covers after the list save.
+  addAlbumToCurrentList(album);
 }
 
 async function addAlbumToCurrentList(album) {

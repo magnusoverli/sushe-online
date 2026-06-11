@@ -24,12 +24,45 @@ export function createListSelection(deps = {}) {
     showLoadingSpinner,
     getListData,
     isListDataLoaded,
+    isListDataFullyLoaded,
+    getListDataProfile,
     apiCall,
     setListData,
     displayAlbums,
     fetchAndDisplayPlaycounts,
+    wasRecentLocalSave,
     showToast,
   } = deps;
+
+  async function hydrateListDetails(listId) {
+    if (!listId || isListDataFullyLoaded?.(listId)) return;
+
+    try {
+      const fullData = await apiCall(
+        `/api/lists/${encodeURIComponent(listId)}`
+      );
+      if (getCurrentListId() !== listId) return;
+      if (wasRecentLocalSave?.(listId)) return;
+
+      setListData(listId, fullData, true, { profile: 'full' });
+      if (getCurrentListId() === listId) {
+        displayAlbums(fullData, { forceFullRebuild: true });
+      }
+    } catch (error) {
+      logger.warn('Failed to hydrate list details:', error);
+    }
+  }
+
+  async function fetchCoreList(listId) {
+    return apiCall(`/api/lists/${encodeURIComponent(listId)}?profile=core`)
+      .then((items) => ({ items, profile: 'core' }))
+      .catch(() =>
+        apiCall(`/api/lists/${encodeURIComponent(listId)}`).then((items) => ({
+          items,
+          profile: 'full',
+        }))
+      );
+  }
 
   async function selectList(listId) {
     try {
@@ -83,12 +116,18 @@ export function createListSelection(deps = {}) {
           const needsFetch = !isListDataLoaded(listId);
 
           if (needsFetch) {
-            data = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
-            setListData(listId, data);
+            const payload = await fetchCoreList(listId);
+            data = payload.items;
+            setListData(listId, data, true, { profile: payload.profile });
           }
 
           if (getCurrentListId() === listId) {
             displayAlbums(data, { forceFullRebuild: true });
+
+            const loadedProfile = getListDataProfile?.(listId) || 'full';
+            if (loadedProfile !== 'full') {
+              hydrateListDetails(listId);
+            }
 
             fetchAndDisplayPlaycounts(listId).catch((error) => {
               logger.warn('Background playcount fetch failed:', error);

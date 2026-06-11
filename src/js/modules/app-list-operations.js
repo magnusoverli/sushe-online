@@ -93,27 +93,62 @@ export function createAppListOperations(deps = {}) {
       // and the correct list is fetched. Same endpoint and shape as before, so
       // the rendered list is identical — only the network timing changes.
       const candidateTargetId = localLastListId || serverLastListId || null;
-      const candidateDataPromise = candidateTargetId
-        ? apiCall(`/api/lists/${encodeURIComponent(candidateTargetId)}`).catch(
-            () => null
-          )
-        : null;
+      let candidateDataPromise = null;
+      let fetchedLists;
+      let fetchedGroups;
+      let recommendationYears = [];
 
-      const metadataPromise = apiCall('/api/lists');
-      const groupsPromise = apiCall('/api/groups');
-      const recYearsPromise = apiCall('/api/recommendations/years').catch(
-        () => ({
-          years: [],
-        })
-      );
+      try {
+        const query = candidateTargetId
+          ? `?selectedListId=${encodeURIComponent(candidateTargetId)}`
+          : '';
+        const bootstrap = await apiCall(`/api/app-bootstrap${query}`);
+        fetchedLists = bootstrap.lists || {};
+        fetchedGroups = bootstrap.groups || [];
+        recommendationYears = bootstrap.recommendationYears || [];
+        if (bootstrap.selectedListId && bootstrap.selectedListItems) {
+          candidateDataPromise = Promise.resolve({
+            items: bootstrap.selectedListItems,
+            profile: bootstrap.selectedListProfile || 'core',
+          });
+        }
+      } catch (error) {
+        logger.warn(
+          'App bootstrap failed, falling back to legacy load:',
+          error
+        );
+        const fetchCoreList = (listId) =>
+          apiCall(`/api/lists/${encodeURIComponent(listId)}?profile=core`)
+            .then((items) => ({ items, profile: 'core' }))
+            .catch(() =>
+              apiCall(`/api/lists/${encodeURIComponent(listId)}`).then(
+                (items) => ({ items, profile: 'full' })
+              )
+            );
 
-      const [fetchedLists, fetchedGroups, recYearsData] = await Promise.all([
-        metadataPromise,
-        groupsPromise,
-        recYearsPromise,
-      ]);
+        candidateDataPromise = candidateTargetId
+          ? fetchCoreList(candidateTargetId).catch(() => null)
+          : null;
 
-      setRecommendationYears(recYearsData.years || []);
+        const metadataPromise = apiCall('/api/lists');
+        const groupsPromise = apiCall('/api/groups');
+        const recYearsPromise = apiCall('/api/recommendations/years').catch(
+          () => ({
+            years: [],
+          })
+        );
+
+        const [metadata, groups, recYearsData] = await Promise.all([
+          metadataPromise,
+          groupsPromise,
+          recYearsPromise,
+        ]);
+        fetchedLists = metadata;
+        fetchedGroups = groups;
+        recommendationYears = recYearsData.years || [];
+      }
+
+      setRecommendationYears(recommendationYears);
       updateGroupsFromServer(fetchedGroups);
 
       const newLists = {};
@@ -170,16 +205,24 @@ export function createAppListOperations(deps = {}) {
         try {
           // Reuse the in-flight prefetch when it was for this same list;
           // otherwise fetch the correct one.
-          let listData =
+          let listPayload =
             targetListId === candidateTargetId && candidateDataPromise
               ? await candidateDataPromise
               : null;
-          if (!listData) {
-            listData = await apiCall(
-              `/api/lists/${encodeURIComponent(targetListId)}`
-            );
+          if (!listPayload) {
+            listPayload = await apiCall(
+              `/api/lists/${encodeURIComponent(targetListId)}?profile=core`
+            )
+              .then((items) => ({ items, profile: 'core' }))
+              .catch(() =>
+                apiCall(`/api/lists/${encodeURIComponent(targetListId)}`).then(
+                  (items) => ({ items, profile: 'full' })
+                )
+              );
           }
-          setListData(targetListId, listData);
+          setListData(targetListId, listPayload.items, true, {
+            profile: listPayload.profile || 'full',
+          });
 
           if (!getCurrentListId()) {
             selectList(targetListId);

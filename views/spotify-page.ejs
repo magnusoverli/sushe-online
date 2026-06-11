@@ -23,7 +23,6 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&display=swap">
   <link href="<%= asset('/styles/output.css') %>" rel="stylesheet">
   <link href="<%= asset('/styles/app.css') %>" rel="stylesheet">
-  <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
   <style>
     /* CSS Custom Properties for theming */
     :root {
@@ -476,10 +475,7 @@
     window.csrfToken = <%- safeJsonStringify(csrfToken) %>;
   </script>
   
-  <!-- No asset() version query here: lazy chunks import this exact URL, and a
-       ?v= query would make the browser load the entry twice as two separate
-       modules. Freshness comes from Cache-Control: no-cache on this file. -->
-  <script type="module" src="/js/main.js"></script>
+  <script type="module" src="<%= viteAsset('src/js/main.js') %>"></script>
 
   <script>
 

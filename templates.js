@@ -31,6 +31,25 @@ const ejs = require('ejs');
 const assetVersion = process.env.ASSET_VERSION || Date.now().toString();
 const asset = createAssetHelper(assetVersion);
 
+let viteManifest = null;
+function viteAsset(entry = 'src/js/main.js') {
+  if (!viteManifest) {
+    try {
+      viteManifest = JSON.parse(
+        fs.readFileSync(
+          path.join(__dirname, 'public/js/.vite/manifest.json'),
+          'utf8'
+        )
+      );
+    } catch (_error) {
+      viteManifest = {};
+    }
+  }
+
+  const file = viteManifest[entry]?.file;
+  return file ? `/js/${file}` : '/js/main.js';
+}
+
 const viewsDir = path.join(__dirname, 'views');
 // Precompile EJS templates for caching
 const layoutTemplateFn = ejs.compile(
@@ -76,6 +95,7 @@ const { contextMenusComponent, settingsDrawerComponent, modalPortalComponent } =
 
 const spotifyTemplate = createSpotifyTemplate({
   asset,
+  viteAsset,
   generateAccentCssVars,
   generateAccentOverrides,
   headerComponent,

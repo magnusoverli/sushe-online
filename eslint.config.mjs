@@ -28,6 +28,7 @@ export default [
   {
     ignores: [
       'public/js/main.js',
+      'public/js/assets/**',
       'public/js/chunks/**',
       'dist/**',
       'node_modules/**',

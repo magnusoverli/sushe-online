@@ -21,7 +21,7 @@ const logger = require('../utils/logger');
 const { normalizeForExternalApi } = require('../utils/normalization');
 const { nameSimilarity } = require('../utils/entity-matching');
 const {
-  processImage,
+  processCoverImageVariants,
   upscaleItunesArtworkUrl,
 } = require('../utils/image-processing');
 const {
@@ -357,7 +357,7 @@ function createCoverFetchQueue(deps = {}) {
 
         if (rawBuffer && rawBuffer.length > 0) {
           // Process image through sharp for consistent output
-          const processedBuffer = await processImage(rawBuffer);
+          const processed = await processCoverImageVariants(rawBuffer);
 
           // Store in database
           const result = await db.raw(
@@ -365,9 +365,18 @@ function createCoverFetchQueue(deps = {}) {
              SET cover_image = $1,
                  cover_image_format = $2,
                  cover_image_updated_at = NOW(),
+                 cover_thumbnail = $3,
+                 cover_thumbnail_format = $4,
+                 cover_thumbnail_updated_at = NOW(),
                  updated_at = NOW()
-             WHERE album_id = $3`,
-            [processedBuffer, 'JPEG', albumId]
+             WHERE album_id = $5`,
+            [
+              processed.buffer,
+              processed.format,
+              processed.thumbnailBuffer,
+              processed.thumbnailFormat,
+              albumId,
+            ]
           );
 
           if (result.rowCount === 0) {
@@ -381,7 +390,8 @@ function createCoverFetchQueue(deps = {}) {
             album,
             provider: provider.name,
             rawSize: rawBuffer.length,
-            processedSize: processedBuffer.length,
+            processedSize: processed.buffer.length,
+            thumbnailSize: processed.thumbnailBuffer.length,
           });
 
           return; // Success - exit loop

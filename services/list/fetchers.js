@@ -42,7 +42,8 @@ function createListFetchers(deps = {}) {
          a.genre_2,
          a.tracks,
           a.cover_image_format,
-          a.cover_image_updated_at,
+           a.cover_image_updated_at,
+           a.cover_thumbnail_updated_at,
           a.summary,
          a.summary_source,
          COALESCE((
@@ -171,13 +172,77 @@ function createListFetchers(deps = {}) {
   async function getListByIdWithItems(
     listId,
     userId,
-    { isExport = false } = {}
+    { isExport = false, profile = 'full' } = {}
   ) {
-    const list = await findListById(listId, userId);
-    if (!list) return null;
+    const includeDetails = isExport || profile !== 'core';
+    const availabilityCte = includeDetails
+      ? `,
+      availability AS (
+        SELECT album_id, json_agg(service ORDER BY service) AS services
+        FROM album_service_mappings
+        WHERE strategy LIKE 'availability:%'
+          AND service = ANY($3)
+        GROUP BY album_id
+      )`
+      : '';
+    const availabilityJoin = includeDetails
+      ? 'LEFT JOIN availability av ON av.album_id = li.album_id'
+      : '';
+    const recommendationJoin = includeDetails
+      ? `LEFT JOIN recommendations r ON r.year = tl.year AND r.album_id = li.album_id
+        LEFT JOIN users u ON r.recommended_by = u._id`
+      : '';
+    const detailsColumns = includeDetails
+      ? `a.tracks,
+              a.summary,
+              a.summary_source,
+              COALESCE(av.services, '[]'::json) AS availability,
+              u.username AS recommended_by,
+              r.created_at AS recommended_at,`
+      : `NULL AS tracks,
+              '' AS summary,
+              '' AS summary_source,
+              '[]'::json AS availability,
+              NULL AS recommended_by,
+              NULL AS recommended_at,`;
+
+    const queryParams = includeDetails
+      ? [listId, userId, AVAILABILITY_SERVICES]
+      : [listId, userId];
 
     const itemsResult = await db.raw(
-      `SELECT li._id,
+      `WITH target_list AS (
+         SELECT l.id,
+                l._id,
+                l.user_id,
+                l.name,
+                l.year,
+                l.is_main,
+                l.group_id,
+                l.sort_order,
+                l.created_at,
+                l.updated_at,
+                g._id AS group_external_id,
+                g.name AS group_name,
+                g.year AS group_year
+         FROM lists l
+         LEFT JOIN list_groups g ON l.group_id = g.id
+         WHERE l._id = $1 AND l.user_id = $2
+       )${availabilityCte}
+       SELECT tl.id AS list_internal_id,
+              tl._id AS list_external_id,
+              tl.user_id AS list_user_id,
+              tl.name AS list_name,
+              tl.year AS list_year,
+              tl.is_main AS list_is_main,
+              tl.group_id AS list_group_id,
+              tl.group_external_id,
+              tl.group_name,
+              tl.group_year,
+              tl.sort_order AS list_sort_order,
+              tl.created_at AS list_created_at,
+              tl.updated_at AS list_updated_at,
+              li._id,
               li.list_id,
               li.position,
               li.comments,
@@ -191,65 +256,79 @@ function createListFetchers(deps = {}) {
               a.country,
               a.genre_1,
               a.genre_2,
-              a.tracks,
+              ${detailsColumns}
               ${isExport ? 'a.cover_image,' : ''}
               a.cover_image_format,
               a.cover_image_updated_at,
-              a.summary,
-              a.summary_source,
-              COALESCE((
-                SELECT json_agg(m.service)
-                FROM album_service_mappings m
-                WHERE m.album_id = li.album_id
-                  AND m.strategy LIKE 'availability:%'
-                  AND m.service = ANY($2)
-              ), '[]'::json) AS availability
-       FROM list_items li
+              a.cover_thumbnail_updated_at
+       FROM target_list tl
+       LEFT JOIN list_items li ON li.list_id = tl._id
        LEFT JOIN albums a ON li.album_id = a.album_id
-       WHERE li.list_id = $1
+       ${availabilityJoin}
+       ${recommendationJoin}
        ORDER BY li.position`,
-      [list._id, AVAILABILITY_SERVICES],
+      queryParams,
       {
         name: isExport
-          ? 'list-fetchers-list-items-with-album-data-export'
-          : 'list-fetchers-list-items-with-album-data',
+          ? 'list-fetchers-list-with-items-export'
+          : includeDetails
+            ? 'list-fetchers-list-with-items-full'
+            : 'list-fetchers-list-with-items-core',
         retryable: true,
       }
     );
-    const items = itemsResult.rows.map((row) => ({
-      _id: row._id,
-      listId: row.list_id,
-      position: row.position,
-      artist: row.artist || '',
-      album: row.album || '',
-      albumId: row.album_id || '',
-      releaseDate: row.release_date || '',
-      country: row.country || '',
-      genre1: row.genre_1 || '',
-      genre2: row.genre_2 || '',
-      primaryTrack: row.primary_track || null,
-      secondaryTrack: row.secondary_track || null,
-      comments: row.comments || '',
-      comments2: row.comments_2 || '',
-      tracks: row.tracks || null,
-      coverImage: row.cover_image || '',
-      coverImageFormat: row.cover_image_format || '',
-      coverImageUpdatedAt: row.cover_image_updated_at || null,
-      summary: row.summary || '',
-      summarySource: row.summary_source || '',
-      availability: row.availability || [],
-    }));
-    const recMaps = await fetchRecommendationMaps(
-      list.year ? [list.year] : [],
-      {
-        listId,
-      }
-    );
-    const recommendationMap = recMaps.get(list.year) || new Map();
+
+    if (itemsResult.rows.length === 0) return null;
+
+    const listRow = itemsResult.rows[0];
+    const list = {
+      id: listRow.list_internal_id,
+      _id: listRow.list_external_id,
+      userId: listRow.list_user_id,
+      name: listRow.list_name,
+      year: listRow.list_year,
+      isMain: listRow.list_is_main,
+      groupId: listRow.list_group_id,
+      groupExternalId: listRow.group_external_id,
+      groupName: listRow.group_name,
+      groupYear: listRow.group_year,
+      sortOrder: listRow.list_sort_order,
+      createdAt: listRow.list_created_at,
+      updatedAt: listRow.list_updated_at,
+    };
+
+    const items = itemsResult.rows
+      .filter((row) => row._id)
+      .map((row) => ({
+        _id: row._id,
+        listId: row.list_id,
+        position: row.position,
+        artist: row.artist || '',
+        album: row.album || '',
+        albumId: row.album_id || '',
+        releaseDate: row.release_date || '',
+        country: row.country || '',
+        genre1: row.genre_1 || '',
+        genre2: row.genre_2 || '',
+        primaryTrack: row.primary_track || null,
+        secondaryTrack: row.secondary_track || null,
+        comments: row.comments || '',
+        comments2: row.comments_2 || '',
+        tracks: row.tracks || null,
+        coverImage: row.cover_image || '',
+        coverImageFormat: row.cover_image_format || '',
+        coverImageUpdatedAt: row.cover_image_updated_at || null,
+        coverThumbnailUpdatedAt: row.cover_thumbnail_updated_at || null,
+        summary: row.summary || '',
+        summarySource: row.summary_source || '',
+        availability: row.availability || [],
+        recommendedBy: row.recommended_by || null,
+        recommendedAt: row.recommended_at || null,
+      }));
 
     const data = items.map((item, index) =>
       mapAlbumDataItemToResponse(item, {
-        recommendationMap,
+        recommendationMap: new Map(),
         isExport,
         index,
         getPointsForPosition,

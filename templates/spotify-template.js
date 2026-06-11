@@ -11,6 +11,7 @@ const spotifyPageTemplateFn = ejs.compile(
 function createSpotifyTemplate(deps) {
   const {
     asset,
+    viteAsset,
     generateAccentCssVars,
     generateAccentOverrides,
     headerComponent,
@@ -25,6 +26,7 @@ function createSpotifyTemplate(deps) {
       user,
       csrfToken,
       asset,
+      viteAsset,
       generateAccentCssVars,
       generateAccentOverrides,
       headerComponent,

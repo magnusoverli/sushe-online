@@ -149,6 +149,7 @@ dist
 
 # Generated CSS files
 public/styles/output.css
+public/js/
 
 # OS files (if not already present)
 .DS_Store

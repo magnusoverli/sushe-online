@@ -147,10 +147,16 @@ export function getListData(listId) {
  * @param {Array} albums - The album array to set
  * @param {boolean} updateSnapshot - Whether to update the saved snapshot (default: true)
  */
-export function setListData(listId, albums, updateSnapshot = true) {
+export function setListData(
+  listId,
+  albums,
+  updateSnapshot = true,
+  options = {}
+) {
   if (!listId) return;
 
   const normalizedAlbums = normalizeAlbumRecords(albums || []);
+  const profile = options.profile || 'full';
 
   if (!lists[listId]) {
     lists[listId] = createDefaultListEntry(listId, normalizedAlbums);
@@ -158,6 +164,7 @@ export function setListData(listId, albums, updateSnapshot = true) {
     lists[listId]._data = normalizedAlbums;
     lists[listId].count = normalizedAlbums.length;
   }
+  lists[listId]._dataProfile = profile;
 
   // Update snapshot for diff-based saves (when data is fetched from server)
   if (updateSnapshot && albums) {
@@ -165,6 +172,27 @@ export function setListData(listId, albums, updateSnapshot = true) {
     lastSavedSnapshots.set(listId, snapshot);
     saveSnapshotToStorage(listId, snapshot);
   }
+}
+
+/**
+ * Get the loaded data profile for a list.
+ * @param {string} listId - The ID of the list
+ * @returns {string|null} - 'core', 'full', or null when not loaded
+ */
+export function getListDataProfile(listId) {
+  if (!listId || !lists[listId] || !Array.isArray(lists[listId]._data)) {
+    return null;
+  }
+  return lists[listId]._dataProfile || 'full';
+}
+
+/**
+ * Check if a list has full detail data loaded.
+ * @param {string} listId - The ID of the list
+ * @returns {boolean}
+ */
+export function isListDataFullyLoaded(listId) {
+  return isListDataLoaded(listId) && getListDataProfile(listId) === 'full';
 }
 
 /**

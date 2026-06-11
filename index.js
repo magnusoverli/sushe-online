@@ -146,18 +146,12 @@ app.use(createCorsMiddleware());
 // Apply compression for requests above 1KB (before static so assets are compressed too)
 app.use(compression({ threshold: 1024 }));
 
-// Static files. Hashed chunk filenames are immutable, but the entry main.js
-// keeps a stable URL (its lazy chunks import it by that exact URL, so it
-// cannot be query-versioned) and must be revalidated on every load instead.
+// Static files are built with hashed filenames, so they can be cached
+// immutably. Dynamic/API responses get no-store headers below.
 app.use(
   express.static('public', {
     maxAge: '1y',
     immutable: true,
-    setHeaders: (res, filePath) => {
-      if (filePath.endsWith(path.join('js', 'main.js'))) {
-        res.setHeader('Cache-Control', 'no-cache');
-      }
-    },
   })
 );
 

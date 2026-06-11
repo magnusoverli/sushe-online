@@ -231,6 +231,7 @@ module.exports = (app, deps) => {
   };
 
   // Register all route modules
+  require('./bootstrap')(app, sharedDeps);
   require('./albums')(app, sharedDeps);
   require('./groups')(app, sharedDeps);
   require('./lists')(app, sharedDeps);

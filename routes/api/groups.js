@@ -48,6 +48,7 @@ module.exports = (app, deps) => {
         );
 
         responseCache.invalidate(`GET:/api/groups:${req.user._id}`);
+        responseCache.invalidate('GET:/api/app-bootstrap');
 
         res.status(201).json(group);
       },
@@ -68,6 +69,7 @@ module.exports = (app, deps) => {
         });
 
         responseCache.invalidate(`GET:/api/groups:${req.user._id}`);
+        responseCache.invalidate('GET:/api/app-bootstrap');
 
         res.json({ success: true });
       },
@@ -90,6 +92,7 @@ module.exports = (app, deps) => {
 
         responseCache.invalidate(`GET:/api/groups:${req.user._id}`);
         responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+        responseCache.invalidate('GET:/api/app-bootstrap');
 
         res.json({ success: true, listsUnassigned: result.listsUnassigned });
       },
@@ -105,6 +108,9 @@ module.exports = (app, deps) => {
     asyncHandler(
       async (req, res) => {
         await groupService.reorderGroups(req.user._id, req.body.order);
+
+        responseCache.invalidate(`GET:/api/groups:${req.user._id}`);
+        responseCache.invalidate('GET:/api/app-bootstrap');
 
         res.json({ success: true });
       },
@@ -127,6 +133,7 @@ module.exports = (app, deps) => {
 
         responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
         responseCache.invalidate(`GET:/api/groups:${req.user._id}`);
+        responseCache.invalidate('GET:/api/app-bootstrap');
 
         if (result.oldYear) triggerAggregateListRecompute(result.oldYear);
         if (result.targetYear && result.targetYear !== result.oldYear)
@@ -156,6 +163,7 @@ module.exports = (app, deps) => {
         );
 
         responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+        responseCache.invalidate('GET:/api/app-bootstrap');
 
         res.json({ success: true });
       },

@@ -135,6 +135,7 @@ export function createAlbumDataProcessor(deps = {}) {
     if (comment2 === 'Comment 2') comment2 = '';
 
     const coverImageUrl = album.cover_image_url || '';
+    const coverThumbUrl = album.cover_thumb_url || coverImageUrl;
     const coverImage = album.cover_image || '';
     const imageFormat = album.cover_image_format || 'PNG';
 
@@ -180,6 +181,7 @@ export function createAlbumDataProcessor(deps = {}) {
       comment,
       comment2,
       coverImageUrl,
+      coverThumbUrl,
       coverImage,
       imageFormat,
       primaryTrack,

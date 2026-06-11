@@ -8,6 +8,7 @@
  */
 
 import { buildListMenuConfig } from './list-menu-shared.js';
+import { loadSortable } from './sortable-loader.js';
 
 /**
  * Factory function to create the list navigation module with injected dependencies
@@ -811,11 +812,14 @@ export function createListNav(deps = {}) {
    * @param {boolean} isMobile - Whether this is mobile view
    */
   function initializeDragAndDrop(container, isMobile = false) {
-    if (!window.Sortable) {
-      console.warn('SortableJS not loaded, drag-and-drop disabled');
-      return;
-    }
+    loadSortable()
+      .then(() => initializeDragAndDropAfterLoad(container, isMobile))
+      .catch((error) => {
+        console.warn('SortableJS not loaded, drag-and-drop disabled', error);
+      });
+  }
 
+  function initializeDragAndDropAfterLoad(container, isMobile = false) {
     // Initialize sortable for groups (reorder groups)
     initializeGroupsSortable(container, isMobile);
 

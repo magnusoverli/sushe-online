@@ -11,7 +11,7 @@
  * @module column-config
  */
 
-import { apiCall } from '../app.js';
+import { apiCall } from './api-client.js';
 
 // ── Column Definitions ──────────────────────────────────────────────────────
 

@@ -24,6 +24,25 @@ describe('app-list-operations module', () => {
     };
 
     const apiCall = mock.fn(async (url) => {
+      if (url === '/api/app-bootstrap?selectedListId=list-1') {
+        return {
+          lists: {
+            'list-1': {
+              name: 'Stored',
+              year: 2024,
+              isMain: false,
+              count: 1,
+              groupId: null,
+              sortOrder: 1,
+            },
+          },
+          groups: [],
+          recommendationYears: [2024],
+          selectedListId: 'list-1',
+          selectedListItems: [{ album_id: 'a1' }],
+          selectedListProfile: 'core',
+        };
+      }
       if (url === '/api/lists') {
         return {
           'list-1': {
@@ -101,6 +120,25 @@ describe('app-list-operations module', () => {
     };
 
     const apiCall = mock.fn(async (url) => {
+      if (url === '/api/app-bootstrap?selectedListId=list-1') {
+        return {
+          lists: {
+            'list-1': {
+              name: 'Stored',
+              year: 2024,
+              isMain: false,
+              count: 1,
+              groupId: null,
+              sortOrder: 1,
+            },
+          },
+          groups: [],
+          recommendationYears: [2024],
+          selectedListId: 'list-1',
+          selectedListItems: [{ album_id: 'a1' }],
+          selectedListProfile: 'core',
+        };
+      }
       if (url === '/api/lists') {
         return {
           'list-1': {
@@ -164,6 +202,8 @@ describe('app-list-operations module', () => {
     assert.deepStrictEqual(setListData.mock.calls[0].arguments, [
       'list-1',
       [{ album_id: 'a1' }],
+      true,
+      { profile: 'core' },
     ]);
     assert.strictEqual(selectList.mock.calls.length, 1);
     assert.deepStrictEqual(selectList.mock.calls[0].arguments, ['list-1']);
@@ -186,6 +226,25 @@ describe('app-list-operations module', () => {
     const win = { lastSelectedList: 'missing-list' };
 
     const apiCall = mock.fn(async (url) => {
+      if (url === '/api/app-bootstrap?selectedListId=missing-list') {
+        return {
+          lists: {
+            'list-1': {
+              name: 'Existing List',
+              year: 2024,
+              isMain: false,
+              count: 0,
+              groupId: null,
+              sortOrder: 0,
+            },
+          },
+          groups: [],
+          recommendationYears: [],
+          selectedListId: null,
+          selectedListItems: null,
+          selectedListProfile: null,
+        };
+      }
       if (url === '/api/lists') {
         return {
           'list-1': {
@@ -235,9 +294,7 @@ describe('app-list-operations module', () => {
 
     await operations.loadLists();
 
-    // 3 metadata calls + 1 optimistic prefetch for the (stale) candidate id,
-    // whose result is discarded once metadata shows the list no longer exists.
-    assert.strictEqual(apiCall.mock.calls.length, 4);
+    assert.strictEqual(apiCall.mock.calls.length, 1);
     assert.strictEqual(setRecommendationYears.mock.calls.length, 1);
     assert.strictEqual(updateGroupsFromServer.mock.calls.length, 1);
     assert.strictEqual(updateListNav.mock.calls.length, 1);

@@ -84,6 +84,9 @@ describe('list-selection module', () => {
       isListDataLoaded: () => false,
       apiCall: async (url, options) => {
         apiCalls.push([url, options]);
+        if (url === '/api/lists/list-1?profile=core') {
+          return [{ album_id: 'fetched' }];
+        }
         if (url === '/api/lists/list-1') {
           return [{ album_id: 'fetched' }];
         }
@@ -107,7 +110,10 @@ describe('list-selection module', () => {
     assert.strictEqual(fab.style.display, 'flex');
     assert.strictEqual(spinnerTarget, container);
     assert.deepStrictEqual(storageWrites, [['lastSelectedList', 'list-1']]);
-    assert.deepStrictEqual(apiCalls[0], ['/api/lists/list-1', undefined]);
+    assert.deepStrictEqual(apiCalls[0], [
+      '/api/lists/list-1?profile=core',
+      undefined,
+    ]);
     assert.strictEqual(apiCalls[1][0], '/api/user/last-list');
     assert.deepStrictEqual(states[1], ['setCurrentRecommendationsYear', null]);
     assert.deepStrictEqual(states[6], [

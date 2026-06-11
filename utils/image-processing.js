@@ -16,6 +16,7 @@ const sharp = require('sharp');
 
 /** Target size in pixels for processed images */
 const TARGET_SIZE = 512;
+const THUMBNAIL_SIZE = 128;
 
 /**
  * JPEG quality for processed images (0-100).
@@ -23,6 +24,7 @@ const TARGET_SIZE = 512;
  * producing markedly smaller files; raising it disables most JPEG compression.
  */
 const JPEG_QUALITY = 85;
+const THUMBNAIL_JPEG_QUALITY = 80;
 
 /** Maximum decoded bytes accepted for manual cover uploads (5 MB). */
 const MAX_UPLOAD_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -44,6 +46,31 @@ async function processImage(buffer) {
     })
     .jpeg({ quality: JPEG_QUALITY })
     .toBuffer();
+}
+
+async function processThumbnailImage(buffer) {
+  return sharp(Buffer.from(buffer))
+    .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .jpeg({ quality: THUMBNAIL_JPEG_QUALITY })
+    .toBuffer();
+}
+
+async function processCoverImageVariants(buffer) {
+  const source = Buffer.from(buffer);
+  const [processed, thumbnail] = await Promise.all([
+    processImage(source),
+    processThumbnailImage(source),
+  ]);
+
+  return {
+    buffer: processed,
+    format: 'JPEG',
+    thumbnailBuffer: thumbnail,
+    thumbnailFormat: 'JPEG',
+  };
 }
 
 /**
@@ -94,19 +121,30 @@ async function processUploadedCoverImage(payload) {
   // write transaction) pass through untouched, so the sharp re-encode never
   // runs while a transaction holds locks.
   if (payload && Buffer.isBuffer(payload.buffer) && payload.format) {
-    return payload;
+    if (Buffer.isBuffer(payload.thumbnailBuffer) && payload.thumbnailFormat) {
+      return payload;
+    }
+    const thumbnailBuffer = await processThumbnailImage(payload.buffer);
+    return {
+      ...payload,
+      thumbnailBuffer,
+      thumbnailFormat: 'JPEG',
+    };
   }
   const buffer = decodeImagePayload(payload);
-  const processed = await processImage(buffer);
-  return { buffer: processed, format: 'JPEG' };
+  return processCoverImageVariants(buffer);
 }
 
 module.exports = {
   TARGET_SIZE,
+  THUMBNAIL_SIZE,
   JPEG_QUALITY,
+  THUMBNAIL_JPEG_QUALITY,
   ITUNES_IMAGE_SIZE,
   MAX_UPLOAD_IMAGE_BYTES,
   processImage,
+  processThumbnailImage,
+  processCoverImageVariants,
   upscaleItunesArtworkUrl,
   normalizeImageBuffer,
   decodeImagePayload,

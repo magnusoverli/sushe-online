@@ -182,7 +182,12 @@ const cacheConfigs = {
   userSpecific: createCacheMiddleware({
     ttl: 300000, // 5 minutes - safe because cache is invalidated on writes
     shouldCache: (req) => {
-      return req.user && req.path.includes('/api/lists');
+      return (
+        req.user &&
+        (req.path.includes('/api/lists') ||
+          req.path === '/api/app-bootstrap' ||
+          req.path === '/api/groups')
+      );
     },
   }),
 

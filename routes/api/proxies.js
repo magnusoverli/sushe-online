@@ -332,6 +332,7 @@ module.exports = (app, deps) => {
         };
       });
 
+      res.set('Cache-Control', 'private, max-age=3600');
       res.json(result);
     }, 'proxying image')
   );

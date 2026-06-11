@@ -22,10 +22,13 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     asyncHandler(
       async (req, res) => {
+        const coverSize = req.query.size === 'thumb' ? 'thumb' : 'full';
         // Read cheap metadata first so a conditional GET can be answered with a
         // 304 without ever reading the cover BYTEA out of Postgres.
         const { contentType, albumId, coverImageUpdatedAt, coverLength } =
-          await albumService.getCoverMeta(req.params.album_id);
+          await albumService.getCoverMeta(req.params.album_id, {
+            size: coverSize,
+          });
         const version = coverImageUpdatedAt
           ? new Date(coverImageUpdatedAt).getTime()
           : coverLength;
@@ -49,7 +52,8 @@ module.exports = (app, deps) => {
         }
 
         const { imageBuffer } = await albumService.getCoverImage(
-          req.params.album_id
+          req.params.album_id,
+          { size: coverSize }
         );
         res.set({
           'Content-Type': contentType,
@@ -82,6 +86,11 @@ module.exports = (app, deps) => {
           cover_image_url: `/api/albums/${encodeURIComponent(
             result.albumId
           )}/cover?v=${new Date(result.coverImageUpdatedAt).getTime()}`,
+          cover_thumb_url: `/api/albums/${encodeURIComponent(
+            result.albumId
+          )}/cover?size=thumb&v=${new Date(
+            result.coverThumbnailUpdatedAt || result.coverImageUpdatedAt
+          ).getTime()}`,
         });
       },
       'updating album cover',

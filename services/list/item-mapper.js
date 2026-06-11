@@ -13,12 +13,15 @@ function asArray(value) {
  * Build the cover-image URL for an album, or '' when there is no album id.
  * Lets list payloads carry a lightweight URL instead of inlining BYTEA blobs.
  */
-function coverImageUrl(albumId, coverImageUpdatedAt) {
+function coverImageUrl(albumId, coverImageUpdatedAt, options = {}) {
   if (!albumId) return '';
-  const version = coverImageUpdatedAt
-    ? `?v=${new Date(coverImageUpdatedAt).getTime()}`
-    : '';
-  return `/api/albums/${encodeURIComponent(albumId)}/cover${version}`;
+  const params = new URLSearchParams();
+  if (options.size) params.set('size', options.size);
+  if (coverImageUpdatedAt) {
+    params.set('v', new Date(coverImageUpdatedAt).getTime().toString());
+  }
+  const query = params.toString();
+  return `/api/albums/${encodeURIComponent(albumId)}/cover${query ? `?${query}` : ''}`;
 }
 
 function mapListRowToItem(row, recommendationMap = null) {
@@ -40,14 +43,42 @@ function mapListRowToItem(row, recommendationMap = null) {
     comments_2: row.comments_2 || '',
     tracks: row.tracks || null,
     cover_image_url: coverImageUrl(row.album_id, row.cover_image_updated_at),
+    cover_thumb_url: coverImageUrl(
+      row.album_id,
+      row.cover_thumbnail_updated_at || row.cover_image_updated_at,
+      { size: 'thumb' }
+    ),
     cover_image_format: row.cover_image_format || '',
     cover_image_updated_at: row.cover_image_updated_at,
+    cover_thumbnail_updated_at: row.cover_thumbnail_updated_at,
     summary: row.summary || '',
     summary_source: row.summary_source || '',
     availability: asArray(row.availability),
     recommended_by: recommendation?.recommendedBy || null,
     recommended_at: recommendation?.recommendedAt || null,
   };
+}
+
+function resolveRecommendation(item, recommendationMap) {
+  const mappedRecommendation = recommendationMap?.get(item.albumId);
+  if (mappedRecommendation) return mappedRecommendation;
+  if (!item.recommendedBy) return null;
+
+  return {
+    recommendedBy: item.recommendedBy,
+    recommendedAt: item.recommendedAt,
+  };
+}
+
+function serializeCoverImage(coverImage) {
+  if (!coverImage) return '';
+  return Buffer.isBuffer(coverImage)
+    ? coverImage.toString('base64')
+    : coverImage;
+}
+
+function getExportPoints(index, getPointsForPosition) {
+  return getPointsForPosition ? getPointsForPosition(index + 1) : null;
 }
 
 function mapAlbumDataItemToResponse(item, options = {}) {
@@ -58,7 +89,7 @@ function mapAlbumDataItemToResponse(item, options = {}) {
     getPointsForPosition = null,
   } = options;
 
-  const recommendation = recommendationMap?.get(item.albumId) || null;
+  const recommendation = resolveRecommendation(item, recommendationMap);
 
   const base = {
     _id: item._id,
@@ -77,6 +108,12 @@ function mapAlbumDataItemToResponse(item, options = {}) {
     tracks: item.tracks,
     cover_image_format: item.coverImageFormat,
     cover_image_updated_at: item.coverImageUpdatedAt || null,
+    cover_thumb_url: coverImageUrl(
+      item.albumId,
+      item.coverThumbnailUpdatedAt || item.coverImageUpdatedAt,
+      { size: 'thumb' }
+    ),
+    cover_thumbnail_updated_at: item.coverThumbnailUpdatedAt || null,
     summary: item.summary || '',
     summary_source: item.summarySource || '',
     availability: asArray(item.availability),
@@ -87,25 +124,16 @@ function mapAlbumDataItemToResponse(item, options = {}) {
   if (isExport) {
     return {
       ...base,
-      cover_image: item.coverImage
-        ? Buffer.isBuffer(item.coverImage)
-          ? item.coverImage.toString('base64')
-          : item.coverImage
-        : '',
+      cover_image: serializeCoverImage(item.coverImage),
       rank: index + 1,
-      points: getPointsForPosition ? getPointsForPosition(index + 1) : null,
+      points: getExportPoints(index, getPointsForPosition),
     };
   }
 
   if (item.albumId) {
-    const version = item.coverImageUpdatedAt
-      ? `?v=${new Date(item.coverImageUpdatedAt).getTime()}`
-      : '';
     return {
       ...base,
-      cover_image_url: `/api/albums/${encodeURIComponent(
-        item.albumId
-      )}/cover${version}`,
+      cover_image_url: coverImageUrl(item.albumId, item.coverImageUpdatedAt),
     };
   }
 

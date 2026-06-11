@@ -692,13 +692,12 @@ describe('templates utilities', () => {
       assert.ok(result.includes('null'));
     });
 
-    it('should include the main.js module script without a version query', () => {
+    it('should include the app module script without an asset version query', () => {
       const user = { username: 'test' };
       const result = templates.spotifyTemplate(user);
 
-      // Lazy chunks import this exact URL; a ?v= query would split the entry
-      // into two module instances in the browser.
-      assert.ok(result.includes('src="/js/main.js"'));
+      assert.match(result, /src="\/js\/(assets\/main-[^"]+\.js|main\.js)"/);
+      assert.ok(!result.includes('src="/js/main.js?v='));
       assert.ok(result.includes('type="module"'));
     });
 

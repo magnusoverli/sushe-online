@@ -7,6 +7,8 @@
  * @module sorting
  */
 
+import { loadSortable } from './sortable-loader.js';
+
 /**
  * Factory function to create the sorting module with injected dependencies
  *
@@ -73,11 +75,14 @@ export function createSorting(deps = {}) {
    * @param {boolean} isMobile - Whether this is mobile view
    */
   function initializeUnifiedSorting(container, isMobile) {
-    if (!window.Sortable) {
-      console.error('SortableJS not loaded');
-      return;
-    }
+    loadSortable()
+      .then(() => initializeUnifiedSortingAfterLoad(container, isMobile))
+      .catch((error) => {
+        console.error('SortableJS not loaded', error);
+      });
+  }
 
+  function initializeUnifiedSortingAfterLoad(container, isMobile) {
     // Clean up any existing sortable instance
     if (container._sortable) {
       container._sortable.destroy();

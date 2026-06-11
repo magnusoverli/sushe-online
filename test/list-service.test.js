@@ -53,6 +53,48 @@ function createOwnedListRow() {
   };
 }
 
+function createSingleListItemRow(overrides = {}) {
+  return {
+    list_internal_id: 1,
+    list_external_id: 'list1',
+    list_user_id: 'user1',
+    list_name: 'My List',
+    list_year: 2024,
+    list_is_main: false,
+    list_group_id: 10,
+    group_external_id: 'group1',
+    group_name: '2024',
+    group_year: 2024,
+    list_sort_order: 0,
+    list_created_at: 'created',
+    list_updated_at: 'updated',
+    _id: 'item1',
+    list_id: 'list1',
+    position: 1,
+    comments: '',
+    comments_2: '',
+    album_id: 'album1',
+    primary_track: 'Track',
+    secondary_track: null,
+    artist: 'Artist',
+    album: 'Album',
+    release_date: '2024-01-01',
+    country: 'NO',
+    genre_1: 'Metal',
+    genre_2: 'Prog',
+    tracks: ['Track'],
+    cover_image_format: 'jpeg',
+    cover_image_updated_at: null,
+    cover_thumbnail_updated_at: null,
+    summary: 'Summary',
+    summary_source: 'musicbrainz',
+    availability: ['spotify'],
+    recommended_by: 'alice',
+    recommended_at: '2025-01-01',
+    ...overrides,
+  };
+}
+
 describe('list-service reorderItems', () => {
   it('should reject partial order payloads', async () => {
     const client = {
@@ -402,23 +444,14 @@ describe('list-service fetchers and setup status', () => {
   });
 
   it('should return mapped list items with recommendation metadata', async () => {
+    let executedSql = '';
+    let executedParams = null;
     const pool = {
-      query: mock.fn(async (sql) => {
-        if (sql.includes('FROM recommendations r')) {
-          return {
-            rows: [
-              {
-                year: 2024,
-                album_id: 'album1',
-                created_at: '2025-01-01',
-                recommended_by: 'alice',
-              },
-            ],
-          };
-        }
-
-        if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
-          return { rows: [createOwnedListRow()] };
+      query: mock.fn(async (sql, params) => {
+        if (sql.includes('WITH target_list AS')) {
+          executedSql = sql;
+          executedParams = params;
+          return { rows: [createSingleListItemRow()] };
         }
 
         throw new Error(`Unexpected pool query: ${sql}`);
@@ -426,57 +459,7 @@ describe('list-service fetchers and setup status', () => {
       connect: mock.fn(),
     };
 
-    const deps = createServiceDeps(pool);
-    pool.query.mock.mockImplementation(async (sql) => {
-      if (sql.includes('FROM recommendations r')) {
-        return {
-          rows: [
-            {
-              year: 2024,
-              album_id: 'album1',
-              created_at: '2025-01-01',
-              recommended_by: 'alice',
-            },
-          ],
-        };
-      }
-
-      if (sql.includes('FROM lists l') && sql.includes('WHERE l._id = $1')) {
-        return { rows: [createOwnedListRow()] };
-      }
-
-      if (sql.includes('FROM list_items li')) {
-        return {
-          rows: [
-            {
-              _id: 'item1',
-              list_id: 'list1',
-              position: 1,
-              comments: '',
-              comments_2: '',
-              album_id: 'album1',
-              primary_track: 'Track',
-              secondary_track: null,
-              artist: 'Artist',
-              album: 'Album',
-              release_date: '2024-01-01',
-              country: 'NO',
-              genre_1: 'Metal',
-              genre_2: 'Prog',
-              tracks: null,
-              cover_image: '',
-              cover_image_format: 'jpeg',
-              summary: '',
-              summary_source: '',
-            },
-          ],
-        };
-      }
-
-      throw new Error(`Unexpected pool query: ${sql}`);
-    });
-
-    const service = createListService(deps);
+    const service = createListService(createServiceDeps(pool));
     const result = await service.getListById('list1', 'user1');
 
     assert.strictEqual(
@@ -485,6 +468,51 @@ describe('list-service fetchers and setup status', () => {
     );
     assert.strictEqual(result.items[0].recommended_by, 'alice');
     assert.strictEqual(result.items[0].recommended_at, '2025-01-01');
+    assert.deepStrictEqual(result.items[0].availability, ['spotify']);
+    assert.ok(executedSql.includes('LEFT JOIN availability av'));
+    assert.ok(executedSql.includes('LEFT JOIN recommendations r'));
+    assert.strictEqual(executedParams.length, 3);
+  });
+
+  it('should fetch core list items without detail joins', async () => {
+    let executedSql = '';
+    let executedParams = null;
+    const pool = {
+      query: mock.fn(async (sql, params) => {
+        if (sql.includes('WITH target_list AS')) {
+          executedSql = sql;
+          executedParams = params;
+          return {
+            rows: [
+              createSingleListItemRow({
+                tracks: null,
+                summary: '',
+                summary_source: '',
+                availability: [],
+                recommended_by: null,
+                recommended_at: null,
+              }),
+            ],
+          };
+        }
+
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(),
+    };
+
+    const service = createListService(createServiceDeps(pool));
+    const result = await service.getListById('list1', 'user1', {
+      profile: 'core',
+    });
+
+    assert.strictEqual(result.items[0].tracks, null);
+    assert.deepStrictEqual(result.items[0].availability, []);
+    assert.strictEqual(result.items[0].recommended_by, null);
+    assert.ok(executedSql.includes('NULL AS tracks'));
+    assert.ok(!executedSql.includes('LEFT JOIN availability av'));
+    assert.ok(!executedSql.includes('LEFT JOIN recommendations r'));
+    assert.deepStrictEqual(executedParams, ['list1', 'user1']);
   });
 });
 

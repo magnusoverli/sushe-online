@@ -87,7 +87,11 @@ function buildAlbumMap(items, userMap) {
         album: item.album || '',
         // Lightweight cover URL served by GET /api/albums/:id/cover (which
         // does 304/immutable caching) — cover bytes never enter this JSONB.
-        coverImage: coverImageUrl(item.album_id, item.cover_image_updated_at),
+        coverImage: coverImageUrl(
+          item.album_id,
+          item.cover_thumbnail_updated_at || item.cover_image_updated_at,
+          { size: 'thumb' }
+        ),
         releaseDate: item.release_date || '',
         country: item.country || '',
         genre1: item.genre_1 || '',
@@ -283,6 +287,7 @@ async function fetchListItemsForLists(db, listIds) {
       a.genre_1,
       a.genre_2,
       a.cover_image_updated_at,
+      a.cover_thumbnail_updated_at,
       l.user_id
     FROM list_items li
     JOIN lists l ON li.list_id = l._id

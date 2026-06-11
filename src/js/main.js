@@ -1,10 +1,4 @@
 import './app.js';
-import {
-  initMiniplayer,
-  initPlaybackTracking,
-} from './modules/spotify-player.js';
-import { initTidalWidget } from './modules/tidal-widget.js';
-import { initDiscovery } from './modules/discovery.js';
 
 /**
  * Determine which sidebar widget to show based on user's music service preference
@@ -48,10 +42,11 @@ function getSidebarWidgetType() {
 /**
  * Initialize the appropriate sidebar widget based on user preference
  */
-function initSidebarWidget(isMobile) {
+async function initSidebarWidget(isMobile) {
   const widgetType = getSidebarWidgetType();
 
   if (widgetType === 'tidal') {
+    const { initTidalWidget } = await import('./modules/tidal-widget.js');
     // Hide Spotify miniplayer, show Tidal widget
     const spotifyMiniplayer = document.getElementById('spotifyMiniplayer');
     if (spotifyMiniplayer) {
@@ -59,6 +54,8 @@ function initSidebarWidget(isMobile) {
     }
     initTidalWidget();
   } else {
+    const { initMiniplayer, initPlaybackTracking } =
+      await import('./modules/spotify-player.js');
     // Hide Tidal widget, show Spotify miniplayer
     const tidalWidget = document.getElementById('tidalWidget');
     if (tidalWidget) {
@@ -79,11 +76,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const isMobile = window.innerWidth < 1024;
 
   // Initialize the appropriate sidebar widget based on user preference
-  initSidebarWidget(isMobile);
+  initSidebarWidget(isMobile).catch((error) => {
+    console.warn('Failed to initialize sidebar widget:', error);
+  });
 
   // Initialize discovery module (Last.fm recommendations)
   // Only if user has Last.fm connected
   if (window.currentUser?.lastfmUsername) {
-    initDiscovery();
+    import('./modules/discovery.js')
+      .then(({ initDiscovery }) => initDiscovery())
+      .catch((error) => {
+        console.warn('Failed to initialize discovery:', error);
+      });
   }
 });

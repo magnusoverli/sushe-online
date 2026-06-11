@@ -41,6 +41,8 @@ import { renderAvailabilityBadges } from './album-display/availability-badges.js
 
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
+const PROGRESSIVE_RENDER_THRESHOLD = 120;
+const PROGRESSIVE_RENDER_BATCH_SIZE = 60;
 
 // Module-level state
 // Store lightweight fingerprint instead of deep-cloned array for performance
@@ -48,6 +50,7 @@ let lastRenderedFingerprint = null;
 // Store mutable field fingerprints for detectUpdateType (strings, not objects)
 let lastRenderedMutableState = null;
 let positionElementCache = new WeakMap();
+let renderGeneration = 0;
 
 // Album cover preview state
 let coverPreviewActive = null; // Stores { overlay, clone, originalRect }
@@ -277,8 +280,8 @@ export function createAlbumDisplay(deps = {}) {
     // 3. Placeholder if no cover available
     const coverImageSrc = data.coverImage
       ? `data:image/${data.imageFormat};base64,${data.coverImage}`
-      : data.coverImageUrl
-        ? data.coverImageUrl
+      : data.coverThumbUrl
+        ? data.coverThumbUrl
         : null;
 
     // Summary badge HTML (shown if album has a summary from any source)
@@ -326,6 +329,7 @@ export function createAlbumDisplay(deps = {}) {
             coverImageSrc
               ? `<img src="${PLACEHOLDER_GIF}" 
                 data-lazy-src="${coverImageSrc}"
+                data-full-src="${data.coverImageUrl || coverImageSrc}"
                 alt="${data.albumName}" 
                 class="album-cover rounded-sm shadow-lg"
                 loading="lazy"
@@ -688,7 +692,7 @@ export function createAlbumDisplay(deps = {}) {
     // === COVER IMAGE SOURCE ===
     const mobileCoverSrc = data.coverImage
       ? `data:image/${data.imageFormat};base64,${data.coverImage}`
-      : data.coverImageUrl || null;
+      : data.coverThumbUrl || null;
 
     // === SUMMARY BADGE (AI indicator on cover) ===
     let summaryBadgeHtml = '';
@@ -768,6 +772,7 @@ export function createAlbumDisplay(deps = {}) {
               mobileCoverSrc
                 ? `<img src="${PLACEHOLDER_GIF}"
                        data-lazy-src="${mobileCoverSrc}"
+                       data-full-src="${data.coverImageUrl || mobileCoverSrc}"
                        alt="${escapeHtml(data.albumName)}"
                        class="album-cover-blur w-[75px] h-[75px] rounded-lg object-cover"
                        loading="lazy" decoding="async">`
@@ -1897,7 +1902,10 @@ export function createAlbumDisplay(deps = {}) {
     if (coverPreviewActive || coverImage.src === PLACEHOLDER_GIF) return;
 
     // Get high-quality image source
-    const highQualitySrc = coverImage.dataset.lazySrc || coverImage.src;
+    const highQualitySrc =
+      coverImage.dataset.fullSrc ||
+      coverImage.dataset.lazySrc ||
+      coverImage.src;
     if (!highQualitySrc || highQualitySrc === PLACEHOLDER_GIF) return;
 
     // Get original position
@@ -2142,10 +2150,94 @@ export function createAlbumDisplay(deps = {}) {
     }
 
     // Full rebuild path - clear element caches
+    renderGeneration += 1;
+    const activeRenderGeneration = renderGeneration;
     positionElementCache = new WeakMap();
     resetRowElementsCache();
 
     let albumContainer;
+    let progressiveParent = null;
+    const useProgressiveRender = albums.length > PROGRESSIVE_RENDER_THRESHOLD;
+
+    const appendAlbumBatch = (parent, startIndex, endIndex) => {
+      const fragment = document.createDocumentFragment();
+      for (let index = startIndex; index < endIndex; index++) {
+        const item = createAlbumItem(albums[index], index, isMobile);
+        fragment.appendChild(item);
+      }
+      parent.appendChild(fragment);
+      observeLazyImages(parent);
+    };
+
+    const scheduleRenderBatch = (callback) => {
+      if (window.requestIdleCallback) {
+        window.requestIdleCallback(callback, { timeout: 100 });
+        return;
+      }
+      window.setTimeout(callback, 0);
+    };
+
+    const finalizeRenderedList = () => {
+      if (activeRenderGeneration !== renderGeneration) return;
+
+      prePopulatePositionCache(container, isMobile);
+
+      // Only enable sorting if the list is not locked (main list in locked year)
+      const currentList = getCurrentList();
+      const listMeta = getListMetadata(currentList);
+      const listYear = listMeta?.year || null;
+      const listIsMain = listMeta?.isMain || false;
+
+      if (listYear && listIsMain) {
+        // Only check lock status for main lists
+        isListLocked(listYear, listIsMain).then((locked) => {
+          if (activeRenderGeneration !== renderGeneration) return;
+          if (!locked) {
+            initializeUnifiedSorting(container, isMobile);
+            clearYearLockUI(container);
+          } else {
+            // Main list is locked - destroy any existing sortable instance
+            if (destroySorting) {
+              destroySorting(container);
+            }
+            showYearLockUI(container, listYear);
+          }
+        });
+      } else {
+        // Non-main lists or collections - always enable sorting
+        initializeUnifiedSorting(container, isMobile);
+        clearYearLockUI(container);
+      }
+
+      // Initialize Last.fm summary tooltips (desktop only)
+      if (!isMobile) {
+        initSummaryTooltips(container);
+      }
+
+      // Update lightweight state instead of expensive deep clone
+      requestAnimationFrame(() => {
+        if (activeRenderGeneration !== renderGeneration) return;
+        lastRenderedFingerprint = generateAlbumFingerprint(albums);
+        lastRenderedMutableState = extractMutableFingerprints(albums);
+      });
+
+      reapplyNowPlayingBorder();
+    };
+
+    const renderRemainingBatches = (parent, nextIndex) => {
+      if (activeRenderGeneration !== renderGeneration) return;
+      if (nextIndex >= albums.length) {
+        finalizeRenderedList();
+        return;
+      }
+
+      const endIndex = Math.min(
+        nextIndex + PROGRESSIVE_RENDER_BATCH_SIZE,
+        albums.length
+      );
+      appendAlbumBatch(parent, nextIndex, endIndex);
+      scheduleRenderBatch(() => renderRemainingBatches(parent, endIndex));
+    };
 
     if (!albums || albums.length === 0) {
       const emptyDiv = document.createElement('div');
@@ -2293,12 +2385,13 @@ export function createAlbumDisplay(deps = {}) {
       const rowsContainer = document.createElement('div');
       rowsContainer.className = 'album-rows-container relative flex-1';
 
-      const fragment = document.createDocumentFragment();
-      albums.forEach((album, index) => {
-        const row = createAlbumItem(album, index, false);
-        fragment.appendChild(row);
-      });
-      rowsContainer.appendChild(fragment);
+      const initialEnd = useProgressiveRender
+        ? Math.min(PROGRESSIVE_RENDER_BATCH_SIZE, albums.length)
+        : albums.length;
+      appendAlbumBatch(rowsContainer, 0, initialEnd);
+      if (useProgressiveRender) {
+        progressiveParent = rowsContainer;
+      }
 
       // Create a fragment to hold both header and rows
       albumContainer = document.createDocumentFragment();
@@ -2309,61 +2402,28 @@ export function createAlbumDisplay(deps = {}) {
       albumContainer = document.createElement('div');
       albumContainer.className = 'mobile-album-list';
 
-      const fragment = document.createDocumentFragment();
-      albums.forEach((album, index) => {
-        const card = createAlbumItem(album, index, true);
-        fragment.appendChild(card);
-      });
-      albumContainer.appendChild(fragment);
+      const initialEnd = useProgressiveRender
+        ? Math.min(PROGRESSIVE_RENDER_BATCH_SIZE, albums.length)
+        : albums.length;
+      appendAlbumBatch(albumContainer, 0, initialEnd);
+      if (useProgressiveRender) {
+        progressiveParent = albumContainer;
+      }
     }
 
     container.replaceChildren(albumContainer);
 
-    // Note: After replaceChildren, if albumContainer was a DocumentFragment,
-    // it's now empty - the children are in `container`. Use `container` for lookups.
-    prePopulatePositionCache(container, isMobile);
-
-    // Only enable sorting if the list is not locked (main list in locked year)
-    const currentList = getCurrentList();
-    const listMeta = getListMetadata(currentList);
-    const listYear = listMeta?.year || null;
-    const listIsMain = listMeta?.isMain || false;
-
-    if (listYear && listIsMain) {
-      // Only check lock status for main lists
-      isListLocked(listYear, listIsMain).then((locked) => {
-        if (!locked) {
-          initializeUnifiedSorting(container, isMobile);
-          clearYearLockUI(container);
-        } else {
-          // Main list is locked - destroy any existing sortable instance
-          if (destroySorting) {
-            destroySorting(container);
-          }
-          showYearLockUI(container, listYear);
-        }
-      });
-    } else {
-      // Non-main lists or collections - always enable sorting
-      initializeUnifiedSorting(container, isMobile);
-      clearYearLockUI(container);
-    }
-
     // Initialize lazy loading for album cover images
     observeLazyImages(container);
 
-    // Initialize Last.fm summary tooltips (desktop only)
-    if (!isMobile) {
-      initSummaryTooltips(container);
+    if (progressiveParent) {
+      scheduleRenderBatch(() =>
+        renderRemainingBatches(progressiveParent, PROGRESSIVE_RENDER_BATCH_SIZE)
+      );
+      return;
     }
 
-    // Update lightweight state instead of expensive deep clone
-    requestAnimationFrame(() => {
-      lastRenderedFingerprint = generateAlbumFingerprint(albums);
-      lastRenderedMutableState = extractMutableFingerprints(albums);
-    });
-
-    reapplyNowPlayingBorder();
+    finalizeRenderedList();
   }
 
   /**

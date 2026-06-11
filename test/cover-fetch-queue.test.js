@@ -346,10 +346,12 @@ describe('CoverFetchQueue', () => {
       assert.strictEqual(mockPool.query.mock.calls.length, 1);
 
       const updateCall = mockPool.query.mock.calls[0].arguments;
-      assert.strictEqual(updateCall[1].length, 3);
+      assert.strictEqual(updateCall[1].length, 5);
       assert.ok(Buffer.isBuffer(updateCall[1][0]));
       assert.strictEqual(updateCall[1][1], 'JPEG');
-      assert.strictEqual(updateCall[1][2], musicbrainzId);
+      assert.ok(Buffer.isBuffer(updateCall[1][2]));
+      assert.strictEqual(updateCall[1][3], 'JPEG');
+      assert.strictEqual(updateCall[1][4], musicbrainzId);
     });
 
     it('should use iTunes fuzzy matching to find best result', async () => {

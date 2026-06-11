@@ -160,14 +160,18 @@ function createAlbumService(deps = {}) {
    * @param {string} albumId
    * @returns {Promise<Object>} { albumId, contentType, coverImageUpdatedAt, coverLength }
    */
-  async function getCoverMeta(albumId) {
+  async function getCoverMeta(albumId, options = {}) {
+    const thumbnail = options.size === 'thumb';
     const result = await db.raw(
       `SELECT cover_image_format,
               cover_image_updated_at,
+              cover_thumbnail_format,
+              cover_thumbnail_updated_at,
               updated_at,
               artist,
               album,
-              octet_length(cover_image) AS cover_length
+              octet_length(cover_image) AS cover_length,
+              octet_length(cover_thumbnail) AS cover_thumbnail_length
        FROM albums WHERE album_id = $1`,
       [albumId]
     );
@@ -178,6 +182,16 @@ function createAlbumService(deps = {}) {
 
     const album = result.rows[0];
     const coverLength = album.cover_length || 0;
+    const thumbnailLength = album.cover_thumbnail_length || 0;
+    const selectedLength = thumbnail
+      ? thumbnailLength || coverLength
+      : coverLength;
+    const selectedFormat = thumbnail
+      ? album.cover_thumbnail_format || album.cover_image_format
+      : album.cover_image_format;
+    const selectedUpdatedAt = thumbnail
+      ? album.cover_thumbnail_updated_at || album.cover_image_updated_at
+      : album.cover_image_updated_at;
 
     if (!coverLength && album.artist && album.album) {
       triggerLazyCoverFetch(albumId, album.artist, album.album);
@@ -192,9 +206,9 @@ function createAlbumService(deps = {}) {
 
     return {
       albumId,
-      contentType: coverContentType(album.cover_image_format),
-      coverImageUpdatedAt: album.cover_image_updated_at || album.updated_at,
-      coverLength,
+      contentType: coverContentType(selectedFormat),
+      coverImageUpdatedAt: selectedUpdatedAt || album.updated_at,
+      coverLength: selectedLength,
     };
   }
 
@@ -204,11 +218,15 @@ function createAlbumService(deps = {}) {
    * @param {string} albumId
    * @returns {Promise<Object>} { imageBuffer, contentType } or throws
    */
-  async function getCoverImage(albumId) {
+  async function getCoverImage(albumId, options = {}) {
+    const thumbnail = options.size === 'thumb';
     const result = await db.raw(
       `SELECT cover_image,
               cover_image_format,
               cover_image_updated_at,
+              cover_thumbnail,
+              cover_thumbnail_format,
+              cover_thumbnail_updated_at,
               updated_at,
               artist,
               album
@@ -234,13 +252,26 @@ function createAlbumService(deps = {}) {
       throw new TransactionAbort(404, { error: 'Image not found' });
     }
 
-    const imageBuffer = normalizeImageBuffer(album.cover_image);
+    const selectedImage =
+      thumbnail && album.cover_thumbnail
+        ? album.cover_thumbnail
+        : album.cover_image;
+    const selectedFormat =
+      thumbnail && album.cover_thumbnail
+        ? album.cover_thumbnail_format
+        : album.cover_image_format;
+    const selectedUpdatedAt =
+      thumbnail && album.cover_thumbnail
+        ? album.cover_thumbnail_updated_at
+        : album.cover_image_updated_at;
+
+    const imageBuffer = normalizeImageBuffer(selectedImage);
 
     return {
       imageBuffer,
-      contentType: coverContentType(album.cover_image_format),
+      contentType: coverContentType(selectedFormat),
       albumId,
-      coverImageUpdatedAt: album.cover_image_updated_at || album.updated_at,
+      coverImageUpdatedAt: selectedUpdatedAt || album.updated_at,
     };
   }
 

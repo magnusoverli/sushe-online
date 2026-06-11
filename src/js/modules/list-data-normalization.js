@@ -24,6 +24,7 @@ export function createDefaultListEntry(listId, albums = []) {
     isMain: false,
     count: data.length,
     _data: data,
+    _dataProfile: 'full',
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
   };

@@ -65,9 +65,11 @@ module.exports = (app, deps) => {
     asyncHandler(async (req, res) => {
       const { id } = req.params;
       const isExport = req.query.export === 'true';
+      const profile = req.query.profile === 'core' ? 'core' : 'full';
 
       const result = await listService.getListById(id, req.user._id, {
         isExport,
+        profile,
       });
 
       if (!result) {

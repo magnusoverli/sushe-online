@@ -199,8 +199,15 @@ function createListService(deps = {}) {
     return listFetchers.getAllLists(userId, { full });
   }
 
-  async function getListById(listId, userId, { isExport = false } = {}) {
-    return listFetchers.getListByIdWithItems(listId, userId, { isExport });
+  async function getListById(
+    listId,
+    userId,
+    { isExport = false, profile = 'full' } = {}
+  ) {
+    return listFetchers.getListByIdWithItems(listId, userId, {
+      isExport,
+      profile,
+    });
   }
 
   async function getSetupStatus(userId, user) {
