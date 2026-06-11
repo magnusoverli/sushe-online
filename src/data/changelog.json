@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-06-11",
+    "category": "perf",
+    "description": "Faster app startup and album list loading",
+    "hash": "8f78188be4189a4cf7c90ccc917d1d0a94c8ee71",
+    "commitMessage": "Improve startup and list rendering performance\n\n- Add bootstrap and core list payload paths\n\n- Add cover thumbnails and lazy/progressive rendering\n\n- Hash Vite entry and lazy-load heavy client modules"
+  },
+  {
+    "date": "2026-06-11",
     "category": "security",
     "description": "Fixed security vulnerabilities and improved account protection",
     "hash": "ac64a24c38f7a15ee32fd4c3fb8b9ccaaada8b77",
