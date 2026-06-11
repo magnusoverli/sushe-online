@@ -1,5 +1,19 @@
 [
   {
+    "date": "2026-06-11",
+    "category": "security",
+    "description": "Fixed security vulnerabilities and improved account protection",
+    "hash": "ac64a24c38f7a15ee32fd4c3fb8b9ccaaada8b77",
+    "commitMessage": "Fix XSS sinks, token lifecycle, and rollback bugs from second audit\n\nFrontend XSS (all rendered via innerHTML without escaping):\n- editable-fields: user-entered country, genre, and comment values,\n  including the genre dropdown match highlighting\n- musicbrainz: release titles and artist names from the MusicBrainz API\n  in search result cards (title attribute had no quote escaping at all)\n  and artist image alt text\n- mobile-ui: genre dropdown match highlighting\n\nToken lifecycle:\n- Revoke all extension tokens when a password is changed or reset;\n  90-day tokens previously survived credential rotation\n- Store only the SHA-256 of password reset tokens so a leaked DB row or\n  backup cannot be replayed as a live reset link (outstanding unhashed\n  tokens expire within the hour)\n\nError handling and rollback:\n- sorting: failed reorder saves now revert the data array too (the next\n  save used to persist the failed order) and the DOM revert no longer\n  lands off-by-one when dragging toward the start\n- album-transfer: save target before source so a failure cannot drop an\n  album from both lists; rollback removes the exact pushed album instead\n  of whatever is last in the array\n- track-selection: check response.ok before parsing JSON so HTML error\n  pages do not mask the real error\n- spotify/tidal playlist export: skip tracks with missing metadata and\n  validate playlist-creation responses instead of crashing on malformed\n  API data\n\nhttps://claude.ai/code/session_01EY3TSKwCRJ7Gi5Hm37Le6b"
+  },
+  {
+    "date": "2026-06-10",
+    "category": "security",
+    "description": "Enhanced security and fixed potential data exposure issues",
+    "hash": "e072e47442992c282fe74ec46bed9bcf3e7cba03",
+    "commitMessage": "Fix XSS, log leakage, and error-handling bugs found in code audit\n\n- Escape unfurl metadata (title, description, image, url) in link\n  previews; third-party pages could inject markup via og: meta tags\n- Escape Telegram API values (bot username, group title) and server\n  error messages rendered into settings feedback elements\n- Stop logging the full CSRF token and session secret on validation\n  failure; the safe 8-char previews remain\n- Default OAuth expires_in to 3600s when missing from a refresh\n  response; NaN expires_at made tokens look like they never expire\n- Guard ROLLBACK in the migration runner and poison the connection on\n  rollback failure instead of returning it to the pool, matching the\n  pattern in db/transaction.js\n- Use bash arrays for multi-word npm/prettier commands in the generated\n  pre-commit hook so they expand safely\n\nAdds regression tests for the link-preview escaping and the\nexpires_in fallback.\n\nhttps://claude.ai/code/session_01EY3TSKwCRJ7Gi5Hm37Le6b"
+  },
+  {
     "date": "2026-06-10",
     "category": "fix",
     "description": "Fixed lists moving to Uncategorized when deleting collections",
