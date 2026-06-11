@@ -37,28 +37,6 @@ module.exports = (app, deps, adminEventService) => {
   // Shared middleware stack for all admin telegram routes
   const adminAuth = [ensureAuth, ensureAdmin];
 
-  // Get current Telegram configuration status
-  app.get(
-    '/api/admin/telegram/status',
-    ...adminAuth,
-    asyncHandler(async (_req, res) => {
-      const config = await telegramNotifier.getConfig();
-      if (!config) {
-        return res.json({ configured: false });
-      }
-
-      res.json({
-        configured: true,
-        enabled: config.enabled,
-        chatId: config.chatId,
-        chatTitle: config.chatTitle,
-        threadId: config.threadId,
-        topicName: config.topicName,
-        configuredAt: config.configuredAt,
-      });
-    }, 'getting Telegram status')
-  );
-
   // Validate bot token
   app.post(
     '/api/admin/telegram/validate-token',

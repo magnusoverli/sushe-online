@@ -5,8 +5,7 @@
  * It serves as the main entry point for the modular API structure.
  */
 
-// Ensure fetch is available
-const fetch = globalThis.fetch || require('node-fetch');
+const fetch = globalThis.fetch;
 const sharp = require('sharp');
 
 // Import queue utilities
