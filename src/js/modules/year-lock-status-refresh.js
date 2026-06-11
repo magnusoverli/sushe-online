@@ -16,14 +16,15 @@ export function createYearLockStatusRefresh(deps = {}) {
     clearYearLockUI,
   } = deps;
 
-  async function refreshLockedYearStatus(year) {
+  async function refreshLockedYearStatus(year = null) {
     invalidateLockedYearsCache();
 
     const currentMeta = getListMetadata(getCurrentListId());
     const currentYear = currentMeta?.year;
     const currentIsMain = currentMeta?.isMain || false;
+    const targetYear = year ?? currentYear;
 
-    if (!currentYear || currentYear !== year || !currentIsMain) {
+    if (!currentYear || currentYear !== targetYear || !currentIsMain) {
       return;
     }
 

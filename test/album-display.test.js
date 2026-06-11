@@ -162,6 +162,60 @@ describe('album-display module', () => {
       assert.strictEqual(typeof module.detectUpdateType, 'function');
     });
 
+    it('should show locked UI for empty locked main lists', async () => {
+      const previousGetElementById = globalThis.document.getElementById;
+      const previousCreateElement = globalThis.document.createElement;
+      const previousInnerWidth = globalThis.window.innerWidth;
+      const container = {
+        children: [],
+        querySelector: mock.fn(() => null),
+        querySelectorAll: mock.fn(() => []),
+        replaceChildren(...children) {
+          this.children = children;
+        },
+      };
+
+      globalThis.window.innerWidth = 1280;
+      globalThis.document.getElementById = (id) =>
+        id === 'albumContainer' ? container : null;
+      globalThis.document.createElement = () => ({
+        className: '',
+        innerHTML: '',
+        querySelector: () => null,
+      });
+
+      try {
+        const showYearLockUI = mock.fn();
+        const destroySorting = mock.fn();
+        const initializeUnifiedSorting = mock.fn();
+        const module = createAlbumDisplay({
+          getCurrentList: () => 'main-2024',
+          getListMetadata: () => ({ year: 2024, isMain: true }),
+          isListLocked: mock.fn(async () => true),
+          showYearLockUI,
+          clearYearLockUI: mock.fn(),
+          destroySorting,
+          initializeUnifiedSorting,
+          reapplyNowPlayingBorder: mock.fn(),
+        });
+
+        module.displayAlbums([], { forceFullRebuild: true });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        assert.strictEqual(container.children.length, 1);
+        assert.strictEqual(destroySorting.mock.calls.length, 1);
+        assert.strictEqual(initializeUnifiedSorting.mock.calls.length, 0);
+        assert.deepStrictEqual(showYearLockUI.mock.calls[0].arguments, [
+          container,
+          2024,
+        ]);
+      } finally {
+        globalThis.document.getElementById = previousGetElementById;
+        globalThis.document.createElement = previousCreateElement;
+        globalThis.window.innerWidth = previousInnerWidth;
+      }
+    });
+
     it('should handle empty dependencies gracefully', () => {
       // Should not throw when called with empty deps
       const module = createAlbumDisplay({});

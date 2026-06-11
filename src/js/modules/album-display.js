@@ -127,6 +127,9 @@ export function createAlbumDisplay(deps = {}) {
     reapplyNowPlayingBorder,
     initializeUnifiedSorting,
     destroySorting,
+    isListLocked: isListLockedFn = isListLocked,
+    showYearLockUI: showYearLockUIFn = showYearLockUI,
+    clearYearLockUI: clearYearLockUIFn = clearYearLockUI,
     setContextAlbum,
     getTrackName,
     getTrackLength,
@@ -2062,7 +2065,7 @@ export function createAlbumDisplay(deps = {}) {
     // Clear lock UI eagerly on full rebuild (list switch) to prevent stale
     // indicators from a previous list's async isListLocked check
     if (forceFullRebuild) {
-      clearYearLockUI(container);
+      clearYearLockUIFn(container);
     }
 
     // Try incremental update first using fingerprint comparison
@@ -2190,23 +2193,23 @@ export function createAlbumDisplay(deps = {}) {
 
       if (listYear && listIsMain) {
         // Only check lock status for main lists
-        isListLocked(listYear, listIsMain).then((locked) => {
+        isListLockedFn(listYear, listIsMain).then((locked) => {
           if (activeRenderGeneration !== renderGeneration) return;
           if (!locked) {
             initializeUnifiedSorting(container, isMobile);
-            clearYearLockUI(container);
+            clearYearLockUIFn(container);
           } else {
             // Main list is locked - destroy any existing sortable instance
             if (destroySorting) {
               destroySorting(container);
             }
-            showYearLockUI(container, listYear);
+            showYearLockUIFn(container, listYear);
           }
         });
       } else {
         // Non-main lists or collections - always enable sorting
         initializeUnifiedSorting(container, isMobile);
-        clearYearLockUI(container);
+        clearYearLockUIFn(container);
       }
 
       // Initialize Last.fm summary tooltips (desktop only)
@@ -2247,6 +2250,7 @@ export function createAlbumDisplay(deps = {}) {
         <p class="text-sm">Click the + button to add albums${isMobile ? '' : ' or use the Add Album button'}</p>
       `;
       container.replaceChildren(emptyDiv);
+      finalizeRenderedList();
       return;
     }
 

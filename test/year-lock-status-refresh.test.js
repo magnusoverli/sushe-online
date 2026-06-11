@@ -153,6 +153,54 @@ describe('year-lock-status-refresh module', () => {
     );
   });
 
+  it('refreshes the current main list when no target year is provided', async () => {
+    const calls = [];
+    const container = { id: 'albumContainer' };
+    const sorting = {
+      destroySorting(target) {
+        calls.push(['destroy', target]);
+      },
+      initializeUnifiedSorting() {
+        calls.push(['init']);
+      },
+    };
+
+    const { refreshLockedYearStatus } = createYearLockStatusRefresh({
+      invalidateLockedYearsCache() {
+        calls.push('invalidate');
+      },
+      getListMetadata() {
+        return { year: 2024, isMain: true };
+      },
+      getCurrentListId() {
+        return 'list-main';
+      },
+      isListLocked: async () => true,
+      getSortingModule() {
+        return sorting;
+      },
+      showYearLockUI(target, year) {
+        calls.push(['show', target, year]);
+      },
+      clearYearLockUI() {
+        calls.push(['clear']);
+      },
+      doc: {
+        getElementById(id) {
+          if (id === 'albumContainer') return container;
+          return null;
+        },
+      },
+      win: { innerWidth: 1280 },
+    });
+
+    await refreshLockedYearStatus();
+
+    assert.deepStrictEqual(calls[0], 'invalidate');
+    assert.deepStrictEqual(calls[1], ['destroy', container]);
+    assert.deepStrictEqual(calls[2], ['show', container, 2024]);
+  });
+
   it('returns without sorting calls when album container is missing', async () => {
     const calls = [];
     const sorting = {
