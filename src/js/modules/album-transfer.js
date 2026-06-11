@@ -117,33 +117,45 @@ export async function transferAlbumToList(deps, options) {
   }
   targetData.push(albumToTransfer);
 
-  // Save the affected lists
+  // Save the target first: if it fails, nothing was persisted and we can
+  // roll back cleanly. Saving in parallel could remove the album from the
+  // source while the target save failed, losing it from both lists.
   try {
-    if (mode === 'move') {
-      await Promise.all([
-        saveList(currentListId, sourceAlbums),
-        saveList(targetListId, targetData),
-      ]);
-    } else {
-      // Copy: only save the target list
-      await saveList(targetListId, targetData);
-    }
-
-    selectList(currentListId);
-
-    const actionVerb = mode === 'move' ? 'Moved' : 'Copied';
-    showToast(`${actionVerb} "${album.album}" to "${targetListName}"`);
+    await saveList(targetListId, targetData);
   } catch (error) {
     console.error(`Error saving lists after ${mode}:`, error);
 
-    // Rollback
+    // Nothing persisted; undo the local changes. Remove the exact album we
+    // pushed (not the last element — realtime sync may have appended since).
     if (mode === 'move') {
       sourceAlbums.splice(indexToTransfer, 0, albumToTransfer);
     }
-    targetData.pop();
+    const pushedIndex = targetData.indexOf(albumToTransfer);
+    if (pushedIndex !== -1) {
+      targetData.splice(pushedIndex, 1);
+    }
 
     throw error;
   }
+
+  if (mode === 'move') {
+    try {
+      await saveList(currentListId, sourceAlbums);
+    } catch (error) {
+      console.error(`Error saving lists after ${mode}:`, error);
+
+      // The target save already persisted, so keep the local source in sync
+      // with the server: the album exists in both lists until removed again.
+      sourceAlbums.splice(indexToTransfer, 0, albumToTransfer);
+
+      throw error;
+    }
+  }
+
+  selectList(currentListId);
+
+  const actionVerb = mode === 'move' ? 'Moved' : 'Copied';
+  showToast(`${actionVerb} "${album.album}" to "${targetListName}"`);
 }
 
 /**

@@ -70,8 +70,18 @@ export function createTrackSelection(deps = {}) {
       `/api/musicbrainz/tracks?${params.toString()}`,
       fetchOptions
     );
+    if (!resp.ok) {
+      // Error responses may not be JSON (e.g. proxy/HTML error pages)
+      let message = 'Failed';
+      try {
+        const errData = await resp.json();
+        message = errData.error || message;
+      } catch (_parseError) {
+        // keep the generic message
+      }
+      throw new Error(message);
+    }
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || 'Failed');
     album.tracks = data.tracks;
     return data.tracks;
   }

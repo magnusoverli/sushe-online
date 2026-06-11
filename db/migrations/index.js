@@ -64,6 +64,7 @@ class MigrationManager {
 
     // Acquire a dedicated client for transaction isolation
     const client = await this.pool.connect();
+    let releaseError;
 
     try {
       logger.info(`Executing migration: ${version}`);
@@ -112,13 +113,21 @@ class MigrationManager {
         }
       }
     } catch (error) {
-      // Rollback transaction on the same client
-      await client.query('ROLLBACK');
+      // Rollback transaction on the same client; if ROLLBACK itself fails,
+      // poison the connection so the pool discards it instead of reusing it
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        releaseError = rollbackError;
+        logger.error(`ROLLBACK failed after migration ${version} error:`, {
+          rollbackError: rollbackError.message,
+        });
+      }
       logger.error(`Migration ${version} failed:`, { error: error.message });
       throw error;
     } finally {
       // Always release the client back to the pool
-      client.release();
+      client.release(releaseError);
     }
   }
 
@@ -138,6 +147,7 @@ class MigrationManager {
 
     // Acquire a dedicated client for transaction isolation
     const client = await this.pool.connect();
+    let releaseError;
 
     try {
       logger.info(`Rolling back migration: ${version}`);
@@ -166,15 +176,24 @@ class MigrationManager {
 
       logger.info(`Migration ${version} rolled back successfully`);
     } catch (error) {
-      // Rollback transaction on the same client
-      await client.query('ROLLBACK');
+      // Rollback transaction on the same client; if ROLLBACK itself fails,
+      // poison the connection so the pool discards it instead of reusing it
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        releaseError = rollbackError;
+        logger.error(
+          `ROLLBACK failed after rollback of migration ${version} error:`,
+          { rollbackError: rollbackError.message }
+        );
+      }
       logger.error(`Rollback of migration ${version} failed:`, {
         error: error.message,
       });
       throw error;
     } finally {
       // Always release the client back to the pool
-      client.release();
+      client.release(releaseError);
     }
   }
 

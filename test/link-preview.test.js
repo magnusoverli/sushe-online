@@ -256,6 +256,29 @@ describe('link-preview', async () => {
       assert.strictEqual(container.appendChild.mock.calls.length, 0);
     });
 
+    it('escapes HTML in unfurl data to prevent XSS', async () => {
+      const mockApiCall = mock.fn(async () => ({
+        title: '<img src=x onerror=alert(1)>',
+        description: '<script>alert(2)</script>',
+        image: 'https://img.com/a.jpg" onerror="alert(3)',
+      }));
+      const lp = createLinkPreview({ apiCall: mockApiCall });
+
+      await lp._fetchCached('https://evil.example.com');
+
+      const container = { children: [], appendChild: mock.fn() };
+      lp.attachLinkPreview(container, 'See https://evil.example.com');
+
+      const previewEl = container.appendChild.mock.calls[0].arguments[0];
+      assert.ok(!previewEl.innerHTML.includes('<img src=x'));
+      assert.ok(!previewEl.innerHTML.includes('<script>'));
+      assert.ok(!previewEl.innerHTML.includes('" onerror="'));
+      assert.ok(
+        previewEl.innerHTML.includes('&lt;img src=x onerror=alert(1)&gt;')
+      );
+      assert.ok(previewEl.innerHTML.includes('&lt;script&gt;'));
+    });
+
     it('extracts first URL from comment with multiple URLs', () => {
       const lp = createLinkPreview({ apiCall: async () => ({ title: 'T' }) });
       const container = { children: [], appendChild: mock.fn() };

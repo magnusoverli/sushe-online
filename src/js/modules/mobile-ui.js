@@ -330,7 +330,7 @@ export function createMobileUI(deps = {}) {
           : 'px-4 py-3 cursor-pointer active:bg-gray-600 text-gray-600';
 
         // Highlight matching text
-        let displayText = item.genre;
+        let displayText = escapeHtml(item.genre);
         if (term && item.isMatch) {
           const matchIndex = item.genre.toLowerCase().indexOf(term);
           if (matchIndex !== -1) {
@@ -340,7 +340,7 @@ export function createMobileUI(deps = {}) {
               matchIndex + term.length
             );
             const after = item.genre.slice(matchIndex + term.length);
-            displayText = `${before}<span class="text-green-400 font-medium">${match}</span>${after}`;
+            displayText = `${escapeHtml(before)}<span class="text-green-400 font-medium">${escapeHtml(match)}</span>${escapeHtml(after)}`;
           }
         }
 

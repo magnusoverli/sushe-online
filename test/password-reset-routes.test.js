@@ -38,6 +38,9 @@ function createTestApp(overrides = {}) {
       ),
     resetPasswordByToken:
       overrides.resetPasswordByToken || mock.fn(() => Promise.resolve(1)),
+    revokeAllExtensionTokens:
+      overrides.revokeAllExtensionTokens ||
+      mock.fn(() => Promise.resolve({ revokedCount: 0 })),
   };
 
   const bcrypt = {
@@ -97,5 +100,36 @@ describe('password-reset routes', () => {
     assert.strictEqual(response.headers.location, '/login');
     assert.strictEqual(bcrypt.hash.mock.calls.length, 1);
     assert.strictEqual(authService.resetPasswordByToken.mock.calls.length, 1);
+  });
+
+  it('hashes the token before any service lookup and revokes extension tokens on reset', async () => {
+    const { app, authService } = createTestApp();
+    const crypto = require('crypto');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update('test-token')
+      .digest('hex');
+
+    const response = await request(app)
+      .post('/reset/test-token')
+      .send({ password: 'long-enough-password' });
+
+    assert.strictEqual(response.status, 302);
+    assert.strictEqual(
+      authService.getUserByResetToken.mock.calls[0].arguments[0],
+      hashedToken
+    );
+    assert.strictEqual(
+      authService.resetPasswordByToken.mock.calls[0].arguments[0],
+      hashedToken
+    );
+    assert.strictEqual(
+      authService.revokeAllExtensionTokens.mock.calls.length,
+      1
+    );
+    assert.strictEqual(
+      authService.revokeAllExtensionTokens.mock.calls[0].arguments[0],
+      'user-1'
+    );
   });
 });

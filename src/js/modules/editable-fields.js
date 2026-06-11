@@ -7,6 +7,8 @@
  * @module editable-fields
  */
 
+import { escapeHtmlAttr } from './html-utils.js';
+
 /**
  * Factory function to create the editable fields module with injected dependencies
  *
@@ -218,7 +220,7 @@ export function createEditableFields(deps = {}) {
         ? 'text-gray-300'
         : 'text-gray-500 italic';
 
-      countryDiv.innerHTML = `<span class="text-sm ${displayClass} truncate cursor-pointer hover:text-gray-100">${displayValue}</span>`;
+      countryDiv.innerHTML = `<span class="text-sm ${displayClass} truncate cursor-pointer hover:text-gray-100">${escapeHtmlAttr(displayValue)}</span>`;
 
       // Restore the original click handler
       countryDiv.onclick = originalOnClick;
@@ -419,7 +421,7 @@ export function createEditableFields(deps = {}) {
         }
       }
 
-      genreDiv.innerHTML = `<span class="text-sm ${displayClass} truncate cursor-pointer hover:text-gray-100">${displayValue}</span>`;
+      genreDiv.innerHTML = `<span class="text-sm ${displayClass} truncate cursor-pointer hover:text-gray-100">${escapeHtmlAttr(displayValue)}</span>`;
 
       // Restore the original click handler
       genreDiv.onclick = originalOnClick;
@@ -573,7 +575,7 @@ export function createEditableFields(deps = {}) {
         option.dataset.index = String(idx + clearOptionOffset);
 
         // Highlight matching text in the genre name
-        let displayText = item.genre;
+        let displayText = escapeHtmlAttr(item.genre);
         if (term && item.isMatch) {
           const matchIndex = item.genre.toLowerCase().indexOf(term);
           if (matchIndex !== -1) {
@@ -583,7 +585,7 @@ export function createEditableFields(deps = {}) {
               matchIndex + term.length
             );
             const after = item.genre.slice(matchIndex + term.length);
-            displayText = `${before}<span class="text-green-400 font-medium">${match}</span>${after}`;
+            displayText = `${escapeHtmlAttr(before)}<span class="text-green-400 font-medium">${escapeHtmlAttr(match)}</span>${escapeHtmlAttr(after)}`;
           }
         }
 
@@ -820,7 +822,7 @@ export function createEditableFields(deps = {}) {
           displayClass = 'text-gray-800 italic';
         }
 
-        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${displayComment}</span>`;
+        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${escapeHtmlAttr(displayComment)}</span>`;
 
         // Re-add click handler
         commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
@@ -846,7 +848,7 @@ export function createEditableFields(deps = {}) {
           revertDisplay = 'Comment';
           revertClass = 'text-gray-500';
         }
-        commentDiv.innerHTML = `<span class="text-sm ${revertClass} italic line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${revertDisplay}</span>`;
+        commentDiv.innerHTML = `<span class="text-sm ${revertClass} italic line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${escapeHtmlAttr(revertDisplay)}</span>`;
         commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
 
         // Add tooltip only if comment is truncated
@@ -878,7 +880,7 @@ export function createEditableFields(deps = {}) {
           displayClass = 'text-gray-500';
         }
 
-        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${displayComment}</span>`;
+        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${escapeHtmlAttr(displayComment)}</span>`;
         commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
 
         // Add tooltip only if comment is truncated
@@ -963,7 +965,7 @@ export function createEditableFields(deps = {}) {
           displayClass = 'text-gray-800 italic';
         }
 
-        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${displayComment}</span>`;
+        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${escapeHtmlAttr(displayComment)}</span>`;
 
         // Re-add click handler
         commentDiv.onclick = () => makeComment2Editable(commentDiv, albumIndex);
@@ -989,7 +991,7 @@ export function createEditableFields(deps = {}) {
           revertDisplay = 'Comment 2';
           revertClass = 'text-gray-500';
         }
-        commentDiv.innerHTML = `<span class="text-sm ${revertClass} italic line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${revertDisplay}</span>`;
+        commentDiv.innerHTML = `<span class="text-sm ${revertClass} italic line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${escapeHtmlAttr(revertDisplay)}</span>`;
         commentDiv.onclick = () => makeComment2Editable(commentDiv, albumIndex);
 
         // Add tooltip only if comment is truncated
@@ -1020,7 +1022,7 @@ export function createEditableFields(deps = {}) {
           displayClass = 'text-gray-500';
         }
 
-        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${displayComment}</span>`;
+        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${escapeHtmlAttr(displayComment)}</span>`;
         commentDiv.onclick = () => makeComment2Editable(commentDiv, albumIndex);
 
         // Add tooltip only if comment is truncated

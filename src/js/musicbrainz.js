@@ -1,5 +1,6 @@
 // MusicBrainz API integration
 import { isAlbumInList, showToast } from './modules/utils.js';
+import { escapeHtmlAttr } from './modules/html-utils.js';
 import { checkAndPromptSimilar } from './modules/similar-album-modal.js';
 import {
   stringSimilarity,
@@ -1118,18 +1119,18 @@ async function displayDirectAlbumResults(releaseGroups) {
           : ''
       }
       <div class="album-cover-container shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md bg-gray-700 animate-pulse">
-        <img data-artist="${artistDisplay.replace(/"/g, '&quot;')}"
-            data-album="${rg.title.replace(/"/g, '&quot;')}"
+        <img data-artist="${escapeHtmlAttr(artistDisplay)}"
+            data-album="${escapeHtmlAttr(rg.title)}"
             data-release-group-id="${rg.id}"
             data-index="${index}"
-            alt="${rg.title.replace(/"/g, '&quot;')}"
+            alt="${escapeHtmlAttr(rg.title)}"
             class="w-20 h-20 object-cover rounded-lg"
             src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
       </div>
       <div class="flex-1 min-w-0">
-        <div class="font-semibold text-white truncate text-lg" title="${rg.title}">${rg.title}</div>
-        <div class="text-sm text-gray-400 mt-1">${releaseDate} • ${albumType}</div>
-        <div class="text-xs text-gray-500 mt-1">${artistDisplay}</div>
+        <div class="font-semibold text-white truncate text-lg" title="${escapeHtmlAttr(rg.title)}">${escapeHtmlAttr(rg.title)}</div>
+        <div class="text-sm text-gray-400 mt-1">${escapeHtmlAttr(releaseDate)} • ${escapeHtmlAttr(albumType)}</div>
+        <div class="text-xs text-gray-500 mt-1">${escapeHtmlAttr(artistDisplay)}</div>
       </div>
     `;
 
@@ -1885,8 +1886,8 @@ function loadArtistImageInto({
         if (imageContainer) {
           imageContainer.innerHTML = `
             <img
-              src="${imageUrl}"
-              alt="${displayName.primary}"
+              src="${escapeHtmlAttr(imageUrl)}"
+              alt="${escapeHtmlAttr(displayName.primary)}"
               class="w-16 h-16 rounded-full object-cover"
               onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><path d=\\'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\\'></path><circle cx=\\'12\\' cy=\\'7\\' r=\\'4\\'></circle></svg></div>'"
             >

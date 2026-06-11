@@ -10,6 +10,8 @@
  * @param {Function} deps.apiCall - API call function for /api/unfurl endpoint
  * @returns {Object} { attachLinkPreview }
  */
+import { escapeHtmlAttr } from './html-utils.js';
+
 export function createLinkPreview(deps = {}) {
   const { apiCall } = deps;
 
@@ -98,13 +100,14 @@ export function createLinkPreview(deps = {}) {
    * @param {string} url - Original URL
    */
   function renderPreviewHtml(previewEl, data, url) {
+    // Unfurl data comes from arbitrary third-party pages — escape everything
     const img = data.image
-      ? `<img src="${data.image}" class="w-12 h-12 object-cover rounded-sm shrink-0" alt="">`
+      ? `<img src="${escapeHtmlAttr(data.image)}" class="w-12 h-12 object-cover rounded-sm shrink-0" alt="">`
       : '';
     const desc = data.description
-      ? `<div class="text-gray-400 truncate">${data.description}</div>`
+      ? `<div class="text-gray-400 truncate">${escapeHtmlAttr(data.description)}</div>`
       : '';
-    previewEl.innerHTML = `<a href="${url}" target="_blank" class="flex gap-2 p-2 items-center">${img}<div class="min-w-0"><div class="font-semibold text-gray-100 truncate">${data.title || url}</div>${desc}</div></a>`;
+    previewEl.innerHTML = `<a href="${escapeHtmlAttr(url)}" target="_blank" class="flex gap-2 p-2 items-center">${img}<div class="min-w-0"><div class="font-semibold text-gray-100 truncate">${escapeHtmlAttr(data.title || url)}</div>${desc}</div></a>`;
   }
 
   /**
