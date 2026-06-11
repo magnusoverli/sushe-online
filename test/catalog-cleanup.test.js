@@ -139,4 +139,73 @@ describe('catalog cleanup service', () => {
       (error) => error.code === 'CATALOG_CLEANUP_STALE_PREVIEW'
     );
   });
+
+  it('clears cover cache after deleting orphan albums', async () => {
+    const query = mock.fn(async (sql) => {
+      if (sql === 'BEGIN' || sql === 'ROLLBACK' || sql === 'COMMIT') {
+        return { rows: [], rowCount: 0 };
+      }
+
+      if (sql.includes('FROM pg_tables')) {
+        return {
+          rows: [
+            { tablename: 'user_album_stats' },
+            { tablename: 'album_distinct_pairs' },
+          ],
+        };
+      }
+
+      if (sql.includes('DROP TABLE IF EXISTS cleanup_album_targets')) {
+        return { rows: [], rowCount: 0 };
+      }
+
+      if (sql.includes('CREATE TEMP TABLE cleanup_album_targets')) {
+        return { rows: [], rowCount: 0 };
+      }
+
+      if (
+        sql.includes('SELECT COUNT(*)::int AS count FROM cleanup_album_targets')
+      ) {
+        return { rows: [{ count: 1 }] };
+      }
+
+      if (sql.includes('DELETE FROM album_distinct_pairs')) {
+        return { rows: [], rowCount: 0 };
+      }
+
+      if (sql.includes('FROM cleanup_album_targets')) {
+        return {
+          rows: [{ album_id: 'orphan-1', artist: 'Artist', album: 'Album' }],
+        };
+      }
+
+      if (sql.includes('DELETE FROM albums a')) {
+        return { rows: [], rowCount: 1 };
+      }
+
+      if (sql.includes('UPDATE user_album_stats')) {
+        return { rows: [], rowCount: 0 };
+      }
+
+      return { rows: [], rowCount: 0 };
+    });
+    const client = { query, release: mock.fn() };
+    const coverCache = { clear: mock.fn() };
+    const service = createCatalogCleanupService({
+      db: asMockDb({
+        query,
+        connect: async () => client,
+      }),
+      logger: createMockLogger(),
+      coverCache,
+    });
+
+    const result = await service.executeCleanup({
+      minAgeDays: 30,
+      expectedDeleteCount: 1,
+    });
+
+    assert.strictEqual(result.deletedAlbums, 1);
+    assert.strictEqual(coverCache.clear.mock.calls.length, 1);
+  });
 });

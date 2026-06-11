@@ -18,6 +18,9 @@ const {
   findPotentialDuplicates,
   normalizeForComparison,
 } = require('../utils/fuzzy-match');
+const {
+  invalidateResponseCacheForAlbumUsers: invalidateAlbumUserResponseCaches,
+} = require('./album-cache-invalidation');
 
 const DEFAULT_PAIR_LIMIT = 100;
 const DEFAULT_CLUSTER_PAGE = 1;
@@ -243,6 +246,24 @@ function compareCanonicalAlbums(a, b) {
 function createDuplicateService(deps = {}) {
   const db = ensureDb(deps.db, 'duplicate-service');
   const logger = deps.logger || defaultLogger;
+  const coverCache = deps.coverCache;
+  const responseCache = deps.responseCache;
+
+  function invalidateAlbumCoverCache(albumId) {
+    if (coverCache && typeof coverCache.invalidateAlbum === 'function') {
+      coverCache.invalidateAlbum(albumId);
+    }
+  }
+
+  async function invalidateResponseCacheForMergedAlbums(albumIds) {
+    return invalidateAlbumUserResponseCaches({
+      db,
+      responseCache,
+      logger,
+      albumIds,
+      operation: 'duplicate-service',
+    });
+  }
 
   function getBlockingKeys(album) {
     const normalizedArtist = normalizeForComparison(album.artist || '');
@@ -1296,7 +1317,7 @@ function createDuplicateService(deps = {}) {
       });
     }
 
-    return db.withTransaction(async (client) => {
+    const result = await db.withTransaction(async (client) => {
       return mergeAlbumsWithinTransaction(
         client,
         keepAlbumId,
@@ -1304,6 +1325,10 @@ function createDuplicateService(deps = {}) {
         options
       );
     });
+    invalidateAlbumCoverCache(keepAlbumId);
+    invalidateAlbumCoverCache(deleteAlbumId);
+    await invalidateResponseCacheForMergedAlbums([keepAlbumId, deleteAlbumId]);
+    return result;
   }
 
   /**
@@ -1459,7 +1484,7 @@ function createDuplicateService(deps = {}) {
       retireAlbumIds
     ).sort();
 
-    return db.withTransaction(async (client) => {
+    const result = await db.withTransaction(async (client) => {
       const aggregate = {
         canonicalAlbumId: canonicalId,
         requestedRetireIds: retireIds,
@@ -1523,6 +1548,12 @@ function createDuplicateService(deps = {}) {
         results: aggregate.results,
       };
     });
+    if (result.albumsDeleted > 0 || result.metadataMerged) {
+      invalidateAlbumCoverCache(canonicalId);
+      for (const retireId of retireIds) invalidateAlbumCoverCache(retireId);
+    }
+    await invalidateResponseCacheForMergedAlbums([canonicalId, ...retireIds]);
+    return result;
   }
 
   return {

@@ -2,6 +2,12 @@
  * List loading, import, and persistence flows for app composition.
  */
 import { createListImporter } from './app-list-import.js';
+import {
+  buildListMetadataEntries,
+  fetchCoreList,
+  loadListStartupData,
+  resolveLastSelectedList,
+} from './app-list-load-helpers.js';
 
 export function createAppListOperations(deps = {}) {
   const {
@@ -86,98 +92,27 @@ export function createAppListOperations(deps = {}) {
       const localLastListId = storage?.getItem?.('lastSelectedList');
       const serverLastListId = win?.lastSelectedList;
 
-      // Optimistically prefetch the most likely target list's items in parallel
-      // with the metadata batch, collapsing two serial round-trips before the
-      // first album paints down to one. The result is used only if this id is
-      // still the chosen target once metadata loads; otherwise it is discarded
-      // and the correct list is fetched. Same endpoint and shape as before, so
-      // the rendered list is identical — only the network timing changes.
       const candidateTargetId = localLastListId || serverLastListId || null;
-      let candidateDataPromise = null;
-      let fetchedLists;
-      let fetchedGroups;
-      let recommendationYears = [];
-
-      try {
-        const query = candidateTargetId
-          ? `?selectedListId=${encodeURIComponent(candidateTargetId)}`
-          : '';
-        const bootstrap = await apiCall(`/api/app-bootstrap${query}`);
-        fetchedLists = bootstrap.lists || {};
-        fetchedGroups = bootstrap.groups || [];
-        recommendationYears = bootstrap.recommendationYears || [];
-        if (bootstrap.selectedListId && bootstrap.selectedListItems) {
-          candidateDataPromise = Promise.resolve({
-            items: bootstrap.selectedListItems,
-            profile: bootstrap.selectedListProfile || 'core',
-          });
-        }
-      } catch (error) {
-        logger.warn(
-          'App bootstrap failed, falling back to legacy load:',
-          error
-        );
-        const fetchCoreList = (listId) =>
-          apiCall(`/api/lists/${encodeURIComponent(listId)}?profile=core`)
-            .then((items) => ({ items, profile: 'core' }))
-            .catch(() =>
-              apiCall(`/api/lists/${encodeURIComponent(listId)}`).then(
-                (items) => ({ items, profile: 'full' })
-              )
-            );
-
-        candidateDataPromise = candidateTargetId
-          ? fetchCoreList(candidateTargetId).catch(() => null)
-          : null;
-
-        const metadataPromise = apiCall('/api/lists');
-        const groupsPromise = apiCall('/api/groups');
-        const recYearsPromise = apiCall('/api/recommendations/years').catch(
-          () => ({
-            years: [],
-          })
-        );
-
-        const [metadata, groups, recYearsData] = await Promise.all([
-          metadataPromise,
-          groupsPromise,
-          recYearsPromise,
-        ]);
-        fetchedLists = metadata;
-        fetchedGroups = groups;
-        recommendationYears = recYearsData.years || [];
-      }
+      const {
+        candidateDataPromise,
+        fetchedLists,
+        fetchedGroups,
+        recommendationYears,
+      } = await loadListStartupData({ apiCall, candidateTargetId, logger });
 
       setRecommendationYears(recommendationYears);
       updateGroupsFromServer(fetchedGroups);
 
-      const newLists = {};
-      Object.keys(fetchedLists).forEach((listId) => {
-        const meta = fetchedLists[listId];
-        newLists[listId] = {
-          _id: listId,
-          name: meta.name || 'Unknown',
-          year: meta.year || null,
-          isMain: meta.isMain || false,
-          count: meta.count || 0,
-          groupId: meta.groupId || null,
-          sortOrder: meta.sortOrder || 0,
-          _data: null,
-          updatedAt: meta.updatedAt || null,
-          createdAt: meta.createdAt || null,
-        };
-      });
+      const newLists = buildListMetadataEntries(fetchedLists);
       setLists(newLists);
-
       const hasList = (listId) =>
         Object.prototype.hasOwnProperty.call(newLists, listId);
-      let targetListId = null;
 
-      if (localLastListId && hasList(localLastListId)) {
-        targetListId = localLastListId;
-      } else if (serverLastListId && hasList(serverLastListId)) {
-        targetListId = serverLastListId;
-      }
+      const targetListId = resolveLastSelectedList({
+        localLastListId,
+        serverLastListId,
+        lists: newLists,
+      });
 
       if (localLastListId && !hasList(localLastListId)) {
         try {
@@ -210,15 +145,7 @@ export function createAppListOperations(deps = {}) {
               ? await candidateDataPromise
               : null;
           if (!listPayload) {
-            listPayload = await apiCall(
-              `/api/lists/${encodeURIComponent(targetListId)}?profile=core`
-            )
-              .then((items) => ({ items, profile: 'core' }))
-              .catch(() =>
-                apiCall(`/api/lists/${encodeURIComponent(targetListId)}`).then(
-                  (items) => ({ items, profile: 'full' })
-                )
-              );
+            listPayload = await fetchCoreList(apiCall, targetListId);
           }
           setListData(targetListId, listPayload.items, true, {
             profile: listPayload.profile || 'full',

@@ -31,7 +31,6 @@ export function createMobileAlbumActions(deps = {}) {
       index = parseInt(card.dataset.index);
     }
 
-    // Validate index
     const albumsForSheet = getListData(currentList);
     if (
       isNaN(index) ||
@@ -49,7 +48,6 @@ export function createMobileAlbumActions(deps = {}) {
       return;
     }
 
-    // Create a unique identifier for this album
     const albumId =
       `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
 
@@ -81,7 +79,6 @@ export function createMobileAlbumActions(deps = {}) {
       showSpotifyConnect = true;
     }
 
-    // Determine if recommend option should be shown
     const listMeta = getListMetadata(getCurrentList());
     const isYearBased =
       listMeta && listMeta.year !== null && listMeta.year !== undefined;

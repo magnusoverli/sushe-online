@@ -75,6 +75,7 @@ function toRowCount(value) {
 function createCatalogCleanupService(deps = {}) {
   const db = ensureDb(deps.db, 'catalog-cleanup');
   const log = deps.logger || logger;
+  const coverCache = deps.coverCache;
 
   // getExistingTableSet expects a queryable with .query(); both a pg client
   // (inside a transaction) and this shim satisfy that contract.
@@ -283,6 +284,8 @@ function createCatalogCleanupService(deps = {}) {
         sampleDeletedAlbums: sampleDeletedResult.rows,
       };
     });
+
+    if (executionResult.deletedAlbums > 0) coverCache?.clear?.();
 
     const postCleanupPreview = await getPreview({ minAgeDays, sampleLimit });
     return { ...executionResult, postCleanupPreview };

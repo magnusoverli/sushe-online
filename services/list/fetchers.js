@@ -1,7 +1,5 @@
-const {
-  mapListRowToItem,
-  mapAlbumDataItemToResponse,
-} = require('./item-mapper');
+const { mapListRowToItem } = require('./item-mapper');
+const { mapSingleListRowsToResponse } = require('./single-list-mapper');
 const { ensureDb } = require('../../db/postgres');
 const { AVAILABILITY_SERVICES } = require('../availability/platforms');
 
@@ -280,62 +278,10 @@ function createListFetchers(deps = {}) {
 
     if (itemsResult.rows.length === 0) return null;
 
-    const listRow = itemsResult.rows[0];
-    const list = {
-      id: listRow.list_internal_id,
-      _id: listRow.list_external_id,
-      userId: listRow.list_user_id,
-      name: listRow.list_name,
-      year: listRow.list_year,
-      isMain: listRow.list_is_main,
-      groupId: listRow.list_group_id,
-      groupExternalId: listRow.group_external_id,
-      groupName: listRow.group_name,
-      groupYear: listRow.group_year,
-      sortOrder: listRow.list_sort_order,
-      createdAt: listRow.list_created_at,
-      updatedAt: listRow.list_updated_at,
-    };
-
-    const items = itemsResult.rows
-      .filter((row) => row._id)
-      .map((row) => ({
-        _id: row._id,
-        listId: row.list_id,
-        position: row.position,
-        artist: row.artist || '',
-        album: row.album || '',
-        albumId: row.album_id || '',
-        releaseDate: row.release_date || '',
-        country: row.country || '',
-        genre1: row.genre_1 || '',
-        genre2: row.genre_2 || '',
-        primaryTrack: row.primary_track || null,
-        secondaryTrack: row.secondary_track || null,
-        comments: row.comments || '',
-        comments2: row.comments_2 || '',
-        tracks: row.tracks || null,
-        coverImage: row.cover_image || '',
-        coverImageFormat: row.cover_image_format || '',
-        coverImageUpdatedAt: row.cover_image_updated_at || null,
-        coverThumbnailUpdatedAt: row.cover_thumbnail_updated_at || null,
-        summary: row.summary || '',
-        summarySource: row.summary_source || '',
-        availability: row.availability || [],
-        recommendedBy: row.recommended_by || null,
-        recommendedAt: row.recommended_at || null,
-      }));
-
-    const data = items.map((item, index) =>
-      mapAlbumDataItemToResponse(item, {
-        recommendationMap: new Map(),
-        isExport,
-        index,
-        getPointsForPosition,
-      })
-    );
-
-    return { list, items: data };
+    return mapSingleListRowsToResponse(itemsResult.rows, {
+      isExport,
+      getPointsForPosition,
+    });
   }
 
   return {

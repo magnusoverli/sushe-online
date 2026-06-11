@@ -28,11 +28,24 @@ services:
       - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-5}
       - CLAUDE_MAX_TOKENS=${CLAUDE_MAX_TOKENS:-1024}
       - CLAUDE_RATE_LIMIT_MS=${CLAUDE_RATE_LIMIT_MS:-1000}
+      - ENABLE_RAM_ACCELERATION=${ENABLE_RAM_ACCELERATION:-false}
+      - DB_PREWARM_ENABLED=${DB_PREWARM_ENABLED:-}
+      - DB_PREWARM_MODE=${DB_PREWARM_MODE:-hot}
+      - COVER_CACHE_ENABLED=${COVER_CACHE_ENABLED:-}
+      - COVER_CACHE_MAX_BYTES=${COVER_CACHE_MAX_BYTES:-512MB}
+      - COVER_CACHE_MAX_ITEMS=${COVER_CACHE_MAX_ITEMS:-10000}
+      - RESPONSE_CACHE_MAX_BYTES=${RESPONSE_CACHE_MAX_BYTES:-256MB}
+      - APP_PREWARM_ENABLED=${APP_PREWARM_ENABLED:-}
+      - APP_PREWARM_BLOCKING=${APP_PREWARM_BLOCKING:-true}
+      - APP_PREWARM_USERS_LIMIT=${APP_PREWARM_USERS_LIMIT:-100}
+      - APP_PREWARM_COVERS_LIMIT=${APP_PREWARM_COVERS_LIMIT:-5000}
       - DATABASE_URL=postgres://postgres:example@/sushe?host=/var/run/postgresql
     volumes:
       - sushe-data:/app/data
       - postgres-socket:/var/run/postgresql
       - ./routes/auth.js:/app/routes/auth.js:ro
+    tmpfs:
+      - /tmp:size=512m,mode=1777
     depends_on:
       db:
         condition: service_healthy
@@ -45,10 +58,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 3G
           cpus: '2.0'
         reservations:
-          memory: 512M
+          memory: 1G
           cpus: '0.5'
 
   db:
@@ -75,10 +88,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
+          memory: 8G
           cpus: '4.0'
         reservations:
-          memory: 1G
+          memory: 2G
           cpus: '1.0'
     command: >
       postgres 
@@ -87,15 +100,15 @@ services:
       -c log_statement=none 
       -c log_duration=off 
       -c log_min_duration_statement=-1
-      -c shared_buffers=1GB
-      -c effective_cache_size=3GB
-      -c maintenance_work_mem=256MB
+      -c shared_buffers=2GB
+      -c effective_cache_size=6GB
+      -c maintenance_work_mem=512MB
       -c checkpoint_completion_target=0.9
       -c wal_buffers=64MB
       -c default_statistics_target=100
       -c random_page_cost=1.1
       -c effective_io_concurrency=200
-      -c work_mem=16MB
+      -c work_mem=32MB
       -c max_connections=100
 
 volumes:

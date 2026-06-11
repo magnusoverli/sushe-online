@@ -9,6 +9,7 @@ const { validateYearParam } = require('../../middleware/validate-params');
 module.exports = (app, deps) => {
   const { ensureAuth, ensureAdmin, db } = deps;
   const logger = require('../../utils/logger');
+  const { responseCache } = require('../../middleware/response-cache');
 
   // Create aggregate audit instance
   const aggregateAudit = createAggregateAudit({
@@ -22,7 +23,13 @@ module.exports = (app, deps) => {
     if (!affectedYears || affectedYears.length === 0) return [];
 
     const { createAggregateList } = require('../../services/aggregate-list');
-    const aggregateList = createAggregateList({ db, logger });
+    const aggregateList = createAggregateList({
+      db,
+      logger,
+      onRecomputeComplete: (year) => {
+        responseCache.invalidate(`/api/aggregate-list/${year}`);
+      },
+    });
 
     const results = [];
     for (const year of affectedYears) {

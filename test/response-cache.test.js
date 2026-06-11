@@ -133,6 +133,14 @@ test.describe('ResponseCache Class', () => {
       assert.strictEqual(cache.get('oldest'), null);
       assert.ok(cache.get('newest'));
     });
+
+    test('should honor a zero byte limit', () => {
+      const cache = createTestCache({ maxBytes: 0 });
+
+      assert.strictEqual(cache.set('key', { data: 'value' }), false);
+      assert.strictEqual(cache.get('key'), null);
+      assert.strictEqual(cache.getStats().maxBytes, 0);
+    });
   });
 
   test.describe('Cleanup Operations', () => {

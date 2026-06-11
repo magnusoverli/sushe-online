@@ -20,11 +20,14 @@ const {
  * Should be called after database migrations complete.
  * @param {import('../db/types').DbFacade} db - Canonical datastore
  */
-function initializeQueues(db) {
+function initializeQueues(db, options = {}) {
   const {
     initializeCoverFetchQueue,
   } = require('../services/cover-fetch-queue');
-  initializeCoverFetchQueue(db);
+  initializeCoverFetchQueue(db, {
+    coverCache: options.coverCache,
+    responseCache: options.responseCache,
+  });
 
   const {
     initializeTrackFetchQueue,

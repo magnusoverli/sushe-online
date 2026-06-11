@@ -49,6 +49,18 @@ function scheduleYearRecompute(year, recomputeFn, log) {
   if (typeof timer.unref === 'function') timer.unref();
 }
 
+function notifyRecomputeComplete(callback, year, log) {
+  if (!callback) return;
+  try {
+    callback(year);
+  } catch (error) {
+    log.warn('Aggregate recompute completion hook failed', {
+      year,
+      error: error.message,
+    });
+  }
+}
+
 // ============================================
 // AGGREGATION HELPER FUNCTIONS
 // ============================================
@@ -615,6 +627,7 @@ function createAggregateList(deps = {}) {
     log.info(`Recomputing aggregate list for year ${year}`);
     const { data, stats } = await aggregateForYear(year);
     const result = await saveAggregateList(db, year, data, stats);
+    notifyRecomputeComplete(deps.onRecomputeComplete, year, log);
     log.info(`Aggregate list for ${year} recomputed successfully`);
     return result;
   }

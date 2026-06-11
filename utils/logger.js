@@ -4,7 +4,6 @@
 const pino = require('pino');
 const crypto = require('crypto');
 
-// Log levels mapping for compatibility with existing code
 const LogLevels = {
   ERROR: 0,
   WARN: 1,
@@ -14,7 +13,6 @@ const LogLevels = {
 
 const LogLevelNames = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
 
-// Map our log levels to pino levels
 const pinoLevelMap = {
   0: 'error',
   1: 'warn',
@@ -61,7 +59,6 @@ function createLogger(options = {}) {
   const enableConsole = options.enableConsole !== false;
   const pinoLevel = pinoLevelMap[level] || 'info';
 
-  // Build pino configuration
   const pinoConfig = {
     level: pinoLevel,
     base: { service: 'sushe-online' },
@@ -69,15 +66,12 @@ function createLogger(options = {}) {
     formatters: {
       level: (label) => ({ level: label }),
     },
-    // Merge any test-specific options
     ...options.pinoOptions,
   };
 
-  // Create the pino instance
   let pinoLogger;
 
   if (!enableConsole) {
-    // Silent logger for tests
     pinoLogger = pino(
       pinoConfig,
       pino.destination({ sync: true, write: () => {} })

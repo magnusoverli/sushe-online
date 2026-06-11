@@ -43,6 +43,7 @@ const { createAlbumService } = require('../../services/album-service');
 const {
   createExternalIdentityService,
 } = require('../../services/external-identity-service');
+const { createAlbumCoverCache } = require('../../services/album-cover-cache');
 const {
   createRecommendationService,
 } = require('../../services/recommendation-service');
@@ -93,7 +94,18 @@ module.exports = (app, deps) => {
     isValidPassword,
     authService,
     userService,
+    ramAccelerationConfig,
+    coverCache: injectedCoverCache,
   } = deps;
+
+  const coverCache =
+    injectedCoverCache ||
+    createAlbumCoverCache({
+      enabled: ramAccelerationConfig?.coverCacheEnabled === true,
+      maxBytes: ramAccelerationConfig?.coverCacheMaxBytes,
+      maxItems: ramAccelerationConfig?.coverCacheMaxItems,
+      logger,
+    });
 
   // Create helper functions
   const helpers = createHelpers({
@@ -102,6 +114,7 @@ module.exports = (app, deps) => {
     responseCache,
     app,
     crypto,
+    coverCache,
   });
 
   // Create service auth middleware
@@ -146,6 +159,7 @@ module.exports = (app, deps) => {
     db,
     logger,
     responseCache,
+    coverCache,
     upsertAlbumRecord: helpers.upsertAlbumRecord,
   });
 
@@ -195,6 +209,7 @@ module.exports = (app, deps) => {
     albumService,
     recommendationService,
     externalIdentityService,
+    coverCache,
     authService,
     userService,
     refreshPlaycountsInBackground,
@@ -248,4 +263,11 @@ module.exports = (app, deps) => {
   require('./recommendations')(app, sharedDeps);
 
   logger.info('API routes initialized (modular structure)');
+  return {
+    albumService,
+    coverCache,
+    groupService,
+    listService,
+    recommendationService,
+  };
 };

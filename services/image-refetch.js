@@ -17,6 +17,9 @@ const {
 } = require('../utils/image-processing');
 const { wait } = require('../utils/request-queue');
 const { mbFetch } = require('../utils/mb-queue-singleton');
+const {
+  invalidateResponseCacheForAlbumUsers,
+} = require('./album-cache-invalidation');
 
 // Rate limiting for external APIs
 const RATE_LIMIT_MS = 200; // 200ms between requests (5 req/sec)
@@ -221,6 +224,8 @@ async function fetchCoverArt(artist, album) {
 function createImageRefetchService(deps = {}) {
   const db = ensureDb(deps.db, 'image-refetch');
   const log = deps.logger || logger;
+  const coverCache = deps.coverCache;
+  const responseCache = deps.responseCache;
 
   // Job state
   let isRunning = false;
@@ -477,6 +482,19 @@ function createImageRefetchService(deps = {}) {
                   WHERE album_id = $2`,
                 [imageBuffer, album.album_id]
               );
+              if (
+                coverCache &&
+                typeof coverCache.invalidateAlbum === 'function'
+              ) {
+                coverCache.invalidateAlbum(album.album_id);
+              }
+              await invalidateResponseCacheForAlbumUsers({
+                db,
+                responseCache,
+                logger: log,
+                albumIds: album.album_id,
+                operation: 'image-refetch',
+              });
               summary.success++;
               currentProgress.success++;
             } else {

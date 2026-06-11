@@ -1,17 +1,51 @@
 const logger = require('../utils/logger');
-const { incCacheHit, incCacheMiss } = require('../utils/metrics');
+const {
+  incCacheHit,
+  incCacheMiss,
+  incResponseCacheEvictions,
+  updateResponseCacheMetrics,
+} = require('../utils/metrics');
+const { resolveRamAccelerationConfig } = require('../config/ram-acceleration');
+const { createResponseCacheConfigs } = require('./response-cache-configs');
+
+function byteLength(value) {
+  return Buffer.byteLength(value || '', 'utf8');
+}
+
+function serializeJson(data) {
+  const serialized = JSON.stringify(data);
+  return serialized === undefined ? 'null' : serialized;
+}
 
 class ResponseCache {
   constructor(options = {}) {
     this.cache = new Map();
-    this.defaultTTL = options.defaultTTL || 60000; // 1 minute default
-    this.maxSize = options.maxSize || 1000; // Max cache entries
+    this.defaultTTL = options.defaultTTL ?? 60000; // 1 minute default
+    this.maxSize = options.maxSize ?? 1000; // Max cache entries
+    this.maxBytes =
+      options.maxBytes ??
+      resolveRamAccelerationConfig(process.env).responseCacheMaxBytes;
+    this.totalBytes = 0;
     this.cleanupInterval = options.cleanupInterval || 300000; // 5 minutes
 
     // Periodic cleanup of expired entries
     this.cleanupTimer = setInterval(() => {
       this.cleanup();
     }, this.cleanupInterval);
+    this.updateMetrics();
+  }
+
+  updateMetrics() {
+    updateResponseCacheMetrics(this.totalBytes, this.cache.size);
+  }
+
+  deleteEntry(key, countEviction = false) {
+    const entry = this.cache.get(key);
+    if (!entry) return false;
+    this.cache.delete(key);
+    this.totalBytes -= entry.bytes || 0;
+    if (countEviction) incResponseCacheEvictions();
+    return true;
   }
 
   cleanup() {
@@ -20,28 +54,28 @@ class ResponseCache {
 
     for (const [key, entry] of this.cache.entries()) {
       if (now > entry.expiresAt) {
-        this.cache.delete(key);
+        this.deleteEntry(key, true);
         cleaned++;
       }
     }
 
-    // If cache is still too large, remove oldest entries
-    if (this.cache.size > this.maxSize) {
-      const entries = Array.from(this.cache.entries()).sort(
-        (a, b) => a[1].createdAt - b[1].createdAt
-      );
-
-      const toRemove = this.cache.size - this.maxSize;
-      for (let i = 0; i < toRemove; i++) {
-        this.cache.delete(entries[i][0]);
-        cleaned++;
-      }
+    // If cache is still too large, remove oldest entries (Map insertion order).
+    while (
+      this.cache.size > 0 &&
+      (this.cache.size > this.maxSize || this.totalBytes > this.maxBytes)
+    ) {
+      const oldestKey = this.cache.keys().next().value;
+      this.deleteEntry(oldestKey, true);
+      cleaned++;
     }
+
+    this.updateMetrics();
 
     if (cleaned > 0) {
       logger.debug('Response cache cleanup', {
         entriesRemoved: cleaned,
         cacheSize: this.cache.size,
+        totalBytes: this.totalBytes,
       });
     }
   }
@@ -57,33 +91,76 @@ class ResponseCache {
     if (!entry) return null;
 
     if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
+      this.deleteEntry(key, true);
+      this.updateMetrics();
       return null;
     }
 
+    // Refresh insertion order for LRU capacity eviction.
+    this.cache.delete(key);
+    this.cache.set(key, entry);
     return entry;
   }
 
-  set(key, data, ttl = this.defaultTTL) {
+  set(key, data, ttl = this.defaultTTL, options = {}) {
     const now = Date.now();
-    this.cache.set(key, {
-      data,
+    const body = serializeJson(data);
+    const bytes = byteLength(body);
+
+    if (bytes > this.maxBytes) {
+      logger.debug('Response cache skipped oversized entry', {
+        key,
+        bytes,
+        maxBytes: this.maxBytes,
+      });
+      return false;
+    }
+
+    this.deleteEntry(key);
+    const entry = {
+      body,
+      bytes,
+      contentType: options.contentType || 'application/json; charset=utf-8',
       createdAt: now,
       expiresAt: now + ttl,
+    };
+    Object.defineProperty(entry, 'data', {
+      enumerable: true,
+      get() {
+        return JSON.parse(body);
+      },
     });
+
+    this.cache.set(key, entry);
+    this.totalBytes += bytes;
+    this.cleanup();
+    this.updateMetrics();
+    return true;
   }
 
   invalidate(pattern) {
     // Invalidate cache entries matching a pattern
     for (const key of this.cache.keys()) {
       if (key.includes(pattern)) {
-        this.cache.delete(key);
+        this.deleteEntry(key);
       }
     }
+    this.updateMetrics();
   }
 
   clear() {
     this.cache.clear();
+    this.totalBytes = 0;
+    this.updateMetrics();
+  }
+
+  getStats() {
+    return {
+      size: this.cache.size,
+      totalBytes: this.totalBytes,
+      maxSize: this.maxSize,
+      maxBytes: this.maxBytes,
+    };
   }
 
   shutdown() {
@@ -129,16 +206,12 @@ function createCacheMiddleware(options = {}) {
       incCacheHit();
       if (onHit) onHit(req, cacheKey);
 
-      // Set cache headers
       res.set({
         'X-Cache': 'HIT',
         'X-Cache-Key': cacheKey,
+        'Content-Type': cached.contentType,
       });
-
-      // Deep clone to prevent prototype pollution from cached data with __proto__ properties
-      // JSON.parse(JSON.stringify()) safely strips __proto__ and constructor properties
-      const safeData = JSON.parse(JSON.stringify(cached.data));
-      return res.json(safeData);
+      return res.send(cached.body);
     }
 
     // Cache miss - intercept response
@@ -149,7 +222,9 @@ function createCacheMiddleware(options = {}) {
     res.json = function (data) {
       // Only cache successful responses
       if (res.statusCode >= 200 && res.statusCode < 300) {
-        responseCache.set(cacheKey, data, ttl);
+        responseCache.set(cacheKey, data, ttl, {
+          contentType: res.get('Content-Type'),
+        });
 
         // Set cache headers
         res.set({
@@ -165,69 +240,10 @@ function createCacheMiddleware(options = {}) {
   };
 }
 
-// Predefined cache configurations for common use cases
-const cacheConfigs = {
-  // Static data that rarely changes (albums, genres)
-  static: createCacheMiddleware({
-    ttl: 300000, // 5 minutes
-    shouldCache: (req) => {
-      // Only cache for authenticated users to avoid leaking data
-      return req.user && req.path.includes('/api/');
-    },
-  }),
-
-  // User-specific data with moderate TTL
-  // Cache is invalidated on any list modification (see routes/api.js POST /api/lists/:name)
-  // so longer TTL is safe and improves perceived performance
-  userSpecific: createCacheMiddleware({
-    ttl: 300000, // 5 minutes - safe because cache is invalidated on writes
-    shouldCache: (req) => {
-      return (
-        req.user &&
-        (req.path.includes('/api/lists') ||
-          req.path === '/api/app-bootstrap' ||
-          req.path === '/api/groups')
-      );
-    },
-  }),
-
-  // Public data with longer TTL
-  public: createCacheMiddleware({
-    ttl: 600000, // 10 minutes
-    keyGenerator: (req) => `public:${req.method}:${req.originalUrl}`,
-    shouldCache: (req) => {
-      return (
-        req.path.includes('/api/proxy/') || req.path.includes('/api/unfurl')
-      );
-    },
-  }),
-
-  // Album cover images with very long TTL (URLs don't change)
-  images: createCacheMiddleware({
-    ttl: 3600000, // 1 hour - images rarely change
-    keyGenerator: (req) => {
-      const url = req.query.url || '';
-      try {
-        const parsedUrl = new URL(url);
-        // Use normalized URL as key (protocol + host + pathname)
-        // This ensures the same URL always gets the same cache key
-        return `image:${parsedUrl.protocol}//${parsedUrl.host}${parsedUrl.pathname}`;
-      } catch {
-        // Invalid URL - use the raw URL string as key
-        return `image:invalid:${url}`;
-      }
-    },
-    shouldCache: (req) => {
-      return req.path === '/api/proxy/image';
-    },
-    onHit: (req, key) => {
-      logger.debug('Image cache hit', { key });
-    },
-    onMiss: (req, key) => {
-      logger.debug('Image cache miss', { key });
-    },
-  }),
-};
+const cacheConfigs = createResponseCacheConfigs({
+  createCacheMiddleware,
+  logger,
+});
 
 // Export class for testing, plus default instances for app usage
 module.exports = {

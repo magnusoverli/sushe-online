@@ -354,6 +354,40 @@ describe('CoverFetchQueue', () => {
       assert.strictEqual(updateCall[1][4], musicbrainzId);
     });
 
+    it('should invalidate response cache for users with the updated album', async () => {
+      const musicbrainzId = '12345678-1234-1234-1234-123456789abc';
+      const query = mock.fn(async (sql) => {
+        if (sql.includes('SELECT DISTINCT l.user_id')) {
+          return { rows: [{ user_id: 'user1' }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 1 };
+      });
+      const responseCache = { invalidate: mock.fn() };
+      const mockFetch = createMockFetch({
+        coverArtArchive: {
+          ok: true,
+          arrayBuffer: () => Promise.resolve(MOCK_IMAGE_BUFFER),
+        },
+      });
+
+      const queue = createCoverFetchQueue({
+        db: { query, raw: query },
+        fetch: mockFetch,
+        responseCache,
+      });
+
+      await queue.fetchAndStoreCover(
+        musicbrainzId,
+        'Artist Name',
+        'Album Name'
+      );
+
+      assert.deepStrictEqual(
+        responseCache.invalidate.mock.calls.map((call) => call.arguments[0]),
+        [':user1']
+      );
+    });
+
     it('should use iTunes fuzzy matching to find best result', async () => {
       const musicbrainzId = '12345678-1234-1234-1234-123456789abc';
 

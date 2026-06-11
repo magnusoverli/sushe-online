@@ -19,6 +19,9 @@ const { TransactionAbort } = require('../db/transaction');
 const { buildPartialUpdate } = require('../utils/query-builder');
 const { findPotentialDuplicates } = require('../utils/fuzzy-match');
 const { normalizeImageBuffer } = require('../utils/image-processing');
+const {
+  invalidateResponseCacheForAlbumUsers,
+} = require('./album-cache-invalidation');
 const { createAlbumCoverService } = require('./album-cover-service');
 
 /**
@@ -34,47 +37,22 @@ function createAlbumService(deps = {}) {
   const logger = deps.logger || defaultLogger;
   const { upsertAlbumRecord } = deps;
   const responseCache = deps.responseCache;
+  const coverCache = deps.coverCache;
   const db = ensureDb(deps.db, 'album-service');
-  const albumCoverService = createAlbumCoverService({ db, logger });
+  const albumCoverService = createAlbumCoverService({
+    db,
+    logger,
+    coverCache,
+  });
 
   async function invalidateCachesForAlbumUsers(albumId) {
-    if (
-      !albumId ||
-      !responseCache ||
-      typeof responseCache.invalidate !== 'function'
-    ) {
-      return;
-    }
-
-    try {
-      const result = await db.raw(
-        `SELECT DISTINCT l.user_id
-         FROM lists l
-         JOIN list_items li ON li.list_id = l._id
-         WHERE li.album_id = $1`,
-        [albumId],
-        {
-          name: 'album-service-find-users-with-album',
-          retryable: true,
-        }
-      );
-
-      for (const row of result.rows) {
-        responseCache.invalidate(`:${row.user_id}`);
-      }
-
-      if (result.rows.length > 0) {
-        logger.debug('Invalidated caches for album users', {
-          albumId,
-          usersAffected: result.rows.length,
-        });
-      }
-    } catch (error) {
-      logger.warn('Failed to invalidate caches for album users', {
-        albumId,
-        error: error.message,
-      });
-    }
+    return invalidateResponseCacheForAlbumUsers({
+      db,
+      responseCache,
+      logger,
+      albumIds: albumId,
+      operation: 'album-service',
+    });
   }
 
   function validateOptionalTextField(value, errorMessage) {
@@ -273,6 +251,27 @@ function createAlbumService(deps = {}) {
       albumId,
       coverImageUpdatedAt: selectedUpdatedAt || album.updated_at,
     };
+  }
+
+  function getCachedCover(albumId, options = {}) {
+    if (!coverCache || typeof coverCache.get !== 'function') return null;
+    return coverCache.get({
+      albumId,
+      size: options.size || 'full',
+      version: options.version,
+    });
+  }
+
+  function cacheCover(albumId, options = {}) {
+    if (!coverCache || typeof coverCache.set !== 'function') return false;
+    return coverCache.set({
+      albumId,
+      size: options.size || 'full',
+      version: options.version,
+      imageBuffer: options.imageBuffer,
+      contentType: options.contentType,
+      headers: options.headers,
+    });
   }
 
   async function updateCoverImage(albumId, coverImagePayload, userId) {
@@ -594,6 +593,8 @@ function createAlbumService(deps = {}) {
   return {
     getCoverMeta,
     getCoverImage,
+    getCachedCover,
+    cacheCover,
     updateCoverImage,
     getSummary,
     updateSummary,

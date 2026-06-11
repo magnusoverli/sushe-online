@@ -212,12 +212,21 @@ describe('duplicate-service', () => {
 
     const pool = {
       connect: mock.fn(async () => client),
-      query: mock.fn(async () => ({ rows: [], rowCount: 0 })),
+      query: mock.fn(async (sql) => {
+        if (sql.includes('SELECT DISTINCT l.user_id')) {
+          return { rows: [{ user_id: 'user1' }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      }),
     };
 
+    const coverCache = { invalidateAlbum: mock.fn() };
+    const responseCache = { invalidate: mock.fn() };
     const service = createDuplicateService({
       db: asMockDb(pool),
       logger: createMockLogger(),
+      coverCache,
+      responseCache,
     });
 
     await assert.rejects(
@@ -228,6 +237,8 @@ describe('duplicate-service', () => {
     assert.ok(callLog.includes('BEGIN'));
     assert.ok(callLog.includes('ROLLBACK'));
     assert.ok(!callLog.includes('COMMIT'));
+    assert.strictEqual(coverCache.invalidateAlbum.mock.calls.length, 0);
+    assert.strictEqual(responseCache.invalidate.mock.calls.length, 0);
   });
 
   it('mergeAlbums should resolve same-list collisions before remap', async () => {
@@ -349,12 +360,21 @@ describe('duplicate-service', () => {
 
     const pool = {
       connect: mock.fn(async () => client),
-      query: mock.fn(async () => ({ rows: [], rowCount: 0 })),
+      query: mock.fn(async (sql) => {
+        if (sql.includes('SELECT DISTINCT l.user_id')) {
+          return { rows: [{ user_id: 'user1' }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      }),
     };
 
+    const coverCache = { invalidateAlbum: mock.fn() };
+    const responseCache = { invalidate: mock.fn() };
     const service = createDuplicateService({
       db: asMockDb(pool),
       logger: createMockLogger(),
+      coverCache,
+      responseCache,
     });
 
     const result = await service.mergeAlbums('keep1', 'del1');
@@ -364,6 +384,14 @@ describe('duplicate-service', () => {
     assert.strictEqual(result.albumsDeleted, 1);
     assert.ok(updates.length >= 1);
     assert.ok(deletions.length >= 1);
+    assert.deepStrictEqual(
+      coverCache.invalidateAlbum.mock.calls.map((call) => call.arguments[0]),
+      ['keep1', 'del1']
+    );
+    assert.deepStrictEqual(
+      responseCache.invalidate.mock.calls.map((call) => call.arguments[0]),
+      [':user1']
+    );
   });
 
   it('mergeAlbums should remap dependent references safely', async () => {
@@ -615,5 +643,115 @@ describe('duplicate-service', () => {
       sql.includes('UPDATE albums SET')
     );
     assert.strictEqual(hasMetadataUpdate, false);
+  });
+
+  it('mergeCluster should invalidate cover cache for canonical and retired albums', async () => {
+    const client = {
+      query: async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('pg_advisory_xact_lock')) {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('FROM pg_tables')) {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('ORDER BY album_id') && sql.includes('FOR UPDATE')) {
+          return { rows: [] };
+        }
+
+        if (sql.includes('FROM albums WHERE album_id = $1 OR album_id = $2')) {
+          return {
+            rows: [
+              {
+                album_id: 'keep1',
+                artist: 'Artist',
+                album: 'Album',
+                release_date: null,
+                country: null,
+                genre_1: null,
+                genre_2: null,
+                tracks: null,
+                cover_image: null,
+                cover_image_format: null,
+                summary: null,
+                summary_source: null,
+                summary_fetched_at: null,
+              },
+              {
+                album_id: 'del1',
+                artist: 'Artist',
+                album: 'Album',
+                release_date: '2024-01-01',
+                country: null,
+                genre_1: null,
+                genre_2: null,
+                tracks: null,
+                cover_image: null,
+                cover_image_format: null,
+                summary: null,
+                summary_source: null,
+                summary_fetched_at: null,
+              },
+            ],
+          };
+        }
+
+        if (sql.includes('UPDATE albums SET')) {
+          return { rows: [], rowCount: 1 };
+        }
+
+        if (
+          sql.includes('FROM list_items') &&
+          sql.includes('ORDER BY list_id')
+        ) {
+          return { rows: [], rowCount: 0 };
+        }
+
+        if (sql.includes('UPDATE list_items SET album_id')) {
+          return { rows: [], rowCount: 1 };
+        }
+
+        if (sql.includes('DELETE FROM albums WHERE album_id = $1')) {
+          return { rows: [], rowCount: 1 };
+        }
+
+        return { rows: [], rowCount: 0 };
+      },
+      release: mock.fn(),
+    };
+    const pool = {
+      connect: mock.fn(async () => client),
+      query: mock.fn(async (sql) => {
+        if (sql.includes('SELECT DISTINCT l.user_id')) {
+          return { rows: [{ user_id: 'user2' }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      }),
+    };
+    const coverCache = { invalidateAlbum: mock.fn() };
+    const responseCache = { invalidate: mock.fn() };
+    const service = createDuplicateService({
+      db: asMockDb(pool),
+      logger: createMockLogger(),
+      coverCache,
+      responseCache,
+    });
+
+    const result = await service.mergeCluster('keep1', ['del1']);
+
+    assert.strictEqual(result.albumsDeleted, 1);
+    assert.deepStrictEqual(
+      coverCache.invalidateAlbum.mock.calls.map((call) => call.arguments[0]),
+      ['keep1', 'del1']
+    );
+    assert.deepStrictEqual(
+      responseCache.invalidate.mock.calls.map((call) => call.arguments[0]),
+      [':user2']
+    );
   });
 });

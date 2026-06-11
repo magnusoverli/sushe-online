@@ -28,18 +28,28 @@ const { TransactionAbort } = require('../../db/transaction');
  * @returns {Object} - Helper functions
  */
 function createHelpers(deps) {
-  const { logger, responseCache, app, crypto } = deps;
+  const { logger, responseCache, app, crypto, coverCache } = deps;
   const db = deps.db;
   if (!db) {
     throw new Error('createHelpers requires deps.db');
   }
 
+  function invalidateAggregateCache(year) {
+    if (responseCache && year) {
+      responseCache.invalidate(`/api/aggregate-list/${year}`);
+    }
+  }
+
   // Create aggregate list instance for recomputation triggers
-  const aggregateList = createAggregateList({ db, logger });
+  const aggregateList = createAggregateList({
+    db,
+    logger,
+    onRecomputeComplete: invalidateAggregateCache,
+  });
 
   // Create album canonical instance for deduplication
   const albumCanonical = createAlbumCanonical({ db, logger });
-  const albumCoverService = createAlbumCoverService({ db, logger });
+  const albumCoverService = createAlbumCoverService({ db, logger, coverCache });
 
   /**
    * Helper to trigger aggregate list recomputation for a year (non-blocking).
@@ -47,6 +57,7 @@ function createHelpers(deps) {
    * @param {number} year - The year to recompute
    */
   function triggerAggregateListRecompute(year) {
+    invalidateAggregateCache(year);
     aggregateList.scheduleRecompute(year);
   }
 

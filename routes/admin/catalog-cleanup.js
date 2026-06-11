@@ -4,9 +4,13 @@ const {
 } = require('../../services/catalog-cleanup');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin, db } = deps;
+  const { ensureAuth, ensureAdmin, db, coverCache } = deps;
 
-  const catalogCleanupService = createCatalogCleanupService({ db, logger });
+  const catalogCleanupService = createCatalogCleanupService({
+    db,
+    logger,
+    coverCache,
+  });
   app.locals.catalogCleanupService = catalogCleanupService;
 
   app.get(

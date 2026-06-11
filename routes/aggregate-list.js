@@ -7,15 +7,34 @@ module.exports = (app, deps) => {
   const logger = require('../utils/logger');
   const { ensureAuthAPI, ensureAuth, ensureAdmin, db } = deps;
   const { createAsyncHandler } = require('../middleware/async-handler');
+  const {
+    cacheConfigs,
+    responseCache,
+  } = require('../middleware/response-cache');
   const asyncHandler = createAsyncHandler(logger);
 
-  const aggregateList = createAggregateList({ db, logger });
+  function invalidateAggregateCache(year) {
+    if (year) responseCache.invalidate(`/api/aggregate-list/${year}`);
+  }
+
+  const aggregateList = createAggregateList({
+    db,
+    logger,
+    onRecomputeComplete: invalidateAggregateCache,
+  });
 
   function scheduleAggregateRecompute(year, reason) {
     if (!year) return;
     logger.debug('Aggregate recompute scheduled', { year, reason });
+    invalidateAggregateCache(year);
     aggregateList.scheduleRecompute(year);
   }
+
+  const withAggregateInvalidation = (handler) => async (req, res) => {
+    invalidateAggregateCache(req.validatedYear);
+    await handler(req, res);
+    invalidateAggregateCache(req.validatedYear);
+  };
 
   const handlers = createAggregateListHandlers({
     aggregateList,
@@ -37,6 +56,7 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year',
     ensureAuthAPI,
     validateYearParam,
+    cacheConfigs.aggregate,
     asyncHandler(handlers.getAggregateList, 'fetching aggregate list', {
       errorMessage: 'Database error',
     })
@@ -46,6 +66,7 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/status',
     ensureAuthAPI,
     validateYearParam,
+    cacheConfigs.aggregate,
     asyncHandler(handlers.getStatus, 'fetching aggregate list status', {
       errorMessage: 'Database error',
     })
@@ -56,6 +77,7 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
+    cacheConfigs.aggregate,
     asyncHandler(handlers.getStats, 'fetching aggregate list stats', {
       errorMessage: 'Database error',
     })
@@ -66,9 +88,13 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    asyncHandler(handlers.addConfirmation, 'confirming aggregate list reveal', {
-      errorMessage: 'Database error',
-    })
+    asyncHandler(
+      withAggregateInvalidation(handlers.addConfirmation),
+      'confirming aggregate list reveal',
+      {
+        errorMessage: 'Database error',
+      }
+    )
   );
 
   app.delete(
@@ -77,7 +103,7 @@ module.exports = (app, deps) => {
     ensureAdmin,
     validateYearParam,
     asyncHandler(
-      handlers.removeConfirmation,
+      withAggregateInvalidation(handlers.removeConfirmation),
       'revoking aggregate list confirmation',
       { errorMessage: 'Database error' }
     )
@@ -88,9 +114,17 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    asyncHandler(handlers.recompute, 'recomputing aggregate list', {
-      errorMessage: 'Database error',
-    })
+    asyncHandler(
+      async (req, res) => {
+        invalidateAggregateCache(req.validatedYear);
+        await handlers.recompute(req, res);
+        invalidateAggregateCache(req.validatedYear);
+      },
+      'recomputing aggregate list',
+      {
+        errorMessage: 'Database error',
+      }
+    )
   );
 
   app.get(
@@ -146,9 +180,13 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    asyncHandler(handlers.addContributor, 'adding contributor', {
-      errorMessage: 'Database error',
-    })
+    asyncHandler(
+      withAggregateInvalidation(handlers.addContributor),
+      'adding contributor',
+      {
+        errorMessage: 'Database error',
+      }
+    )
   );
 
   app.delete(
@@ -156,9 +194,13 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    asyncHandler(handlers.removeContributor, 'removing contributor', {
-      errorMessage: 'Database error',
-    })
+    asyncHandler(
+      withAggregateInvalidation(handlers.removeContributor),
+      'removing contributor',
+      {
+        errorMessage: 'Database error',
+      }
+    )
   );
 
   app.put(
@@ -166,9 +208,13 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    asyncHandler(handlers.setContributors, 'setting contributors', {
-      errorMessage: 'Database error',
-    })
+    asyncHandler(
+      withAggregateInvalidation(handlers.setContributors),
+      'setting contributors',
+      {
+        errorMessage: 'Database error',
+      }
+    )
   );
 
   app.post(
@@ -176,7 +222,7 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    asyncHandler(handlers.lockYear, 'locking year', {
+    asyncHandler(withAggregateInvalidation(handlers.lockYear), 'locking year', {
       errorMessage: 'Database error',
     })
   );
@@ -186,9 +232,13 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    asyncHandler(handlers.unlockYear, 'unlocking year', {
-      errorMessage: 'Database error',
-    })
+    asyncHandler(
+      withAggregateInvalidation(handlers.unlockYear),
+      'unlocking year',
+      {
+        errorMessage: 'Database error',
+      }
+    )
   );
 
   app.get(

@@ -12,7 +12,7 @@ function getQueryFn(dbOrClient) {
 }
 
 function createAlbumCoverService(deps = {}) {
-  const { db, logger } = deps;
+  const { db, logger, coverCache } = deps;
   if (!db) throw new Error('db is required');
 
   async function updateCoverImage(albumId, coverImagePayload, userId = null) {
@@ -59,6 +59,10 @@ function createAlbumCoverService(deps = {}) {
 
     if (result.rowCount === 0) {
       throw new TransactionAbort(404, { error: 'Album not found' });
+    }
+
+    if (coverCache && typeof coverCache.invalidateAlbum === 'function') {
+      coverCache.invalidateAlbum(albumId);
     }
 
     logger?.info('Album cover updated', {

@@ -497,6 +497,114 @@ describe('refetchAllImages', () => {
 
     assert.strictEqual(summary.failed, 1);
   });
+
+  it('should invalidate response cache for users with updated albums', async () => {
+    const imageRefetchPath = require.resolve('../services/image-refetch.js');
+    const mbQueuePath = require.resolve('../utils/mb-queue-singleton');
+    const requestQueuePath = require.resolve('../utils/request-queue');
+    const previousFetch = globalThis.fetch;
+    const previousMbQueue = require.cache[mbQueuePath];
+    const previousRequestQueue = require.cache[requestQueuePath];
+    delete require.cache[imageRefetchPath];
+
+    require.cache[mbQueuePath] = {
+      id: mbQueuePath,
+      filename: mbQueuePath,
+      loaded: true,
+      exports: {
+        mbFetch: mock.fn(async () => ({
+          json: async () => ({
+            'release-groups': [{ id: 'release-group-1' }],
+          }),
+        })),
+      },
+    };
+    require.cache[requestQueuePath] = {
+      id: requestQueuePath,
+      filename: requestQueuePath,
+      loaded: true,
+      exports: { wait: mock.fn(async () => {}) },
+    };
+    globalThis.fetch = mock.fn(async () => ({
+      ok: true,
+      headers: { get: () => 'image/jpeg' },
+      arrayBuffer: async () => MOCK_IMAGE_BUFFER,
+    }));
+
+    try {
+      const {
+        createImageRefetchService: createFreshService,
+      } = require('../services/image-refetch.js');
+      let batchCalls = 0;
+      const queryFn = mock.fn(async (sql) => {
+        if (sql.includes('SELECT COUNT(*) AS total FROM albums')) {
+          return { rows: [{ total: '1' }] };
+        }
+        if (
+          sql.includes('SELECT COUNT(*) AS total') &&
+          sql.includes('COALESCE')
+        ) {
+          return { rows: [{ total: '1' }] };
+        }
+        if (sql.includes('SELECT album_id')) {
+          batchCalls++;
+          if (batchCalls === 1) {
+            return {
+              rows: [
+                {
+                  album_id: 'album-1',
+                  artist: 'Artist',
+                  album: 'Album',
+                  image_size_bytes: 0,
+                },
+              ],
+            };
+          }
+          return { rows: [] };
+        }
+        if (sql.includes('UPDATE albums')) {
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes('SELECT DISTINCT l.user_id')) {
+          return { rows: [{ user_id: 'user-1' }] };
+        }
+        return { rows: [], rowCount: 0 };
+      });
+      const responseCache = { invalidate: mock.fn() };
+      const coverCache = { invalidateAlbum: mock.fn() };
+      const service = createFreshService({
+        db: createMockPool([], { query: queryFn }),
+        logger: createMockLogger(),
+        coverCache,
+        responseCache,
+      });
+
+      const summary = await service.refetchAllImages();
+
+      assert.strictEqual(summary.success, 1);
+      assert.deepStrictEqual(
+        coverCache.invalidateAlbum.mock.calls.map((call) => call.arguments[0]),
+        ['album-1']
+      );
+      assert.deepStrictEqual(
+        responseCache.invalidate.mock.calls.map((call) => call.arguments[0]),
+        [':user-1']
+      );
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousMbQueue) {
+        require.cache[mbQueuePath] = previousMbQueue;
+      } else {
+        delete require.cache[mbQueuePath];
+      }
+      if (previousRequestQueue) {
+        require.cache[requestQueuePath] = previousRequestQueue;
+      } else {
+        delete require.cache[requestQueuePath];
+      }
+      delete require.cache[imageRefetchPath];
+    }
+  });
 });
 
 // =============================================================================

@@ -29,6 +29,9 @@ const {
   incQueueItemsProcessed,
   incQueueItemsFailed,
 } = require('../utils/metrics');
+const {
+  invalidateResponseCacheForAlbumUsers,
+} = require('./album-cache-invalidation');
 
 // Per-provider timeout in milliseconds
 const PROVIDER_TIMEOUT_MS = 5000;
@@ -292,6 +295,8 @@ function createCoverFetchQueue(deps = {}) {
   const maxConcurrent = deps.maxConcurrent || 3;
   const queue = new RequestQueue(maxConcurrent);
   const fetchFn = deps.fetch || fetch;
+  const coverCache = deps.coverCache;
+  const responseCache = deps.responseCache;
   const coverProviders = createCoverProviders(fetchFn);
 
   /**
@@ -384,6 +389,17 @@ function createCoverFetchQueue(deps = {}) {
             return;
           }
 
+          if (coverCache && typeof coverCache.invalidateAlbum === 'function') {
+            coverCache.invalidateAlbum(albumId);
+          }
+          await invalidateResponseCacheForAlbumUsers({
+            db,
+            responseCache,
+            logger,
+            albumIds: albumId,
+            operation: 'cover-fetch-queue',
+          });
+
           logger.info('Cover fetched successfully', {
             albumId,
             artist,
@@ -433,9 +449,9 @@ let coverFetchQueue = null;
  * Initialize the singleton cover fetch queue
  * @param {import('../db/types').DbFacade} db - Canonical datastore
  */
-function initializeCoverFetchQueue(db) {
+function initializeCoverFetchQueue(db, options = {}) {
   if (!coverFetchQueue) {
-    coverFetchQueue = createCoverFetchQueue({ db });
+    coverFetchQueue = createCoverFetchQueue({ db, ...options });
     logger.info('Cover fetch queue initialized');
   }
   return coverFetchQueue;

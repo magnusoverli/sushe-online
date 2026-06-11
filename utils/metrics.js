@@ -328,6 +328,62 @@ const cacheMissesTotal = new client.Counter({
   registers: [register],
 });
 
+const responseCacheBytes = new client.Gauge({
+  name: 'sushe_response_cache_bytes',
+  help: 'Total bytes held in the in-process response cache',
+  registers: [register],
+});
+
+const responseCacheItems = new client.Gauge({
+  name: 'sushe_response_cache_items',
+  help: 'Total items held in the in-process response cache',
+  registers: [register],
+});
+
+const responseCacheEvictionsTotal = new client.Counter({
+  name: 'sushe_response_cache_evictions_total',
+  help: 'Total response cache entries evicted for capacity or expiry',
+  registers: [register],
+});
+
+const coverCacheHitsTotal = new client.Counter({
+  name: 'sushe_cover_cache_hits_total',
+  help: 'Total album cover cache hits',
+  registers: [register],
+});
+
+const coverCacheMissesTotal = new client.Counter({
+  name: 'sushe_cover_cache_misses_total',
+  help: 'Total album cover cache misses',
+  registers: [register],
+});
+
+const coverCacheBytes = new client.Gauge({
+  name: 'sushe_cover_cache_bytes',
+  help: 'Total bytes held in the in-process album cover cache',
+  registers: [register],
+});
+
+const coverCacheItems = new client.Gauge({
+  name: 'sushe_cover_cache_items',
+  help: 'Total items held in the in-process album cover cache',
+  registers: [register],
+});
+
+const coverCacheEvictionsTotal = new client.Counter({
+  name: 'sushe_cover_cache_evictions_total',
+  help: 'Total album cover cache entries evicted for capacity or expiry',
+  registers: [register],
+});
+
+const startupPrewarmDuration = new client.Histogram({
+  name: 'sushe_startup_prewarm_duration_seconds',
+  help: 'Duration of startup prewarm phases in seconds',
+  labelNames: ['phase', 'result'],
+  buckets: [0.01, 0.05, 0.1, 0.5, 1, 5, 15, 30, 60, 120],
+  registers: [register],
+});
+
 // ============================================
 // Rate Limit Metrics
 // ============================================
@@ -538,6 +594,38 @@ function incCacheMiss() {
   cacheMissesTotal.inc();
 }
 
+function updateResponseCacheMetrics(bytes, items) {
+  responseCacheBytes.set(bytes || 0);
+  responseCacheItems.set(items || 0);
+}
+
+function incResponseCacheEvictions(count = 1) {
+  if (count > 0) responseCacheEvictionsTotal.inc(count);
+}
+
+function incCoverCacheHit() {
+  coverCacheHitsTotal.inc();
+}
+
+function incCoverCacheMiss() {
+  coverCacheMissesTotal.inc();
+}
+
+function updateCoverCacheMetrics(bytes, items) {
+  coverCacheBytes.set(bytes || 0);
+  coverCacheItems.set(items || 0);
+}
+
+function incCoverCacheEvictions(count = 1) {
+  if (count > 0) coverCacheEvictionsTotal.inc(count);
+}
+
+function observeStartupPrewarm(phase, durationMs, result = 'success') {
+  startupPrewarmDuration
+    .labels(phase || 'unknown', result || 'unknown')
+    .observe(durationMs / 1000);
+}
+
 /**
  * Increment rate limit hit counter
  * @param {string} endpoint
@@ -685,6 +773,15 @@ module.exports = {
   queueItemsFailedTotal,
   cacheHitsTotal,
   cacheMissesTotal,
+  responseCacheBytes,
+  responseCacheItems,
+  responseCacheEvictionsTotal,
+  coverCacheHitsTotal,
+  coverCacheMissesTotal,
+  coverCacheBytes,
+  coverCacheItems,
+  coverCacheEvictionsTotal,
+  startupPrewarmDuration,
   rateLimitHitsTotal,
   websocketEventsTotal,
   playcountSyncRunsTotal,
@@ -712,6 +809,13 @@ module.exports = {
   incQueueItemsFailed,
   incCacheHit,
   incCacheMiss,
+  updateResponseCacheMetrics,
+  incResponseCacheEvictions,
+  incCoverCacheHit,
+  incCoverCacheMiss,
+  updateCoverCacheMetrics,
+  incCoverCacheEvictions,
+  observeStartupPrewarm,
   incRateLimitHit,
   incWebsocketEvent,
   recordPlaycountSync,

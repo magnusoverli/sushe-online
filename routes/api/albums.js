@@ -23,6 +23,29 @@ module.exports = (app, deps) => {
     asyncHandler(
       async (req, res) => {
         const coverSize = req.query.size === 'thumb' ? 'thumb' : 'full';
+        const hasVersion = typeof req.query.v === 'string';
+        const requestedVersion = hasVersion ? req.query.v : null;
+        const cachedCover = albumService.getCachedCover(req.params.album_id, {
+          size: coverSize,
+          version: requestedVersion,
+        });
+
+        if (cachedCover) {
+          res.set({
+            ...cachedCover.headers,
+            'Cache-Control': hasVersion
+              ? 'private, max-age=31536000, immutable'
+              : 'private, max-age=300, must-revalidate',
+            'X-Cover-Cache': 'HIT',
+          });
+          if (req.fresh) {
+            res.status(304).end();
+            return;
+          }
+          res.send(cachedCover.imageBuffer);
+          return;
+        }
+
         // Read cheap metadata first so a conditional GET can be answered with a
         // 304 without ever reading the cover BYTEA out of Postgres.
         const { contentType, albumId, coverImageUpdatedAt, coverLength } =
@@ -32,18 +55,42 @@ module.exports = (app, deps) => {
         const version = coverImageUpdatedAt
           ? new Date(coverImageUpdatedAt).getTime()
           : coverLength;
-        const hasVersion = typeof req.query.v === 'string';
+        const cacheControl = hasVersion
+          ? 'private, max-age=31536000, immutable'
+          : 'private, max-age=300, must-revalidate';
+        const lastModified = coverImageUpdatedAt
+          ? new Date(coverImageUpdatedAt).toUTCString()
+          : undefined;
 
-        res.set({
-          'Cache-Control': hasVersion
-            ? 'private, max-age=31536000, immutable'
-            : 'private, max-age=300, must-revalidate',
-          ETag: `"${albumId}-${version}-${coverLength}"`,
+        const currentCachedCover = albumService.getCachedCover(albumId, {
+          size: coverSize,
+          version,
         });
 
-        if (coverImageUpdatedAt) {
-          res.set('Last-Modified', new Date(coverImageUpdatedAt).toUTCString());
+        if (currentCachedCover) {
+          const cachedHeaders = {
+            ...currentCachedCover.headers,
+            'Cache-Control': cacheControl,
+            ETag: `"${albumId}-${version}-${coverLength}"`,
+            'X-Cover-Cache': 'HIT',
+          };
+          if (lastModified) cachedHeaders['Last-Modified'] = lastModified;
+          res.set(cachedHeaders);
+          if (req.fresh) {
+            res.status(304).end();
+            return;
+          }
+          res.send(currentCachedCover.imageBuffer);
+          return;
         }
+
+        res.set({
+          'Cache-Control': cacheControl,
+          ETag: `"${albumId}-${version}-${coverLength}"`,
+          'X-Cover-Cache': 'MISS',
+        });
+
+        if (lastModified) res.set('Last-Modified', lastModified);
 
         // If the client's cached copy is still valid, skip the blob read.
         if (req.fresh) {
@@ -55,9 +102,22 @@ module.exports = (app, deps) => {
           req.params.album_id,
           { size: coverSize }
         );
-        res.set({
+        const imageHeaders = {
           'Content-Type': contentType,
           'Content-Length': imageBuffer.length,
+        };
+        res.set(imageHeaders);
+        albumService.cacheCover(albumId, {
+          size: coverSize,
+          version,
+          imageBuffer,
+          contentType,
+          headers: {
+            ...imageHeaders,
+            'Cache-Control': res.get('Cache-Control'),
+            ETag: res.get('ETag'),
+            'Last-Modified': res.get('Last-Modified'),
+          },
         });
         res.send(imageBuffer);
       },

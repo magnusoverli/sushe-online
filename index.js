@@ -31,12 +31,14 @@ const {
   initializeQueues,
   startSyncServices,
 } = require('./config/startup-services');
+const { resolveRamAccelerationConfig } = require('./config/ram-acceleration');
 
 // ============ INTERNAL MODULES ============
 const logger = require('./utils/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/error-handler');
 const requestIdMiddleware = require('./middleware/request-id');
 const { metricsMiddleware } = require('./utils/metrics');
+const { responseCache } = require('./middleware/response-cache');
 const { setup: setupWebSocket, broadcast } = require('./utils/websocket');
 const { composeForgotPasswordEmail } = require('./utils/forgot-email');
 const {
@@ -64,6 +66,8 @@ const { createAuthService } = require('./services/auth-service');
 const { createUserService } = require('./services/user-service');
 const { createDuplicateService } = require('./services/duplicate-service');
 const { createReidentifyService } = require('./services/reidentify-service');
+const { createAlbumCoverCache } = require('./services/album-cover-cache');
+const { runRamPrewarm } = require('./services/startup/ram-prewarm');
 const {
   sanitizeUser,
   recordActivity: recordActivityBase,
@@ -74,6 +78,15 @@ const {
 } = require('./middleware/auth');
 
 // ============ EARLY INITIALIZATION ============
+
+const ramAccelerationConfig = resolveRamAccelerationConfig(process.env);
+logger.info('RAM acceleration settings resolved', ramAccelerationConfig);
+const coverCache = createAlbumCoverCache({
+  enabled: ramAccelerationConfig.coverCacheEnabled,
+  maxBytes: ramAccelerationConfig.coverCacheMaxBytes,
+  maxItems: ramAccelerationConfig.coverCacheMaxItems,
+  logger,
+});
 
 // Multer upload configuration
 const upload = multer({
@@ -109,7 +122,12 @@ const userService = createUserService({
   logger,
   invalidateUserCache,
 });
-const duplicateService = createDuplicateService({ db, logger });
+const duplicateService = createDuplicateService({
+  db,
+  logger,
+  coverCache,
+  responseCache,
+});
 const reidentifyService = createReidentifyService({ db, logger });
 
 // Configure Passport authentication
@@ -287,13 +305,16 @@ const deps = {
   duplicateService,
   reidentifyService,
   broadcast,
+  ramAccelerationConfig,
+  coverCache,
+  responseCache,
 };
 
 // Application routes
 authRoutes(app, deps);
 oauthRoutes(app, deps);
 adminRoutes(app, deps);
-apiRoutes(app, deps);
+const apiServices = apiRoutes(app, deps);
 preferencesRoutes(app, deps);
 const { aggregateList } = aggregateListRoutes(app, deps);
 
@@ -367,8 +388,43 @@ registerProcessHandlers({
 
 ready
   .then(async () => {
+    const prewarmServices = {
+      ...apiServices,
+      aggregateList,
+    };
+    const runPrewarm = (config) =>
+      runRamPrewarm({
+        db,
+        config,
+        logger,
+        responseCache,
+        services: prewarmServices,
+      });
+
+    if (ramAccelerationConfig.appPrewarmBlocking) {
+      await runPrewarm(ramAccelerationConfig);
+    } else {
+      if (ramAccelerationConfig.dbPrewarmEnabled) {
+        await runPrewarm({
+          ...ramAccelerationConfig,
+          appPrewarmEnabled: false,
+        });
+      }
+
+      if (ramAccelerationConfig.appPrewarmEnabled) {
+        runPrewarm({
+          ...ramAccelerationConfig,
+          dbPrewarmEnabled: false,
+        }).catch((error) => {
+          logger.warn('Background RAM prewarm failed', {
+            error: error.message,
+          });
+        });
+      }
+    }
+
     // Initialize background queues
-    initializeQueues(db);
+    initializeQueues(db, { coverCache, responseCache });
 
     // Set up WebSocket server with session middleware
     setupWebSocket(httpServer, sessionMiddleware);
