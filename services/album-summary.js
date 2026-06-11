@@ -472,23 +472,6 @@ function createAlbumSummaryService(deps = {}) {
     }
   }
 
-  /**
-   * Hash album ID to integer for PostgreSQL advisory lock
-   * @param {string} albumId - Album ID string
-   * @returns {number} Integer hash suitable for pg_advisory_lock
-   */
-  function hashAlbumId(albumId) {
-    // Convert album_id string to integer for advisory lock
-    // Use simple hash function (FNV-1a variant)
-    let hash = 2166136261;
-    for (let i = 0; i < albumId.length; i++) {
-      hash ^= albumId.charCodeAt(i);
-      hash +=
-        (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
-    }
-    return Math.abs(hash) % 2147483647; // PostgreSQL int4 range
-  }
-
   /** Fetch summary for a new album (non-blocking) */
   function fetchSummaryAsync(albumId, _artist, _album) {
     // Use setImmediate to ensure this runs after the current call stack
@@ -496,54 +479,30 @@ function createAlbumSummaryService(deps = {}) {
     setImmediate(() => {
       Promise.resolve()
         .then(async () => {
-          // Use advisory lock based on album_id hash to prevent race conditions.
-          // db.withClient acquires a single client for the lifetime of the
-          // advisory lock — the lock is tied to the connection, so it must
-          // be acquired and released on the same client.
-          const lockId = hashAlbumId(albumId);
+          // Atomically claim the album by stamping summary_fetched_at.
+          // Exactly one concurrent caller wins, and — unlike a session
+          // advisory lock — no pool connection is held while the slow
+          // external summary fetch runs.
+          const claim = await db.raw(
+            `UPDATE albums SET summary_fetched_at = NOW()
+             WHERE album_id = $1 AND summary_fetched_at IS NULL
+             RETURNING album_id`,
+            [albumId]
+          );
+          if (claim.rowCount === 0) {
+            log.debug('Summary fetch already done or claimed', { albumId });
+            return;
+          }
 
-          await db.withClient(async (client) => {
-            // Try to acquire lock (non-blocking)
-            const lockResult = await client.query(
-              'SELECT pg_try_advisory_lock($1) as acquired',
-              [lockId]
+          const result = await fetchAndStoreSummary(albumId);
+          if (!result.success) {
+            // Release the claim so a later add can retry the fetch.
+            await db.raw(
+              `UPDATE albums SET summary_fetched_at = NULL
+               WHERE album_id = $1 AND summary IS NULL`,
+              [albumId]
             );
-
-            if (!lockResult.rows[0].acquired) {
-              log.debug('Summary fetch already in progress (lock held)', {
-                albumId,
-                lockId,
-              });
-              return; // Another process is handling this
-            }
-
-            log.debug('Acquired advisory lock for summary fetch', {
-              albumId,
-              lockId,
-            });
-
-            try {
-              // Check if already fetched
-              const existing = await client.query(
-                'SELECT summary_fetched_at FROM albums WHERE album_id = $1',
-                [albumId]
-              );
-              if (
-                existing.rows.length > 0 &&
-                existing.rows[0].summary_fetched_at
-              ) {
-                return; // Already fetched
-              }
-              await fetchAndStoreSummary(albumId);
-            } finally {
-              // Always release lock
-              await client.query('SELECT pg_advisory_unlock($1)', [lockId]);
-              log.debug('Released advisory lock for summary fetch', {
-                albumId,
-                lockId,
-              });
-            }
-          });
+          }
         })
         .catch((err) => {
           // Catch any unhandled rejections from the promise chain

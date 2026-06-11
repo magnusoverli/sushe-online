@@ -55,6 +55,11 @@ function createSessionMiddleware(pool) {
     pool: pool,
     tableName: 'session',
     createTableIfMissing: true,
+    // Skip the per-request expiry UPDATE that otherwise blocks the tail of
+    // every authenticated response. recordActivity modifies the session at
+    // least every 5 minutes for active users, and that store.set refreshes
+    // the expire column — so sliding expiry only coarsens to ~5 minutes.
+    disableTouch: true,
     pruneSessionInterval: 600, // Clean up expired sessions every 10 minutes (in seconds)
     errorLog: (err) =>
       logger.error('Session store error', { error: err.message }),

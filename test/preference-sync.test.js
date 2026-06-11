@@ -145,10 +145,14 @@ describe('getUsersNeedingSync', () => {
     assert.strictEqual(users.length, 2);
     assert.strictEqual(pool.query.mock.calls.length, 1);
 
-    // Verify query includes proper filters
+    // Verify query includes proper filters. jsonb_typeof = 'object' (rather
+    // than IS NOT NULL) excludes rows backfilled with 'null'::jsonb, which
+    // would otherwise be re-selected every cycle forever.
     const query = pool.query.mock.calls[0].arguments[0];
     assert.ok(
-      query.includes('spotify_auth IS NOT NULL OR u.lastfm_auth IS NOT NULL')
+      query.includes(
+        "jsonb_typeof(u.spotify_auth) = 'object' OR jsonb_typeof(u.lastfm_auth) = 'object'"
+      )
     );
     assert.ok(query.includes('LIMIT'));
   });

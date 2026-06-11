@@ -263,6 +263,12 @@ module.exports = (app, deps) => {
 
       invalidateListCaches(req.user._id, id);
 
+      // Reordering changes position-derived points, so the aggregate snapshot
+      // must be recomputed like every other item write.
+      if (list.year) {
+        triggerAggregateListRecompute(list.year);
+      }
+
       const broadcast = req.app.locals.broadcast;
       if (broadcast) {
         const excludeSocketId = req.headers['x-socket-id'];

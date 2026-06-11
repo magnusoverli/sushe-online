@@ -113,6 +113,7 @@ function mapAlbumDataItemToResponse(item, options = {}) {
 }
 
 module.exports = {
+  coverImageUrl,
   mapListRowToItem,
   mapAlbumDataItemToResponse,
 };

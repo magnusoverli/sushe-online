@@ -4,6 +4,12 @@
 
 const logger = require('./logger');
 
+// In-flight refreshes keyed by `${userId}:${authField}`, shared across every
+// manager instance in the process. Concurrent requests that hit the refresh
+// window await one provider call instead of racing N refresh POSTs whose
+// last-writer-wins persist can strand a consumed refresh token.
+const inflightRefreshes = new Map();
+
 /**
  * Create OAuth token management utilities for a music service.
  *
@@ -168,9 +174,19 @@ function createOAuthTokenManager(config, deps = {}) {
       `${serviceName} token expired/expiring, attempting refresh for user:`,
       user.email
     );
-    const newToken = await refreshToken(auth);
 
-    if (!newToken) {
+    // Single-flight: concurrent callers for the same user+service share one
+    // refresh + persist instead of each POSTing to the provider.
+    const flightKey = `${user._id}:${authField}`;
+    let flight = inflightRefreshes.get(flightKey);
+    if (!flight) {
+      flight = refreshAndPersist(user, userStore, auth);
+      inflightRefreshes.set(flightKey, flight);
+      flight.finally(() => inflightRefreshes.delete(flightKey));
+    }
+    const outcome = await flight;
+
+    if (!outcome.token) {
       log.warn(`${serviceName} token refresh failed for user:`, user.email);
       return {
         success: false,
@@ -180,7 +196,33 @@ function createOAuthTokenManager(config, deps = {}) {
       };
     }
 
-    // Update the token in the database
+    // Each caller's user object may be a different instance; carry the
+    // shared outcome onto this one too.
+    user[authField] = outcome.token;
+
+    return {
+      success: true,
+      [authField]: outcome.token,
+      error: null,
+      persisted: outcome.persisted,
+    };
+  }
+
+  /**
+   * Refresh the token and persist it. Never rejects — returns
+   * { token, persisted } so awaiting callers can share one outcome.
+   */
+  async function refreshAndPersist(user, userStore, auth) {
+    const newToken = await refreshToken(auth);
+    if (!newToken) {
+      return { token: null, persisted: false };
+    }
+
+    // Update the in-memory user BEFORE persistence: with refresh-token
+    // rotation the old stored token is already consumed, so a failed save
+    // must not leave the only live token visible to just this one request.
+    user[authField] = newToken;
+
     try {
       if (typeof userStore?.saveOAuthToken === 'function') {
         await userStore.saveOAuthToken(user._id, authField, newToken);
@@ -188,20 +230,20 @@ function createOAuthTokenManager(config, deps = {}) {
         throw new Error('OAuth token persistence requires saveOAuthToken()');
       }
 
-      // Update the user object in memory as well
-      user[authField] = newToken;
-
       log.info(
         `${serviceName} token refreshed and saved for user:`,
         user.email
       );
-
-      return { success: true, [authField]: newToken, error: null };
+      return { token: newToken, persisted: true };
     } catch (dbError) {
-      log.error(`Failed to save refreshed ${serviceName} token:`, dbError);
-      // Still return the new token even if DB save failed
-      // It will work for this request, and we'll try to save again next time
-      return { success: true, [authField]: newToken, error: null };
+      // The refreshed token only lives in memory now; surface that loudly —
+      // if the process dies before a later save succeeds, the provider link
+      // is severed (the persisted refresh token was consumed).
+      log.error(
+        `Failed to save refreshed ${serviceName} token — new token is in-memory only`,
+        { userId: user._id, error: dbError.message }
+      );
+      return { token: newToken, persisted: false };
     }
   }
 

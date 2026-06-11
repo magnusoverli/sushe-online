@@ -125,7 +125,16 @@ function createListService(deps = {}) {
 
     const listYear = list.year || list.groupYear;
 
-    if (queryable && typeof queryable.query === 'function' && listYear) {
+    // Year locking only constrains main lists (validateMainListNotLocked
+    // no-ops otherwise), so only main-list writes need to serialize against
+    // an admin lock/unlock flip. Taking the exclusive year lock for every
+    // list would serialize all users' writes for that year.
+    if (
+      queryable &&
+      typeof queryable.query === 'function' &&
+      listYear &&
+      list.isMain
+    ) {
       await acquireYearLocks(queryable, [listYear]);
     }
 

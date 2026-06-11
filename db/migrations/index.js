@@ -74,6 +74,11 @@ class MigrationManager {
 
       // Start transaction on dedicated client
       await client.query('BEGIN');
+      // Migrations may legitimately run long DDL/backfills and wait on locks;
+      // SET LOCAL lifts the pool's per-connection timeouts for this
+      // transaction only (resets automatically at COMMIT/ROLLBACK).
+      await client.query('SET LOCAL statement_timeout = 0');
+      await client.query('SET LOCAL lock_timeout = 0');
 
       // Execute the migration using the same client
       if (typeof migrationModule.up === 'function') {
@@ -154,6 +159,9 @@ class MigrationManager {
 
       // Start transaction on dedicated client
       await client.query('BEGIN');
+      // Same timeout exemption as executeMigration (SET LOCAL ends with tx).
+      await client.query('SET LOCAL statement_timeout = 0');
+      await client.query('SET LOCAL lock_timeout = 0');
 
       // Execute the rollback using the same client
       if (typeof migrationModule.down === 'function') {
@@ -232,7 +240,11 @@ class MigrationManager {
 
     const lockClient = await this.pool.connect();
     let heldLock = false;
+    let lockClientError;
     try {
+      // The wait for another pod's migration run can exceed the pool's
+      // lock_timeout — lift it for this client (RESET before release below).
+      await lockClient.query('SET lock_timeout = 0');
       // Acquire the advisory lock — blocks if another pod holds it, then
       // proceeds. The lock is released by pg_advisory_unlock() or on
       // client disconnect (in finally, on release).
@@ -271,7 +283,14 @@ class MigrationManager {
           });
         }
       }
-      lockClient.release();
+      try {
+        // Undo the session-level SET so the connection returns to the pool
+        // with the configured lock_timeout; discard it if RESET fails.
+        await lockClient.query('RESET lock_timeout');
+      } catch (err) {
+        lockClientError = err;
+      }
+      lockClient.release(lockClientError);
     }
   }
 
@@ -299,9 +318,17 @@ class MigrationManager {
   }
 
   async getMigrationStatus() {
-    await this.ensureMigrationTable();
-
-    const executedMigrations = await this.getExecutedMigrations();
+    // Strictly read-only: health/readiness probes call this. Issuing the
+    // CREATE TABLE IF NOT EXISTS here would take DDL locks — and a probe
+    // firing mid-pg_restore can abort the entire --single-transaction
+    // restore with "relation already exists".
+    const tableCheck = await this.pool.query(
+      `SELECT to_regclass($1) IS NOT NULL AS table_exists`,
+      [this.migrationTableName]
+    );
+    const executedMigrations = tableCheck.rows[0].table_exists
+      ? await this.getExecutedMigrations()
+      : [];
     const migrationFiles = await this.getMigrationFiles();
 
     return migrationFiles.map((migration) => ({

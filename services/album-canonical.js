@@ -34,6 +34,26 @@ function generateInternalAlbumId() {
 }
 
 /**
+ * ON CONFLICT name-merge fragment shared by the single and batch upserts.
+ * Prefers non-empty incoming values, but never replaces a restored
+ * native-script name with a pure ASCII one — re-adds of a popular album
+ * would otherwise silently undo the native spelling for everyone.
+ */
+const PRESERVE_NATIVE_NAME_SQL = `
+          artist = CASE
+            WHEN EXCLUDED.artist != ''
+             AND NOT (albums.artist ~ '[^\\x20-\\x7E]' AND EXCLUDED.artist !~ '[^\\x20-\\x7E]')
+            THEN EXCLUDED.artist
+            ELSE albums.artist
+          END,
+          album = CASE
+            WHEN EXCLUDED.album != ''
+             AND NOT (albums.album ~ '[^\\x20-\\x7E]' AND EXCLUDED.album !~ '[^\\x20-\\x7E]')
+            THEN EXCLUDED.album
+            ELSE albums.album
+          END,`;
+
+/**
  * Determine if a cover image is "better" than another based on file size
  * Larger file size generally indicates higher quality/resolution
  *
@@ -320,25 +340,16 @@ function createAlbumCanonical(deps = {}) {
           genre_1, genre_2, tracks, cover_image, cover_image_format,
           cover_image_updated_at, created_at, updated_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-        ON CONFLICT (album_id) 
+        ON CONFLICT (album_id)
         WHERE album_id IS NOT NULL AND album_id != ''
-        DO UPDATE SET
-          -- Smart merge: prefer non-empty incoming values over existing
-          artist = CASE 
-            WHEN EXCLUDED.artist != '' THEN EXCLUDED.artist 
-            ELSE albums.artist 
+        DO UPDATE SET${PRESERVE_NATIVE_NAME_SQL}
+          release_date = CASE
+            WHEN EXCLUDED.release_date != '' THEN EXCLUDED.release_date
+            ELSE albums.release_date
           END,
-          album = CASE 
-            WHEN EXCLUDED.album != '' THEN EXCLUDED.album 
-            ELSE albums.album 
-          END,
-          release_date = CASE 
-            WHEN EXCLUDED.release_date != '' THEN EXCLUDED.release_date 
-            ELSE albums.release_date 
-          END,
-          country = CASE 
-            WHEN EXCLUDED.country != '' THEN EXCLUDED.country 
-            ELSE albums.country 
+          country = CASE
+            WHEN EXCLUDED.country != '' THEN EXCLUDED.country
+            ELSE albums.country
           END,
           genre_1 = CASE 
             WHEN EXCLUDED.genre_1 != '' THEN EXCLUDED.genre_1 
@@ -568,20 +579,12 @@ function createAlbumCanonical(deps = {}) {
           $5::text[], $6::text[], $7::text[], $8::jsonb[],
           $9::timestamptz[], $10::timestamptz[]
         ) AS t(album_id, artist, album, release_date, country, genre_1, genre_2, tracks, created_at, updated_at)
-        ON CONFLICT (album_id) 
+        ON CONFLICT (album_id)
         WHERE album_id IS NOT NULL AND album_id != ''
-        DO UPDATE SET
-          artist = CASE 
-            WHEN EXCLUDED.artist != '' THEN EXCLUDED.artist 
-            ELSE albums.artist 
-          END,
-          album = CASE 
-            WHEN EXCLUDED.album != '' THEN EXCLUDED.album 
-            ELSE albums.album 
-          END,
-          release_date = CASE 
-            WHEN EXCLUDED.release_date != '' THEN EXCLUDED.release_date 
-            ELSE albums.release_date 
+        DO UPDATE SET${PRESERVE_NATIVE_NAME_SQL}
+          release_date = CASE
+            WHEN EXCLUDED.release_date != '' THEN EXCLUDED.release_date
+            ELSE albums.release_date
           END,
           country = CASE 
             WHEN EXCLUDED.country != '' THEN EXCLUDED.country 
@@ -618,9 +621,14 @@ function createAlbumCanonical(deps = {}) {
         { name: 'album-canonical-batch-upsert-with-id' }
       );
 
-      // Map results by artist|album key
+      // Map results back to the CALLER's keys via album_id — the stored
+      // artist/album can legitimately differ from the input (preserved
+      // native-script names, sanitization), and consumers look up results
+      // by the names they passed in.
+      const inputKeyByAlbumId = new Map(withId.map((a) => [a.album_id, a.key]));
       result.rows.forEach((row) => {
-        const key = `${row.artist}|${row.album}`;
+        const key =
+          inputKeyByAlbumId.get(row.album_id) || `${row.artist}|${row.album}`;
         results.set(key, {
           albumId: row.album_id,
           wasInserted: row.was_inserted,

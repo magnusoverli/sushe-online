@@ -118,7 +118,16 @@ function createExternalIdentityService(deps = {}) {
          external_album = COALESCE(EXCLUDED.external_album, album_service_mappings.external_album),
          external_url = COALESCE(EXCLUDED.external_url, album_service_mappings.external_url),
          confidence = COALESCE(EXCLUDED.confidence, album_service_mappings.confidence),
-         strategy = COALESCE(EXCLUDED.strategy, album_service_mappings.strategy),
+         -- The availability feature keys off strategy LIKE 'availability:%'.
+         -- Identity-search writers share this row; they must not downgrade an
+         -- availability label (a confident identity match implies the album
+         -- exists on the service, so keeping the label stays truthful).
+         strategy = CASE
+           WHEN album_service_mappings.strategy LIKE 'availability:%'
+            AND (EXCLUDED.strategy IS NULL OR EXCLUDED.strategy NOT LIKE 'availability:%')
+           THEN album_service_mappings.strategy
+           ELSE COALESCE(EXCLUDED.strategy, album_service_mappings.strategy)
+         END,
          updated_at = NOW(),
          last_used_at = NOW()`,
       [

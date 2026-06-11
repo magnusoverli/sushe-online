@@ -2,32 +2,56 @@ const logger = require('../utils/logger');
 const { ensureDb } = require('../db/postgres');
 const { normalizeAlbumKey } = require('../utils/fuzzy-match');
 const { POSITION_POINTS, getPositionPoints } = require('../utils/scoring');
+const { coverImageUrl } = require('./list/item-mapper');
 const {
   acquireYearLocks,
   validateYearNotLocked,
 } = require('./year-lock-service');
 
+// Pending debounced recomputes keyed by year, shared across every
+// createAggregateList instance in the process so all trigger points coalesce
+// into the same timer.
+const pendingRecomputes = new Map();
+const RECOMPUTE_DEBOUNCE_MS = 5000;
+
+/**
+ * Fire-and-forget recompute with per-year coalescing. Bursts of list writes
+ * (every save during list season triggers one) collapse into a single
+ * recompute per RECOMPUTE_DEBOUNCE_MS window, plus one trailing run if more
+ * writes landed while a recompute was pending or in flight.
+ */
+function scheduleYearRecompute(year, recomputeFn, log) {
+  if (!year) return;
+
+  const pending = pendingRecomputes.get(year);
+  if (pending) {
+    pending.dirty = true;
+    return;
+  }
+
+  const entry = { dirty: false };
+  pendingRecomputes.set(year, entry);
+
+  const timer = setTimeout(async () => {
+    try {
+      await recomputeFn(year);
+    } catch (err) {
+      log.error(`Failed to recompute aggregate list for year ${year}`, {
+        error: err.message,
+      });
+    } finally {
+      pendingRecomputes.delete(year);
+      if (entry.dirty) {
+        scheduleYearRecompute(year, recomputeFn, log);
+      }
+    }
+  }, RECOMPUTE_DEBOUNCE_MS);
+  if (typeof timer.unref === 'function') timer.unref();
+}
+
 // ============================================
 // AGGREGATION HELPER FUNCTIONS
 // ============================================
-
-/**
- * Convert BYTEA cover image to base64 data URL
- * @param {Buffer|string|null} coverImage - Cover image data (Buffer from BYTEA or legacy string)
- * @param {string} format - Image format (e.g., 'JPEG', 'PNG')
- * @returns {string} - Base64 data URL or empty string
- */
-function convertCoverToDataUrl(coverImage, format) {
-  if (!coverImage) return '';
-
-  // Handle both BYTEA (Buffer) and legacy TEXT (base64 string) formats
-  const base64 = Buffer.isBuffer(coverImage)
-    ? coverImage.toString('base64')
-    : coverImage;
-
-  const imageFormat = (format || 'jpeg').toLowerCase();
-  return `data:image/${imageFormat};base64,${base64}`;
-}
 
 /**
  * Build album map from list items
@@ -61,11 +85,9 @@ function buildAlbumMap(items, userMap) {
         albumId: item.album_id || null,
         artist: item.artist || '',
         album: item.album || '',
-        // Convert BYTEA Buffer to base64 data URL for JSON serialization
-        coverImage: convertCoverToDataUrl(
-          item.cover_image,
-          item.cover_image_format
-        ),
+        // Lightweight cover URL served by GET /api/albums/:id/cover (which
+        // does 304/immutable caching) — cover bytes never enter this JSONB.
+        coverImage: coverImageUrl(item.album_id, item.cover_image_updated_at),
         releaseDate: item.release_date || '',
         country: item.country || '',
         genre1: item.genre_1 || '',
@@ -260,8 +282,7 @@ async function fetchListItemsForLists(db, listIds) {
       a.country,
       a.genre_1,
       a.genre_2,
-      a.cover_image,
-      a.cover_image_format,
+      a.cover_image_updated_at,
       l.user_id
     FROM list_items li
     JOIN lists l ON li.list_id = l._id
@@ -593,6 +614,10 @@ function createAggregateList(deps = {}) {
     return result;
   }
 
+  /** Debounced fire-and-forget recompute (see scheduleYearRecompute). */
+  const scheduleRecompute = (year) =>
+    scheduleYearRecompute(year, recompute, log);
+
   /**
    * Get aggregate list for a year (from cache)
    */
@@ -609,10 +634,26 @@ function createAggregateList(deps = {}) {
   }
 
   /**
+   * Get aggregate list metadata for a year WITHOUT the data column.
+   * The data JSONB can be large; status/stats/confirmation paths only need
+   * the scalar columns and stats, so they must never pull data off disk.
+   */
+  async function getMeta(year) {
+    const result = await db.raw(
+      `SELECT id, year, revealed, revealed_at, computed_at,
+              stats, locked, created_at, updated_at
+       FROM master_lists WHERE year = $1`,
+      [year],
+      { name: 'aggregate-list-get-meta-by-year', retryable: true }
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
    * Get reveal status and confirmations for a year
    */
   async function getStatus(year) {
-    const aggregateList = await get(year);
+    const aggregateList = await getMeta(year);
     return buildAggregateStatus(db, aggregateList, year);
   }
 
@@ -622,10 +663,10 @@ function createAggregateList(deps = {}) {
   async function addConfirmation(year, adminUserId) {
     log.info(`Admin ${adminUserId} confirming reveal for year ${year}`);
 
-    let aggregateList = await get(year);
+    let aggregateList = await getMeta(year);
     if (!aggregateList) {
       await recompute(year);
-      aggregateList = await get(year);
+      aggregateList = await getMeta(year);
     }
 
     if (aggregateList.revealed) {
@@ -670,7 +711,7 @@ function createAggregateList(deps = {}) {
   async function removeConfirmation(year, adminUserId) {
     log.info(`Admin ${adminUserId} revoking confirmation for year ${year}`);
 
-    const aggregateList = await get(year);
+    const aggregateList = await getMeta(year);
     if (aggregateList?.revealed) {
       return { alreadyRevealed: true, status: await getStatus(year) };
     }
@@ -687,7 +728,7 @@ function createAggregateList(deps = {}) {
    * Get anonymous stats for admin preview
    */
   async function getStats(year) {
-    const aggregateList = await get(year);
+    const aggregateList = await getMeta(year);
     return aggregateList?.stats || null;
   }
 
@@ -787,7 +828,9 @@ function createAggregateList(deps = {}) {
   return {
     aggregateForYear,
     recompute,
+    scheduleRecompute,
     get,
+    getMeta,
     getStatus,
     addConfirmation,
     removeConfirmation,

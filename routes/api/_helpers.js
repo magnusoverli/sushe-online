@@ -42,15 +42,12 @@ function createHelpers(deps) {
   const albumCoverService = createAlbumCoverService({ db, logger });
 
   /**
-   * Helper to trigger aggregate list recomputation for a year (non-blocking)
+   * Helper to trigger aggregate list recomputation for a year (non-blocking).
+   * Coalesced per year inside the service so write bursts cost one recompute.
    * @param {number} year - The year to recompute
    */
   function triggerAggregateListRecompute(year) {
-    if (!year) return;
-    // Fire and forget - don't block the response
-    aggregateList.recompute(year).catch((err) => {
-      logger.error(`Failed to recompute aggregate list for year ${year}:`, err);
-    });
+    aggregateList.scheduleRecompute(year);
   }
 
   /**

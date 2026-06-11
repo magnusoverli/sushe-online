@@ -277,6 +277,11 @@ async function runRestorePreflight({
 }
 
 async function dropPublicTablesForRestore({ db, logger, restoreId }) {
+  // Any failure here is FATAL to the restore. This is the last moment where
+  // aborting is still safe — the data is intact until the DROP commits, and
+  // proceeding to pg_restore after a failed drop just hands the same lock
+  // conflict to the restore with the destructive flags already set.
+  let dataDropped = false;
   try {
     logger.info(
       `[${restoreId}] Dropping all tables before restore to avoid FK conflicts`
@@ -293,15 +298,27 @@ async function dropPublicTablesForRestore({ db, logger, restoreId }) {
         .map((row) => `"${row.tablename}"`)
         .join(', ');
       await db.raw(`DROP TABLE IF EXISTS ${tableNames} CASCADE`);
+      dataDropped = true;
       logger.info(`[${restoreId}] Dropped ${tablesResult.rows.length} tables`);
     }
 
     await db.raw('DROP TABLE IF EXISTS schema_migrations CASCADE');
     logger.info(`[${restoreId}] Dropped schema_migrations table`);
   } catch (error) {
-    logger.warn(`[${restoreId}] Pre-restore table drop failed (non-fatal)`, {
+    logger.error(`[${restoreId}] Pre-restore table drop failed`, {
       error: error.message,
+      dataDropped,
     });
+    const restoreError = createRestoreError(
+      RESTORE_ERROR_CODES.PROCESS_FAILED,
+      `Pre-restore table drop failed: ${error.message}`,
+      500,
+      { dataDropped }
+    );
+    // Lets the caller distinguish "data intact, safe to retry" from
+    // "schema is gone, the app must restart into a consistent state".
+    restoreError.dataDropped = dataDropped;
+    throw restoreError;
   }
 }
 

@@ -37,8 +37,20 @@ if (process.env.DATABASE_URL) {
     keepAliveInitialDelayMillis: 60000, // 60 seconds - less aggressive keep-alive probing
     statement_timeout: 60000, // 60 seconds for complex queries
     query_timeout: 60000, // 60 seconds query timeout
+    lock_timeout: 10000, // Fail lock waits after 10s instead of holding a connection for the full statement_timeout
+    idle_in_transaction_session_timeout: 30000, // Reap transactions left idle between statements
     allowExitOnIdle: false, // Don't exit when idle
     application_name: process.env.PG_APP_NAME || 'sushe-online',
+  });
+  // pg emits 'error' on the pool when an idle client's connection drops
+  // (server restart, network blip). Without a listener this is an unhandled
+  // 'error' event that takes down the whole process; the client is already
+  // removed from the pool, so logging is the complete response.
+  pool.on('error', (err) => {
+    logger.error('Idle database client error', {
+      error: err.message,
+      code: err.code,
+    });
   });
   // Canonical tableless datastore. Exposes only raw/withClient/withTransaction;
   // all services that don't need tabled helpers (findOne/insert/update/...)

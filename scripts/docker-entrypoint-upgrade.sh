@@ -118,8 +118,11 @@ if [ -f "$PG_VERSION_FILE" ]; then
         mkdir -p /var/lib/postgresql/18
         chown -R postgres:postgres /var/lib/postgresql/18
         
-        # Initialize new cluster as postgres user
-        su - postgres -c "/usr/lib/postgresql/18/bin/initdb -D $NEW_DATA_DIR"
+        # Initialize new cluster as postgres user.
+        # --no-data-checksums: PG18's initdb enables checksums by default, but
+        # clusters initialized under PG17 have them off; pg_upgrade --check
+        # hard-fails on the mismatch.
+        su - postgres -c "/usr/lib/postgresql/18/bin/initdb --no-data-checksums -D $NEW_DATA_DIR"
         echo "   ✅ PostgreSQL 18 cluster initialized"
         
         echo ""

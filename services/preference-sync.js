@@ -387,12 +387,12 @@ function createPreferenceSyncService(deps = {}) {
         p.updated_at
       FROM users u
       LEFT JOIN user_preferences p ON u._id = p.user_id
-      WHERE (u.spotify_auth IS NOT NULL OR u.lastfm_auth IS NOT NULL)
+      WHERE (jsonb_typeof(u.spotify_auth) = 'object' OR jsonb_typeof(u.lastfm_auth) = 'object')
         AND (
           p.user_id IS NULL
           OR p.updated_at < NOW() - make_interval(secs => $2)
-          OR (u.spotify_auth IS NOT NULL AND (p.spotify_synced_at IS NULL OR p.spotify_synced_at < NOW() - make_interval(secs => $2)))
-          OR (u.lastfm_auth IS NOT NULL AND (p.lastfm_synced_at IS NULL OR p.lastfm_synced_at < NOW() - make_interval(secs => $2)))
+          OR (jsonb_typeof(u.spotify_auth) = 'object' AND (p.spotify_synced_at IS NULL OR p.spotify_synced_at < NOW() - make_interval(secs => $2)))
+          OR (jsonb_typeof(u.lastfm_auth) = 'object' AND (p.lastfm_synced_at IS NULL OR p.lastfm_synced_at < NOW() - make_interval(secs => $2)))
         )
       ORDER BY COALESCE(p.updated_at, '1970-01-01') ASC
       LIMIT $1

@@ -90,6 +90,12 @@ function decodeImagePayload(payload) {
 }
 
 async function processUploadedCoverImage(payload) {
+  // Already-processed payloads (resized JPEG buffers prepared ahead of a
+  // write transaction) pass through untouched, so the sharp re-encode never
+  // runs while a transaction holds locks.
+  if (payload && Buffer.isBuffer(payload.buffer) && payload.format) {
+    return payload;
+  }
   const buffer = decodeImagePayload(payload);
   const processed = await processImage(buffer);
   return { buffer: processed, format: 'JPEG' };

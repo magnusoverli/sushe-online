@@ -13,14 +13,8 @@ module.exports = (app, deps) => {
 
   function scheduleAggregateRecompute(year, reason) {
     if (!year) return;
-
-    aggregateList.recompute(year).catch((error) => {
-      logger.error('Failed to recompute aggregate list', {
-        year,
-        reason,
-        error: error.message,
-      });
-    });
+    logger.debug('Aggregate recompute scheduled', { year, reason });
+    aggregateList.scheduleRecompute(year);
   }
 
   const handlers = createAggregateListHandlers({

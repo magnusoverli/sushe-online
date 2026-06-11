@@ -181,6 +181,7 @@ module.exports = (app, deps) => {
         });
 
         const runRestoreJob = async () => {
+          let databaseDropped = false;
           try {
             restoreOperationService.setStatus(restoreId, 'preflight');
             await backupService.runRestorePreflight({
@@ -193,6 +194,7 @@ module.exports = (app, deps) => {
 
             restoreOperationService.setStatus(restoreId, 'dropping');
             await backupService.dropPublicTablesForRestore(restoreId);
+            databaseDropped = true;
 
             restoreOperationService.setStatus(restoreId, 'restoring');
             const restoreResult = await backupService.runRestoreProcess({
@@ -291,6 +293,17 @@ module.exports = (app, deps) => {
               code: error.code,
               totalDuration: `${Date.now() - restoreStartTime}ms`,
             });
+
+            // If the schema was already dropped, the app cannot serve anything
+            // meaningful — restart so migrations rebuild a consistent (if
+            // empty) database instead of 500ing indefinitely against nothing.
+            if (databaseDropped || error?.dataDropped === true) {
+              logger.error(
+                `[${restoreId}] Database was dropped but restore did not complete. ` +
+                  `Restarting into an empty schema — re-run the restore with a valid dump to recover.`
+              );
+              backupService.scheduleRestart(restoreId);
+            }
           } finally {
             backupService.cleanupTempFile(tmpFile);
           }

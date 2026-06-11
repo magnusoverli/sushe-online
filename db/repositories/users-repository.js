@@ -87,7 +87,9 @@ function createUsersRepository(deps = {}) {
            updated_at = NOW()
        WHERE _id = $2`,
       [token, userId],
-      { name: 'users-repo-set-spotify-auth' }
+      // Idempotent single-row write of the same value — safe to retry, and a
+      // dropped persist here would strand a consumed OAuth refresh token.
+      { name: 'users-repo-set-spotify-auth', retryable: true }
     );
     return result.rowCount;
   }
@@ -105,14 +107,18 @@ function createUsersRepository(deps = {}) {
   }
 
   async function setTidalAuth(userId, token, countryCode = null) {
+    // COALESCE keeps the stored country when a token-only refresh passes
+    // null — refreshes must never wipe a previously resolved region.
     const result = await db.raw(
       `UPDATE users
        SET tidal_auth = $1,
-           tidal_country = $2,
+           tidal_country = COALESCE($2, tidal_country),
            updated_at = NOW()
        WHERE _id = $3`,
       [token, countryCode, userId],
-      { name: 'users-repo-set-tidal-auth' }
+      // Idempotent single-row write of the same value — safe to retry, and a
+      // dropped persist here would strand a consumed OAuth refresh token.
+      { name: 'users-repo-set-tidal-auth', retryable: true }
     );
     return result.rowCount;
   }
