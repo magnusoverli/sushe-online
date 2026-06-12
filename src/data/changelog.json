@@ -2,6 +2,13 @@
   {
     "date": "2026-06-12",
     "category": "perf",
+    "description": "Faster album transfers without full page refresh",
+    "hash": "0c1e1dfa3e711a17fc80011e3b434e1cbb3c9dba",
+    "commitMessage": "Avoid full list reload after album transfer"
+  },
+  {
+    "date": "2026-06-12",
+    "category": "perf",
     "description": "Faster initial album list loading",
     "hash": "aab612e811db7597b5a9d36bbd167db2113453ae",
     "commitMessage": "Improve initial list rendering performance\n\n- preload critical module and cover resources earlier\n\n- defer non-critical startup work until after first list paint\n\n- seed and prefetch playcounts before initial album render"
