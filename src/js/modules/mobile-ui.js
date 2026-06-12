@@ -128,7 +128,7 @@ export function createMobileUI(deps = {}) {
       setListData,
       getListMetadata,
       saveList,
-      selectList,
+      displayAlbums,
       showToast,
       apiCall,
       findAlbumByIdentity,

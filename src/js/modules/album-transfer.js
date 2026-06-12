@@ -23,7 +23,7 @@ import { isAlbumInList } from '../utils/album-list-utils.js';
  * @param {Function} deps.setListData - Set list data in cache (optional, used by mobile)
  * @param {Function} deps.getListMetadata - Get metadata for a list
  * @param {Function} deps.saveList - Save list to server
- * @param {Function} deps.selectList - Select/refresh a list in the UI
+ * @param {Function} deps.displayAlbums - Render current list data
  * @param {Function} deps.showToast - Show toast notification
  * @param {Function} deps.apiCall - Make API call
  * @param {Function} deps.findAlbumByIdentity - Find album by identity string
@@ -41,7 +41,7 @@ export async function transferAlbumToList(deps, options) {
     setListData,
     getListMetadata,
     saveList,
-    selectList,
+    displayAlbums,
     showToast,
     apiCall,
     findAlbumByIdentity,
@@ -152,7 +152,9 @@ export async function transferAlbumToList(deps, options) {
     }
   }
 
-  selectList(currentListId);
+  if (mode === 'move') {
+    displayAlbums(getListData(currentListId) || sourceAlbums);
+  }
 
   const actionVerb = mode === 'move' ? 'Moved' : 'Copied';
   showToast(`${actionVerb} "${album.album}" to "${targetListName}"`);

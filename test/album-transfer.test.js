@@ -100,6 +100,7 @@ describe('album-transfer module', () => {
         }),
         getListMetadata: mock.fn(() => ({ name: 'Target List' })),
         saveList: mock.fn(() => Promise.resolve()),
+        displayAlbums: mock.fn(),
         selectList: mock.fn(),
         showToast: mock.fn(),
         apiCall: mock.fn(),
@@ -124,6 +125,14 @@ describe('album-transfer module', () => {
       // Both lists should be saved
       assert.strictEqual(deps.saveList.mock.calls.length, 2);
 
+      // Current list should be updated incrementally, not reselected/reloaded
+      assert.strictEqual(deps.displayAlbums.mock.calls.length, 1);
+      assert.deepStrictEqual(
+        deps.displayAlbums.mock.calls[0].arguments[0],
+        sourceAlbums
+      );
+      assert.strictEqual(deps.selectList.mock.calls.length, 0);
+
       // Toast should show "Moved"
       assert.strictEqual(deps.showToast.mock.calls.length, 1);
       assert.ok(deps.showToast.mock.calls[0].arguments[0].includes('Moved'));
@@ -147,6 +156,7 @@ describe('album-transfer module', () => {
         }),
         getListMetadata: mock.fn(() => ({ name: 'Target List' })),
         saveList: mock.fn(() => Promise.resolve()),
+        displayAlbums: mock.fn(),
         selectList: mock.fn(),
         showToast: mock.fn(),
         apiCall: mock.fn(),
@@ -234,6 +244,7 @@ describe('album-transfer module', () => {
         }),
         getListMetadata: mock.fn(() => ({ name: 'Target List' })),
         saveList: mock.fn(() => Promise.resolve()),
+        displayAlbums: mock.fn(),
         selectList: mock.fn(),
         showToast: mock.fn(),
         apiCall: mock.fn(),
@@ -258,6 +269,10 @@ describe('album-transfer module', () => {
       // Only target list should be saved (not source)
       assert.strictEqual(deps.saveList.mock.calls.length, 1);
       assert.strictEqual(deps.saveList.mock.calls[0].arguments[0], 'target');
+
+      // Copying does not change the current list, so it should not refresh it
+      assert.strictEqual(deps.displayAlbums.mock.calls.length, 0);
+      assert.strictEqual(deps.selectList.mock.calls.length, 0);
 
       // Toast should show "Copied"
       assert.strictEqual(deps.showToast.mock.calls.length, 1);
