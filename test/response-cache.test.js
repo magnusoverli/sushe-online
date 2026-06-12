@@ -523,6 +523,37 @@ test.describe('Cache Middleware', () => {
       const res2 = await request(app).get('/api/users');
       assert.strictEqual(res2.body.count, 2); // Not cached
     });
+
+    test('should not cache selected-list app bootstrap requests', async () => {
+      const app = express();
+      let callCount = 0;
+
+      app.get(
+        '/api/app-bootstrap',
+        (req, _res, next) => {
+          req.user = { _id: 'user1' };
+          req.path = '/api/app-bootstrap';
+          next();
+        },
+        cacheConfigs.userSpecific,
+        (_req, res) => {
+          callCount++;
+          res.json({ count: callCount });
+        }
+      );
+
+      const res1 = await request(app).get(
+        '/api/app-bootstrap?selectedListId=list-1'
+      );
+      assert.strictEqual(res1.body.count, 1);
+      assert.strictEqual(res1.headers['x-cache'], undefined);
+
+      const res2 = await request(app).get(
+        '/api/app-bootstrap?selectedListId=list-1'
+      );
+      assert.strictEqual(res2.body.count, 2);
+      assert.strictEqual(res2.headers['x-cache'], undefined);
+    });
   });
 
   test.describe('cacheConfigs.public', () => {

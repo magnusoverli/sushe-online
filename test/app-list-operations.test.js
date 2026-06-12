@@ -137,6 +137,10 @@ describe('app-list-operations module', () => {
           selectedListId: 'list-1',
           selectedListItems: [{ album_id: 'a1' }],
           selectedListProfile: 'core',
+          selectedListPlaycounts: {
+            'item-1': { playcount: 42, status: 'success' },
+          },
+          selectedListPlaycountRefreshing: 2,
         };
       }
       if (url === '/api/lists') {
@@ -206,7 +210,14 @@ describe('app-list-operations module', () => {
       { profile: 'core' },
     ]);
     assert.strictEqual(selectList.mock.calls.length, 1);
-    assert.deepStrictEqual(selectList.mock.calls[0].arguments, ['list-1']);
+    assert.deepStrictEqual(selectList.mock.calls[0].arguments, [
+      'list-1',
+      {
+        initialPlaycounts: {
+          'item-1': { playcount: 42, status: 'success' },
+        },
+      },
+    ]);
     assert.deepStrictEqual(snapshots.get('list-1'), ['snapshot']);
     assert.strictEqual(storage.setItem.mock.calls.length, 0);
   });

@@ -2,6 +2,11 @@
  * App bootstrap orchestration for DOM-ready initialization.
  */
 
+import {
+  createPostRenderScheduler,
+  FIRST_LIST_RENDERED_EVENT,
+} from './post-render-scheduler.js';
+
 export function createAppBootstrap(deps = {}) {
   const {
     doc = typeof document !== 'undefined' ? document : null,
@@ -29,6 +34,9 @@ export function createAppBootstrap(deps = {}) {
     showToast,
     importMusicbrainz = () => import('../musicbrainz.js'),
   } = deps;
+  const { schedulePostRenderTask } = deps.schedulePostRenderTask
+    ? { schedulePostRenderTask: deps.schedulePostRenderTask }
+    : createPostRenderScheduler({ win, setTimeoutFn });
 
   function initializeFabHandler() {
     const fab = doc?.getElementById('addAlbumFAB');
@@ -60,14 +68,35 @@ export function createAppBootstrap(deps = {}) {
     getListCrudModule().initializeCreateCollection();
     getListCrudModule().initializeRenameList();
     initializeImportConflictHandling();
-    initializeRealtimeSync();
     initializeFileImportHandlers();
 
-    setTimeoutFn(() => {
-      checkListSetupStatus({ refreshLists: loadLists }).catch((err) => {
-        logger.warn('Failed to check list setup status:', err);
-      });
-    }, 1000);
+    schedulePostRenderTask(() => {
+      initializeRealtimeSync();
+    });
+
+    schedulePostRenderTask(
+      () => {
+        checkListSetupStatus({ refreshLists: loadLists }).catch((err) => {
+          logger.warn('Failed to check list setup status:', err);
+        });
+      },
+      { delayMs: 1000, timeoutMs: 3000 }
+    );
+  }
+
+  function notifyFirstListRendered() {
+    if (!doc || typeof doc.dispatchEvent !== 'function') return;
+
+    schedulePostRenderTask(
+      () => {
+        if (typeof win?.CustomEvent === 'function') {
+          doc.dispatchEvent(new win.CustomEvent(FIRST_LIST_RENDERED_EVENT));
+        } else if (typeof win?.Event === 'function') {
+          doc.dispatchEvent(new win.Event(FIRST_LIST_RENDERED_EVENT));
+        }
+      },
+      { timeoutMs: 1000 }
+    );
   }
 
   function initialize() {
@@ -97,6 +126,7 @@ export function createAppBootstrap(deps = {}) {
       listLoadPromise
         .then(() => {
           initializeAfterListLoad();
+          notifyFirstListRendered();
         })
         .catch(() => {
           showToast('Failed to initialize', 'error');

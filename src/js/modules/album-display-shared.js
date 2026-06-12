@@ -41,6 +41,12 @@ function renderCoverPlaceholder(parent) {
   </div>`;
 }
 
+function removeCoverRevealState(image) {
+  image.classList.remove('cover-reveal-pending');
+  image.classList.add('cover-reveal-visible');
+  delete image.dataset.coverRevealGroup;
+}
+
 export function createAlbumDisplayShared(deps = {}) {
   const doc = deps.doc || (typeof document !== 'undefined' ? document : null);
   const setTimer = deps.setTimeout || globalThis.setTimeout;
@@ -145,6 +151,52 @@ export function createAlbumDisplayShared(deps = {}) {
     lazyImages.forEach((img) => {
       attachCoverErrorRetry(img);
       coverImageObserver.observe(img);
+    });
+  }
+
+  function revealInitialCoverGroup(container, options = {}) {
+    const images = Array.from(
+      container?.querySelectorAll?.('img[data-cover-reveal-group="initial"]') ||
+        []
+    );
+    if (images.length === 0) return;
+
+    const timeoutMs = options.timeoutMs ?? 800;
+    let remaining = images.length;
+    let released = false;
+
+    const release = () => {
+      if (released) return;
+      released = true;
+      images.forEach(removeCoverRevealState);
+    };
+
+    const markReady = () => {
+      remaining -= 1;
+      if (remaining <= 0) release();
+    };
+
+    setTimer(release, timeoutMs);
+
+    images.forEach((image) => {
+      const handleLoaded = () => {
+        if (typeof image.decode === 'function') {
+          image
+            .decode()
+            .catch(() => {})
+            .finally(markReady);
+          return;
+        }
+        markReady();
+      };
+
+      if (image.complete && image.naturalWidth !== 0) {
+        handleLoaded();
+        return;
+      }
+
+      image.addEventListener('load', handleLoaded, { once: true });
+      image.addEventListener('error', markReady, { once: true });
     });
   }
 
@@ -253,6 +305,7 @@ export function createAlbumDisplayShared(deps = {}) {
   return {
     applyVisibilityInPlace,
     observeLazyImages,
+    revealInitialCoverGroup,
     getCachedElements,
     resetRowElementsCache,
     generateAlbumFingerprint,

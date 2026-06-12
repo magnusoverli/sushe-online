@@ -56,6 +56,58 @@ describe('album-display playcount-sync module', () => {
     assert.strictEqual(mobileEl.dataset.status, 'success');
   });
 
+  it('primes cached playcounts without needing a fetch', () => {
+    const apiCall = mock.fn(async () => {
+      throw new Error('should not fetch while priming cache');
+    });
+
+    const sync = createPlaycountSync({
+      apiCall,
+      formatPlaycount: (value) => String(value),
+    });
+
+    sync.primePlaycountCache({
+      'item-1': { playcount: 42, status: 'success' },
+    });
+
+    assert.deepStrictEqual(sync.getPlaycountCacheEntry('item-1'), {
+      playcount: 42,
+      status: 'success',
+    });
+    assert.strictEqual(apiCall.mock.calls.length, 0);
+  });
+
+  it('prefetches playcounts for render and updates existing elements if present', async () => {
+    const desktopEl = createElement();
+    const doc = {
+      querySelector: (selector) =>
+        selector === '[data-playcount="item-1"]' ? desktopEl : null,
+    };
+    const apiCall = mock.fn(async () => ({
+      playcounts: {
+        'item-1': { playcount: 77, status: 'success' },
+      },
+      refreshing: 0,
+    }));
+
+    const sync = createPlaycountSync({
+      apiCall,
+      formatPlaycount: (value) => String(value),
+      doc,
+    });
+
+    const response = await sync.prefetchPlaycountsForRender('list-1');
+
+    assert.strictEqual(apiCall.mock.calls.length, 1);
+    assert.strictEqual(
+      apiCall.mock.calls[0].arguments[0],
+      '/api/lastfm/list-playcounts/list-1'
+    );
+    assert.strictEqual(response.refreshing, 0);
+    assert.strictEqual(sync.getPlaycountCacheEntry('item-1').playcount, 77);
+    assert.match(desktopEl.innerHTML, /77/);
+  });
+
   it('renders not-found state for both desktop and mobile badges', async () => {
     const desktopEl = createElement();
     const mobileEl = createElement();

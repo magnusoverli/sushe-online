@@ -152,7 +152,9 @@ export function createAppListOperations(deps = {}) {
           });
 
           if (!getCurrentListId()) {
-            selectList(targetListId);
+            await selectList(targetListId, {
+              initialPlaycounts: listPayload.playcounts || null,
+            });
             if (localLastListId !== targetListId) {
               try {
                 storage?.setItem?.('lastSelectedList', targetListId);

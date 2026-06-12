@@ -24,6 +24,8 @@ export async function loadListStartupData({
         ? Promise.resolve({
             items: bootstrap.selectedListItems,
             profile: bootstrap.selectedListProfile || 'core',
+            playcounts: bootstrap.selectedListPlaycounts || null,
+            playcountRefreshing: bootstrap.selectedListPlaycountRefreshing || 0,
           })
         : null;
 

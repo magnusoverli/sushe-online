@@ -31,24 +31,62 @@ const ejs = require('ejs');
 const assetVersion = process.env.ASSET_VERSION || Date.now().toString();
 const asset = createAssetHelper(assetVersion);
 
-let viteManifest = null;
-function viteAsset(entry = 'src/js/main.js') {
-  if (!viteManifest) {
+function createViteManifestHelpers(deps = {}) {
+  const {
+    fsModule = fs,
+    manifest = null,
+    manifestPath = path.join(__dirname, 'public/js/.vite/manifest.json'),
+  } = deps;
+  let viteManifest = manifest;
+
+  function getViteManifest() {
+    if (viteManifest) return viteManifest;
+
     try {
-      viteManifest = JSON.parse(
-        fs.readFileSync(
-          path.join(__dirname, 'public/js/.vite/manifest.json'),
-          'utf8'
-        )
-      );
+      viteManifest = JSON.parse(fsModule.readFileSync(manifestPath, 'utf8'));
     } catch (_error) {
       viteManifest = {};
     }
+
+    return viteManifest;
   }
 
-  const file = viteManifest[entry]?.file;
-  return file ? `/js/${file}` : '/js/main.js';
+  function viteAsset(entry = 'src/js/main.js') {
+    const file = getViteManifest()[entry]?.file;
+    return file ? `/js/${file}` : '/js/main.js';
+  }
+
+  function viteModulePreloads(entry = 'src/js/main.js') {
+    const currentManifest = getViteManifest();
+    const seen = new Set();
+    const preloadHrefs = [];
+
+    function collectStaticImports(manifestKey) {
+      const imports = currentManifest[manifestKey]?.imports || [];
+      imports.forEach((importKey) => {
+        if (seen.has(importKey)) return;
+        seen.add(importKey);
+
+        const file = currentManifest[importKey]?.file;
+        if (file) {
+          preloadHrefs.push(`/js/${file}`);
+        }
+
+        collectStaticImports(importKey);
+      });
+    }
+
+    collectStaticImports(entry);
+    return preloadHrefs;
+  }
+
+  return {
+    viteAsset,
+    viteModulePreloads,
+  };
 }
+
+const { viteAsset, viteModulePreloads } = createViteManifestHelpers();
 
 const viewsDir = path.join(__dirname, 'views');
 // Precompile EJS templates for caching
@@ -96,6 +134,7 @@ const { contextMenusComponent, settingsDrawerComponent, modalPortalComponent } =
 const spotifyTemplate = createSpotifyTemplate({
   asset,
   viteAsset,
+  viteModulePreloads,
   generateAccentCssVars,
   generateAccentOverrides,
   headerComponent,
@@ -126,4 +165,7 @@ module.exports = {
   formatDate,
   formatDateTime,
   asset,
+  viteAsset,
+  viteModulePreloads,
+  createViteManifestHelpers,
 };

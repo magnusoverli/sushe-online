@@ -452,8 +452,16 @@ export function fetchAndDisplayPlaycounts(listId, forceRefresh = false) {
   );
 }
 
+function prefetchPlaycountsForRender(listId) {
+  return getAlbumDisplayModule().prefetchPlaycountsForRender(listId);
+}
+
 function clearPlaycountCache() {
   return getAlbumDisplayModule().clearPlaycountCache();
+}
+
+function primePlaycountCache(playcounts) {
+  return getAlbumDisplayModule().primePlaycountCache(playcounts);
 }
 
 function updatePositionNumbers(container, isMobile) {
@@ -857,6 +865,7 @@ const getListSelectionModule = createLazyModule(() =>
     getCurrentListId,
     getRealtimeSyncModuleInstance,
     clearPlaycountCache,
+    primePlaycountCache,
     getLists,
     updateListNavActiveState,
     updateHeaderTitle,
@@ -869,6 +878,7 @@ const getListSelectionModule = createLazyModule(() =>
     apiCall,
     setListData,
     displayAlbums,
+    prefetchPlaycountsForRender,
     fetchAndDisplayPlaycounts,
     wasRecentLocalSave,
     showToast,

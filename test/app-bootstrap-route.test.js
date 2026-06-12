@@ -32,10 +32,14 @@ function createTestApp(overrides = {}) {
   const recommendationService = {
     getYears: overrides.getYears || mock.fn(async () => [2024]),
   };
+  const playcountService = overrides.playcountService || null;
+  const user = overrides.user || { _id: 'user-1' };
+  const db = {};
+  const normalizeAlbumKey = (artist, album) => `${artist}:${album}`;
 
   require('../routes/api/bootstrap')(app, {
     ensureAuthAPI: (req, _res, next) => {
-      req.user = { _id: 'user-1' };
+      req.user = user;
       next();
     },
     logger,
@@ -43,9 +47,21 @@ function createTestApp(overrides = {}) {
     listService,
     groupService,
     recommendationService,
+    playcountService,
+    db,
+    normalizeAlbumKey,
   });
 
-  return { app, logger, listService, groupService, recommendationService };
+  return {
+    app,
+    logger,
+    listService,
+    groupService,
+    recommendationService,
+    playcountService,
+    db,
+    normalizeAlbumKey,
+  };
 }
 
 describe('app bootstrap route', () => {
@@ -70,6 +86,8 @@ describe('app bootstrap route', () => {
       selectedListId: 'list-1',
       selectedListItems: [{ album_id: 'album-1' }],
       selectedListProfile: 'core',
+      selectedListPlaycounts: null,
+      selectedListPlaycountRefreshing: 0,
     });
     assert.deepStrictEqual(listService.getAllLists.mock.calls[0].arguments, [
       'user-1',
@@ -98,7 +116,45 @@ describe('app bootstrap route', () => {
     assert.strictEqual(response.body.selectedListId, null);
     assert.strictEqual(response.body.selectedListItems, null);
     assert.strictEqual(response.body.selectedListProfile, null);
+    assert.strictEqual(response.body.selectedListPlaycounts, null);
+    assert.strictEqual(response.body.selectedListPlaycountRefreshing, 0);
     assert.strictEqual(listService.getListById.mock.calls.length, 0);
     assert.strictEqual(logger.warn.mock.calls.length, 1);
+  });
+
+  it('includes cached playcounts for the selected list when Last.fm is connected', async () => {
+    const playcountService = {
+      getListPlaycounts: mock.fn(async () => ({
+        playcounts: {
+          'item-1': { playcount: 42, status: 'success' },
+        },
+        refreshing: 3,
+      })),
+    };
+    const { app, logger, db, normalizeAlbumKey } = createTestApp({
+      user: { _id: 'user-1', lastfmUsername: 'listener' },
+      getListById: mock.fn(async () => ({
+        list: { _id: 'list-1' },
+        items: [{ _id: 'item-1', album_id: 'album-1' }],
+      })),
+      playcountService,
+    });
+
+    const response = await request(app)
+      .get('/api/app-bootstrap?selectedListId=list-1')
+      .expect(200);
+
+    assert.deepStrictEqual(response.body.selectedListPlaycounts, {
+      'item-1': { playcount: 42, status: 'success' },
+    });
+    assert.strictEqual(response.body.selectedListPlaycountRefreshing, 3);
+    assert.strictEqual(playcountService.getListPlaycounts.mock.calls.length, 1);
+    const args = playcountService.getListPlaycounts.mock.calls[0].arguments[0];
+    assert.strictEqual(args.listId, 'list-1');
+    assert.strictEqual(args.userId, 'user-1');
+    assert.strictEqual(args.lastfmUsername, 'listener');
+    assert.strictEqual(args.db, db);
+    assert.strictEqual(args.logger, logger);
+    assert.strictEqual(args.normalizeAlbumKey, normalizeAlbumKey);
   });
 });

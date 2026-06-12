@@ -43,6 +43,9 @@ import { renderAvailabilityBadges } from './album-display/availability-badges.js
 const ENABLE_INCREMENTAL_UPDATES = true;
 const PROGRESSIVE_RENDER_THRESHOLD = 120;
 const PROGRESSIVE_RENDER_BATCH_SIZE = 60;
+const INITIAL_DESKTOP_COVER_COUNT = 16;
+const INITIAL_MOBILE_COVER_COUNT = 8;
+const INITIAL_COVER_REVEAL_TIMEOUT_MS = 800;
 
 // Module-level state
 // Store lightweight fingerprint instead of deep-cloned array for performance
@@ -65,12 +68,47 @@ const albumDisplayShared = createAlbumDisplayShared({
 const {
   applyVisibilityInPlace,
   observeLazyImages,
+  revealInitialCoverGroup,
   getCachedElements,
   resetRowElementsCache,
   generateAlbumFingerprint,
   invalidateFingerprint,
   extractMutableFingerprints,
 } = albumDisplayShared;
+
+function getCoverLoadMode(index, isMobile) {
+  const initialCount = isMobile
+    ? INITIAL_MOBILE_COVER_COUNT
+    : INITIAL_DESKTOP_COVER_COUNT;
+  return index < initialCount ? 'initial' : 'lazy';
+}
+
+function renderCoverImage({ src, fullSrc, alt, className, loadMode }) {
+  const escapedSrc = escapeHtml(src);
+  const escapedFullSrc = escapeHtml(fullSrc || src);
+  const escapedAlt = escapeHtml(alt || '');
+
+  if (loadMode === 'initial') {
+    return `<img src="${escapedSrc}"
+      data-full-src="${escapedFullSrc}"
+      data-cover-reveal-group="initial"
+      alt="${escapedAlt}"
+      class="${className} cover-reveal-pending"
+      loading="eager"
+      decoding="async"
+      fetchpriority="high"
+    >`;
+  }
+
+  return `<img src="${PLACEHOLDER_GIF}"
+    data-lazy-src="${escapedSrc}"
+    data-full-src="${escapedFullSrc}"
+    alt="${escapedAlt}"
+    class="${className}"
+    loading="lazy"
+    decoding="async"
+  >`;
+}
 
 /**
  * Factory function to create the album display module with injected dependencies
@@ -286,6 +324,7 @@ export function createAlbumDisplay(deps = {}) {
       : data.coverThumbUrl
         ? data.coverThumbUrl
         : null;
+    const coverLoadMode = getCoverLoadMode(index, false);
 
     // Summary badge HTML (shown if album has a summary from any source)
     // All summaries now use Claude badge (even if originally from Last.fm/Wikipedia)
@@ -327,17 +366,16 @@ export function createAlbumDisplay(deps = {}) {
           ? `<div class="position-cell flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>`
           : '<div class="position-cell"></div>',
       cover: `<div class="cover-cell flex items-center">
-        <div class="album-cover-container">
+        <div class="album-cover-container${coverImageSrc && coverLoadMode === 'initial' ? ' cover-reveal-shell' : ''}">
           ${
             coverImageSrc
-              ? `<img src="${PLACEHOLDER_GIF}" 
-                data-lazy-src="${coverImageSrc}"
-                data-full-src="${data.coverImageUrl || coverImageSrc}"
-                alt="${data.albumName}" 
-                class="album-cover rounded-sm shadow-lg"
-                loading="lazy"
-                decoding="async"
-              >`
+              ? renderCoverImage({
+                  src: coverImageSrc,
+                  fullSrc: data.coverImageUrl || coverImageSrc,
+                  alt: data.albumName,
+                  className: 'album-cover rounded-sm shadow-lg',
+                  loadMode: coverLoadMode,
+                })
               : `<div class="album-cover-placeholder rounded-sm bg-gray-800 shadow-lg">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -696,6 +734,7 @@ export function createAlbumDisplay(deps = {}) {
     const mobileCoverSrc = data.coverImage
       ? `data:image/${data.imageFormat};base64,${data.coverImage}`
       : data.coverThumbUrl || null;
+    const coverLoadMode = getCoverLoadMode(index, true);
 
     // === SUMMARY BADGE (AI indicator on cover) ===
     let summaryBadgeHtml = '';
@@ -770,15 +809,17 @@ export function createAlbumDisplay(deps = {}) {
              availability badges below them are present. -->
         <div class="shrink-0 w-[88px] flex flex-col items-center self-start pt-1.5 pl-1">
           <!-- Album cover with optional summary badge -->
-          <div class="mobile-album-cover relative w-20 h-20 flex items-center justify-center ${!mobileCoverSrc ? 'bg-gray-800 rounded-lg' : ''}">
+          <div class="mobile-album-cover relative w-20 h-20 flex items-center justify-center ${!mobileCoverSrc ? 'bg-gray-800 rounded-lg' : ''} ${mobileCoverSrc && coverLoadMode === 'initial' ? 'cover-reveal-shell' : ''}">
             ${
               mobileCoverSrc
-                ? `<img src="${PLACEHOLDER_GIF}"
-                       data-lazy-src="${mobileCoverSrc}"
-                       data-full-src="${data.coverImageUrl || mobileCoverSrc}"
-                       alt="${escapeHtml(data.albumName)}"
-                       class="album-cover-blur w-[75px] h-[75px] rounded-lg object-cover"
-                       loading="lazy" decoding="async">`
+                ? renderCoverImage({
+                    src: mobileCoverSrc,
+                    fullSrc: data.coverImageUrl || mobileCoverSrc,
+                    alt: data.albumName,
+                    className:
+                      'album-cover-blur w-[75px] h-[75px] rounded-lg object-cover',
+                    loadMode: coverLoadMode,
+                  })
                 : `<i class="fas fa-compact-disc text-xl text-gray-600"></i>`
             }
             ${summaryBadgeHtml}
@@ -2419,6 +2460,9 @@ export function createAlbumDisplay(deps = {}) {
 
     // Initialize lazy loading for album cover images
     observeLazyImages(container);
+    revealInitialCoverGroup(container, {
+      timeoutMs: INITIAL_COVER_REVEAL_TIMEOUT_MS,
+    });
 
     if (progressiveParent) {
       scheduleRenderBatch(() =>
@@ -2551,6 +2595,8 @@ export function createAlbumDisplay(deps = {}) {
   return {
     displayAlbums,
     fetchAndDisplayPlaycounts: playcountSync.fetchAndDisplayPlaycounts,
+    prefetchPlaycountsForRender: playcountSync.prefetchPlaycountsForRender,
+    primePlaycountCache: playcountSync.primePlaycountCache,
     updatePositionNumbers,
     clearLastRenderedCache,
     clearPlaycountCache: playcountSync.clearPlaycountCache,

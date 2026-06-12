@@ -8,6 +8,7 @@ function createResponseCacheConfigs({ createCacheMiddleware, logger }) {
       ttl: 300000,
       shouldCache: (req) =>
         req.user &&
+        !(req.path === '/api/app-bootstrap' && req.query?.selectedListId) &&
         (req.path.includes('/api/lists') ||
           req.path === '/api/app-bootstrap' ||
           req.path === '/api/groups'),

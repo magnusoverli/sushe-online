@@ -112,6 +112,123 @@ describe('album-display-shared module', () => {
     assert.strictEqual(unobserved[0], img);
   });
 
+  it('reveals initial cover group together after images load', () => {
+    const timers = [];
+    const revealed = [];
+    const images = [
+      {
+        dataset: { coverRevealGroup: 'initial' },
+        complete: false,
+        naturalWidth: 100,
+        handlers: {},
+        classList: {
+          remove(name) {
+            revealed.push(['remove', name]);
+          },
+          add(name) {
+            revealed.push(['add', name]);
+          },
+        },
+        addEventListener(event, handler) {
+          this.handlers[event] = handler;
+        },
+      },
+      {
+        dataset: { coverRevealGroup: 'initial' },
+        complete: false,
+        naturalWidth: 100,
+        handlers: {},
+        classList: {
+          remove(name) {
+            revealed.push(['remove', name]);
+          },
+          add(name) {
+            revealed.push(['add', name]);
+          },
+        },
+        addEventListener(event, handler) {
+          this.handlers[event] = handler;
+        },
+      },
+    ];
+    const utils = createAlbumDisplayShared({
+      doc: { getElementById: () => null },
+      computeGridTemplate: () => '',
+      getVisibleColumns: () => [],
+      getToggleableColumns: () => [],
+      isColumnVisible: () => true,
+      setTimeout(callback, ms) {
+        timers.push({ callback, ms });
+      },
+    });
+
+    utils.revealInitialCoverGroup({
+      querySelectorAll(selector) {
+        return selector === 'img[data-cover-reveal-group="initial"]'
+          ? images
+          : [];
+      },
+    });
+
+    assert.strictEqual(timers[0].ms, 800);
+    images[0].handlers.load();
+    assert.deepStrictEqual(revealed, []);
+
+    images[1].handlers.load();
+    assert.strictEqual(
+      revealed.filter(
+        ([action, name]) => action === 'add' && name === 'cover-reveal-visible'
+      ).length,
+      2
+    );
+    assert.strictEqual(images[0].dataset.coverRevealGroup, undefined);
+  });
+
+  it('reveals initial cover group on timeout if images are still loading', () => {
+    const timers = [];
+    const revealed = [];
+    const img = {
+      dataset: { coverRevealGroup: 'initial' },
+      complete: false,
+      naturalWidth: 0,
+      classList: {
+        remove(name) {
+          revealed.push(['remove', name]);
+        },
+        add(name) {
+          revealed.push(['add', name]);
+        },
+      },
+      addEventListener() {},
+    };
+    const utils = createAlbumDisplayShared({
+      doc: { getElementById: () => null },
+      computeGridTemplate: () => '',
+      getVisibleColumns: () => [],
+      getToggleableColumns: () => [],
+      isColumnVisible: () => true,
+      setTimeout(callback, ms) {
+        timers.push({ callback, ms });
+      },
+    });
+
+    utils.revealInitialCoverGroup(
+      {
+        querySelectorAll() {
+          return [img];
+        },
+      },
+      { timeoutMs: 250 }
+    );
+
+    assert.strictEqual(timers[0].ms, 250);
+    timers[0].callback();
+    assert.deepStrictEqual(revealed, [
+      ['remove', 'cover-reveal-pending'],
+      ['add', 'cover-reveal-visible'],
+    ]);
+  });
+
   it('retries cover images after initial load errors', () => {
     const timers = [];
     let observerCallback = null;

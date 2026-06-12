@@ -12,6 +12,7 @@ function createSpotifyTemplate(deps) {
   const {
     asset,
     viteAsset,
+    viteModulePreloads = () => [],
     generateAccentCssVars,
     generateAccentOverrides,
     headerComponent,
@@ -27,6 +28,7 @@ function createSpotifyTemplate(deps) {
       csrfToken,
       asset,
       viteAsset,
+      viteModulePreloads,
       generateAccentCssVars,
       generateAccentOverrides,
       headerComponent,

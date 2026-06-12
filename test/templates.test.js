@@ -211,6 +211,56 @@ describe('templates utilities', () => {
     });
   });
 
+  describe('vite manifest helpers', () => {
+    it('returns the entry asset and static import preload hrefs', () => {
+      const { viteAsset, viteModulePreloads } =
+        templates.createViteManifestHelpers({
+          manifest: {
+            'src/js/main.js': {
+              file: 'assets/main.js',
+              imports: ['_runtime.js', '_shared.js'],
+              dynamicImports: ['src/js/modules/settings-drawer.js'],
+            },
+            '_runtime.js': {
+              file: 'chunks/runtime.js',
+            },
+            '_shared.js': {
+              file: 'chunks/shared.js',
+              imports: ['_runtime.js', '_nested.js'],
+              dynamicImports: ['src/js/modules/later.js'],
+            },
+            '_nested.js': {
+              file: 'chunks/nested.js',
+            },
+            'src/js/modules/settings-drawer.js': {
+              file: 'chunks/settings-drawer.js',
+            },
+          },
+        });
+
+      assert.strictEqual(viteAsset('src/js/main.js'), '/js/assets/main.js');
+      assert.deepStrictEqual(viteModulePreloads('src/js/main.js'), [
+        '/js/chunks/runtime.js',
+        '/js/chunks/shared.js',
+        '/js/chunks/nested.js',
+      ]);
+    });
+
+    it('falls back when the manifest cannot be read', () => {
+      const { viteAsset, viteModulePreloads } =
+        templates.createViteManifestHelpers({
+          fsModule: {
+            readFileSync() {
+              throw new Error('missing manifest');
+            },
+          },
+        });
+
+      assert.strictEqual(viteAsset('src/js/main.js'), '/js/main.js');
+      assert.deepStrictEqual(viteModulePreloads('src/js/main.js'), []);
+    });
+  });
+
   describe('spotify components', () => {
     it('should limit recommendation reasoning to Telegram caption length', () => {
       const { modalPortalComponent } = createSpotifyComponents({

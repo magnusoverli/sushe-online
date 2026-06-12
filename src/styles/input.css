@@ -556,6 +556,31 @@
   border-radius: 6px !important;
 }
 
+.cover-reveal-shell {
+  background-color: rgb(31 41 55);
+  overflow: hidden;
+}
+
+.cover-reveal-pending,
+.cover-reveal-visible {
+  transition: opacity 140ms ease-out;
+}
+
+.cover-reveal-pending {
+  opacity: 0;
+}
+
+.cover-reveal-visible {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover-reveal-pending,
+  .cover-reveal-visible {
+    transition: none;
+  }
+}
+
 /* Remove blur effect when now-playing border is active (mobile) */
 .mobile-album-cover.now-playing .album-cover-blur {
   box-shadow: none;

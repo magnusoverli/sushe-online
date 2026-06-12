@@ -216,6 +216,65 @@ describe('album-display module', () => {
       }
     });
 
+    it('uses eager grouped cover loading for initial desktop covers only', () => {
+      const previousCreateElement = globalThis.document.createElement;
+      globalThis.document.createElement = () => ({
+        className: '',
+        dataset: {},
+        style: {},
+        innerHTML: '',
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        addEventListener: () => {},
+      });
+
+      try {
+        const module = createAlbumDisplay({
+          getCurrentList: () => 'list-1',
+          getListMetadata: () => ({ isMain: false }),
+          getListData: () => [],
+          getTrackName: (track) => track?.name || track || '',
+          getTrackLength: () => null,
+          formatTrackTime: () => '',
+        });
+
+        const firstRow = module.createAlbumItem(
+          {
+            album: 'First Album',
+            artist: 'Artist',
+            album_id: 'album-1',
+            cover_thumb_url: '/thumb-1.jpg',
+          },
+          0,
+          false
+        );
+        const laterRow = module.createAlbumItem(
+          {
+            album: 'Later Album',
+            artist: 'Artist',
+            album_id: 'album-2',
+            cover_thumb_url: '/thumb-2.jpg',
+          },
+          16,
+          false
+        );
+
+        assert.match(firstRow.innerHTML, /src="\/thumb-1\.jpg"/);
+        assert.match(firstRow.innerHTML, /fetchpriority="high"/);
+        assert.match(firstRow.innerHTML, /data-cover-reveal-group="initial"/);
+        assert.doesNotMatch(
+          firstRow.innerHTML,
+          /data-lazy-src="\/thumb-1\.jpg"/
+        );
+
+        assert.match(laterRow.innerHTML, /data-lazy-src="\/thumb-2\.jpg"/);
+        assert.match(laterRow.innerHTML, /loading="lazy"/);
+        assert.doesNotMatch(laterRow.innerHTML, /fetchpriority="high"/);
+      } finally {
+        globalThis.document.createElement = previousCreateElement;
+      }
+    });
+
     it('should handle empty dependencies gracefully', () => {
       // Should not throw when called with empty deps
       const module = createAlbumDisplay({});

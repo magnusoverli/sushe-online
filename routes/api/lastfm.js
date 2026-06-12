@@ -37,10 +37,11 @@ module.exports = (app, deps) => {
     getLastfmSimilarArtists,
     getLastfmRecentTracks,
     externalIdentityService,
+    playcountService: injectedPlaycountService,
   } = deps;
 
   const asyncHandler = createAsyncHandler(logger);
-  const playcountService = createPlaycountService();
+  const playcountService = injectedPlaycountService || createPlaycountService();
 
   // Canonical album key consistent with the playcount cache write path, so
   // accented/special-char names (e.g. "Sigur Rós") match reliably.

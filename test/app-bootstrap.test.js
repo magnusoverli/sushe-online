@@ -68,6 +68,7 @@ describe('app-bootstrap module', () => {
   it('runs startup orchestration and deferred setup checks', async () => {
     let domReadyHandler = null;
     let fabClickHandler = null;
+    const dispatchedEvents = [];
     const fab = {
       addEventListener(eventName, handler) {
         if (eventName === 'click') {
@@ -87,6 +88,9 @@ describe('app-bootstrap module', () => {
         }
         return null;
       },
+      dispatchEvent(event) {
+        dispatchedEvents.push(event.type);
+      },
     };
 
     let resolveLoadLists;
@@ -97,12 +101,11 @@ describe('app-bootstrap module', () => {
         })
     );
 
-    let timeoutHandler = null;
-    const setTimeoutFn = (handler, ms) => {
-      timeoutHandler = handler;
-      assert.strictEqual(ms, 1000);
-      return 1;
-    };
+    const scheduledTasks = [];
+    const schedulePostRenderTask = mock.fn((task, options) => {
+      scheduledTasks.push({ task, options });
+      return scheduledTasks.length;
+    });
 
     const convertFlashToToast = mock.fn();
     const initColumnConfig = mock.fn();
@@ -132,8 +135,11 @@ describe('app-bootstrap module', () => {
       win: {
         location: { pathname: '/spotify' },
         currentUser: { columnVisibility: { rating: true } },
+        CustomEvent: function CustomEvent(type) {
+          this.type = type;
+        },
       },
-      setTimeoutFn,
+      schedulePostRenderTask,
       logger: { warn: mock.fn(), error: mock.fn() },
       convertFlashToToast,
       initColumnConfig,
@@ -191,17 +197,27 @@ describe('app-bootstrap module', () => {
     );
     assert.strictEqual(listCrudInit.initializeRenameList.mock.calls.length, 1);
     assert.strictEqual(initializeImportConflictHandling.mock.calls.length, 1);
-    assert.strictEqual(initializeRealtimeSync.mock.calls.length, 1);
+    assert.strictEqual(initializeRealtimeSync.mock.calls.length, 0);
     assert.strictEqual(initializeFileImportHandlers.mock.calls.length, 1);
-    assert.strictEqual(typeof timeoutHandler, 'function');
+    assert.strictEqual(schedulePostRenderTask.mock.calls.length, 3);
 
-    timeoutHandler();
+    scheduledTasks[0].task();
+    assert.strictEqual(initializeRealtimeSync.mock.calls.length, 1);
+
+    assert.deepStrictEqual(scheduledTasks[1].options, {
+      delayMs: 1000,
+      timeoutMs: 3000,
+    });
+    scheduledTasks[1].task();
     await new Promise((resolve) => setImmediate(resolve));
     assert.strictEqual(checkListSetupStatus.mock.calls.length, 1);
     assert.strictEqual(
       checkListSetupStatus.mock.calls[0].arguments[0].refreshLists,
       loadLists
     );
+
+    scheduledTasks[2].task();
+    assert.deepStrictEqual(dispatchedEvents, ['sushe:first-list-rendered']);
 
     await fabClickHandler();
     assert.strictEqual(importMusicbrainz.mock.calls.length, 1);

@@ -48,6 +48,7 @@ const {
   createRecommendationService,
 } = require('../../services/recommendation-service');
 const {
+  createPlaycountService,
   refreshPlaycountsInBackground,
 } = require('../../services/playcount-service');
 const {
@@ -176,6 +177,8 @@ module.exports = (app, deps) => {
     upsertAlbumRecord: helpers.upsertAlbumRecord,
   });
 
+  const playcountService = createPlaycountService();
+
   // Shared dependencies for all route modules
   const sharedDeps = {
     // Core dependencies
@@ -208,6 +211,7 @@ module.exports = (app, deps) => {
     groupService,
     albumService,
     recommendationService,
+    playcountService,
     externalIdentityService,
     coverCache,
     authService,

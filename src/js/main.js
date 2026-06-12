@@ -1,4 +1,5 @@
 import './app.js';
+import { scheduleDeferredStartup } from './modules/post-render-scheduler.js';
 
 /**
  * Determine which sidebar widget to show based on user's music service preference
@@ -75,18 +76,27 @@ async function initSidebarWidget(isMobile) {
 document.addEventListener('DOMContentLoaded', () => {
   const isMobile = window.innerWidth < 1024;
 
-  // Initialize the appropriate sidebar widget based on user preference
-  initSidebarWidget(isMobile).catch((error) => {
-    console.warn('Failed to initialize sidebar widget:', error);
-  });
+  scheduleDeferredStartup(
+    () => {
+      initSidebarWidget(isMobile).catch((error) => {
+        console.warn('Failed to initialize sidebar widget:', error);
+      });
+    },
+    { immediateOnInteraction: true }
+  );
 
   // Initialize discovery module (Last.fm recommendations)
   // Only if user has Last.fm connected
   if (window.currentUser?.lastfmUsername) {
-    import('./modules/discovery.js')
-      .then(({ initDiscovery }) => initDiscovery())
-      .catch((error) => {
-        console.warn('Failed to initialize discovery:', error);
-      });
+    scheduleDeferredStartup(
+      () => {
+        import('./modules/discovery.js')
+          .then(({ initDiscovery }) => initDiscovery())
+          .catch((error) => {
+            console.warn('Failed to initialize discovery:', error);
+          });
+      },
+      { timeoutMs: 3500 }
+    );
   }
 });

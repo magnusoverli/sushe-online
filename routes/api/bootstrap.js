@@ -11,6 +11,9 @@ module.exports = (app, deps) => {
     listService,
     groupService,
     recommendationService,
+    playcountService,
+    db,
+    normalizeAlbumKey,
   } = deps;
 
   const { createAsyncHandler } = require('../../middleware/async-handler');
@@ -49,6 +52,33 @@ module.exports = (app, deps) => {
           selectedListPromise,
         ]);
 
+      let selectedListPlaycounts = null;
+      let selectedListPlaycountRefreshing = 0;
+
+      if (selectedList && req.user.lastfmUsername && playcountService) {
+        try {
+          const result = await playcountService.getListPlaycounts({
+            listId: selectedList.list._id,
+            userId: req.user._id,
+            lastfmUsername: req.user.lastfmUsername,
+            db,
+            logger,
+            normalizeAlbumKey,
+          });
+
+          if (!result.error) {
+            selectedListPlaycounts = result.playcounts || {};
+            selectedListPlaycountRefreshing = result.refreshing || 0;
+          }
+        } catch (error) {
+          logger.warn('Failed to load selected list playcounts for bootstrap', {
+            userId: req.user._id,
+            listId: selectedList.list._id,
+            error: error.message,
+          });
+        }
+      }
+
       res.json({
         lists,
         groups,
@@ -56,6 +86,8 @@ module.exports = (app, deps) => {
         selectedListId: selectedList ? selectedList.list._id : null,
         selectedListItems: selectedList ? selectedList.items : null,
         selectedListProfile: selectedList ? 'core' : null,
+        selectedListPlaycounts,
+        selectedListPlaycountRefreshing,
       });
     }, 'loading app bootstrap')
   );

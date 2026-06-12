@@ -30,6 +30,11 @@ export function createPlaycountSync(deps = {}) {
     playcountCache = {};
   }
 
+  function primePlaycountCache(playcounts) {
+    if (!playcounts || typeof playcounts !== 'object') return;
+    Object.assign(playcountCache, playcounts);
+  }
+
   function cancelPollingForList(listId) {
     const controller = pollingControllers.get(listId);
     if (controller) {
@@ -283,10 +288,53 @@ export function createPlaycountSync(deps = {}) {
     }
   }
 
+  async function prefetchPlaycountsForRender(listId) {
+    if (!listId || playcountFetchInProgress) return null;
+
+    if (!hasLastfmConnection()) {
+      clearPlaycountCache();
+      return null;
+    }
+
+    playcountFetchInProgress = true;
+
+    try {
+      const response = await apiCall(`/api/lastfm/list-playcounts/${listId}`);
+
+      if (response.error) {
+        if (response.error !== 'Last.fm not connected') {
+          logger.warn('Failed to fetch playcounts:', response.error);
+        }
+        return null;
+      }
+
+      const { playcounts, refreshing } = response;
+      applyPlaycountUpdates(playcounts);
+
+      if (refreshing > 0) {
+        pollForRefreshedPlaycounts(listId, refreshing);
+      }
+
+      return response;
+    } catch (err) {
+      if (isLastfmNotConnectedError(err)) {
+        clearPlaycountCache();
+        return null;
+      }
+
+      logger.warn('Playcount fetch error:', err);
+      return null;
+    } finally {
+      playcountFetchInProgress = false;
+    }
+  }
+
   return {
     getPlaycountCacheEntry,
+    primePlaycountCache,
     clearPlaycountCache,
     cancelPollingForList,
+    prefetchPlaycountsForRender,
     fetchAndDisplayPlaycounts,
   };
 }
