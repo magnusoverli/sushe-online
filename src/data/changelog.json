@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-06-12",
+    "category": "perf",
+    "description": "Faster initial album list loading",
+    "hash": "aab612e811db7597b5a9d36bbd167db2113453ae",
+    "commitMessage": "Improve initial list rendering performance\n\n- preload critical module and cover resources earlier\n\n- defer non-critical startup work until after first list paint\n\n- seed and prefetch playcounts before initial album render"
+  },
+  {
     "date": "2026-06-11",
     "category": "fix",
     "description": "Fixed locked year display refreshing properly",
