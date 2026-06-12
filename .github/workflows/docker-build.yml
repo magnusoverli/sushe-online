@@ -212,11 +212,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
+          context: git
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest
             type=raw,value=main-${{ steps.image_revision.outputs.short_sha }}
           labels: |
+            org.opencontainers.image.revision=${{ steps.image_revision.outputs.sha }}
+          annotations: |
             org.opencontainers.image.revision=${{ steps.image_revision.outputs.sha }}
 
       - name: Build and push Docker image
@@ -228,5 +231,6 @@ jobs:
             CACHE_BUST=${{ steps.image_revision.outputs.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
