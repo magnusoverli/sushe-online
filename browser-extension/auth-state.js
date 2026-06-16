@@ -3,6 +3,8 @@
 // All components should use these functions instead of maintaining their own state
 
 (function () {
+  const { STORAGE_KEYS } = globalThis.ExtensionConstants;
+
   /**
    * Storage keys used for authentication:
    * - authToken: The bearer token for API authentication
@@ -14,12 +16,12 @@
    */
 
   const AUTH_STORAGE_KEYS = [
-    'authToken',
-    'tokenExpiresAt',
-    'userLists',
-    'userListsByYear',
-    'listsLastFetched',
-    'hasEverAuthenticated',
+    STORAGE_KEYS.AUTH_TOKEN,
+    STORAGE_KEYS.TOKEN_EXPIRES_AT,
+    STORAGE_KEYS.USER_LISTS,
+    STORAGE_KEYS.USER_LISTS_BY_YEAR,
+    STORAGE_KEYS.LISTS_LAST_FETCHED,
+    STORAGE_KEYS.HAS_EVER_AUTHENTICATED,
   ];
 
   /**
@@ -40,14 +42,14 @@
    */
   async function getAuthState() {
     const data = await chrome.storage.local.get([
-      'authToken',
-      'tokenExpiresAt',
-      'apiUrl',
+      STORAGE_KEYS.AUTH_TOKEN,
+      STORAGE_KEYS.TOKEN_EXPIRES_AT,
+      STORAGE_KEYS.API_URL,
     ]);
 
-    const token = data.authToken || null;
-    const expiresAt = data.tokenExpiresAt || null;
-    const apiUrl = data.apiUrl || null;
+    const token = data[STORAGE_KEYS.AUTH_TOKEN] || null;
+    const expiresAt = data[STORAGE_KEYS.TOKEN_EXPIRES_AT] || null;
+    const apiUrl = data[STORAGE_KEYS.API_URL] || null;
     const expired = isTokenExpired(expiresAt);
 
     return {
@@ -108,16 +110,16 @@
    */
   async function loadFullState() {
     const data = await chrome.storage.local.get([
-      'apiUrl',
-      'authToken',
-      'tokenExpiresAt',
-      'userLists',
-      'userListsByYear',
-      'listsLastFetched',
+      STORAGE_KEYS.API_URL,
+      STORAGE_KEYS.AUTH_TOKEN,
+      STORAGE_KEYS.TOKEN_EXPIRES_AT,
+      STORAGE_KEYS.USER_LISTS,
+      STORAGE_KEYS.USER_LISTS_BY_YEAR,
+      STORAGE_KEYS.LISTS_LAST_FETCHED,
     ]);
 
-    const token = data.authToken || null;
-    const expiresAt = data.tokenExpiresAt || null;
+    const token = data[STORAGE_KEYS.AUTH_TOKEN] || null;
+    const expiresAt = data[STORAGE_KEYS.TOKEN_EXPIRES_AT] || null;
     const expired = isTokenExpired(expiresAt);
 
     // If token is expired, don't return it as valid
@@ -128,12 +130,14 @@
     }
 
     return {
-      apiUrl: data.apiUrl || null,
+      apiUrl: data[STORAGE_KEYS.API_URL] || null,
       authToken: expired ? null : token,
       tokenExpiresAt: expiresAt,
-      userLists: Array.isArray(data.userLists) ? data.userLists : [],
-      userListsByYear: data.userListsByYear || {},
-      listsLastFetched: data.listsLastFetched || 0,
+      userLists: Array.isArray(data[STORAGE_KEYS.USER_LISTS])
+        ? data[STORAGE_KEYS.USER_LISTS]
+        : [],
+      userListsByYear: data[STORAGE_KEYS.USER_LISTS_BY_YEAR] || {},
+      listsLastFetched: data[STORAGE_KEYS.LISTS_LAST_FETCHED] || 0,
       isValid: !!token && !expired,
       isExpired: expired,
     };

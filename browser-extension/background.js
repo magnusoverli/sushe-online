@@ -3,19 +3,39 @@
 
 // Import shared modules for service worker
 // eslint-disable-next-line no-undef
-importScripts('shared-utils.js', 'auth-state.js');
+importScripts(
+  'extension-constants.js',
+  'shared-utils.js',
+  'auth-state.js',
+  'context-menu-service.js',
+  'album-add-service.js'
+);
 
 // Debug mode - set to false for production
 const DEBUG = false;
 const log = DEBUG ? console.log.bind(console) : () => {};
 
-// In-memory state (ONLY used as cache, always re-validated from storage)
+// In-memory state (loaded from storage on service worker cold start, then kept
+// current through chrome.storage.onChanged while the worker stays warm)
 let SUSHE_API_BASE = null;
 let AUTH_TOKEN = null;
+let TOKEN_EXPIRES_AT = null;
 let userListsByYear = {}; // { year: [{ name, count }], ... } - grouped by year
 let userLists = []; // Flat list of names for backward compatibility
 let listsLastFetched = 0;
-const CACHE_DURATION = 1 * 60 * 1000; // 1 minute (server has its own 5-min cache)
+let stateLoaded = false;
+let listFetchInFlight = null;
+let listFetchInFlightForce = false;
+let menuRefreshAfterHidden = false;
+let authCleanupInProgress = false;
+const {
+  STORAGE_KEYS,
+  LIST_CACHE_DURATION_MS,
+  MENU,
+  ACTIONS,
+  API,
+  NOTIFICATIONS,
+} = globalThis.ExtensionConstants;
 
 // Use shared utilities
 const {
@@ -31,6 +51,28 @@ const {
   handleUnauthorized,
 } = globalThis.AuthState;
 
+const contextMenuService =
+  globalThis.ContextMenuService.createContextMenuService({
+    chrome,
+    constants: globalThis.ExtensionConstants,
+    logger: console,
+  });
+
+const albumAddService = globalThis.AlbumAddService.createAlbumAddService({
+  chrome,
+  constants: globalThis.ExtensionConstants,
+  fetchWithTimeout,
+  showNotification,
+  showNotificationWithImage,
+  validateAndCleanToken,
+  handleUnauthorized,
+  ensureStateLoaded,
+  getApiBase: () => SUSHE_API_BASE,
+  getAuthHeaders,
+  showErrorMenu,
+  logger: console,
+});
+
 // Get authorization headers for API requests (uses in-memory token for performance)
 function getAuthHeaders() {
   const headers = {
@@ -45,9 +87,123 @@ function getAuthHeaders() {
   return headers;
 }
 
+function isTokenExpired(expiresAt) {
+  if (!expiresAt) return false;
+  return Date.now() >= expiresAt - 30000;
+}
+
+function hasFreshListCache() {
+  return (
+    AUTH_TOKEN &&
+    userLists.length > 0 &&
+    Date.now() - listsLastFetched < LIST_CACHE_DURATION_MS
+  );
+}
+
+function getListResponseMeta(fetchResult = {}) {
+  const stale =
+    !listsLastFetched ||
+    Date.now() - listsLastFetched >= LIST_CACHE_DURATION_MS;
+  return {
+    fromCache: fetchResult.fromCache ?? false,
+    stale,
+    lastFetched: listsLastFetched,
+  };
+}
+
+async function getHasEverAuthenticated() {
+  const data = await chrome.storage.local.get([
+    STORAGE_KEYS.HAS_EVER_AUTHENTICATED,
+  ]);
+  return !!data[STORAGE_KEYS.HAS_EVER_AUTHENTICATED];
+}
+
+function getListStateResponse(fetchResult = {}) {
+  const meta = getListResponseMeta(fetchResult);
+  return {
+    success: true,
+    lists: userListsByYear,
+    flatLists: userLists,
+    count: userLists.length,
+    fromCache: meta.fromCache,
+    stale: meta.stale,
+    lastFetched: meta.lastFetched,
+  };
+}
+
+function getAuthStatusResponse() {
+  return {
+    isAuthenticated: !!AUTH_TOKEN,
+    hasToken: !!AUTH_TOKEN,
+    isExpired: AUTH_TOKEN ? isTokenExpired(TOKEN_EXPIRES_AT) : false,
+    apiUrl: SUSHE_API_BASE,
+  };
+}
+
+function clearListCacheInMemory() {
+  userLists = [];
+  userListsByYear = {};
+  listsLastFetched = 0;
+}
+
+async function clearStoredListCache() {
+  await chrome.storage.local.remove([
+    STORAGE_KEYS.USER_LISTS,
+    STORAGE_KEYS.USER_LISTS_BY_YEAR,
+    STORAGE_KEYS.LISTS_LAST_FETCHED,
+  ]);
+}
+
+async function buildMenusFromCurrentState() {
+  await ensureStateLoaded();
+
+  if (!SUSHE_API_BASE) {
+    if (await getHasEverAuthenticated()) {
+      await showErrorMenu('Not configured - open Settings');
+    } else {
+      await showWelcomeMenu();
+    }
+    return;
+  }
+
+  if (!AUTH_TOKEN) {
+    if (await getHasEverAuthenticated()) {
+      await showErrorMenu('Not logged in');
+    } else {
+      await showWelcomeMenu();
+    }
+    return;
+  }
+
+  if (userLists.length > 0) {
+    await updateContextMenuWithLists();
+    return;
+  }
+
+  await showErrorMenu('Lists not loaded');
+}
+
 // Ensure critical state is loaded from storage (handles service worker restarts)
 // CRITICAL FIX: Always overwrite in-memory state from storage, never trust existing values
-async function ensureStateLoaded() {
+async function ensureStateLoaded(forceReload = false) {
+  if (stateLoaded && !forceReload) {
+    if (AUTH_TOKEN && isTokenExpired(TOKEN_EXPIRES_AT)) {
+      console.log('[ensureStateLoaded] Token expired, clearing auth data');
+      await performLogout(false);
+    }
+
+    return {
+      apiUrl: SUSHE_API_BASE,
+      authToken: AUTH_TOKEN,
+      tokenExpiresAt: TOKEN_EXPIRES_AT,
+      userLists,
+      userListsByYear,
+      listsLastFetched,
+      isValid: !!AUTH_TOKEN,
+      isExpired: false,
+    };
+  }
+
   console.log('[ensureStateLoaded] Loading state from storage...');
 
   const state = await loadFullState();
@@ -55,9 +211,11 @@ async function ensureStateLoaded() {
   // ALWAYS overwrite in-memory state from storage (fixes Issue #2)
   SUSHE_API_BASE = state.apiUrl;
   AUTH_TOKEN = state.authToken; // Will be null if expired (handled by loadFullState)
+  TOKEN_EXPIRES_AT = state.tokenExpiresAt || null;
   userLists = state.userLists || [];
   userListsByYear = state.userListsByYear || {};
   listsLastFetched = state.listsLastFetched;
+  stateLoaded = true;
 
   // If token was expired, clear all auth data (fixes Issue #3)
   if (state.isExpired) {
@@ -83,12 +241,18 @@ async function performLogout(showNotificationMsg = true) {
 
   // Clear in-memory state
   AUTH_TOKEN = null;
-  userLists = [];
-  userListsByYear = {};
-  listsLastFetched = 0;
+  TOKEN_EXPIRES_AT = null;
+  clearListCacheInMemory();
+  stateLoaded = true;
 
   // Clear all auth-related storage (fixes Issue #4 - clears cached data)
-  await clearAllAuthData();
+  authCleanupInProgress = true;
+  try {
+    await clearAllAuthData();
+  } catch (error) {
+    authCleanupInProgress = false;
+    throw error;
+  }
 
   // Update context menu to show logged-out state
   await showErrorMenu('Not logged in');
@@ -96,6 +260,10 @@ async function performLogout(showNotificationMsg = true) {
   if (showNotificationMsg) {
     showNotification('Logged out', 'You have been logged out of SuShe Online');
   }
+
+  setTimeout(() => {
+    authCleanupInProgress = false;
+  }, 1000);
 
   return { success: true };
 }
@@ -112,7 +280,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
   // Show welcome notification on first install
   if (details.reason === 'install') {
-    chrome.notifications.create('sushe-welcome', {
+    chrome.notifications.create(NOTIFICATIONS.WELCOME_ID, {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
       title: 'Welcome to SuShe Online!',
@@ -124,7 +292,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
     // Auto-dismiss after 10 seconds
     setTimeout(() => {
-      chrome.notifications.clear('sushe-welcome');
+      chrome.notifications.clear(NOTIFICATIONS.WELCOME_ID);
     }, 10000);
   }
 
@@ -146,46 +314,54 @@ chrome.runtime.onStartup.addListener(async () => {
   createContextMenus();
 });
 
-// Refresh lists when context menu is shown (always fetch fresh)
-// This ensures the user always sees up-to-date lists (e.g., after renaming)
+// Refresh lists when context menu is shown if the cache is stale.
 // Note: onShown is only available in some browsers/versions, so we check first
-// Server has its own 5-minute cache to prevent DB hammering, so we can be aggressive here
+// Manual refresh remains available when users need immediate list changes.
 if (chrome.contextMenus.onShown) {
   chrome.contextMenus.onShown.addListener(async (info) => {
     // Only refresh if showing our menu on RYM pages
-    if (info.menuIds && info.menuIds.includes('sushe-main')) {
-      console.log('[onShown] Fetching fresh lists for context menu...');
+    if (info.menuIds && info.menuIds.includes(MENU.MAIN_ID)) {
       try {
-        // Always fetch fresh - server cache protects against DB hammering
-        // This ensures list renames/additions appear immediately
-        await fetchUserLists(true);
-        console.log('[onShown] Lists refreshed successfully');
+        await ensureStateLoaded();
+        if (AUTH_TOKEN && !hasFreshListCache()) {
+          menuRefreshAfterHidden = true;
+        }
       } catch (err) {
-        console.error('[onShown] List refresh failed:', err.message);
-        // Don't fail completely - the menu will show cached lists or error state
-        // fetchUserLists() already handles showing error menus
+        console.error('[onShown] Failed to inspect list cache:', err.message);
       }
     }
   });
 
+  if (chrome.contextMenus.onHidden) {
+    chrome.contextMenus.onHidden.addListener(() => {
+      if (!menuRefreshAfterHidden) return;
+      menuRefreshAfterHidden = false;
+      fetchUserLists(false).catch((err) => {
+        console.error('[onHidden] Deferred list refresh failed:', err.message);
+      });
+    });
+  }
+
   // Store feature support flag for UI to display
-  chrome.storage.local.set({ autoRefreshSupported: true });
+  chrome.storage.local.set({
+    [STORAGE_KEYS.AUTO_REFRESH_SUPPORTED]: !!chrome.contextMenus.onHidden,
+  });
 } else {
   console.warn(
     '[Extension] chrome.contextMenus.onShown not supported - automatic refresh disabled'
   );
   // Store this information for UI to potentially display a notice
-  chrome.storage.local.set({ autoRefreshSupported: false });
+  chrome.storage.local.set({ [STORAGE_KEYS.AUTO_REFRESH_SUPPORTED]: false });
 }
 
 // Listen for storage changes to update token and invalidate cache
 chrome.storage.onChanged.addListener(async (changes, areaName) => {
   if (areaName === 'local') {
-    if (changes.authToken) {
-      const hadToken = !!changes.authToken.oldValue;
-      const hasToken = !!changes.authToken.newValue;
+    if (changes[STORAGE_KEYS.AUTH_TOKEN]) {
+      const hadToken = !!changes[STORAGE_KEYS.AUTH_TOKEN].oldValue;
+      const hasToken = !!changes[STORAGE_KEYS.AUTH_TOKEN].newValue;
 
-      AUTH_TOKEN = changes.authToken?.newValue || null;
+      AUTH_TOKEN = changes[STORAGE_KEYS.AUTH_TOKEN]?.newValue || null;
       log('Auth token updated:', AUTH_TOKEN ? 'present' : 'removed');
 
       // Invalidate cache when auth changes
@@ -193,132 +369,101 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
 
       if (AUTH_TOKEN) {
         // New login - fetch fresh lists and mark as authenticated
-        userLists = [];
+        clearListCacheInMemory();
         // Track that user has successfully authenticated at least once
-        chrome.storage.local.set({ hasEverAuthenticated: true });
+        chrome.storage.local.set({
+          [STORAGE_KEYS.HAS_EVER_AUTHENTICATED]: true,
+        });
         fetchUserLists();
       } else if (hadToken && !hasToken) {
+        clearListCacheInMemory();
+
+        if (authCleanupInProgress) {
+          authCleanupInProgress = false;
+          return;
+        }
+
         // Token was removed - CLEAR EVERYTHING (fixes Issue #4)
         console.log(
           '[storage.onChanged] Token removed, clearing all cached data'
         );
-        userLists = [];
-        listsLastFetched = 0;
         // Clear cached lists from storage too
-        await chrome.storage.local.remove(['userLists', 'listsLastFetched']);
+        await clearStoredListCache();
         // Update context menu to show logged-out state immediately
         await showErrorMenu('Not logged in');
       }
     }
 
-    if (changes.apiUrl) {
-      SUSHE_API_BASE = changes.apiUrl?.newValue || null;
+    if (changes[STORAGE_KEYS.TOKEN_EXPIRES_AT]) {
+      TOKEN_EXPIRES_AT =
+        changes[STORAGE_KEYS.TOKEN_EXPIRES_AT]?.newValue || null;
+    }
+
+    if (changes[STORAGE_KEYS.API_URL]) {
+      SUSHE_API_BASE = changes[STORAGE_KEYS.API_URL]?.newValue || null;
       console.log('API URL updated:', SUSHE_API_BASE);
 
       // Invalidate cache when API URL changes
-      userLists = [];
-      listsLastFetched = 0;
+      clearListCacheInMemory();
       createContextMenus();
     }
   }
 });
 
-// Helper to safely remove all context menus
-async function removeAllMenus() {
-  return new Promise((resolve) => {
-    chrome.contextMenus.removeAll(() => {
-      if (chrome.runtime.lastError) {
-        console.log(
-          'Remove all menus error (ignored):',
-          chrome.runtime.lastError
-        );
-      }
-      resolve();
-    });
-  });
-}
-
 // Create the base context menu structure
 async function createContextMenus() {
   try {
-    // Remove all existing menus first
-    await removeAllMenus();
-
-    // Create parent menu item
-    chrome.contextMenus.create(
-      {
-        id: 'sushe-main',
-        title: 'Add to SuShe Online',
-        contexts: ['image', 'link'],
-        documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
-      },
-      () => {
-        if (chrome.runtime.lastError) {
-          console.log(
-            'Menu creation error (ignored):',
-            chrome.runtime.lastError
-          );
-        }
-      }
-    );
-
-    // Create loading placeholder
-    chrome.contextMenus.create(
-      {
-        id: 'sushe-loading',
-        parentId: 'sushe-main',
-        title: 'Loading lists...',
-        contexts: ['image', 'link'],
-        enabled: false,
-      },
-      () => {
-        if (chrome.runtime.lastError) {
-          console.log(
-            'Menu creation error (ignored):',
-            chrome.runtime.lastError
-          );
-        }
-      }
-    );
-
-    // Fetch lists and update menu
-    fetchUserLists();
+    // Startup/menu recreation is cache-only. Network refreshes happen from
+    // explicit refresh actions or after the user has opened the context menu.
+    await buildMenusFromCurrentState();
   } catch (error) {
     console.error('Error creating context menus:', error);
   }
 }
 
-// Fetch user's lists from SuShe Online API
+// Fetch user's lists from SuShe Online API. Concurrent callers share work so
+// page loads, popup opens, and context-menu events cannot stampede the API.
 async function fetchUserLists(forceRefresh = false) {
+  if (listFetchInFlight) {
+    if (!forceRefresh || listFetchInFlightForce) {
+      return listFetchInFlight;
+    }
+
+    try {
+      await listFetchInFlight;
+    } catch (_error) {
+      // A force refresh should still get its own attempt after an older failure.
+    }
+  }
+
+  listFetchInFlightForce = forceRefresh;
+  listFetchInFlight = fetchUserListsInternal(forceRefresh).finally(() => {
+    listFetchInFlight = null;
+    listFetchInFlightForce = false;
+  });
+
+  return listFetchInFlight;
+}
+
+async function fetchUserListsInternal(forceRefresh = false) {
   // CRITICAL: Always reload state first (fixes Issue #2)
   await ensureStateLoaded();
 
   const now = Date.now();
 
   // Use cache if recent AND we have a valid token (unless force refresh)
-  if (
-    !forceRefresh &&
-    userLists.length > 0 &&
-    now - listsLastFetched < CACHE_DURATION &&
-    AUTH_TOKEN
-  ) {
+  if (!forceRefresh && hasFreshListCache()) {
     console.log('Using cached lists:', userLists.length);
-    updateContextMenuWithLists();
-    return;
+    await updateContextMenuWithLists();
+    return { fromCache: true };
   }
 
   // Clear cache when forcing refresh
   if (forceRefresh) {
     console.log('Force refreshing lists...');
-    userLists = [];
-    userListsByYear = {};
-    listsLastFetched = 0;
+    clearListCacheInMemory();
     // Also clear from storage so ensureStateLoaded doesn't reload old data
-    await chrome.storage.local.remove([
-      'userLists',
-      'userListsByYear',
-      'listsLastFetched',
-    ]);
+    await clearStoredListCache();
   }
 
   log('Fetching lists from API...');
@@ -328,30 +473,26 @@ async function fetchUserLists(forceRefresh = false) {
   // Check if URL is configured
   if (!SUSHE_API_BASE) {
     console.log('No API URL configured');
-    showErrorMenu('Not configured - open Settings');
-    return;
+    await showErrorMenu('Not configured - open Settings');
+    return { fromCache: false };
   }
 
   // If there's no auth token, check if we've ever had one
   if (!AUTH_TOKEN) {
-    const hasEverBeenLoggedIn = await chrome.storage.local.get([
-      'hasEverAuthenticated',
-    ]);
-
-    if (!hasEverBeenLoggedIn.hasEverAuthenticated) {
+    if (!(await getHasEverAuthenticated())) {
       // First time user - show friendly welcome message
       console.log('First-time user, showing welcome menu');
-      showWelcomeMenu();
-      return;
+      await showWelcomeMenu();
+      return { fromCache: false };
     }
     // If they've been logged in before but token is gone, show login error
-    showErrorMenu('Not logged in');
-    return;
+    await showErrorMenu('Not logged in');
+    return { fromCache: false };
   }
 
   try {
     const response = await fetchWithTimeout(
-      `${SUSHE_API_BASE}/api/lists`,
+      `${SUSHE_API_BASE}${API.LISTS}`,
       { headers: getAuthHeaders() },
       10000 // 10 second timeout
     );
@@ -362,8 +503,8 @@ async function fetchUserLists(forceRefresh = false) {
       log('Not authenticated (401), clearing auth and showing login menu');
       // Handle 401 - clear everything (fixes Issue #3, #4)
       await performLogout(false);
-      showErrorMenu('Not logged in');
-      return;
+      await showErrorMenu('Not logged in');
+      return { fromCache: false };
     }
 
     if (!response.ok) {
@@ -412,7 +553,8 @@ async function fetchUserLists(forceRefresh = false) {
       // Continue anyway - lists are in memory
     }
 
-    updateContextMenuWithLists();
+    await updateContextMenuWithLists();
+    return { fromCache: false };
   } catch (error) {
     console.error('Failed to fetch lists:', error);
 
@@ -422,15 +564,15 @@ async function fetchUserLists(forceRefresh = false) {
     // FIXED: Don't keep stale cache on auth errors (Issue #4)
     if (errorType === 'auth') {
       await performLogout(false);
-      showErrorMenu('Not logged in');
+      await showErrorMenu('Not logged in');
     } else if (userLists.length === 0) {
       // Show appropriate error message based on error type
       if (errorType === 'network') {
-        showErrorMenu('Network error - check connection');
+        await showErrorMenu('Network error - check connection');
       } else if (errorType === 'server') {
-        showErrorMenu('Server error - try again later');
+        await showErrorMenu('Server error - try again later');
       } else {
-        showErrorMenu('Connection failed');
+        await showErrorMenu('Connection failed');
       }
     } else {
       // For non-auth errors, we can still use cached lists temporarily
@@ -439,276 +581,30 @@ async function fetchUserLists(forceRefresh = false) {
         `Failed to refresh lists (${errorType}), using cache temporarily:`,
         error.message
       );
-      updateContextMenuWithLists();
+      await updateContextMenuWithLists();
+      return { fromCache: true };
     }
+
+    return { fromCache: false };
   }
 }
 
 // Update context menu with user's lists grouped by year
 async function updateContextMenuWithLists() {
   log('Updating context menu with lists by year:', userListsByYear);
-
-  try {
-    // Remove ALL menus and rebuild from scratch to ensure clean state
-    await removeAllMenus();
-
-    // Recreate the parent menu
-    chrome.contextMenus.create(
-      {
-        id: 'sushe-main',
-        title: 'Add to SuShe Online',
-        contexts: ['image', 'link'],
-        documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
-      },
-      () => {
-        if (chrome.runtime.lastError) {
-          console.log(
-            'Menu creation error (ignored):',
-            chrome.runtime.lastError
-          );
-        }
-      }
-    );
-
-    if (userLists.length === 0) {
-      chrome.contextMenus.create(
-        {
-          id: 'sushe-no-lists',
-          parentId: 'sushe-main',
-          title: 'No lists found - Create one first!',
-          contexts: ['image', 'link'],
-          enabled: false,
-        },
-        () => {
-          if (chrome.runtime.lastError) {
-            console.log(
-              'Menu creation error (ignored):',
-              chrome.runtime.lastError
-            );
-          }
-        }
-      );
-      return;
-    }
-
-    // Get years sorted: numeric years descending, then 'Uncategorized' at the end
-    const years = Object.keys(userListsByYear).sort((a, b) => {
-      if (a === 'Uncategorized') return 1;
-      if (b === 'Uncategorized') return -1;
-      return parseInt(b) - parseInt(a); // Descending order for years
-    });
-
-    // Create year submenus with lists inside
-    for (const year of years) {
-      const lists = userListsByYear[year];
-      const yearId = `sushe-year-${year}`;
-
-      // Create year submenu
-      chrome.contextMenus.create(
-        {
-          id: yearId,
-          parentId: 'sushe-main',
-          title: `${year} (${lists.length})`,
-          contexts: ['image', 'link'],
-        },
-        () => {
-          if (chrome.runtime.lastError) {
-            console.log(
-              'Menu creation error (ignored):',
-              chrome.runtime.lastError
-            );
-          }
-        }
-      );
-
-      // Add lists under this year
-      lists.forEach((list, index) => {
-        const listId = `sushe-list-${year}-${index}`;
-        chrome.contextMenus.create(
-          {
-            id: listId,
-            parentId: yearId,
-            title: list.name,
-            contexts: ['image', 'link'],
-          },
-          () => {
-            if (chrome.runtime.lastError) {
-              console.log(
-                'Menu creation error (ignored):',
-                chrome.runtime.lastError
-              );
-            }
-          }
-        );
-      });
-    }
-
-    console.log('Context menu updated successfully with year submenus');
-  } catch (error) {
-    console.error('Error updating context menu:', error);
-  }
+  await contextMenuService.updateWithLists(userListsByYear, userLists);
 }
 
 // Show welcome menu for first-time users
 async function showWelcomeMenu() {
   console.log('Showing welcome menu for first-time user');
-
-  try {
-    await removeAllMenus();
-
-    chrome.contextMenus.create(
-      {
-        id: 'sushe-main',
-        title: 'Add to SuShe Online',
-        contexts: ['image', 'link'],
-        documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
-      },
-      () => {
-        if (chrome.runtime.lastError) {
-          console.log(
-            'Menu creation error (ignored):',
-            chrome.runtime.lastError
-          );
-        }
-      }
-    );
-
-    chrome.contextMenus.create(
-      {
-        id: 'sushe-welcome',
-        parentId: 'sushe-main',
-        title: 'Welcome! Click to get started',
-        contexts: ['image', 'link'],
-        enabled: false,
-      },
-      () => {
-        if (chrome.runtime.lastError) {
-          console.log(
-            'Menu creation error (ignored):',
-            chrome.runtime.lastError
-          );
-        }
-      }
-    );
-
-    chrome.contextMenus.create(
-      {
-        id: 'sushe-setup',
-        parentId: 'sushe-main',
-        title: 'Open Settings & Login',
-        contexts: ['image', 'link'],
-      },
-      () => {
-        if (chrome.runtime.lastError) {
-          console.log(
-            'Menu creation error (ignored):',
-            chrome.runtime.lastError
-          );
-        }
-      }
-    );
-  } catch (error) {
-    console.error('Error showing welcome menu:', error);
-  }
+  await contextMenuService.showWelcome();
 }
 
 // Show error in context menu
 async function showErrorMenu(message) {
   console.log('Showing error menu:', message);
-
-  try {
-    // Remove ALL menus and rebuild from scratch
-    await removeAllMenus();
-
-    // Recreate the parent menu
-    chrome.contextMenus.create(
-      {
-        id: 'sushe-main',
-        title: 'Add to SuShe Online',
-        contexts: ['image', 'link'],
-        documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
-      },
-      () => {
-        if (chrome.runtime.lastError) {
-          console.log(
-            'Menu creation error (ignored):',
-            chrome.runtime.lastError
-          );
-        }
-      }
-    );
-
-    // Show appropriate error message based on the error type
-    const isAuthError =
-      message === 'Not logged in' ||
-      message.includes('401') ||
-      message.includes('authenticated');
-    const errorTitle = isAuthError
-      ? 'Not logged in to SuShe Online'
-      : `Error: ${message.substring(0, 50)}`;
-
-    chrome.contextMenus.create(
-      {
-        id: 'sushe-error',
-        parentId: 'sushe-main',
-        title: errorTitle,
-        contexts: ['image', 'link'],
-        enabled: false,
-      },
-      () => {
-        if (chrome.runtime.lastError) {
-          console.log(
-            'Menu creation error (ignored):',
-            chrome.runtime.lastError
-          );
-        }
-      }
-    );
-
-    // Only show login option for authentication errors
-    if (isAuthError) {
-      chrome.contextMenus.create(
-        {
-          id: 'sushe-login',
-          parentId: 'sushe-main',
-          title: 'Click to login',
-          contexts: ['image', 'link'],
-        },
-        () => {
-          if (chrome.runtime.lastError) {
-            console.log(
-              'Menu creation error (ignored):',
-              chrome.runtime.lastError
-            );
-          }
-        }
-      );
-    } else {
-      // For other errors, show a refresh option
-      chrome.contextMenus.create(
-        {
-          id: 'sushe-refresh',
-          parentId: 'sushe-main',
-          title: 'Try again',
-          contexts: ['image', 'link'],
-        },
-        () => {
-          if (chrome.runtime.lastError) {
-            console.log(
-              'Menu creation error (ignored):',
-              chrome.runtime.lastError
-            );
-          }
-        }
-      );
-    }
-  } catch (error) {
-    console.error('Error adding album:', error);
-    showNotification(
-      '❌   Error   ❌',
-      error.message || 'Failed to add album to list'
-    );
-  }
+  await contextMenuService.showError(message);
 }
 
 // Handle context menu clicks
@@ -719,51 +615,40 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   await ensureStateLoaded();
 
   // Handle "Try again" from error menu
-  if (info.menuItemId === 'sushe-refresh') {
+  if (info.menuItemId === MENU.REFRESH_ID) {
     await fetchUserLists(true);
     return;
   }
 
   // Handle setup/welcome redirect
-  if (info.menuItemId === 'sushe-setup') {
+  if (info.menuItemId === MENU.SETUP_ID) {
     chrome.runtime.openOptionsPage();
     return;
   }
 
   // Handle login redirect
-  if (info.menuItemId === 'sushe-login') {
+  if (info.menuItemId === MENU.LOGIN_ID) {
     // Use the loaded API URL (already loaded by ensureStateLoaded above)
-    chrome.tabs.create({ url: `${SUSHE_API_BASE}/extension/auth` });
+    chrome.tabs.create({ url: `${SUSHE_API_BASE}${API.EXTENSION_AUTH}` });
     return;
   }
 
-  // Handle list selection (format: sushe-list-{year}-{index})
-  if (info.menuItemId.startsWith('sushe-list-')) {
-    // Parse the menu ID to extract year and index
-    // Format: sushe-list-{year}-{index} where year can be a number or 'Uncategorized'
-    const idPart = info.menuItemId.replace('sushe-list-', '');
-    const lastDashIndex = idPart.lastIndexOf('-');
-    const year = idPart.substring(0, lastDashIndex);
-    const index = parseInt(idPart.substring(lastDashIndex + 1));
-
-    console.log(
-      `Menu item clicked: ${info.menuItemId}, year: ${year}, index: ${index}`
+  // Handle list selection (format: sushe-list-{listId})
+  if (info.menuItemId.startsWith(MENU.LIST_PREFIX)) {
+    const listData = contextMenuService.findListForMenuId(
+      info.menuItemId,
+      userLists,
+      userListsByYear
     );
-
-    // Look up the list from userListsByYear
-    const listsForYear = userListsByYear[year];
-    const listData = listsForYear ? listsForYear[index] : null;
     const listId = listData?._id;
     const listName = listData?.name;
 
-    console.log(
-      `List for ${year}[${index}]: id="${listId}", name="${listName}"`
-    );
+    console.log(`Menu item clicked: ${info.menuItemId}, list: ${listName}`);
 
     if (listId && typeof listId === 'string') {
       await addAlbumToList(info, tab, listId, listName);
     } else {
-      console.error('List not found:', { year, index, userListsByYear });
+      console.error('List not found:', { menuItemId: info.menuItemId });
       showNotification('Error', 'List not found. Try refreshing lists.');
     }
   }
@@ -772,265 +657,22 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 // Extract album data and add to list (now uses list ID instead of name)
 async function addAlbumToList(info, tab, listId, listName) {
   log('Adding album to list:', listId, listName);
-
-  // Ensure state is loaded in case service worker restarted
-  await ensureStateLoaded();
-  console.log('In-memory state:', {
-    apiUrl: SUSHE_API_BASE,
-    hasToken: !!AUTH_TOKEN,
-  });
-
-  // Verify URL is configured
-  if (!SUSHE_API_BASE) {
-    showNotification(
-      'Not configured',
-      'Please click the extension icon and configure your SuShe Online URL.'
-    );
-    return;
-  }
-
-  // Verify token is present and valid before starting
-  const validation = await validateAndCleanToken();
-  if (!validation.valid) {
-    showNotification(
-      'Not logged in',
-      'Please click the extension icon and login to SuShe Online.'
-    );
-    await showErrorMenu('Not logged in');
-    return;
-  }
-
-  try {
-    // Capture the RYM cover URL to use in the final notification
-    const rymCoverUrl = info.srcUrl || 'icons/icon128.png';
-
-    // No intermediate "Adding..." notification - the process is fast enough (~200-400ms)
-    // that we can just show the final result (success or duplicate)
-
-    // Send message to content script to extract album data
-    console.log('Sending message to content script...');
-    let albumData;
-
-    try {
-      albumData = await chrome.tabs.sendMessage(tab.id, {
-        action: 'extractAlbumData',
-        srcUrl: info.srcUrl,
-        linkUrl: info.linkUrl,
-        pageUrl: info.pageUrl,
-      });
-    } catch (err) {
-      // Content script not loaded yet - this is normal after extension reload
-      console.log('Content script not ready, injecting...', err.message);
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['content-script.js'],
-        });
-        // Wait a moment for script to initialize
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        // Try again
-        albumData = await chrome.tabs.sendMessage(tab.id, {
-          action: 'extractAlbumData',
-          srcUrl: info.srcUrl,
-          linkUrl: info.linkUrl,
-          pageUrl: info.pageUrl,
-        });
-      } catch (injectErr) {
-        console.error('Failed to inject content script:', injectErr.message);
-        throw new Error(
-          'Could not communicate with page. Try refreshing RateYourMusic.',
-          { cause: injectErr }
-        );
-      }
-    }
-
-    if (!albumData || albumData.error) {
-      console.error('Content script returned error:', albumData?.error);
-      throw new Error(
-        albumData?.error ||
-          'Failed to extract album data. Make sure you are on an album page.'
-      );
-    }
-
-    if (!albumData.artist || !albumData.album) {
-      console.error('Invalid album data received:', albumData);
-      throw new Error(
-        `Could not extract album information from page. Artist: "${albumData?.artist}", Album: "${albumData?.album}"`
-      );
-    }
-
-    console.log('Extracted album data:', albumData);
-
-    // Search MusicBrainz for the album
-    console.log('Searching MusicBrainz for album...');
-
-    const searchQuery = `${albumData.artist} ${albumData.album}`;
-    const mbEndpoint = `release-group/?query=${searchQuery}&type=album|ep&fmt=json&limit=5`;
-
-    const mbResponse = await fetchWithTimeout(
-      `${SUSHE_API_BASE}/api/proxy/musicbrainz?endpoint=${encodeURIComponent(mbEndpoint)}&priority=high`,
-      { headers: getAuthHeaders() },
-      15000 // 15 second timeout for MusicBrainz
-    );
-
-    if (mbResponse.status === 401) {
-      await handleUnauthorized();
-      throw new Error('Authentication failed. Please login again.');
-    }
-
-    if (!mbResponse.ok) {
-      throw new Error('Failed to search MusicBrainz');
-    }
-
-    const mbData = await mbResponse.json();
-    const releaseGroups = mbData['release-groups'] || [];
-
-    if (releaseGroups.length === 0) {
-      throw new Error(
-        'Album not found in MusicBrainz. Try adding manually in SuShe Online.'
-      );
-    }
-
-    // Take the first (best) match
-    const releaseGroup = releaseGroups[0];
-    console.log('Found release group:', releaseGroup);
-
-    // Note: Cover images are now fetched asynchronously on the backend
-    // This saves ~650KB per PATCH request and makes the extension feel instant
-
-    // Note: Duplicate check now handled server-side via PATCH endpoint
-    // No need to fetch entire list - saves bandwidth and time!
-
-    // Get artist country from MusicBrainz (send 2-letter code to server for resolution)
-    let artistCountry = '';
-    if (
-      releaseGroup['artist-credit'] &&
-      releaseGroup['artist-credit'].length > 0
-    ) {
-      const artistId = releaseGroup['artist-credit'][0].artist.id;
-      try {
-        const artistEndpoint = `artist/${artistId}?fmt=json`;
-        const artistResponse = await fetchWithTimeout(
-          `${SUSHE_API_BASE}/api/proxy/musicbrainz?endpoint=${encodeURIComponent(artistEndpoint)}&priority=normal`,
-          { headers: getAuthHeaders() },
-          15000 // 15 second timeout
-        );
-
-        if (artistResponse.ok) {
-          const artistData = await artistResponse.json();
-          // Send 2-letter country code directly - server will resolve to full name
-          artistCountry = artistData.country || '';
-          if (artistCountry) {
-            console.log(`Got artist country code: ${artistCountry}`);
-          }
-        }
-      } catch (error) {
-        console.warn('Could not fetch artist country:', error);
-      }
-    }
-
-    // Build album object to add
-    // Genres are extracted from the RYM page by the content script
-    // Cover images are now fetched asynchronously on the backend
-    const newAlbum = {
-      artist: albumData.artist,
-      album: albumData.album,
-      album_id: releaseGroup.id || '',
-      release_date: releaseGroup['first-release-date'] || '',
-      country: artistCountry,
-      genre_1: albumData.genre_1 || '',
-      genre_2: albumData.genre_2 || '',
-      comments: '',
-      tracks: null,
-      primary_track: null,
-      secondary_track: null,
-    };
-
-    console.log('Album genres from RYM:', {
-      genre_1: albumData.genre_1,
-      genre_2: albumData.genre_2,
-    });
-
-    // Add album via incremental PATCH endpoint (much faster than full list replacement)
-    console.log('Adding album to list via PATCH...');
-    const saveResponse = await fetchWithTimeout(
-      `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listId)}/items`,
-      {
-        method: 'PATCH',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ added: [newAlbum] }),
-      },
-      15000 // 15 second timeout (vs 60s for full list - much faster!)
-    );
-
-    console.log('Save response status:', saveResponse.status);
-
-    if (!saveResponse.ok) {
-      const errorText = await saveResponse.text();
-      console.error('Save failed:', errorText);
-
-      // Handle specific error cases
-      if (saveResponse.status === 401) {
-        await handleUnauthorized();
-        await showErrorMenu('Not logged in');
-        throw new Error(
-          'Not authenticated. Please click the extension icon and login again.'
-        );
-      }
-
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch {
-        throw new Error(`Failed to add album (HTTP ${saveResponse.status})`);
-      }
-      throw new Error(errorData.error || 'Failed to add album');
-    }
-
-    // Parse response to check for duplicates
-    const result = await saveResponse.json();
-    console.log('Add result:', result);
-
-    // Check if album was a duplicate (server-side detection)
-    if (result.duplicates && result.duplicates.length > 0) {
-      console.log('Album already exists in list');
-      showNotificationWithImage(
-        `⚠️   Already in ${listName}   ⚠️`,
-        `${albumData.album} by ${albumData.artist}`,
-        rymCoverUrl
-      );
-      return;
-    }
-
-    // Success notification with the same RYM cover image
-    // This provides visual consistency and shows the album cover immediately
-    showNotificationWithImage(
-      `✅   Added to ${listName}   ✅`,
-      `${albumData.album} by ${albumData.artist}`,
-      rymCoverUrl
-    );
-  } catch (error) {
-    console.error('Error adding album:', error);
-    showNotification(
-      '❌ Error',
-      error.message || 'Failed to add album to list'
-    );
-  }
+  await albumAddService.addAlbumToList(info, tab, listId, listName);
 }
 
 // Handle notification clicks (for install notification)
 chrome.notifications.onClicked.addListener((notificationId) => {
-  if (notificationId === 'sushe-welcome') {
+  if (notificationId === NOTIFICATIONS.WELCOME_ID) {
     // Open options page for first-time setup
     chrome.runtime.openOptionsPage();
-    chrome.notifications.clear('sushe-welcome');
+    chrome.notifications.clear(NOTIFICATIONS.WELCOME_ID);
   }
 });
 
 // Listen for messages from content script or popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Handle async operations with proper error handling
-  if (message.action === 'refreshLists') {
+  if (message.action === ACTIONS.REFRESH_LISTS) {
     // Async operation - keep channel open
     (async () => {
       try {
@@ -1044,16 +686,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open for async response
   }
 
-  if (message.action === 'updateApiUrl') {
+  if (message.action === ACTIONS.UPDATE_API_URL) {
     // Async operation - keep channel open
     (async () => {
       try {
         await ensureStateLoaded();
         SUSHE_API_BASE = message.apiUrl;
         console.log('API URL updated to:', SUSHE_API_BASE);
-        listsLastFetched = 0; // Force refresh with new URL
-        userLists = [];
-        await createContextMenus();
+        clearListCacheInMemory();
+        await chrome.storage.local.set({
+          [STORAGE_KEYS.API_URL]: message.apiUrl,
+        });
+        await clearStoredListCache();
         sendResponse({ success: true });
       } catch (error) {
         console.error('Error updating API URL:', error);
@@ -1063,7 +707,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.action === 'getApiUrl') {
+  if (message.action === ACTIONS.GET_API_URL) {
     // Async operation - ensure state loaded first
     (async () => {
       try {
@@ -1078,7 +722,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // Centralized logout handler (fixes Issue #6)
-  if (message.action === 'logout') {
+  if (message.action === ACTIONS.LOGOUT) {
     (async () => {
       try {
         await performLogout(true);
@@ -1092,11 +736,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // Get authentication status (for popup/options to check)
-  if (message.action === 'getAuthStatus') {
+  if (message.action === ACTIONS.GET_AUTH_STATUS) {
     (async () => {
       try {
-        await ensureStateLoaded();
-        const state = await loadFullState();
+        const state = await ensureStateLoaded();
         sendResponse({
           isAuthenticated: state.isValid,
           hasToken: !!state.authToken,
@@ -1111,9 +754,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === ACTIONS.GET_POPUP_STATE) {
+    (async () => {
+      try {
+        await ensureStateLoaded();
+        const auth = getAuthStatusResponse();
+
+        if (!SUSHE_API_BASE || !AUTH_TOKEN) {
+          sendResponse({
+            success: true,
+            auth,
+            lists: userListsByYear,
+            flatLists: userLists,
+            count: userLists.length,
+            fromCache: true,
+            stale: true,
+            lastFetched: listsLastFetched,
+          });
+          return;
+        }
+
+        if (userLists.length > 0) {
+          sendResponse({ auth, ...getListStateResponse({ fromCache: true }) });
+          fetchUserLists(false).catch((error) => {
+            console.error('[getPopupState] Background refresh failed:', error);
+          });
+          return;
+        }
+
+        const fetchResult = await fetchUserLists(false);
+        sendResponse({ auth, ...getListStateResponse(fetchResult) });
+      } catch (error) {
+        console.error('[getPopupState] Error:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
   // Get lists from background (single source of truth for popup)
   // This ensures popup and context menu always show the same data
-  if (message.action === 'getLists') {
+  if (message.action === ACTIONS.GET_LISTS) {
     (async () => {
       try {
         console.log(
@@ -1121,9 +802,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           message.forceRefresh
         );
 
+        await ensureStateLoaded();
+
+        if (!message.forceRefresh && AUTH_TOKEN && userLists.length > 0) {
+          const meta = getListResponseMeta({ fromCache: true });
+          sendResponse({
+            success: true,
+            lists: userListsByYear,
+            flatLists: userLists,
+            count: userLists.length,
+            fromCache: meta.fromCache,
+            stale: meta.stale,
+            lastFetched: meta.lastFetched,
+          });
+
+          fetchUserLists(false).catch((error) => {
+            console.error('[getLists] Background refresh failed:', error);
+          });
+          return;
+        }
+
         // Fetch lists (and update context menu as a side effect)
         // forceRefresh bypasses cache to get fresh data
-        await fetchUserLists(message.forceRefresh || false);
+        const fetchResult = await fetchUserLists(message.forceRefresh || false);
+        const meta = getListResponseMeta(fetchResult);
 
         // Return the lists data that's now cached in background
         sendResponse({
@@ -1131,6 +833,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           lists: userListsByYear,
           flatLists: userLists,
           count: userLists.length,
+          fromCache: meta.fromCache,
+          stale: meta.stale,
+          lastFetched: meta.lastFetched,
         });
 
         console.log('[getLists] Returned', userLists.length, 'lists to popup');
@@ -1144,14 +849,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // RYM page loaded - refresh lists to keep context menu fresh
   // This ensures the menu is always up-to-date when browsing RateYourMusic
-  if (message.action === 'rymPageLoaded') {
+  if (message.action === ACTIONS.RYM_PAGE_LOADED) {
     (async () => {
       try {
         console.log('[RYM Page Load] Refreshing lists for context menu...');
 
-        // Always force refresh - server has 5-minute cache to prevent DB hammering
-        // This gives us the best UX (always fresh) with minimal server impact
-        await fetchUserLists(true);
+        // Page loads are passive; avoid forced refreshes while browsing RYM.
+        await fetchUserLists(false);
 
         console.log('[RYM Page Load] Context menu refreshed successfully');
         sendResponse({ success: true });

@@ -4,6 +4,7 @@
 // Access shared modules from globalThis
 const { fetchWithTimeout } = globalThis.SharedUtils;
 const { getAuthState } = globalThis.AuthState;
+const { ACTIONS, API, STORAGE_KEYS } = globalThis.ExtensionConstants;
 
 // Store interval reference for cleanup
 let authCheckInterval = null;
@@ -38,12 +39,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Remove trailing slash if present
       const cleanUrl = apiUrl.replace(/\/$/, '');
 
-      // Save to storage
-      await chrome.storage.local.set({ apiUrl: cleanUrl });
-
-      // Notify background script to update
+      // Notify background script to persist the URL and rebuild extension state.
       await chrome.runtime.sendMessage({
-        action: 'updateApiUrl',
+        action: ACTIONS.UPDATE_API_URL,
         apiUrl: cleanUrl,
       });
 
@@ -51,9 +49,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         'Settings saved successfully! The extension will now use: ' + cleanUrl,
         'success'
       );
-
-      // Clear lists cache to force refresh with new URL
-      await chrome.storage.local.remove(['userLists', 'listsLastFetched']);
     });
 
   // Test connection button
@@ -72,7 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       // Try to fetch from the API
       const response = await fetchWithTimeout(
-        `${apiUrl}/api/lists`,
+        `${apiUrl}${API.LISTS}`,
         {
           headers: {
             Accept: 'application/json',
@@ -110,7 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const loginUrl = `${apiUrl}/extension/auth`;
+    const loginUrl = `${apiUrl}${API.EXTENSION_AUTH}`;
 
     // Open login page in new tab
     chrome.tabs.create({ url: loginUrl });
@@ -153,7 +148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       confirm('Are you sure you want to logout? You will need to login again.')
     ) {
       // Use centralized logout in background script (fixes Issue #6)
-      await chrome.runtime.sendMessage({ action: 'logout' });
+      await chrome.runtime.sendMessage({ action: ACTIONS.LOGOUT });
 
       await updateAuthStatus();
       showStatus('Logged out successfully', 'success');
@@ -201,7 +196,7 @@ async function updateAuthStatus() {
     logoutBtn.style.display = 'none';
 
     // Trigger cleanup via centralized logout
-    await chrome.runtime.sendMessage({ action: 'logout' });
+    await chrome.runtime.sendMessage({ action: ACTIONS.LOGOUT });
     return;
   }
 
@@ -224,7 +219,7 @@ async function updateAuthStatus() {
   // Verify token is valid by checking with API (for options page, we do full validation)
   try {
     const response = await fetchWithTimeout(
-      `${authState.apiUrl}/api/lists`,
+      `${authState.apiUrl}${API.LISTS}`,
       {
         headers: {
           Authorization: `Bearer ${authState.token}`,
@@ -247,7 +242,7 @@ async function updateAuthStatus() {
       logoutBtn.style.display = 'none';
 
       // Trigger cleanup via centralized logout
-      await chrome.runtime.sendMessage({ action: 'logout' });
+      await chrome.runtime.sendMessage({ action: ACTIONS.LOGOUT });
     } else {
       authStatusEl.innerHTML = `<span style="color: #6b7280;">○ Unable to verify (HTTP ${response.status})</span>`;
       loginBtn.style.display = 'inline-block';
@@ -264,7 +259,10 @@ async function updateAuthStatus() {
 // Listen for storage changes to update UI
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'local') {
-    if (changes.authToken || changes.tokenExpiresAt) {
+    if (
+      changes[STORAGE_KEYS.AUTH_TOKEN] ||
+      changes[STORAGE_KEYS.TOKEN_EXPIRES_AT]
+    ) {
       updateAuthStatus();
     }
   }

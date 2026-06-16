@@ -1,13 +1,12 @@
 // Popup script for SuShe Online extension
-// Uses shared auth-state.js and shared-utils.js (loaded via popup.html)
+// Renders background-owned extension state.
 
-// Access shared modules from globalThis
-const { getAuthState } = globalThis.AuthState;
+const { ACTIONS, STORAGE_KEYS, API } = globalThis.ExtensionConstants;
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Load state and update UI
-  // NOTE: loadLists() now uses background as single source of truth
-  // This automatically refreshes both popup AND context menu with forceRefresh: true
+  // NOTE: loadLists() now uses background as single source of truth.
+  // It shows cached lists immediately and only refreshes when the cache is stale.
   await loadLists();
 
   // Set up event listeners
@@ -20,7 +19,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Listen for storage changes to auto-refresh when auth token changes
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'local') {
-    if (changes.authToken || changes.tokenExpiresAt) {
+    if (
+      changes[STORAGE_KEYS.AUTH_TOKEN] ||
+      changes[STORAGE_KEYS.TOKEN_EXPIRES_AT] ||
+      changes[STORAGE_KEYS.LISTS_LAST_FETCHED]
+    ) {
       console.log('Auth state changed, reloading lists');
       loadLists();
     }
@@ -34,58 +37,56 @@ async function loadLists() {
   const loginBtn = document.getElementById('loginBtn');
   const logoutBtn = document.getElementById('logoutBtn');
 
-  // Get auth state from shared module (always reads from storage)
-  const authState = await getAuthState();
-
-  // Show/hide buttons based on auth state (fixes Issue #5 - consistent validation)
-  if (authState.isValid) {
-    loginBtn.style.display = 'none';
-    logoutBtn.style.display = 'block';
-  } else {
-    loginBtn.style.display = 'block';
-    logoutBtn.style.display = 'none';
-
-    // If token existed but is expired, show appropriate message
-    if (authState.token && authState.isExpired) {
-      statusEl.innerHTML =
-        '<div class="status error">Session expired. Please login again.</div>';
-      listsEl.style.display = 'none';
-      return;
-    }
-  }
-
-  // Check if URL is configured
-  if (!authState.apiUrl) {
-    statusEl.innerHTML =
-      '<div class="status error">Not configured. Click Settings to set your SuShe Online URL.</div>';
-    listsEl.style.display = 'none';
-    return;
-  }
-
-  // Check if authenticated
-  if (!authState.isValid) {
-    statusEl.innerHTML =
-      '<div class="status error">Not logged in. Click Login to authenticate.</div>';
-    listsEl.style.display = 'none';
-    return;
-  }
-
-  statusEl.innerHTML = '<div class="status info">Loading your lists...</div>';
-
   try {
-    // Get lists from background (single source of truth)
-    // This ensures popup and context menu always show the same data
-    // forceRefresh: true ensures we get fresh data when opening popup
-    console.log('[Popup] Requesting lists from background...');
     const response = await chrome.runtime.sendMessage({
-      action: 'getLists',
-      forceRefresh: true,
+      action: ACTIONS.GET_POPUP_STATE,
     });
 
     if (!response.success) {
-      throw new Error(response.error || 'Failed to get lists from background');
+      throw new Error(response.error || 'Failed to get extension state');
     }
 
+    const authState = {
+      apiUrl: response.auth?.apiUrl || null,
+      isValid: !!response.auth?.isAuthenticated,
+      isExpired: !!response.auth?.isExpired,
+      token: response.auth?.hasToken ? 'present' : null,
+    };
+
+    // Show/hide buttons based on auth state (fixes Issue #5 - consistent validation)
+    if (authState.isValid) {
+      loginBtn.style.display = 'none';
+      logoutBtn.style.display = 'block';
+    } else {
+      loginBtn.style.display = 'block';
+      logoutBtn.style.display = 'none';
+
+      // If token existed but is expired, show appropriate message
+      if (authState.token && authState.isExpired) {
+        statusEl.innerHTML =
+          '<div class="status error">Session expired. Please login again.</div>';
+        listsEl.style.display = 'none';
+        return;
+      }
+    }
+
+    // Check if URL is configured
+    if (!authState.apiUrl) {
+      statusEl.innerHTML =
+        '<div class="status error">Not configured. Click Settings to set your SuShe Online URL.</div>';
+      listsEl.style.display = 'none';
+      return;
+    }
+
+    // Check if authenticated
+    if (!authState.isValid) {
+      statusEl.innerHTML =
+        '<div class="status error">Not logged in. Click Login to authenticate.</div>';
+      listsEl.style.display = 'none';
+      return;
+    }
+
+    statusEl.innerHTML = '<div class="status info">Loading your lists...</div>';
     console.log('[Popup] Received', response.count, 'lists from background');
 
     if (response.count === 0) {
@@ -116,14 +117,15 @@ async function loadLists() {
     });
 
     listsEl.style.display = 'block';
-    statusEl.innerHTML = `<div class="status success">${response.count} list(s) loaded</div>`;
+    const cacheNotice = response.stale ? ' (cached)' : '';
+    statusEl.innerHTML = `<div class="status success">${response.count} list(s) loaded${cacheNotice}</div>`;
   } catch (error) {
     console.error('[Popup] Failed to load lists:', error);
 
     // Handle specific error cases
     if (error.message && error.message.includes('401')) {
       // Token is invalid - trigger centralized logout
-      await chrome.runtime.sendMessage({ action: 'logout' });
+      await chrome.runtime.sendMessage({ action: ACTIONS.LOGOUT });
       statusEl.innerHTML =
         '<div class="status error">Session expired. Please login again.</div>';
       loginBtn.style.display = 'block';
@@ -143,7 +145,7 @@ async function refreshLists() {
   btn.innerHTML = '<span class="icon">↻</span> Refreshing...';
 
   // Tell background script to refresh
-  chrome.runtime.sendMessage({ action: 'refreshLists' }, (_response) => {
+  chrome.runtime.sendMessage({ action: ACTIONS.REFRESH_LISTS }, (_response) => {
     btn.disabled = false;
     btn.innerHTML = '<span class="icon">↻</span> Refresh Lists';
     loadLists();
@@ -156,7 +158,9 @@ function openOptions() {
 }
 
 async function openLogin() {
-  const authState = await getAuthState();
+  const authState = await chrome.runtime.sendMessage({
+    action: ACTIONS.GET_API_URL,
+  });
 
   if (!authState.apiUrl) {
     alert('Please configure your SuShe Online URL in Settings first.');
@@ -164,12 +168,12 @@ async function openLogin() {
     return;
   }
   // Open login page
-  chrome.tabs.create({ url: `${authState.apiUrl}/extension/auth` });
+  chrome.tabs.create({ url: `${authState.apiUrl}${API.EXTENSION_AUTH}` });
 }
 
 async function logout() {
   // Use centralized logout in background script (fixes Issue #6)
-  await chrome.runtime.sendMessage({ action: 'logout' });
+  await chrome.runtime.sendMessage({ action: ACTIONS.LOGOUT });
 
   // UI will update via storage.onChanged listener, but also refresh immediately
   await loadLists();

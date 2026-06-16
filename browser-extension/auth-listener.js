@@ -3,6 +3,8 @@
 
 console.log('SuShe auth listener loaded');
 
+const { STORAGE_KEYS } = globalThis.ExtensionConstants;
+
 // Listen for custom event from the page
 window.addEventListener('sushe-auth-complete', async (event) => {
   console.log('Auth event received:', event.detail);
@@ -20,8 +22,8 @@ window.addEventListener('sushe-auth-complete', async (event) => {
       // Token expiry is checked client-side by auth-state.js before any API operation
       // If expired, auth will be cleared automatically
       await chrome.storage.local.set({
-        authToken: token,
-        tokenExpiresAt: expiresAtMs,
+        [STORAGE_KEYS.AUTH_TOKEN]: token,
+        [STORAGE_KEYS.TOKEN_EXPIRES_AT]: expiresAtMs,
       });
 
       console.log(

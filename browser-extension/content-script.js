@@ -4,11 +4,41 @@
 
 console.log('SuShe Online content script loaded on RateYourMusic');
 
+const { ACTIONS, STORAGE_KEYS } = globalThis.ExtensionConstants;
+
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Content script received message:', message.action);
 
-  if (message.action === 'extractAlbumData') {
+  if (message.action === ACTIONS.EXTRACT_ALBUM_IDENTITY) {
+    (async () => {
+      try {
+        console.log('Extracting album identity from page...');
+        sendResponse(extractAlbumIdentityFromPage(message));
+      } catch (error) {
+        console.error('Error extracting album identity:', error);
+        sendResponse({ error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.action === ACTIONS.FETCH_GENRES_FOR_ALBUM) {
+    (async () => {
+      try {
+        const genres = message.albumUrl
+          ? await fetchGenresFromAlbumPage(message.albumUrl)
+          : { genre_1: '', genre_2: '' };
+        sendResponse(genres);
+      } catch (error) {
+        console.error('Error fetching album genres:', error);
+        sendResponse({ genre_1: '', genre_2: '' });
+      }
+    })();
+    return true;
+  }
+
+  if (message.action === ACTIONS.EXTRACT_ALBUM_DATA) {
     // Handle async extraction
     (async () => {
       try {
@@ -32,16 +62,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Extract album information from RateYourMusic page
-async function extractAlbumDataFromPage(context) {
+function extractAlbumIdentityFromPage(context) {
   const data = {
     artist: '',
     album: '',
     genre_1: '',
     genre_2: '',
+    albumUrl: null,
   };
 
   // Parse from URL - RYM URLs are typically: /release/album/artist_name/album_name/
-  let albumUrl = null;
   if (context.linkUrl || context.pageUrl) {
     const url = context.linkUrl || context.pageUrl;
     const match = url.match(/\/release\/[^/]+\/([^/]+)\/([^/]+)/);
@@ -57,7 +87,7 @@ async function extractAlbumDataFromPage(context) {
       data.album = cleanName(data.album);
 
       // Store the album URL for potential genre fetching
-      albumUrl = url;
+      data.albumUrl = url;
     }
   }
 
@@ -76,16 +106,24 @@ async function extractAlbumDataFromPage(context) {
   // Extract genres - try context-aware extraction first (for chart/list pages),
   // then fall back to page-level extraction (for album detail pages)
   const contextGenres = extractGenresFromContext(context);
-  let genres = contextGenres || extractGenresFromPage();
-
-  // If no genres found locally, fetch the album detail page to get accurate genres
-  if (!genres.genre_1 && albumUrl) {
-    console.log('No genres found locally, fetching album page:', albumUrl);
-    genres = await fetchGenresFromAlbumPage(albumUrl);
-  }
+  const genres = contextGenres || extractGenresFromPage();
 
   data.genre_1 = genres.genre_1;
   data.genre_2 = genres.genre_2;
+
+  return data;
+}
+
+async function extractAlbumDataFromPage(context) {
+  const data = extractAlbumIdentityFromPage(context);
+
+  // If no genres found locally, fetch the album detail page to get accurate genres
+  if (!data.genre_1 && data.albumUrl) {
+    console.log('No genres found locally, fetching album page:', data.albumUrl);
+    const genres = await fetchGenresFromAlbumPage(data.albumUrl);
+    data.genre_1 = genres.genre_1;
+    data.genre_2 = genres.genre_2;
+  }
 
   return data;
 }
@@ -289,17 +327,19 @@ function cleanName(name) {
   return name;
 }
 
-// Notify background when RYM page loads to trigger list refresh
-// This ensures context menu is always fresh when browsing RateYourMusic
-// Small delay to batch rapid navigation and avoid hammering on quick page loads
 setTimeout(() => {
-  chrome.runtime
-    .sendMessage({ action: 'rymPageLoaded' })
-    .then(() => {
-      console.log('[Content Script] Notified background of RYM page load');
-    })
-    .catch(() => {
-      // Ignore errors - background might not be ready yet
-      // This is normal during extension startup
+  chrome.storage.local
+    .get([STORAGE_KEYS.AUTO_REFRESH_SUPPORTED])
+    .then((data) => {
+      if (data[STORAGE_KEYS.AUTO_REFRESH_SUPPORTED] !== false) return;
+
+      chrome.runtime
+        .sendMessage({ action: ACTIONS.RYM_PAGE_LOADED })
+        .then(() => {
+          console.log('[Content Script] Notified background of RYM page load');
+        })
+        .catch(() => {
+          // Ignore errors - background might not be ready yet.
+        });
     });
 }, 500); // 500ms delay to batch rapid page loads
