@@ -20,7 +20,10 @@ fi
 
 echo "📋 Including files:"
 echo "  ✓ manifest.json"
+echo "  ✓ extension-constants.js"
 echo "  ✓ background.js"
+echo "  ✓ context-menu-service.js"
+echo "  ✓ album-add-service.js"
 echo "  ✓ content-script.js"
 echo "  ✓ auth-listener.js"
 echo "  ✓ auth-state.js"
@@ -35,7 +38,10 @@ echo ""
 # Create the ZIP file with only the necessary files
 zip -q "$OUTPUT_FILE" \
     manifest.json \
+    extension-constants.js \
     background.js \
+    context-menu-service.js \
+    album-add-service.js \
     content-script.js \
     auth-listener.js \
     auth-state.js \
@@ -69,4 +75,3 @@ echo "4. Fill out the store listing"
 echo "5. Submit for review"
 echo ""
 echo "Good luck! 🚀"
-
