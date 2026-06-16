@@ -22,6 +22,9 @@
     STORAGE_KEYS.USER_LISTS_BY_YEAR,
     STORAGE_KEYS.LISTS_LAST_FETCHED,
     STORAGE_KEYS.HAS_EVER_AUTHENTICATED,
+    STORAGE_KEYS.LAST_USED_LIST,
+    STORAGE_KEYS.ALBUM_PRESENCE_INDEX,
+    STORAGE_KEYS.ALBUM_PRESENCE_LAST_FETCHED,
   ];
 
   /**
@@ -116,6 +119,7 @@
       STORAGE_KEYS.USER_LISTS,
       STORAGE_KEYS.USER_LISTS_BY_YEAR,
       STORAGE_KEYS.LISTS_LAST_FETCHED,
+      STORAGE_KEYS.LAST_USED_LIST,
     ]);
 
     const token = data[STORAGE_KEYS.AUTH_TOKEN] || null;
@@ -138,6 +142,7 @@
         : [],
       userListsByYear: data[STORAGE_KEYS.USER_LISTS_BY_YEAR] || {},
       listsLastFetched: data[STORAGE_KEYS.LISTS_LAST_FETCHED] || 0,
+      lastUsedList: data[STORAGE_KEYS.LAST_USED_LIST] || null,
       isValid: !!token && !expired,
       isExpired: expired,
     };

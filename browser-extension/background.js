@@ -5,9 +5,11 @@
 // eslint-disable-next-line no-undef
 importScripts(
   'extension-constants.js',
+  'album-identity-service.js',
   'shared-utils.js',
   'auth-state.js',
   'context-menu-service.js',
+  'album-presence-service.js',
   'album-api-service.js',
   'album-add-service.js'
 );
@@ -29,6 +31,7 @@ let listFetchInFlight = null;
 let listFetchInFlightForce = false;
 let menuRefreshAfterHidden = false;
 let authCleanupInProgress = false;
+let lastUsedList = null;
 const {
   STORAGE_KEYS,
   LIST_CACHE_DURATION_MS,
@@ -59,6 +62,20 @@ const contextMenuService =
     logger: console,
   });
 
+const albumPresenceService =
+  globalThis.AlbumPresenceService.createAlbumPresenceService({
+    chrome,
+    constants: globalThis.ExtensionConstants,
+    albumIdentity: globalThis.AlbumIdentity,
+    fetchWithTimeout,
+    ensureStateLoaded,
+    getApiBase: () => SUSHE_API_BASE,
+    getAuthHeaders,
+    refreshListMetadata: () => fetchUserLists(false),
+    getListMetadata: () => ({ userLists, userListsByYear }),
+    logger: console,
+  });
+
 const albumAddService = globalThis.AlbumAddService.createAlbumAddService({
   chrome,
   constants: globalThis.ExtensionConstants,
@@ -71,6 +88,7 @@ const albumAddService = globalThis.AlbumAddService.createAlbumAddService({
   getApiBase: () => SUSHE_API_BASE,
   getAuthHeaders,
   showErrorMenu,
+  onAlbumAdded,
   logger: console,
 });
 
@@ -132,6 +150,60 @@ function getListStateResponse(fetchResult = {}) {
   };
 }
 
+function findListById(listId) {
+  return (
+    userLists.find((list) => list._id === listId) ||
+    Object.values(userListsByYear)
+      .flat()
+      .find((list) => list._id === listId) ||
+    null
+  );
+}
+
+async function saveLastUsedList(list) {
+  if (!list?._id) return;
+
+  lastUsedList = {
+    id: list._id,
+    name: list.name || 'List',
+    year: list.year || null,
+  };
+
+  await chrome.storage.local.set({
+    [STORAGE_KEYS.LAST_USED_LIST]: lastUsedList,
+  });
+}
+
+function notifyAlbumAddedToTab(tabId, album, list) {
+  if (!tabId) return;
+
+  chrome.tabs
+    .sendMessage(tabId, {
+      action: ACTIONS.ALBUM_ADDED_TO_LIST,
+      album,
+      list: {
+        listId: list._id,
+        listName: list.name || 'List',
+        year: list.year || null,
+      },
+    })
+    .catch((error) => {
+      console.debug('Could not update RYM badge immediately:', error.message);
+    });
+}
+
+async function onAlbumAdded({ listId, listName, album, tabId }) {
+  const list = findListById(listId) || { _id: listId, name: listName };
+  await saveLastUsedList(list);
+  albumPresenceService.rememberAlbumInList(album, {
+    id: list._id,
+    name: list.name || listName || 'List',
+    year: list.year || null,
+  });
+  notifyAlbumAddedToTab(tabId, album, list);
+  await updateContextMenuWithLists();
+}
+
 function getAuthStatusResponse() {
   return {
     isAuthenticated: !!AUTH_TOKEN,
@@ -145,6 +217,7 @@ function clearListCacheInMemory() {
   userLists = [];
   userListsByYear = {};
   listsLastFetched = 0;
+  albumPresenceService.clear();
 }
 
 async function clearStoredListCache() {
@@ -200,6 +273,7 @@ async function ensureStateLoaded(forceReload = false) {
       userLists,
       userListsByYear,
       listsLastFetched,
+      lastUsedList,
       isValid: !!AUTH_TOKEN,
       isExpired: false,
     };
@@ -216,6 +290,7 @@ async function ensureStateLoaded(forceReload = false) {
   userLists = state.userLists || [];
   userListsByYear = state.userListsByYear || {};
   listsLastFetched = state.listsLastFetched;
+  lastUsedList = state.lastUsedList || null;
   stateLoaded = true;
 
   // If token was expired, clear all auth data (fixes Issue #3)
@@ -229,6 +304,7 @@ async function ensureStateLoaded(forceReload = false) {
     hasToken: !!AUTH_TOKEN,
     listsCount: userLists.length,
     yearsCount: Object.keys(userListsByYear).length,
+    hasLastUsedList: !!lastUsedList,
     isValid: state.isValid,
   });
 
@@ -243,6 +319,7 @@ async function performLogout(showNotificationMsg = true) {
   // Clear in-memory state
   AUTH_TOKEN = null;
   TOKEN_EXPIRES_AT = null;
+  lastUsedList = null;
   clearListCacheInMemory();
   stateLoaded = true;
 
@@ -406,6 +483,13 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
 
       // Invalidate cache when API URL changes
       clearListCacheInMemory();
+      lastUsedList = null;
+      await chrome.storage.local.remove([STORAGE_KEYS.LAST_USED_LIST]);
+      createContextMenus();
+    }
+
+    if (changes[STORAGE_KEYS.LAST_USED_LIST]) {
+      lastUsedList = changes[STORAGE_KEYS.LAST_USED_LIST]?.newValue || null;
       createContextMenus();
     }
   }
@@ -593,7 +677,11 @@ async function fetchUserListsInternal(forceRefresh = false) {
 // Update context menu with user's lists grouped by year
 async function updateContextMenuWithLists() {
   log('Updating context menu with lists by year:', userListsByYear);
-  await contextMenuService.updateWithLists(userListsByYear, userLists);
+  await contextMenuService.updateWithLists(
+    userListsByYear,
+    userLists,
+    lastUsedList
+  );
 }
 
 // Show welcome menu for first-time users
@@ -631,6 +719,18 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === MENU.LOGIN_ID) {
     // Use the loaded API URL (already loaded by ensureStateLoaded above)
     chrome.tabs.create({ url: `${SUSHE_API_BASE}${API.EXTENSION_AUTH}` });
+    return;
+  }
+
+  if (info.menuItemId === MENU.LAST_USED_ID) {
+    const listData = lastUsedList?.id ? findListById(lastUsedList.id) : null;
+    if (listData?._id) {
+      await addAlbumToList(info, tab, listData._id, listData.name);
+    } else {
+      await chrome.storage.local.remove([STORAGE_KEYS.LAST_USED_LIST]);
+      showNotification('Error', 'Last used list not found. Pick a list again.');
+      await updateContextMenuWithLists();
+    }
     return;
   }
 
@@ -846,6 +946,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     })();
     return true; // Keep channel open for async response
+  }
+
+  if (message.action === ACTIONS.GET_ALBUM_PRESENCE) {
+    (async () => {
+      try {
+        const matches = await albumPresenceService.getPresenceForAlbums(
+          Array.isArray(message.albums) ? message.albums : [],
+          { forceRefresh: !!message.forceRefresh }
+        );
+        sendResponse({ success: true, matches });
+      } catch (error) {
+        console.error('[getAlbumPresence] Error:', error);
+        sendResponse({ success: false, error: error.message, matches: {} });
+      }
+    })();
+    return true;
   }
 
   // RYM page loaded - refresh lists to keep context menu fresh

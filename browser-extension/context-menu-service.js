@@ -20,21 +20,26 @@
       return JSON.stringify({ kind, data });
     }
 
-    function buildListSignatureData(userListsByYear) {
+    function buildListSignatureData(userListsByYear, lastUsedList) {
       const years = Object.keys(userListsByYear).sort((a, b) => {
         if (a === 'Uncategorized') return 1;
         if (b === 'Uncategorized') return -1;
         return parseInt(b) - parseInt(a);
       });
 
-      return years.map((year) => ({
-        year,
-        lists: (userListsByYear[year] || []).map((list) => ({
-          id: list._id,
-          name: list.name,
-          count: list.count,
+      return {
+        lastUsedList: lastUsedList
+          ? { id: lastUsedList._id, name: lastUsedList.name }
+          : null,
+        years: years.map((year) => ({
+          year,
+          lists: (userListsByYear[year] || []).map((list) => ({
+            id: list._id,
+            name: list.name,
+            count: list.count,
+          })),
         })),
-      }));
+      };
     }
 
     async function removeAllMenus() {
@@ -86,10 +91,23 @@
       createMenu(menuOptions);
     }
 
-    async function updateWithLists(userListsByYear, userLists) {
+    function findListById(listId, userLists, userListsByYear) {
+      return (
+        userLists.find((list) => list._id === listId) ||
+        Object.values(userListsByYear)
+          .flat()
+          .find((list) => list._id === listId) ||
+        null
+      );
+    }
+
+    async function updateWithLists(userListsByYear, userLists, lastUsedList) {
+      const activeLastUsedList = lastUsedList?.id
+        ? findListById(lastUsedList.id, userLists, userListsByYear)
+        : null;
       const menuSignature = getSignature(
         'lists',
-        buildListSignatureData(userListsByYear)
+        buildListSignatureData(userListsByYear, activeLastUsedList)
       );
       if (activeMenuKind === 'lists' && lastMenuSignature === menuSignature) {
         return;
@@ -109,6 +127,14 @@
           activeMenuKind = 'lists';
           lastMenuSignature = menuSignature;
           return;
+        }
+
+        if (activeLastUsedList) {
+          menuListById[MENU.LAST_USED_ID] = activeLastUsedList;
+          createChildMenu(
+            MENU.LAST_USED_ID,
+            `Add to last used: ${activeLastUsedList.name}`
+          );
         }
 
         const years = Object.keys(userListsByYear).sort((a, b) => {
@@ -186,11 +212,7 @@
       const clickedListId = menuItemId.replace(MENU.LIST_PREFIX, '');
       return (
         menuListById[menuItemId] ||
-        userLists.find((list) => list._id === clickedListId) ||
-        Object.values(userListsByYear)
-          .flat()
-          .find((list) => list._id === clickedListId) ||
-        null
+        findListById(clickedListId, userLists, userListsByYear)
       );
     }
 

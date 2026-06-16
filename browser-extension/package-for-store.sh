@@ -21,10 +21,13 @@ fi
 echo "📋 Including files:"
 echo "  ✓ manifest.json"
 echo "  ✓ extension-constants.js"
+echo "  ✓ album-identity-service.js"
 echo "  ✓ background.js"
 echo "  ✓ context-menu-service.js"
+echo "  ✓ album-presence-service.js"
 echo "  ✓ album-api-service.js"
 echo "  ✓ album-add-service.js"
+echo "  ✓ rym-presence-badges.js"
 echo "  ✓ content-script.js"
 echo "  ✓ auth-listener.js"
 echo "  ✓ auth-state.js"
@@ -40,10 +43,13 @@ echo ""
 zip -q "$OUTPUT_FILE" \
     manifest.json \
     extension-constants.js \
+    album-identity-service.js \
     background.js \
     context-menu-service.js \
+    album-presence-service.js \
     album-api-service.js \
     album-add-service.js \
+    rym-presence-badges.js \
     content-script.js \
     auth-listener.js \
     auth-state.js \

@@ -87,8 +87,16 @@
    * @param {string} title - Notification title
    * @param {string} message - Notification message
    */
+  function createNotification(options) {
+    return new Promise((resolve) => {
+      chrome.notifications.create(options, () => {
+        resolve();
+      });
+    });
+  }
+
   function showNotification(title, message) {
-    chrome.notifications.create({
+    return createNotification({
       type: 'basic',
       iconUrl: 'icons/icon128.png',
       title: title,
@@ -121,7 +129,7 @@
       options.contextMessage = contextMessage;
     }
 
-    chrome.notifications.create(options);
+    return createNotification(options);
     // Let Chrome handle auto-dismiss naturally (progress bar will match timing)
   }
 

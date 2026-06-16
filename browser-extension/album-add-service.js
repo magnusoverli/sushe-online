@@ -14,6 +14,7 @@
       getApiBase,
       getAuthHeaders,
       showErrorMenu,
+      onAlbumAdded,
     } = deps;
     const albumApi =
       deps.albumApi || globalThis.AlbumApiService.createAlbumApiService(deps);
@@ -31,7 +32,12 @@
         try {
           await chromeApi.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['content-script.js'],
+            files: [
+              'extension-constants.js',
+              'album-identity-service.js',
+              'rym-presence-badges.js',
+              'content-script.js',
+            ],
           });
           await new Promise((resolve) => setTimeout(resolve, 200));
           return await chromeApi.tabs.sendMessage(tab.id, {
@@ -189,11 +195,22 @@
           return;
         }
 
-        showNotificationWithImage(
+        await showNotificationWithImage(
           `✅   Added to ${listName}   ✅`,
           `${albumData.album} by ${albumData.artist}`,
           rymCoverUrl
         );
+
+        if (typeof onAlbumAdded === 'function') {
+          onAlbumAdded({
+            album: newAlbum,
+            listId,
+            listName,
+            tabId: tab.id,
+          }).catch((error) => {
+            logger.warn('Post-add extension state update failed:', error);
+          });
+        }
       } catch (error) {
         logger.error('Error adding album:', error);
         showNotification(

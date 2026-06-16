@@ -10,9 +10,13 @@
     LISTS_LAST_FETCHED: 'listsLastFetched',
     HAS_EVER_AUTHENTICATED: 'hasEverAuthenticated',
     AUTO_REFRESH_SUPPORTED: 'autoRefreshSupported',
+    LAST_USED_LIST: 'lastUsedList',
+    ALBUM_PRESENCE_INDEX: 'albumPresenceIndex',
+    ALBUM_PRESENCE_LAST_FETCHED: 'albumPresenceLastFetched',
   };
 
   const LIST_CACHE_DURATION_MS = 60 * 1000;
+  const ALBUM_PRESENCE_CACHE_DURATION_MS = 5 * 60 * 1000;
 
   const MENU = {
     CONTEXTS: ['image', 'link'],
@@ -25,6 +29,7 @@
     ERROR_ID: 'sushe-error',
     LOGIN_ID: 'sushe-login',
     REFRESH_ID: 'sushe-refresh',
+    LAST_USED_ID: 'sushe-last-used',
   };
 
   const ACTIONS = {
@@ -39,6 +44,8 @@
     GET_POPUP_STATE: 'getPopupState',
     GET_LISTS: 'getLists',
     RYM_PAGE_LOADED: 'rymPageLoaded',
+    GET_ALBUM_PRESENCE: 'getAlbumPresence',
+    ALBUM_ADDED_TO_LIST: 'albumAddedToList',
   };
 
   const API = {
@@ -54,6 +61,7 @@
   globalThis.ExtensionConstants = {
     STORAGE_KEYS,
     LIST_CACHE_DURATION_MS,
+    ALBUM_PRESENCE_CACHE_DURATION_MS,
     MENU,
     ACTIONS,
     API,
