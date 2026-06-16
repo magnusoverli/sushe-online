@@ -4,28 +4,19 @@
   function createAlbumAddService(deps = {}) {
     const chromeApi = deps.chrome || chrome;
     const logger = deps.logger || console;
-    const { ACTIONS, API } = deps.constants || globalThis.ExtensionConstants;
-    const fetchWithTimeout = deps.fetchWithTimeout;
-    const showNotification = deps.showNotification;
-    const showNotificationWithImage = deps.showNotificationWithImage;
-    const validateAndCleanToken = deps.validateAndCleanToken;
-    const handleUnauthorized = deps.handleUnauthorized;
-    const ensureStateLoaded = deps.ensureStateLoaded;
-    const getApiBase = deps.getApiBase;
-    const getAuthHeaders = deps.getAuthHeaders;
-    const showErrorMenu = deps.showErrorMenu;
-
-    const artistCountryCache = new Map();
-    const maxArtistCountryCacheSize = 100;
-
-    function rememberArtistCountry(artistId, country) {
-      if (!artistId) return;
-      if (artistCountryCache.size >= maxArtistCountryCacheSize) {
-        const oldestKey = artistCountryCache.keys().next().value;
-        artistCountryCache.delete(oldestKey);
-      }
-      artistCountryCache.set(artistId, country || '');
-    }
+    const { ACTIONS } = deps.constants || globalThis.ExtensionConstants;
+    const {
+      showNotification,
+      showNotificationWithImage,
+      validateAndCleanToken,
+      handleUnauthorized,
+      ensureStateLoaded,
+      getApiBase,
+      getAuthHeaders,
+      showErrorMenu,
+    } = deps;
+    const albumApi =
+      deps.albumApi || globalThis.AlbumApiService.createAlbumApiService(deps);
 
     async function extractAlbumIdentity(info, tab) {
       try {
@@ -76,101 +67,6 @@
           logger.warn('Could not fetch fallback RYM genres:', error);
           return { genre_1: '', genre_2: '' };
         });
-    }
-
-    async function searchMusicBrainz(apiBase, albumData) {
-      const searchQuery = `${albumData.artist} ${albumData.album}`;
-      const mbEndpoint = `release-group/?query=${searchQuery}&type=album|ep&fmt=json&limit=5`;
-
-      const mbResponse = await fetchWithTimeout(
-        `${apiBase}${API.MUSICBRAINZ_PROXY}?endpoint=${encodeURIComponent(mbEndpoint)}&priority=high`,
-        { headers: getAuthHeaders() },
-        15000
-      );
-
-      if (mbResponse.status === 401) {
-        await handleUnauthorized();
-        throw new Error('Authentication failed. Please login again.');
-      }
-
-      if (!mbResponse.ok) {
-        throw new Error('Failed to search MusicBrainz');
-      }
-
-      const mbData = await mbResponse.json();
-      const releaseGroups = mbData['release-groups'] || [];
-
-      if (releaseGroups.length === 0) {
-        throw new Error(
-          'Album not found in MusicBrainz. Try adding manually in SuShe Online.'
-        );
-      }
-
-      return releaseGroups[0];
-    }
-
-    async function fetchArtistCountry(apiBase, releaseGroup) {
-      if (
-        !releaseGroup['artist-credit'] ||
-        releaseGroup['artist-credit'].length === 0
-      ) {
-        return '';
-      }
-
-      const artistId = releaseGroup['artist-credit'][0].artist.id;
-      try {
-        if (artistCountryCache.has(artistId)) {
-          return artistCountryCache.get(artistId);
-        }
-
-        const artistEndpoint = `artist/${artistId}?fmt=json`;
-        const artistResponse = await fetchWithTimeout(
-          `${apiBase}${API.MUSICBRAINZ_PROXY}?endpoint=${encodeURIComponent(artistEndpoint)}&priority=normal`,
-          { headers: getAuthHeaders() },
-          15000
-        );
-
-        if (!artistResponse.ok) return '';
-
-        const artistData = await artistResponse.json();
-        const artistCountry = artistData.country || '';
-        rememberArtistCountry(artistId, artistCountry);
-        if (artistCountry) {
-          logger.log(`Got artist country code: ${artistCountry}`);
-        }
-        return artistCountry;
-      } catch (error) {
-        logger.warn('Could not fetch artist country:', error);
-        return '';
-      }
-    }
-
-    function buildAlbumPayload(albumData, releaseGroup, artistCountry) {
-      return {
-        artist: albumData.artist,
-        album: albumData.album,
-        album_id: releaseGroup.id || '',
-        release_date: releaseGroup['first-release-date'] || '',
-        country: artistCountry,
-        genre_1: albumData.genre_1 || '',
-        genre_2: albumData.genre_2 || '',
-        comments: '',
-        tracks: null,
-        primary_track: null,
-        secondary_track: null,
-      };
-    }
-
-    async function saveAlbum(apiBase, listId, newAlbum) {
-      return fetchWithTimeout(
-        `${apiBase}${API.LISTS}/${encodeURIComponent(listId)}/items`,
-        {
-          method: 'PATCH',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({ added: [newAlbum] }),
-        },
-        15000
-      );
     }
 
     async function addAlbumToList(info, tab, listId, listName) {
@@ -224,15 +120,21 @@
 
         const genresPromise = fetchFallbackGenres(tab, albumData);
         logger.log('Searching MusicBrainz for album...');
-        const releaseGroup = await searchMusicBrainz(apiBase, albumData);
+        const releaseGroup = await albumApi.searchMusicBrainz(
+          apiBase,
+          albumData
+        );
         logger.log('Found release group:', releaseGroup);
 
-        const artistCountry = await fetchArtistCountry(apiBase, releaseGroup);
+        const artistCountry = await albumApi.fetchArtistCountry(
+          apiBase,
+          releaseGroup
+        );
         const genres = await genresPromise;
         albumData.genre_1 = genres.genre_1 || '';
         albumData.genre_2 = genres.genre_2 || '';
 
-        const newAlbum = buildAlbumPayload(
+        const newAlbum = albumApi.buildAlbumPayload(
           albumData,
           releaseGroup,
           artistCountry
@@ -244,7 +146,11 @@
         });
 
         logger.log('Adding album to list via PATCH...');
-        const saveResponse = await saveAlbum(apiBase, listId, newAlbum);
+        const saveResponse = await albumApi.saveAlbum(
+          apiBase,
+          listId,
+          newAlbum
+        );
         logger.log('Save response status:', saveResponse.status);
 
         if (!saveResponse.ok) {

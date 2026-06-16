@@ -23,6 +23,7 @@ echo "  ✓ manifest.json"
 echo "  ✓ extension-constants.js"
 echo "  ✓ background.js"
 echo "  ✓ context-menu-service.js"
+echo "  ✓ album-api-service.js"
 echo "  ✓ album-add-service.js"
 echo "  ✓ content-script.js"
 echo "  ✓ auth-listener.js"
@@ -41,6 +42,7 @@ zip -q "$OUTPUT_FILE" \
     extension-constants.js \
     background.js \
     context-menu-service.js \
+    album-api-service.js \
     album-add-service.js \
     content-script.js \
     auth-listener.js \

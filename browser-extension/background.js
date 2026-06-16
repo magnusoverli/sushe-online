@@ -8,6 +8,7 @@ importScripts(
   'shared-utils.js',
   'auth-state.js',
   'context-menu-service.js',
+  'album-api-service.js',
   'album-add-service.js'
 );
 
