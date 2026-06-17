@@ -130,10 +130,11 @@
         }
 
         if (activeLastUsedList) {
+          const lastUsedYear = activeLastUsedList.year || 'Uncategorized';
           menuListById[MENU.LAST_USED_ID] = activeLastUsedList;
           createChildMenu(
             MENU.LAST_USED_ID,
-            `Add to last used: ${activeLastUsedList.name}`
+            `Last used: ${lastUsedYear} - ${activeLastUsedList.name}`
           );
         }
 
