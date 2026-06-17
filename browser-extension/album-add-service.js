@@ -75,6 +75,32 @@
         });
     }
 
+    async function enrichAlbumCountry(apiBase, releaseGroup, albumId) {
+      if (!albumId) return;
+
+      const artistCountry = await albumApi.fetchArtistCountry(
+        apiBase,
+        releaseGroup
+      );
+      if (!artistCountry) return;
+
+      const response = await albumApi.updateAlbumMetadata(apiBase, [
+        { albumId, country: artistCountry },
+      ]);
+
+      if (response.status === 401) {
+        await handleUnauthorized();
+        return;
+      }
+
+      if (!response.ok) {
+        logger.warn(
+          'Could not update album country after add:',
+          response.status
+        );
+      }
+    }
+
     async function addAlbumToList(info, tab, listId, listName) {
       await ensureStateLoaded();
       const apiBase = getApiBase();
@@ -132,10 +158,6 @@
         );
         logger.log('Found release group:', releaseGroup);
 
-        const artistCountry = await albumApi.fetchArtistCountry(
-          apiBase,
-          releaseGroup
-        );
         const genres = await genresPromise;
         albumData.genre_1 = genres.genre_1 || '';
         albumData.genre_2 = genres.genre_2 || '';
@@ -143,7 +165,7 @@
         const newAlbum = albumApi.buildAlbumPayload(
           albumData,
           releaseGroup,
-          artistCountry
+          ''
         );
 
         logger.log('Album genres from RYM:', {
@@ -211,6 +233,14 @@
             logger.warn('Post-add extension state update failed:', error);
           });
         }
+
+        await enrichAlbumCountry(
+          apiBase,
+          releaseGroup,
+          newAlbum.album_id
+        ).catch((error) => {
+          logger.warn('Post-add album country enrichment failed:', error);
+        });
       } catch (error) {
         logger.error('Error adding album:', error);
         showNotification(

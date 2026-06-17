@@ -8,14 +8,9 @@
     const albumIdentity = deps.albumIdentity || globalThis.AlbumIdentity;
     const { STORAGE_KEYS } = constants;
     const { API, ALBUM_PRESENCE_CACHE_DURATION_MS } = constants;
-    const {
-      fetchWithTimeout,
-      getApiBase,
-      getAuthHeaders,
-      ensureStateLoaded,
-      refreshListMetadata,
-      getListMetadata,
-    } = deps;
+    const { fetchWithTimeout, getApiBase, getAuthHeaders, ensureStateLoaded } =
+      deps;
+    const findListById = deps.findListById || (() => null);
 
     let presenceIndex = {};
     let lastFetched = 0;
@@ -59,23 +54,6 @@
       });
     }
 
-    function getListLookup() {
-      const { userLists = [], userListsByYear = {} } = getListMetadata();
-      const lookup = new Map();
-
-      for (const list of userLists) {
-        lookup.set(list._id, list);
-      }
-
-      for (const lists of Object.values(userListsByYear)) {
-        for (const list of lists || []) {
-          lookup.set(list._id, list);
-        }
-      }
-
-      return lookup;
-    }
-
     function addPresenceEntry(index, key, entry) {
       if (!key) return;
       if (!index[key]) index[key] = [];
@@ -86,17 +64,33 @@
       if (!alreadyTracked) index[key].push(entry);
     }
 
-    function buildPresenceIndex(listsWithItems) {
+    function buildPresenceIndex(items) {
       const index = {};
-      const listLookup = getListLookup();
 
-      for (const [listId, items] of Object.entries(listsWithItems || {})) {
-        const list = listLookup.get(listId) || { _id: listId, name: 'List' };
+      for (const item of items || []) {
+        const key = albumIdentity.getAlbumKey(item);
+        addPresenceEntry(index, key, {
+          albumId: item.albumId || '',
+          listId: item.listId,
+          listName: item.listName || 'List',
+          year: item.year || null,
+        });
+      }
 
-        for (const item of items || []) {
+      return index;
+    }
+
+    function buildPresenceIndexFromFullLists(listsById) {
+      const index = {};
+
+      for (const [listId, items] of Object.entries(listsById || {})) {
+        if (!Array.isArray(items)) continue;
+        const list = findListById(listId) || {};
+
+        for (const item of items) {
           const key = albumIdentity.getAlbumKey(item);
           addPresenceEntry(index, key, {
-            albumId: item.album_id || '',
+            albumId: item.album_id || item.albumId || '',
             listId,
             listName: list.name || 'List',
             year: list.year || null,
@@ -105,6 +99,30 @@
       }
 
       return index;
+    }
+
+    async function fetchPresenceData(apiBase, headers) {
+      const response = await fetchWithTimeout(
+        `${apiBase}${API.LIST_ALBUM_PRESENCE}`,
+        { headers },
+        15000
+      );
+
+      if (response.status !== 404) {
+        return { response, source: 'presence' };
+      }
+
+      logger.warn(
+        'Album presence endpoint unavailable; falling back to full lists'
+      );
+
+      const fallbackResponse = await fetchWithTimeout(
+        `${apiBase}${API.LISTS}?full=true`,
+        { headers },
+        15000
+      );
+
+      return { response: fallbackResponse, source: 'full-lists' };
     }
 
     async function fetchPresenceIndex(forceRefresh = false) {
@@ -125,19 +143,17 @@
           return presenceIndex;
         }
 
-        await refreshListMetadata();
-
-        const response = await fetchWithTimeout(
-          `${apiBase}${API.LISTS}?full=true`,
-          { headers },
-          15000
-        );
+        const { response, source } = await fetchPresenceData(apiBase, headers);
 
         if (!response.ok) {
           throw new Error(`Presence lookup failed (${response.status})`);
         }
 
-        presenceIndex = buildPresenceIndex(await response.json());
+        const data = await response.json();
+        presenceIndex =
+          source === 'full-lists'
+            ? buildPresenceIndexFromFullLists(data)
+            : buildPresenceIndex(data.items);
         lastFetched = Date.now();
         await persistPresenceIndex();
         return presenceIndex;

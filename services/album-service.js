@@ -18,6 +18,7 @@ const { TransactionAbort } = require('../db/transaction');
 // withTransaction is provided via db.withTransaction now.
 const { buildPartialUpdate } = require('../utils/query-builder');
 const { findPotentialDuplicates } = require('../utils/fuzzy-match');
+const { resolveCountryCode } = require('../utils/musicbrainz');
 const { normalizeImageBuffer } = require('../utils/image-processing');
 const {
   invalidateResponseCacheForAlbumUsers,
@@ -65,11 +66,17 @@ function createAlbumService(deps = {}) {
     return value ? value.trim() : null;
   }
 
+  function normalizeCountryValue(country) {
+    const normalized = normalizeOptionalText(country);
+    if (!normalized || normalized.length !== 2) return normalized;
+    return resolveCountryCode(normalized) || normalized;
+  }
+
   function buildAlbumMetadataFields({ country, genre_1, genre_2 }) {
     const fields = [];
 
     if (country !== undefined) {
-      fields.push({ column: 'country', value: normalizeOptionalText(country) });
+      fields.push({ column: 'country', value: normalizeCountryValue(country) });
     }
 
     if (genre_1 !== undefined) {
@@ -336,7 +343,7 @@ function createAlbumService(deps = {}) {
   async function updateCountry(albumId, country, userId) {
     validateOptionalTextField(country, 'Invalid country value');
 
-    const trimmedCountry = normalizeOptionalText(country);
+    const trimmedCountry = normalizeCountryValue(country);
 
     const result = await db.raw(
       'UPDATE albums SET country = $1, updated_at = $2 WHERE album_id = $3 RETURNING album_id',

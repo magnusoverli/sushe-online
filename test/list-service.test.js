@@ -397,6 +397,49 @@ describe('list-service fetchers and setup status', () => {
     });
   });
 
+  it('should return lightweight album presence rows for extension badges', async () => {
+    let executedSql = '';
+    let executedParams = null;
+    const pool = {
+      query: mock.fn(async (sql, params) => {
+        executedSql = sql;
+        executedParams = params;
+
+        return {
+          rows: [
+            {
+              list_id: 'list1',
+              list_name: '2024',
+              year: 2024,
+              album_id: 'album1',
+              artist: 'Artist',
+              album: 'Album',
+            },
+          ],
+        };
+      }),
+      connect: mock.fn(),
+    };
+
+    const service = createListService(createServiceDeps(pool));
+    const result = await service.getAlbumPresence('user1');
+
+    assert.ok(executedSql.includes('JOIN list_items'));
+    assert.ok(executedSql.includes('JOIN albums'));
+    assert.ok(!executedSql.includes('tracks'));
+    assert.deepStrictEqual(executedParams, ['user1']);
+    assert.deepStrictEqual(result, [
+      {
+        listId: 'list1',
+        listName: '2024',
+        year: 2024,
+        albumId: 'album1',
+        artist: 'Artist',
+        album: 'Album',
+      },
+    ]);
+  });
+
   it('should compute setup status for missing year and missing main list', async () => {
     const pool = {
       query: mock.fn(async () => ({

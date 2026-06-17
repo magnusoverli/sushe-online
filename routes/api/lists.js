@@ -43,6 +43,17 @@ module.exports = (app, deps) => {
     }, 'fetching lists')
   );
 
+  // Lightweight list membership data for browser-extension RYM badges.
+  app.get(
+    '/api/lists/presence',
+    ensureAuthAPI,
+    cacheConfigs.userSpecific,
+    asyncHandler(async (req, res) => {
+      const items = await listService.getAlbumPresence(req.user._id);
+      res.json({ items });
+    }, 'fetching album presence')
+  );
+
   // Check if user needs to complete list setup
   app.get(
     '/api/lists/setup-status',

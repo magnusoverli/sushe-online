@@ -167,6 +167,29 @@ describe('album-service', () => {
     );
   });
 
+  it('batchUpdate should resolve two-letter country codes', async () => {
+    const pool = createMockPool([
+      { rows: [], rowCount: 0 },
+      { rows: [{ album_id: 'a1' }], rowCount: 1 },
+      { rows: [], rowCount: 0 },
+    ]);
+
+    const service = createAlbumService({
+      db: pool,
+      logger: createMockLogger(),
+      upsertAlbumRecord: mock.fn(),
+    });
+
+    const updated = await service.batchUpdate(
+      [{ albumId: 'a1', country: 'no' }],
+      'user1'
+    );
+
+    assert.strictEqual(updated, 1);
+    assert.ok(pool.query.mock.calls[1].arguments[0].includes('country = $1'));
+    assert.strictEqual(pool.query.mock.calls[1].arguments[1][0], 'Norway');
+  });
+
   it('markDistinct should resolve string user _id to numeric created_by', async () => {
     const pool = {
       query: mock.fn(async (sql, params) => {

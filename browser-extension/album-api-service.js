@@ -98,6 +98,18 @@
       };
     }
 
+    async function updateAlbumMetadata(apiBase, updates) {
+      return fetchWithTimeout(
+        `${apiBase}${API.ALBUM_BATCH_UPDATE}`,
+        {
+          method: 'PATCH',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ updates }),
+        },
+        15000
+      );
+    }
+
     async function saveAlbum(apiBase, listId, newAlbum) {
       return fetchWithTimeout(
         `${apiBase}${API.LISTS}/${encodeURIComponent(listId)}/items`,
@@ -115,6 +127,7 @@
       fetchArtistCountry,
       saveAlbum,
       searchMusicBrainz,
+      updateAlbumMetadata,
     };
   }
 

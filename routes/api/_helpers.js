@@ -354,6 +354,7 @@ function createHelpers(deps) {
       responseCache.invalidate(`GET:/api/lists/${listId}`);
     }
     responseCache.invalidate(`GET:/api/lists:${userId}`);
+    responseCache.invalidate(`GET:/api/lists/presence:${userId}`);
     responseCache.invalidate('GET:/api/app-bootstrap');
     if (full) {
       responseCache.invalidate(`GET:/api/lists?full=true:${userId}`);

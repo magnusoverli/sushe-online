@@ -50,6 +50,8 @@
 
   const API = {
     LISTS: '/api/lists',
+    LIST_ALBUM_PRESENCE: '/api/lists/presence',
+    ALBUM_BATCH_UPDATE: '/api/albums/batch-update',
     MUSICBRAINZ_PROXY: '/api/proxy/musicbrainz',
     EXTENSION_AUTH: '/extension/auth',
   };

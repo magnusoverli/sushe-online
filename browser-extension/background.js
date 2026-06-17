@@ -71,8 +71,7 @@ const albumPresenceService =
     ensureStateLoaded,
     getApiBase: () => SUSHE_API_BASE,
     getAuthHeaders,
-    refreshListMetadata: () => fetchUserLists(false),
-    getListMetadata: () => ({ userLists, userListsByYear }),
+    findListById,
     logger: console,
   });
 

@@ -11,6 +11,7 @@ const { buildPartialUpdate } = require('../utils/query-builder');
 const { createItemComments } = require('./list/item-comments');
 const { createListFetchers } = require('./list/fetchers');
 const { createListItemOperations } = require('./list/item-operations');
+const { createListPresence } = require('./list/presence');
 const {
   createListManagementOperations,
 } = require('./list/management-operations');
@@ -169,6 +170,7 @@ function createListService(deps = {}) {
     findListById,
     getPointsForPosition,
   });
+  const listPresence = createListPresence({ db });
   const managementOperations = createListManagementOperations({
     db,
     TransactionAbort,
@@ -197,6 +199,10 @@ function createListService(deps = {}) {
 
   async function getAllLists(userId, { full = false } = {}) {
     return listFetchers.getAllLists(userId, { full });
+  }
+
+  async function getAlbumPresence(userId) {
+    return listPresence.getAlbumPresence(userId);
   }
 
   async function getListById(
@@ -372,6 +378,7 @@ function createListService(deps = {}) {
 
   return {
     findListById,
+    getAlbumPresence,
     getAllLists,
     getListById,
     getSetupStatus,
