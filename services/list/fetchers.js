@@ -173,13 +173,8 @@ function createListFetchers(deps = {}) {
     { isExport = false, profile = 'full' } = {}
   ) {
     const includeDetails = isExport || profile !== 'core';
-    // Platform availability is small, stable metadata (a short list of service
-    // names), so it ships in every profile — including 'core' — the same way the
-    // cover-image URL does. Keeping it on the first paint means the badges render
-    // immediately and survive a cold load / cache clear, instead of waiting for
-    // the detail hydrate (which only repaints when album order changes).
-    // Scope the aggregate to this list's albums so its cost grows with the list,
-    // not the whole album_service_mappings table (it runs on the first-paint path).
+    // Availability is small metadata, so core fetches include it for first-paint
+    // badges while scoping the aggregate to this list's albums.
     const availabilityCte = `,
       availability AS (
         SELECT album_id, json_agg(service ORDER BY service) AS services
