@@ -517,7 +517,7 @@ describe('list-service fetchers and setup status', () => {
     assert.strictEqual(executedParams.length, 3);
   });
 
-  it('should fetch core list items without detail joins', async () => {
+  it('should fetch core list items with availability but no other detail joins', async () => {
     let executedSql = '';
     let executedParams = null;
     const pool = {
@@ -531,7 +531,7 @@ describe('list-service fetchers and setup status', () => {
                 tracks: null,
                 summary: '',
                 summary_source: '',
-                availability: [],
+                availability: ['spotify'],
                 recommended_by: null,
                 recommended_at: null,
               }),
@@ -550,12 +550,14 @@ describe('list-service fetchers and setup status', () => {
     });
 
     assert.strictEqual(result.items[0].tracks, null);
-    assert.deepStrictEqual(result.items[0].availability, []);
+    // Availability ships in the core profile (like the cover URL) so badges
+    // render on the first paint instead of waiting for the detail hydrate.
+    assert.deepStrictEqual(result.items[0].availability, ['spotify']);
     assert.strictEqual(result.items[0].recommended_by, null);
     assert.ok(executedSql.includes('NULL AS tracks'));
-    assert.ok(!executedSql.includes('LEFT JOIN availability av'));
+    assert.ok(executedSql.includes('LEFT JOIN availability av'));
     assert.ok(!executedSql.includes('LEFT JOIN recommendations r'));
-    assert.deepStrictEqual(executedParams, ['list1', 'user1']);
+    assert.strictEqual(executedParams.length, 3);
   });
 });
 

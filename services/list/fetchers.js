@@ -173,19 +173,26 @@ function createListFetchers(deps = {}) {
     { isExport = false, profile = 'full' } = {}
   ) {
     const includeDetails = isExport || profile !== 'core';
-    const availabilityCte = includeDetails
-      ? `,
+    // Platform availability is small, stable metadata (a short list of service
+    // names), so it ships in every profile — including 'core' — the same way the
+    // cover-image URL does. Keeping it on the first paint means the badges render
+    // immediately and survive a cold load / cache clear, instead of waiting for
+    // the detail hydrate (which only repaints when album order changes).
+    // Scope the aggregate to this list's albums so its cost grows with the list,
+    // not the whole album_service_mappings table (it runs on the first-paint path).
+    const availabilityCte = `,
       availability AS (
         SELECT album_id, json_agg(service ORDER BY service) AS services
         FROM album_service_mappings
         WHERE strategy LIKE 'availability:%'
           AND service = ANY($3)
+          AND album_id IN (
+            SELECT album_id FROM list_items WHERE list_id = $1
+          )
         GROUP BY album_id
-      )`
-      : '';
-    const availabilityJoin = includeDetails
-      ? 'LEFT JOIN availability av ON av.album_id = li.album_id'
-      : '';
+      )`;
+    const availabilityJoin =
+      'LEFT JOIN availability av ON av.album_id = li.album_id';
     const recommendationJoin = includeDetails
       ? `LEFT JOIN recommendations r ON r.year = tl.year AND r.album_id = li.album_id
         LEFT JOIN users u ON r.recommended_by = u._id`
@@ -200,13 +207,11 @@ function createListFetchers(deps = {}) {
       : `NULL AS tracks,
               '' AS summary,
               '' AS summary_source,
-              '[]'::json AS availability,
+              COALESCE(av.services, '[]'::json) AS availability,
               NULL AS recommended_by,
               NULL AS recommended_at,`;
 
-    const queryParams = includeDetails
-      ? [listId, userId, AVAILABILITY_SERVICES]
-      : [listId, userId];
+    const queryParams = [listId, userId, AVAILABILITY_SERVICES];
 
     const itemsResult = await db.raw(
       `WITH target_list AS (
