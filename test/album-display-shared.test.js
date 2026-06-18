@@ -67,11 +67,7 @@ describe('album-display-shared module', () => {
     assert.deepStrictEqual(hiddenCell.toggled[0], ['column-hidden', true]);
   });
 
-  it('observes lazy images and swaps src when intersecting', () => {
-    const observed = [];
-    const unobserved = [];
-    let observerCallback = null;
-
+  it('loads every cover up front by swapping in the real src immediately', () => {
     const img = { dataset: { lazySrc: '/cover.jpg' }, src: '' };
     const utils = createAlbumDisplayShared({
       doc: {
@@ -83,17 +79,6 @@ describe('album-display-shared module', () => {
       getVisibleColumns: () => [],
       getToggleableColumns: () => [],
       isColumnVisible: () => true,
-      createObserver(callback) {
-        observerCallback = callback;
-        return {
-          observe(node) {
-            observed.push(node);
-          },
-          unobserve(node) {
-            unobserved.push(node);
-          },
-        };
-      },
     });
 
     const container = {
@@ -103,13 +88,54 @@ describe('album-display-shared module', () => {
       },
     };
 
-    utils.observeLazyImages(container);
-    assert.strictEqual(observed[0], img);
-
-    observerCallback([{ isIntersecting: true, target: img }]);
+    utils.loadCoverImages(container);
+    // No intersection needed: the real src is in place right after the call.
     assert.strictEqual(img.src, '/cover.jpg');
+    assert.strictEqual(img.dataset.coverSrc, '/cover.jpg');
     assert.strictEqual(img.dataset.lazySrc, undefined);
-    assert.strictEqual(unobserved[0], img);
+  });
+
+  it('drains off-screen covers with a concurrency cap', () => {
+    const makeImg = (id) => {
+      const handlers = {};
+      return {
+        dataset: { lazySrc: `/cover-${id}.jpg` },
+        src: '',
+        addEventListener(event, handler) {
+          handlers[event] = handler;
+        },
+        fire(event) {
+          handlers[event]?.();
+        },
+      };
+    };
+    // 15 covers, cap is 12, so 3 wait behind the first wave.
+    const images = Array.from({ length: 15 }, (_, i) => makeImg(i));
+    const utils = createAlbumDisplayShared({
+      doc: { getElementById: () => null },
+      computeGridTemplate: () => '',
+      getVisibleColumns: () => [],
+      getToggleableColumns: () => [],
+      isColumnVisible: () => true,
+    });
+    const container = {
+      querySelectorAll(selector) {
+        return selector === 'img[data-lazy-src]' ? images : [];
+      },
+    };
+
+    const loadedCount = () => images.filter((i) => i.src !== '').length;
+
+    utils.loadCoverImages(container);
+    assert.strictEqual(loadedCount(), 12);
+
+    // Each settled cover (load or error) frees a slot for the next.
+    images[0].fire('load');
+    assert.strictEqual(loadedCount(), 13);
+    images[1].fire('error');
+    assert.strictEqual(loadedCount(), 14);
+    images[2].fire('load');
+    assert.strictEqual(loadedCount(), 15);
   });
 
   it('reveals initial cover group together after images load', () => {
@@ -229,9 +255,8 @@ describe('album-display-shared module', () => {
     ]);
   });
 
-  it('retries cover images after initial load errors', () => {
+  it('retries cover images after a load error then falls back to a placeholder', () => {
     const timers = [];
-    let observerCallback = null;
     let errorHandler = null;
     const parent = { innerHTML: '' };
     const img = {
@@ -240,7 +265,9 @@ describe('album-display-shared module', () => {
       parentElement: parent,
       isConnected: true,
       addEventListener(event, handler) {
-        if (event === 'error') errorHandler = handler;
+        // The retry handler is attached first; the drain-release listener is
+        // attached after it, so capture the first 'error' handler.
+        if (event === 'error' && !errorHandler) errorHandler = handler;
       },
     };
 
@@ -253,13 +280,6 @@ describe('album-display-shared module', () => {
       setTimeout(callback) {
         timers.push(callback);
       },
-      createObserver(callback) {
-        observerCallback = callback;
-        return {
-          observe() {},
-          unobserve() {},
-        };
-      },
     });
 
     const container = {
@@ -269,8 +289,8 @@ describe('album-display-shared module', () => {
       },
     };
 
-    utils.observeLazyImages(container);
-    observerCallback([{ isIntersecting: true, target: img }]);
+    // The error handler is attached before the real src is swapped in.
+    utils.loadCoverImages(container);
     assert.strictEqual(img.src, '/api/albums/album1/cover');
     assert.strictEqual(img.dataset.coverSrc, '/api/albums/album1/cover');
 

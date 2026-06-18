@@ -7,6 +7,10 @@ export const PLACEHOLDER_GIF =
 
 const COVER_RETRY_DELAY_MS = 2500;
 const MAX_COVER_RETRIES = 2;
+// Cap how many off-screen covers fetch at once so opening a large list does not
+// fire one request per album in a single cold-load burst; slots refill as each
+// cover settles (load or error).
+const MAX_CONCURRENT_COVER_LOADS = 12;
 
 function addRetryParam(url) {
   try {
@@ -50,9 +54,6 @@ function removeCoverRevealState(image) {
 export function createAlbumDisplayShared(deps = {}) {
   const doc = deps.doc || (typeof document !== 'undefined' ? document : null);
   const setTimer = deps.setTimeout || globalThis.setTimeout;
-  const createObserver =
-    deps.createObserver ||
-    ((callback, options) => new IntersectionObserver(callback, options));
 
   const {
     computeGridTemplate,
@@ -63,7 +64,6 @@ export function createAlbumDisplayShared(deps = {}) {
 
   let fingerprintCache = new WeakMap();
   let rowElementsCache = new WeakMap();
-  let coverImageObserver = null;
 
   function handleCoverError(image) {
     const coverSrc = image.dataset.coverSrc || image.src;
@@ -117,41 +117,49 @@ export function createAlbumDisplayShared(deps = {}) {
     }
   }
 
-  function initCoverImageObserver() {
-    if (coverImageObserver) return;
-
-    coverImageObserver = createObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-
-          const image = entry.target;
-          const lazySrc = image.dataset.lazySrc;
-          if (lazySrc) {
-            image.dataset.coverSrc = lazySrc;
-            image.src = lazySrc;
-            delete image.dataset.lazySrc;
-          }
-          coverImageObserver.unobserve(image);
-        });
-      },
-      {
-        rootMargin: '200px',
-        threshold: 0,
-      }
+  // Load every album cover up front (no scroll gating) so the art is present for
+  // the whole list the way the availability badges are. The error-retry handler
+  // is attached before the real src is swapped in, so a cover that fails to load
+  // still retries and then falls back to the placeholder with no load-vs-attach
+  // race. Off-screen covers carry fetchpriority="low" so the visible ones win the
+  // connection race; we also drain them MAX_CONCURRENT_COVER_LOADS at a time so a
+  // big list does not fire one request per album in a single cold-load burst.
+  function loadCoverImages(container) {
+    const pending = Array.from(
+      container.querySelectorAll('img[data-lazy-src]')
     );
-  }
+    let cursor = 0;
+    let active = 0;
 
-  function observeLazyImages(container) {
-    if (!coverImageObserver) {
-      initCoverImageObserver();
-    }
+    const startNext = () => {
+      while (active < MAX_CONCURRENT_COVER_LOADS && cursor < pending.length) {
+        const image = pending[cursor];
+        cursor += 1;
+        const lazySrc = image.dataset.lazySrc;
+        if (!lazySrc) continue;
 
-    const lazyImages = container.querySelectorAll('img[data-lazy-src]');
-    lazyImages.forEach((img) => {
-      attachCoverErrorRetry(img);
-      coverImageObserver.observe(img);
-    });
+        attachCoverErrorRetry(image);
+
+        active += 1;
+        let released = false;
+        const release = () => {
+          if (released) return;
+          released = true;
+          active -= 1;
+          startNext();
+        };
+        if (typeof image.addEventListener === 'function') {
+          image.addEventListener('load', release, { once: true });
+          image.addEventListener('error', release, { once: true });
+        }
+
+        image.dataset.coverSrc = lazySrc;
+        image.src = lazySrc;
+        delete image.dataset.lazySrc;
+      }
+    };
+
+    startNext();
   }
 
   function revealInitialCoverGroup(container, options = {}) {
@@ -304,7 +312,7 @@ export function createAlbumDisplayShared(deps = {}) {
 
   return {
     applyVisibilityInPlace,
-    observeLazyImages,
+    loadCoverImages,
     revealInitialCoverGroup,
     getCachedElements,
     resetRowElementsCache,

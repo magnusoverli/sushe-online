@@ -67,7 +67,7 @@ const albumDisplayShared = createAlbumDisplayShared({
 
 const {
   applyVisibilityInPlace,
-  observeLazyImages,
+  loadCoverImages,
   revealInitialCoverGroup,
   getCachedElements,
   resetRowElementsCache,
@@ -80,7 +80,7 @@ function getCoverLoadMode(index, isMobile) {
   const initialCount = isMobile
     ? INITIAL_MOBILE_COVER_COUNT
     : INITIAL_DESKTOP_COVER_COUNT;
-  return index < initialCount ? 'initial' : 'lazy';
+  return index < initialCount ? 'initial' : 'eager';
 }
 
 function renderCoverImage({ src, fullSrc, alt, className, loadMode }) {
@@ -100,13 +100,18 @@ function renderCoverImage({ src, fullSrc, alt, className, loadMode }) {
     >`;
   }
 
+  // Off-screen covers still render a placeholder + data-lazy-src so the error
+  // handler can attach before the real src is swapped in (loadCoverImages does
+  // the swap right after render). loading="eager" means they are not deferred by
+  // the browser; fetchpriority="low" keeps them behind the visible covers.
   return `<img src="${PLACEHOLDER_GIF}"
     data-lazy-src="${escapedSrc}"
     data-full-src="${escapedFullSrc}"
     alt="${escapedAlt}"
     class="${className}"
-    loading="lazy"
+    loading="eager"
     decoding="async"
+    fetchpriority="low"
   >`;
 }
 
@@ -1166,8 +1171,8 @@ export function createAlbumDisplay(deps = {}) {
     // Update position numbers
     updatePositionNumbers(rowsContainer, isMobile);
 
-    // Observe lazy images for the new row
-    observeLazyImages(container);
+    // Load cover images for the new row
+    loadCoverImages(container);
 
     // Initialize tooltips for desktop
     if (!isMobile) {
@@ -2210,7 +2215,7 @@ export function createAlbumDisplay(deps = {}) {
         fragment.appendChild(item);
       }
       parent.appendChild(fragment);
-      observeLazyImages(parent);
+      loadCoverImages(parent);
     };
 
     const scheduleRenderBatch = (callback) => {
@@ -2458,8 +2463,8 @@ export function createAlbumDisplay(deps = {}) {
 
     container.replaceChildren(albumContainer);
 
-    // Initialize lazy loading for album cover images
-    observeLazyImages(container);
+    // Kick off cover-image loading for every album (not just the visible ones)
+    loadCoverImages(container);
     revealInitialCoverGroup(container, {
       timeoutMs: INITIAL_COVER_REVEAL_TIMEOUT_MS,
     });

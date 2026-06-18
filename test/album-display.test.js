@@ -268,7 +268,8 @@ describe('album-display module', () => {
         );
 
         assert.match(laterRow.innerHTML, /data-lazy-src="\/thumb-2\.jpg"/);
-        assert.match(laterRow.innerHTML, /loading="lazy"/);
+        assert.match(laterRow.innerHTML, /loading="eager"/);
+        assert.match(laterRow.innerHTML, /fetchpriority="low"/);
         assert.doesNotMatch(laterRow.innerHTML, /fetchpriority="high"/);
       } finally {
         globalThis.document.createElement = previousCreateElement;
@@ -599,7 +600,7 @@ describe('album-display module', () => {
     it('should not track cover_image changes (handled by URL-based loading)', () => {
       // Note: cover_image is intentionally NOT tracked in detectUpdateType
       // because storing it in the lightweight mutable state would be expensive.
-      // Cover images are now loaded via URL with IntersectionObserver lazy loading.
+      // Cover images are loaded eagerly via URL right after each render.
       // In practice, cover_image-only changes are also caught by the fingerprint
       // comparison at the displayAlbums level before detectUpdateType is called.
       const module = createAlbumDisplay({});
