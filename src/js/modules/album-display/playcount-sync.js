@@ -1,3 +1,8 @@
+import {
+  applyMobilePlaycount,
+  applyDesktopPlaycount,
+} from './playcount-view.js';
+
 export function createPlaycountSync(deps = {}) {
   const {
     apiCall,
@@ -63,21 +68,14 @@ export function createPlaycountSync(deps = {}) {
     if (!desktopEl) return;
 
     if (status === 'not_found') {
-      desktopEl.innerHTML = `<i class="fas fa-times text-[10px]"></i>`;
-      desktopEl.title = 'Album not found on Last.fm';
-      desktopEl.className = 'text-xs text-red-500 shrink-0';
-      desktopEl.dataset.status = 'not_found';
-      desktopEl.classList.remove('hidden');
-      return;
-    }
-
-    if (status === 'success') {
-      const display = formatPlaycount(playcount);
-      desktopEl.innerHTML = `<i class="fas fa-headphones text-[10px] mr-1"></i>${display}`;
-      desktopEl.title = `${playcount} plays on Last.fm`;
-      desktopEl.className = 'text-xs text-gray-500 shrink-0';
-      desktopEl.dataset.status = 'success';
-      desktopEl.classList.remove('hidden');
+      applyDesktopPlaycount(desktopEl, 'not_found');
+    } else if (status === 'success') {
+      applyDesktopPlaycount(
+        desktopEl,
+        'success',
+        formatPlaycount(playcount),
+        playcount
+      );
     }
   }
 
@@ -87,20 +85,9 @@ export function createPlaycountSync(deps = {}) {
     if (!mobileEl) return;
 
     if (status === 'not_found') {
-      mobileEl.innerHTML = `<i class="fas fa-times text-[10px]"></i>`;
-      mobileEl.title = 'Album not found on Last.fm';
-      mobileEl.className = 'text-red-500 ml-4';
-      mobileEl.dataset.status = 'not_found';
-      mobileEl.classList.remove('hidden');
-      return;
-    }
-
-    if (status === 'success') {
-      const display = formatPlaycount(playcount);
-      mobileEl.innerHTML = `<i class="fas fa-headphones text-[10px]"></i> ${display}`;
-      mobileEl.className = 'text-gray-600 ml-4';
-      mobileEl.dataset.status = 'success';
-      mobileEl.classList.remove('hidden');
+      applyMobilePlaycount(mobileEl, 'not_found');
+    } else if (status === 'success') {
+      applyMobilePlaycount(mobileEl, 'success', formatPlaycount(playcount));
     }
   }
 

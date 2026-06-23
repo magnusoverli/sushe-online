@@ -51,7 +51,11 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
     }
 
     return {
-      _id: ctx.crypto.randomBytes(12).toString('hex'),
+      // Reuse the client-provided id for existing items so a full-list save
+      // (replaceListItems) keeps list-item _ids stable. Other features key on
+      // _id (track picks, playcounts); regenerating it orphaned them until a
+      // page refresh. New items (no _id yet) still get a fresh id.
+      _id: album._id || ctx.crypto.randomBytes(12).toString('hex'),
       album_id: upsertResult.albumId,
       position: index + 1,
       comments: album.comments || null,

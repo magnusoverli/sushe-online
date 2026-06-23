@@ -255,6 +255,9 @@ export function createAlbumDisplayShared(deps = {}) {
       countryText: card.querySelector('[data-field="country-mobile-text"]'),
       genreText: card.querySelector('[data-field="genre-mobile-text"]'),
       trackText: card.querySelector('[data-field="track-mobile-text"]'),
+      secondaryTrackText: card.querySelector(
+        '[data-field="secondary-track-mobile-text"]'
+      ),
     };
 
     rowElementsCache.set(card, cache);

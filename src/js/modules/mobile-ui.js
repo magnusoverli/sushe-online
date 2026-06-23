@@ -604,7 +604,7 @@ export function createMobileUI(deps = {}) {
               <label class="block text-gray-400 text-sm mb-2">Track Selection</label>
               <button type="button" id="fetchTracksBtn" class="text-xs text-red-500 hover:underline">Get</button>
             </div>
-            <div class="text-xs text-gray-500 mb-2">Click once = secondary (☆) | Click again = primary (★)</div>
+            <div class="text-xs text-gray-500 mb-2">Click once = secondary (<span class="font-[Georgia,serif] font-semibold text-green-400">II</span>) | Click again = primary (<span class="font-[Georgia,serif] font-semibold text-green-400">I</span>)</div>
             <div id="trackPickContainer" data-album-index="${index}" data-list-item-id="${album._id || ''}">
             ${
               Array.isArray(album.tracks) && album.tracks.length > 0
@@ -617,16 +617,9 @@ export function createMobileUI(deps = {}) {
                     const isPrimary = trackName === (album.primary_track || '');
                     const isSecondary =
                       trackName === (album.secondary_track || '');
-                    const indicator = isPrimary
-                      ? '<span class="text-yellow-400 mr-1">★</span>'
-                      : isSecondary
-                        ? '<span class="text-yellow-400 mr-1">☆</span>'
-                        : '';
-                    const bgClass = isPrimary
-                      ? 'bg-yellow-900/20'
-                      : isSecondary
-                        ? 'bg-gray-700/30'
-                        : '';
+                    const indicator = `<span class="track-pick-indicator inline-block w-4 text-center mr-1 text-[11px] font-semibold font-[Georgia,serif] text-green-400">${isPrimary ? 'I' : isSecondary ? 'II' : ''}</span>`;
+                    const bgClass =
+                      isPrimary || isSecondary ? 'bg-gray-700/30' : '';
                     return `
                   <li class="flex items-center space-x-2 p-1.5 rounded ${bgClass} track-pick-item cursor-pointer active:bg-gray-700/50" 
                       data-track="${trackName.replace(/"/g, '&quot;')}"
@@ -803,30 +796,15 @@ export function createMobileUI(deps = {}) {
 
         // Update visual appearance
         item.classList.remove('bg-yellow-900/20', 'bg-gray-700/30');
-        if (isPrimary) {
-          item.classList.add('bg-yellow-900/20');
-        } else if (isSecondary) {
+        if (isPrimary || isSecondary) {
           item.classList.add('bg-gray-700/30');
         }
 
-        // Update indicator
-        const existingIndicator = item.querySelector(
-          '.text-yellow-400, .text-gray-400'
-        );
-        if (existingIndicator) {
-          existingIndicator.remove();
-        }
-
-        if (isPrimary) {
-          const indicator = document.createElement('span');
-          indicator.className = 'text-yellow-400 mr-1';
-          indicator.textContent = '★';
-          item.insertBefore(indicator, item.firstChild);
-        } else if (isSecondary) {
-          const indicator = document.createElement('span');
-          indicator.className = 'text-yellow-400 mr-1';
-          indicator.textContent = '☆';
-          item.insertBefore(indicator, item.firstChild);
+        // Update indicator content. The slot is always rendered, so swapping
+        // the text keeps the track name from shifting when selection changes.
+        const indicator = item.querySelector('.track-pick-indicator');
+        if (indicator) {
+          indicator.textContent = isPrimary ? 'I' : isSecondary ? 'II' : '';
         }
       });
     }
@@ -915,16 +893,9 @@ export function createMobileUI(deps = {}) {
                       const trackLength = formatTrackTime(getTrackLength(t));
                       const isPrimary = trackName === currentPrimaryTrack;
                       const isSecondary = trackName === currentSecondaryTrack;
-                      const indicator = isPrimary
-                        ? '<span class="text-yellow-400 mr-1">★</span>'
-                        : isSecondary
-                          ? '<span class="text-yellow-400 mr-1">☆</span>'
-                          : '';
-                      const bgClass = isPrimary
-                        ? 'bg-yellow-900/20'
-                        : isSecondary
-                          ? 'bg-gray-700/30'
-                          : '';
+                      const indicator = `<span class="track-pick-indicator inline-block w-4 text-center mr-1 text-[11px] font-semibold font-[Georgia,serif] text-green-400">${isPrimary ? 'I' : isSecondary ? 'II' : ''}</span>`;
+                      const bgClass =
+                        isPrimary || isSecondary ? 'bg-gray-700/30' : '';
                       return `
                   <li class="flex items-center space-x-2 p-1.5 rounded ${bgClass} track-pick-item cursor-pointer active:bg-gray-700/50" 
                       data-track="${trackName.replace(/"/g, '&quot;')}"

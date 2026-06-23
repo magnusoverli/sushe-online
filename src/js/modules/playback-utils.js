@@ -1,6 +1,6 @@
 /**
  * Playback matching utilities
- * Consolidated from spotify-player.js and now-playing.js
+ * Used by spotify-player.js to match albums against current playback
  */
 
 // Import normalizeForMatch from centralized normalization module

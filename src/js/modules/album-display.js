@@ -38,6 +38,10 @@ import {
 } from './album-display/album-data.js';
 import { createPlaycountSync } from './album-display/playcount-sync.js';
 import { renderAvailabilityBadges } from './album-display/availability-badges.js';
+import {
+  mobilePlaycountSpan,
+  desktopPlaycountSpan,
+} from './album-display/playcount-view.js';
 
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
@@ -139,7 +143,6 @@ function renderCoverImage({ src, fullSrc, alt, className, loadMode }) {
  * @param {Function} deps.playTrackSafe - Play track safely by album ID
  * @param {Function} deps.playSpecificTrack - Play a specific track by index + identifier
  * @param {Function} deps.isViewingRecommendations - Check if recommendations view is active
- * @param {Function} deps.reapplyNowPlayingBorder - Re-apply now playing border
  * @param {Function} deps.initializeUnifiedSorting - Initialize drag-drop sorting
  * @param {Function} deps.destroySorting - Destroy drag-drop sorting instance
  * @param {Function} deps.setContextAlbum - Set context album index and ID for menus
@@ -167,7 +170,6 @@ export function createAlbumDisplay(deps = {}) {
     playTrackSafe,
     playSpecificTrack,
     isViewingRecommendations,
-    reapplyNowPlayingBorder,
     initializeUnifiedSorting,
     destroySorting,
     isListLocked: isListLockedFn = isListLocked,
@@ -260,6 +262,33 @@ export function createAlbumDisplay(deps = {}) {
       }
     }
 
+    const secondaryTrack = album.secondary_track || '';
+    let secondaryTrackDisplay = '';
+    if (secondaryTrack) {
+      if (album.tracks && Array.isArray(album.tracks)) {
+        const trackMatch = album.tracks.find(
+          (t) => getTrackName(t) === secondaryTrack
+        );
+        if (trackMatch) {
+          const trackName = getTrackName(trackMatch);
+          const match = trackName.match(/^(\d+)[.\s-]?\s*(.*)$/);
+          secondaryTrackDisplay = match
+            ? match[2]
+              ? `${match[1]}. ${match[2]}`
+              : `Track ${match[1]}`
+            : trackName;
+        } else if (secondaryTrack.match(/^\d+$/)) {
+          secondaryTrackDisplay = `Track ${secondaryTrack}`;
+        } else {
+          secondaryTrackDisplay = secondaryTrack;
+        }
+      } else if (secondaryTrack.match(/^\d+$/)) {
+        secondaryTrackDisplay = `Track ${secondaryTrack}`;
+      } else {
+        secondaryTrackDisplay = secondaryTrack;
+      }
+    }
+
     return {
       position,
       albumName,
@@ -282,6 +311,8 @@ export function createAlbumDisplay(deps = {}) {
       primaryTrackDisplay,
       primaryTrackClass,
       primaryTrackDuration,
+      secondaryTrack,
+      secondaryTrackDisplay,
     };
   }
 
@@ -396,13 +427,7 @@ export function createAlbumDisplay(deps = {}) {
       album: `<div class="album-cell flex flex-col justify-start">
         <div class="flex items-center gap-2">
           <span class="album-name font-semibold text-gray-200 truncate">${data.albumName}</span>
-          ${
-            data.playcountDisplay.isNotFound
-              ? `<span class="text-xs text-red-500 shrink-0" data-playcount="${data.itemId}" data-status="not_found" title="Album not found on Last.fm"><i class="fas fa-times text-[10px]"></i></span>`
-              : data.playcountDisplay.isEmpty
-                ? `<span class="text-xs text-gray-500 shrink-0 hidden" data-playcount="${data.itemId}"></span>`
-                : `<span class="text-xs text-gray-500 shrink-0" data-playcount="${data.itemId}" data-status="success" title="${data.playcount} plays on Last.fm"><i class="fas fa-headphones text-[10px] mr-1"></i>${data.playcountDisplay.html}</span>`
-          }
+          ${desktopPlaycountSpan(data.itemId, data.playcountDisplay, data.playcount)}
         </div>
         <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
         ${renderAvailabilityBadges(data.availability)}
@@ -821,8 +846,7 @@ export function createAlbumDisplay(deps = {}) {
                     src: mobileCoverSrc,
                     fullSrc: data.coverImageUrl || mobileCoverSrc,
                     alt: data.albumName,
-                    className:
-                      'album-cover-blur w-[75px] h-[75px] rounded-lg object-cover',
+                    className: 'w-full h-full rounded-lg object-cover',
                     loadMode: coverLoadMode,
                   })
                 : `<i class="fas fa-compact-disc text-xl text-gray-600"></i>`
@@ -840,67 +864,48 @@ export function createAlbumDisplay(deps = {}) {
         </div>
         
         <!-- INFO SECTION -->
-        <div class="flex-1 min-w-0 py-1 pl-2 pr-1 flex flex-col justify-between h-[122px]">
-          <!-- Album name -->
-          <div class="flex items-center">
-            <h3 class="font-semibold text-gray-200 text-sm leading-tight truncate">
-              <i class="fas fa-compact-disc fa-xs mr-2"></i>${escapeHtml(data.albumName)}
+        <div class="flex-1 min-w-0 pl-1 pr-1 flex flex-col justify-evenly h-[122px]">
+          <!-- Album name + playcount -->
+          <div class="flex items-center justify-between">
+            <h3 class="font-semibold text-gray-100 text-sm leading-tight truncate min-w-0">
+              <i class="fas fa-compact-disc fa-xs inline-block w-4 text-center align-middle mr-1"></i>${escapeHtml(data.albumName)}
             </h3>
+            ${mobilePlaycountSpan(data.itemId, data.playcountDisplay)}
           </div>
-          <!-- Artist + playcount -->
+          <!-- Artist -->
           <div class="flex items-center">
-            <p class="text-[13px] text-gray-500 truncate">
-              <i class="fas fa-user fa-xs mr-2"></i>
-              <span data-field="artist-mobile-text">${escapeHtml(data.artist)}</span>
-              ${
-                data.playcountDisplay.isNotFound
-                  ? `<span class="text-red-500 ml-4" data-playcount-mobile="${data.itemId}" data-status="not_found" title="Album not found on Last.fm">
-                     <i class="fas fa-times text-[10px]"></i></span>`
-                  : data.playcountDisplay.isEmpty
-                    ? `<span class="text-gray-600 ml-4 hidden" data-playcount-mobile="${data.itemId}"></span>`
-                    : `<span class="text-gray-600 ml-4" data-playcount-mobile="${data.itemId}" data-status="success">
-                       <i class="fas fa-headphones text-[10px]"></i> ${data.playcountDisplay.html}</span>`
-              }
+            <p class="text-[13px] text-gray-400 truncate">
+              <i class="fas fa-user fa-xs inline-block w-4 text-center mr-1"></i><span data-field="artist-mobile-text">${escapeHtml(data.artist)}</span>
             </p>
           </div>
           <!-- Country -->
           <div class="flex items-center">
-            <span class="text-[13px] text-gray-500">
-              <i class="fas fa-globe fa-xs mr-2"></i>
-              <span data-field="country-mobile-text">${escapeHtml(data.country || '')}</span>
+            <span class="text-[13px] text-gray-400">
+              <i class="fas fa-globe fa-xs inline-block w-4 text-center mr-1"></i><span data-field="country-mobile-text">${escapeHtml(data.country || '')}</span>
             </span>
           </div>
           <!-- Genres -->
           <div class="flex items-center">
-            <span class="text-[13px] text-gray-500 truncate">
-              <i class="fas fa-music fa-xs mr-2"></i>
-              <span data-field="genre-mobile-text">${escapeHtml(data.genre1 && data.genre2 ? `${data.genre1} / ${data.genre2}` : data.genre1 || data.genre2 || '')}</span>
+            <span class="text-[13px] text-gray-400 truncate">
+              <i class="fas fa-music fa-xs inline-block w-4 text-center mr-1"></i><span data-field="genre-mobile-text">${escapeHtml(data.genre1 && data.genre2 ? `${data.genre1} / ${data.genre2}` : data.genre1 || data.genre2 || '')}</span>
             </span>
           </div>
-          <!-- Primary track -->
+          <!-- Primary track (marker: 1) -->
           <div class="flex items-center ${data.primaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}"
                data-track-play-btn="${data.primaryTrackDisplay ? 'true' : ''}"
                data-track-identifier="${data.primaryTrack || ''}">
             <span class="text-[13px] text-green-400 truncate">
-              <i class="fas fa-play fa-xs mr-2"></i>
-              ${data.primaryTrackDisplay ? '<span class="text-yellow-400 text-xs mr-1">★</span>' : ''}
-              <span data-field="track-mobile-text">${escapeHtml(data.primaryTrackDisplay || '')}</span>
+              <span class="inline-block w-4 text-center mr-1 text-[11px] font-semibold font-[Georgia,serif]">I</span><span data-field="track-mobile-text">${escapeHtml(data.primaryTrackDisplay || '')}</span>
             </span>
           </div>
-          <!-- Secondary track (optional) -->
-          ${
-            data.hasSecondaryTrack
-              ? `<div class="flex items-center cursor-pointer active:opacity-70"
-                     data-track-play-btn="true"
-                     data-track-identifier="${data.secondaryTrack || ''}">
-                  <span class="text-[13px] text-green-400 truncate">
-                    <i class="fas fa-play fa-xs mr-2"></i>
-                    <span class="text-yellow-400 text-xs mr-1">☆</span>
-                    <span data-field="secondary-track-mobile-text">${escapeHtml(data.secondaryTrackDisplay || '')}</span>
-                  </span>
-                </div>`
-              : ''
-          }
+          <!-- Secondary track (marker: 2) — always rendered for a consistent layout -->
+          <div class="flex items-center ${data.secondaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}"
+               data-track-play-btn="${data.secondaryTrackDisplay ? 'true' : ''}"
+               data-track-identifier="${data.secondaryTrack || ''}">
+            <span class="text-[13px] text-green-400 truncate">
+              <span class="inline-block w-4 text-center mr-1 text-[11px] font-semibold font-[Georgia,serif]">II</span><span data-field="secondary-track-mobile-text">${escapeHtml(data.secondaryTrackDisplay || '')}</span>
+            </span>
+          </div>
         </div>
         
         <!-- MENU SECTION -->
@@ -1433,6 +1438,64 @@ export function createAlbumDisplay(deps = {}) {
                 });
               } else {
                 trackPlayBtn.classList.remove(
+                  'cursor-pointer',
+                  'active:opacity-70'
+                );
+              }
+            }
+          }
+
+          const secondaryTrackMobile = cache.secondaryTrackText;
+          if (secondaryTrackMobile) {
+            secondaryTrackMobile.textContent = data.secondaryTrackDisplay || '';
+
+            const secondaryPlayBtn = secondaryTrackMobile.closest(
+              '[data-track-play-btn]'
+            );
+            if (secondaryPlayBtn) {
+              const hasSecondary = !!data.secondaryTrackDisplay;
+              secondaryPlayBtn.setAttribute(
+                'data-track-play-btn',
+                hasSecondary ? 'true' : ''
+              );
+
+              if (hasSecondary) {
+                secondaryPlayBtn.classList.add(
+                  'cursor-pointer',
+                  'active:opacity-70'
+                );
+                const newSecondaryBtn = secondaryPlayBtn.cloneNode(true);
+                secondaryPlayBtn.parentNode.replaceChild(
+                  newSecondaryBtn,
+                  secondaryPlayBtn
+                );
+                cache.secondaryTrackText = newSecondaryBtn.querySelector(
+                  '[data-field="secondary-track-mobile-text"]'
+                );
+
+                newSecondaryBtn.addEventListener(
+                  'touchstart',
+                  (e) => e.stopPropagation(),
+                  { passive: true }
+                );
+                newSecondaryBtn.addEventListener(
+                  'touchend',
+                  (e) => e.stopPropagation(),
+                  { passive: true }
+                );
+                newSecondaryBtn.addEventListener('click', (e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  const albumsForPlay = getListData(getCurrentList());
+                  const albumForPlay = albumsForPlay && albumsForPlay[index];
+                  if (albumForPlay) {
+                    const albumId =
+                      `${albumForPlay.artist}::${albumForPlay.album}::${albumForPlay.release_date || ''}`.toLowerCase();
+                    playTrackSafe(albumId);
+                  }
+                });
+              } else {
+                secondaryPlayBtn.classList.remove(
                   'cursor-pointer',
                   'active:opacity-70'
                 );
@@ -2142,7 +2205,6 @@ export function createAlbumDisplay(deps = {}) {
             lastRenderedMutableState = extractMutableFingerprints(albums);
           });
 
-          reapplyNowPlayingBorder();
           console.log(`Album inserted at index ${updateType.index}`);
           return;
         }
@@ -2164,7 +2226,6 @@ export function createAlbumDisplay(deps = {}) {
             lastRenderedMutableState = extractMutableFingerprints(albums);
           });
 
-          reapplyNowPlayingBorder();
           console.log(`Album removed from index ${updateType.index}`);
           return;
         }
@@ -2189,7 +2250,6 @@ export function createAlbumDisplay(deps = {}) {
             prePopulatePositionCache(albumContainer, isMobile);
           }
 
-          reapplyNowPlayingBorder();
           return;
         }
         console.warn(
@@ -2269,8 +2329,6 @@ export function createAlbumDisplay(deps = {}) {
         lastRenderedFingerprint = generateAlbumFingerprint(albums);
         lastRenderedMutableState = extractMutableFingerprints(albums);
       });
-
-      reapplyNowPlayingBorder();
     };
 
     const renderRemainingBatches = (parent, nextIndex) => {

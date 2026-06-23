@@ -581,94 +581,9 @@
   }
 }
 
-/* Remove blur effect when now-playing border is active (mobile) */
-.mobile-album-cover.now-playing .album-cover-blur {
-  box-shadow: none;
-}
-
-/* ============================================
-   Now Playing Album Border Effect
-   Animated Spotify-green snaking border for currently playing album
-   ============================================ */
-
-/* CSS custom property for animation angle */
-@property --now-playing-angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-
-/* Desktop: album-cover-container needs position relative for pseudo-element */
+/* Desktop: positioning context for the cover's badge overlays */
 .album-cover-container {
   position: relative;
-}
-
-/* Now playing state - replaces existing effects */
-.album-cover-container.now-playing,
-.mobile-album-cover.now-playing {
-  /* Override existing box-shadow effects */
-  box-shadow: none !important;
-  /* Create stacking context so ::before with z-index:-1 stays visible */
-  isolation: isolate;
-  /* Ensure pseudo-element isn't clipped */
-  overflow: visible !important;
-}
-
-/* The animated snaking border effect */
-.album-cover-container.now-playing::before,
-.mobile-album-cover.now-playing::before {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 8px;
-  /* More border coverage (70%), smaller gap (15%), brighter green */
-  background: conic-gradient(
-    from var(--now-playing-angle),
-    #1ed760 0%,
-    #1ed760 30%,
-    rgba(30, 215, 96, 0.6) 38%,
-    transparent 45%,
-    transparent 55%,
-    rgba(30, 215, 96, 0.6) 62%,
-    #1ed760 70%,
-    #1ed760 100%
-  );
-  filter: blur(3px);
-  opacity: 1;
-  z-index: -1;
-  animation: now-playing-rotate 3.5s linear infinite;
-}
-
-/* Mobile: match desktop proportions for consistent look */
-@media (max-width: 1023px) {
-  .mobile-album-cover.now-playing::before {
-    /* Account for 75x75 image centered in 80x80 container (2.5px padding) */
-    /* Position border 3px from image edge, matching desktop visual */
-    inset: -0.5px;
-    border-radius: 10px;
-    /* No blur - use gradient softness instead to avoid outer halo artifact */
-    filter: none;
-    /* Softer gradient for mobile without blur */
-    background: conic-gradient(
-      from var(--now-playing-angle),
-      #1ed760 0%,
-      #1ed760 25%,
-      rgba(30, 215, 96, 0.7) 32%,
-      rgba(30, 215, 96, 0.3) 40%,
-      transparent 47%,
-      transparent 53%,
-      rgba(30, 215, 96, 0.3) 60%,
-      rgba(30, 215, 96, 0.7) 68%,
-      #1ed760 75%,
-      #1ed760 100%
-    );
-  }
-}
-
-@keyframes now-playing-rotate {
-  to {
-    --now-playing-angle: 360deg;
-  }
 }
 
 /* ============================================

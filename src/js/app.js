@@ -9,7 +9,6 @@ import { createEditableFields } from './modules/editable-fields.js';
 import { createSorting } from './modules/sorting.js';
 import { createImportConflictHandler } from './modules/import-export.js';
 // Date utilities are imported directly by modules that need them
-import { createNowPlaying } from './modules/now-playing.js';
 import { createAppRealtimeSync } from './modules/app-realtime-sync.js';
 import { showToast } from './modules/toast.js';
 import {
@@ -431,7 +430,6 @@ const getAlbumDisplayModule = createLazyModule(() =>
     getTrackName,
     getTrackLength,
     formatTrackTime,
-    reapplyNowPlayingBorder,
     initializeUnifiedSorting,
     destroySorting,
     setContextAlbum: (index, albumId) => {
@@ -759,25 +757,6 @@ const getImportConflictModule = createLazyModule(() =>
 // Wrapper function for import conflict handling
 function initializeImportConflictHandling() {
   return getImportConflictModule().initializeImportConflictHandling();
-}
-
-/**
- * Get or initialize the now-playing module
- * Uses lazy initialization to avoid dependency ordering issues
- */
-const getNowPlayingModule = createLazyModule(() => {
-  const mod = createNowPlaying({
-    getListData,
-    getCurrentList: () => getCurrentListId(),
-  });
-  // Initialize event listeners
-  mod.initialize();
-  return mod;
-});
-
-// Wrapper function for now-playing module (reapplyNowPlayingBorder is passed to album-display)
-function reapplyNowPlayingBorder() {
-  return getNowPlayingModule().reapplyNowPlayingBorder();
 }
 
 const { initializeRealtimeSync } = createAppRealtimeSync({
