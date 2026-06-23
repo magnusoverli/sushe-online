@@ -13,7 +13,6 @@ export function createMobileListActionMenu(deps = {}) {
     showConfirmation,
     apiCall,
     selectList,
-    refreshMobileBarVisibility,
     refreshGroupsAndLists,
     updateListNav,
     showToast,
@@ -243,10 +242,6 @@ export function createMobileListActionMenu(deps = {}) {
             if (remainingLists.length > 0) {
               selectList(remainingLists[0]);
             } else {
-              if (refreshMobileBarVisibility) {
-                refreshMobileBarVisibility();
-              }
-
               const headerAddAlbumBtn =
                 doc?.getElementById('headerAddAlbumBtn');
               if (headerAddAlbumBtn) headerAddAlbumBtn.classList.add('hidden');

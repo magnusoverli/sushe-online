@@ -47,7 +47,6 @@ import { createMobileListMenus } from './mobile-ui/list-menus.js';
  * @param {Function} deps.getAvailableCountries - Get available countries list
  * @param {Function} deps.getAvailableGenres - Get available genres list
  * @param {Function} deps.setCurrentContextAlbum - Set current context album index
- * @param {Function} deps.refreshMobileBarVisibility - Refresh mobile bar visibility
  * @param {Function} deps.showDiscoveryModal - Show discovery modal for Last.fm features
  * @param {Function} deps.playSpecificTrack - Play a specific track by name
  * @param {Function} deps.getSortedGroups - Get groups sorted by sort_order
@@ -88,7 +87,6 @@ export function createMobileUI(deps = {}) {
     getAvailableCountries,
     getAvailableGenres,
     setCurrentContextAlbum,
-    refreshMobileBarVisibility,
     showDiscoveryModal,
     playSpecificTrack,
     getSortedGroups,
@@ -179,7 +177,6 @@ export function createMobileUI(deps = {}) {
     showConfirmation,
     apiCall,
     selectList,
-    refreshMobileBarVisibility,
     refreshGroupsAndLists,
     updateListNav,
     showToast,

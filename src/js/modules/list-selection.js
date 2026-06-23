@@ -204,10 +204,6 @@ export function createListSelection(deps = {}) {
                 { delayMs: 250, timeoutMs: 3000 }
               );
             }
-
-            if (win?.refreshMobileBarVisibility) {
-              win.refreshMobileBarVisibility();
-            }
           }
         } catch (error) {
           logger.warn('Failed to fetch list data:', error);

@@ -5,7 +5,6 @@
  */
 
 import { showToast } from './utils.js';
-import { isAlbumMatchingPlayback } from './playback-utils.js';
 import { getDeviceIcon } from '../utils/device-icons.js';
 import { formatTime } from './time-utils.js';
 import {
@@ -14,7 +13,6 @@ import {
   hasLastfmConnection,
   isTerminalLastfmErrorCode,
 } from './spotify-lastfm-utils.js';
-import { getCurrentListId, getListData } from './app-state.js';
 
 // ============ MODULE STATE ============
 let currentPlayback = null;
@@ -62,48 +60,9 @@ const SPOTIFY_AUTH_ERROR_CODES = new Set([
 // DOM Elements (cached on init)
 let elements = {};
 
-// Mobile now-playing bar elements
-let mobileElements = {};
-
 // ============ UTILITY FUNCTIONS ============
 
 // formatTime is imported from ./time-utils.js
-
-/**
- * Check if the currently playing track's album is in the current list
- */
-function isCurrentTrackInCurrentList(playbackState) {
-  // No playback = not in list
-  if (!playbackState?.item?.album || !playbackState?.item?.artists) {
-    return false;
-  }
-
-  // No current list = not in list
-  const currentList = getCurrentListId();
-  if (!currentList) {
-    return false;
-  }
-
-  const albums = getListData(currentList);
-  if (!albums || !Array.isArray(albums) || albums.length === 0) {
-    return false;
-  }
-
-  // Extract album and artist names from playback state
-  const playingAlbumName = playbackState.item.album.name;
-  const playingArtistName = playbackState.item.artists
-    ?.map((a) => a.name)
-    .join(', ');
-
-  if (!playingAlbumName || !playingArtistName) {
-    return false;
-  }
-
-  // Check if any album in the list matches
-  return albums.some((album) =>
-    isAlbumMatchingPlayback(album, playingAlbumName, playingArtistName)
-  );
-}
 
 // getDeviceIcon is imported from utils/device-icons.js (shared module)
 
@@ -394,7 +353,6 @@ async function apiCall(url, options = {}, actionName = null) {
           isSpotifyAuthUnavailable = true;
           stopPolling();
           currentPlayback = null;
-          updateMobileBar(null);
           if (!isHeadlessMode) {
             showState('not-connected');
           }
@@ -583,140 +541,6 @@ function cacheElements() {
     currentDevice: document.getElementById('miniplayerCurrentDevice'),
     deviceName: document.getElementById('miniplayerDeviceName'),
   };
-}
-
-// ============ MOBILE NOW-PLAYING BAR ============
-
-/**
- * Cache mobile now-playing bar elements
- */
-function cacheMobileElements() {
-  mobileElements = {
-    bar: document.getElementById('mobileNowPlaying'),
-    art: document.getElementById('mobileNowPlayingArt'),
-    track: document.getElementById('mobileNowPlayingTrack'),
-    artist: document.getElementById('mobileNowPlayingArtist'),
-    device: document.getElementById('mobileNowPlayingDevice'),
-    progressFill: document.getElementById('mobileNowPlayingProgressFill'),
-  };
-}
-
-/**
- * Update mobile now-playing bar with current state
- */
-function updateMobileBar(state) {
-  if (!mobileElements.bar) return;
-
-  // Check if we should show the bar:
-  // 1. Must be playing (not paused/stopped)
-  // 2. Must have track info
-  // 3. Track's album must be in the current list
-  const shouldShow =
-    state?.item && state.is_playing && isCurrentTrackInCurrentList(state);
-
-  if (shouldShow) {
-    // Show the bar
-    mobileElements.bar.classList.add('visible');
-    document.body.classList.add('now-playing-bar-visible');
-
-    // Update track info
-    if (mobileElements.track) {
-      mobileElements.track.textContent = state.item.name || 'Unknown';
-    }
-
-    if (mobileElements.artist) {
-      const artists =
-        state.item.artists?.map((a) => a.name).join(', ') || 'Unknown Artist';
-      mobileElements.artist.textContent = artists;
-    }
-
-    // Update device info
-    if (mobileElements.device && state.device) {
-      const deviceSpan = mobileElements.device.querySelector('span');
-      if (deviceSpan) {
-        deviceSpan.textContent = state.device.name || 'Unknown Device';
-      }
-      // Update device icon
-      const deviceIcon = mobileElements.device.querySelector('i');
-      if (deviceIcon) {
-        deviceIcon.className = getDeviceIcon(state.device.type);
-      }
-    }
-
-    // Update progress bar
-    if (mobileElements.progressFill && state.item.duration_ms) {
-      const percent = Math.min(
-        ((state.progress_ms || 0) / state.item.duration_ms) * 100,
-        100
-      );
-      mobileElements.progressFill.style.width = `${percent}%`;
-    }
-
-    // Update album art
-    const albumImage =
-      state.item.album?.images?.[1]?.url || state.item.album?.images?.[0]?.url;
-    if (albumImage && mobileElements.art) {
-      let img = mobileElements.art.querySelector('img');
-      if (!img) {
-        // Replace placeholder with img
-        mobileElements.art.innerHTML = '<img src="" alt="" />';
-        img = mobileElements.art.querySelector('img');
-      }
-      if (img && img.src !== albumImage) {
-        img.src = albumImage;
-        img.alt = state.item.album?.name || '';
-      }
-    }
-
-    // Start/continue mobile progress animation
-    startMobileProgressAnimation();
-  } else {
-    // Hide the bar when paused/stopped or track not in current list
-    mobileElements.bar.classList.remove('visible');
-    document.body.classList.remove('now-playing-bar-visible');
-    stopMobileProgressAnimation();
-  }
-}
-
-// Mobile progress animation
-let mobileAnimationFrameId = null;
-
-/**
- * Animation loop for smooth mobile progress updates
- */
-function mobileProgressLoop() {
-  if (!currentPlayback?.is_playing || !mobileElements.progressFill) {
-    mobileAnimationFrameId = null;
-    return;
-  }
-
-  const position = getInterpolatedPosition();
-  const duration = currentPlayback.item?.duration_ms || 0;
-
-  if (duration > 0) {
-    const percent = Math.min((position / duration) * 100, 100);
-    mobileElements.progressFill.style.width = `${percent}%`;
-  }
-
-  mobileAnimationFrameId = requestAnimationFrame(mobileProgressLoop);
-}
-
-/**
- * Start mobile progress animation
- */
-function startMobileProgressAnimation() {
-  if (mobileAnimationFrameId) return;
-  mobileAnimationFrameId = requestAnimationFrame(mobileProgressLoop);
-}
-
-/**
- * Stop mobile progress animation
- */
-function stopMobileProgressAnimation() {
-  if (mobileAnimationFrameId) {
-    cancelAnimationFrame(mobileAnimationFrameId);
-    mobileAnimationFrameId = null;
-  }
 }
 
 // ============ UI STATE MANAGEMENT ============
@@ -1155,9 +979,6 @@ async function pollPlaybackState() {
     // Emit playback stopped event
     emitPlaybackChange(null);
 
-    // Update mobile bar (hide it)
-    updateMobileBar(null);
-
     if (!isHeadlessMode) {
       showState('inactive');
       stopProgressAnimation();
@@ -1201,9 +1022,6 @@ async function pollPlaybackState() {
   } else if (isTrackChange) {
     console.log('Track changed to:', state.item?.name);
   }
-
-  // Update mobile bar (works in headless mode too)
-  updateMobileBar(state);
 
   // Skip desktop UI updates in headless mode (mobile)
   if (!isHeadlessMode) {
@@ -1626,7 +1444,7 @@ export function initMiniplayer() {
 
 /**
  * Initialize headless playback tracking (for mobile)
- * Polls Spotify API without updating desktop UI, but updates mobile now-playing bar
+ * Polls Spotify API without updating desktop UI (drives Last.fm scrobbling)
  */
 export function initPlaybackTracking() {
   // Check if user has Spotify connected
@@ -1636,9 +1454,6 @@ export function initPlaybackTracking() {
 
   isHeadlessMode = true;
 
-  // Cache mobile now-playing bar elements
-  cacheMobileElements();
-
   // Set up visibility change handler
   document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -1646,20 +1461,3 @@ export function initPlaybackTracking() {
   console.log('Spotify playback tracking: Starting mobile polling mode');
   startPolling();
 }
-
-/**
- * Refresh mobile bar visibility based on current playback and list state
- * Call this when the list changes or albums are added/removed
- */
-export function refreshMobileBarVisibility() {
-  // Re-check current playback state against current list
-  if (currentPlayback) {
-    updateMobileBar(currentPlayback);
-  } else {
-    // No playback, ensure bar is hidden
-    updateMobileBar(null);
-  }
-}
-
-// Make available globally for app.js to call
-window.refreshMobileBarVisibility = refreshMobileBarVisibility;

@@ -318,13 +318,12 @@ describe('app-list-operations module', () => {
     assert.strictEqual(win.lastSelectedList, null);
   });
 
-  it('saves lists incrementally, updates snapshots, and refreshes mobile bar', async () => {
+  it('saves lists incrementally and updates snapshots', async () => {
     const snapshots = new Map([['list-1', [{ album_id: 'old' }]]]);
     const markLocalSave = mock.fn();
     const setListData = mock.fn();
     const updateListMetadata = mock.fn();
     const saveSnapshotToStorage = mock.fn();
-    const refreshMobileBarVisibility = mock.fn();
 
     const operations = createAppListOperations({
       apiCall: async () => ({
@@ -352,7 +351,7 @@ describe('app-list-operations module', () => {
         updated: [],
         totalChanges: 1,
       }),
-      win: { refreshMobileBarVisibility },
+      win: {},
       logger: { log: () => {} },
     });
 
@@ -367,7 +366,6 @@ describe('app-list-operations module', () => {
       'list-1',
       { year: 2024 },
     ]);
-    assert.strictEqual(refreshMobileBarVisibility.mock.calls.length, 1);
     assert.strictEqual(
       setListData.mock.calls[0].arguments[1][0]._id,
       'new-item'
@@ -376,7 +374,6 @@ describe('app-list-operations module', () => {
 
   it('imports list data and related track picks/summaries', async () => {
     const listsState = {};
-    const refreshMobileBarVisibility = mock.fn();
     const logger = { warn: mock.fn(), log: mock.fn() };
 
     const apiCall = mock.fn(async (url) => {
@@ -414,7 +411,7 @@ describe('app-list-operations module', () => {
       saveSnapshotToStorage: () => {},
       markLocalSave: () => {},
       computeListDiff: () => null,
-      win: { refreshMobileBarVisibility },
+      win: {},
       logger,
     });
 
@@ -434,7 +431,6 @@ describe('app-list-operations module', () => {
 
     assert.strictEqual(importedId, 'new-list');
     assert.strictEqual(listsState['new-list'].name, 'Imported List');
-    assert.strictEqual(refreshMobileBarVisibility.mock.calls.length, 1);
     assert.strictEqual(logger.log.mock.calls.length, 1);
     assert.strictEqual(apiCall.mock.calls.length, 5);
   });

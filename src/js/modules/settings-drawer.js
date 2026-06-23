@@ -342,16 +342,11 @@ export function createSettingsDrawer(deps = {}) {
     document.body.style.overflow = 'hidden';
     isOpen = true;
 
-    // Hide FAB and mobile now-playing bar on mobile
+    // Hide FAB on mobile
     const fab = document.getElementById('addAlbumFAB');
-    const nowPlaying = document.getElementById('mobileNowPlaying');
     if (fab) {
       fab.style.opacity = '0';
       fab.style.pointerEvents = 'none';
-    }
-    if (nowPlaying) {
-      nowPlaying.style.opacity = '0';
-      nowPlaying.style.pointerEvents = 'none';
     }
 
     // Load initial category if not loaded
@@ -396,9 +391,8 @@ export function createSettingsDrawer(deps = {}) {
     document.body.style.overflow = '';
     isOpen = false;
 
-    // Restore FAB and mobile now-playing bar visibility
+    // Restore FAB visibility
     const fab = document.getElementById('addAlbumFAB');
-    const nowPlaying = document.getElementById('mobileNowPlaying');
     const currentList = getCurrentListId();
 
     if (fab) {
@@ -407,10 +401,6 @@ export function createSettingsDrawer(deps = {}) {
         fab.style.opacity = '1';
         fab.style.pointerEvents = 'auto';
       }
-    }
-    if (nowPlaying) {
-      nowPlaying.style.opacity = '';
-      nowPlaying.style.pointerEvents = '';
     }
   }
 

@@ -427,32 +427,7 @@
   >
     <i class="fas fa-plus text-xl"></i>
   </button>
-  
-  <!-- Mobile Floating Now Playing Bar -->
-  <div id="mobileNowPlaying" class="mobile-now-playing">
-    <!-- Progress bar at top -->
-    <div id="mobileNowPlayingProgress" class="mobile-now-playing-progress">
-      <div id="mobileNowPlayingProgressFill" class="mobile-now-playing-progress-fill"></div>
-    </div>
-    <!-- Main content -->
-    <a href="spotify:" class="mobile-now-playing-content">
-      <div id="mobileNowPlayingArt" class="mobile-now-playing-art">
-        <svg class="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"></circle>
-          <circle cx="12" cy="12" r="3"></circle>
-        </svg>
-      </div>
-      <div class="mobile-now-playing-info">
-        <p id="mobileNowPlayingTrack" class="mobile-now-playing-track">Not Playing</p>
-        <p id="mobileNowPlayingArtist" class="mobile-now-playing-artist">—</p>
-        <p id="mobileNowPlayingDevice" class="mobile-now-playing-device">
-          <i class="fas fa-broadcast-tower"></i>
-          <span>—</span>
-        </p>
-      </div>
-    </a>
-  </div>
-  
+
   <!-- Toast container -->
   <div id="toast" class="toast"></div>
   
@@ -502,7 +477,6 @@
       const backdrop = document.getElementById('mobileMenuBackdrop');
       const drawer = document.getElementById('mobileMenuDrawer');
       const fab = document.getElementById('addAlbumFAB');
-      const nowPlaying = document.getElementById('mobileNowPlaying');
       const albumContainer = document.getElementById('albumContainer');
       const isOpen = menu.dataset.open === 'true';
       
@@ -520,10 +494,6 @@
         if (fab) {
           fab.style.opacity = '1';
           fab.style.pointerEvents = 'auto';
-        }
-        if (nowPlaying) {
-          nowPlaying.style.opacity = '';
-          nowPlaying.style.pointerEvents = '';
         }
         // Hide after transition completes
         setTimeout(() => {
@@ -553,10 +523,6 @@
         if (fab) {
           fab.style.opacity = '0';
           fab.style.pointerEvents = 'none';
-        }
-        if (nowPlaying) {
-          nowPlaying.style.opacity = '0';
-          nowPlaying.style.pointerEvents = 'none';
         }
       }
     }

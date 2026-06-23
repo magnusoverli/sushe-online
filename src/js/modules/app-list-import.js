@@ -2,14 +2,7 @@
  * List import flow extracted from app list operations.
  */
 export function createListImporter(deps = {}) {
-  const {
-    apiCall,
-    showToast,
-    getLists,
-    getCurrentListId,
-    win = typeof window !== 'undefined' ? window : null,
-    logger = console,
-  } = deps;
+  const { apiCall, showToast, getLists, logger = console } = deps;
 
   function sanitizeImportedAlbums(albums) {
     return albums.map((album) => {
@@ -149,10 +142,6 @@ export function createListImporter(deps = {}) {
       const albumToListItemMap = buildAlbumToListItemMap(savedList);
       const { trackPicksImported, summariesImported } =
         await importTrackPicksAndSummaries(albums, albumToListItemMap);
-
-      if (listId === getCurrentListId() && win?.refreshMobileBarVisibility) {
-        win.refreshMobileBarVisibility();
-      }
 
       if (trackPicksImported > 0 || summariesImported > 0) {
         logger.log(

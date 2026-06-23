@@ -495,11 +495,6 @@ const getContextMenusModule = createLazyModule(() =>
     setCurrentList: (listName) => {
       setCurrentListId(listName);
     },
-    refreshMobileBarVisibility: () => {
-      if (window.refreshMobileBarVisibility) {
-        window.refreshMobileBarVisibility();
-      }
-    },
     getCurrentUser: () => window.currentUser || {},
     toggleMainStatus,
     getSortedGroups,
@@ -551,11 +546,6 @@ const getMobileUIModule = createLazyModule(() =>
     getAvailableGenres,
     setCurrentContextAlbum: (idx) => {
       setContextAlbumState(idx, getContextAlbumState().albumId);
-    },
-    refreshMobileBarVisibility: () => {
-      if (window.refreshMobileBarVisibility) {
-        window.refreshMobileBarVisibility();
-      }
     },
     showDiscoveryModal: (type, data) => {
       import('./modules/discovery.js').then(({ showDiscoveryModal }) => {

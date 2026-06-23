@@ -231,10 +231,6 @@ export function createAppListOperations(deps = {}) {
       if (year !== undefined) {
         updateListMetadata(listId, { year });
       }
-
-      if (listId === getCurrentListId() && win?.refreshMobileBarVisibility) {
-        win.refreshMobileBarVisibility();
-      }
     } catch (error) {
       showToast('Error saving list', 'error');
       throw error;

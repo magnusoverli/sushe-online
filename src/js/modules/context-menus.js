@@ -38,7 +38,6 @@ import {
  * @param {Function} deps.getContextList - Get context menu list state
  * @param {Function} deps.setContextList - Set context menu list state
  * @param {Function} deps.setCurrentList - Set current list (for delete)
- * @param {Function} deps.refreshMobileBarVisibility - Refresh mobile bar visibility
  * @param {Function} deps.getSortedGroups - Get groups sorted by sort_order
  * @param {Function} deps.refreshGroupsAndLists - Refresh groups and lists after changes
  * @param {Function} deps.clearSnapshotFromStorage - Clear local list snapshot cache
@@ -64,7 +63,6 @@ export function createContextMenus(deps = {}) {
     getContextList,
     setContextList,
     setCurrentList,
-    refreshMobileBarVisibility,
     getSortedGroups,
     refreshGroupsAndLists,
     toggleMainStatus,
@@ -308,11 +306,6 @@ export function createContextMenus(deps = {}) {
             } else {
               // No lists remain - show empty state
               setCurrentList(null);
-
-              // Refresh mobile bar visibility when list is cleared
-              if (refreshMobileBarVisibility) {
-                refreshMobileBarVisibility();
-              }
 
               const headerAddAlbumBtn =
                 document.getElementById('headerAddAlbumBtn');

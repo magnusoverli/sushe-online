@@ -14,7 +14,6 @@ describe('list-selection module', () => {
     const states = [];
     const toasts = [];
     let currentListId = 'old-list';
-    let refreshCalls = 0;
     let spinnerTarget = null;
 
     const fab = { style: { display: '' } };
@@ -41,12 +40,7 @@ describe('list-selection module', () => {
           return null;
         },
       },
-      win: {
-        lastSelectedList: null,
-        refreshMobileBarVisibility() {
-          refreshCalls += 1;
-        },
-      },
+      win: { lastSelectedList: null },
       storage: {
         setItem(key, value) {
           storageWrites.push([key, value]);
@@ -126,7 +120,6 @@ describe('list-selection module', () => {
       [{ album_id: 'fetched' }],
       { forceFullRebuild: true },
     ]);
-    assert.strictEqual(refreshCalls, 1);
     assert.deepStrictEqual(toasts, []);
   });
 
