@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-06-24",
+    "category": "fix",
+    "description": "Summary and recommendation badges now display correctly after loading.",
+    "hash": "99d6a4e0b14b18fad23b7eb4e6e38d229a719187",
+    "commitMessage": "Render summary/recommendation badges after list hydration\n\nThe list loads in two phases: a lightweight `core` profile for fast first\npaint (which blanks summary, summary_source and recommended_by), then a\ndeferred `full` hydrate that fetches the complete data. hydrateListDetails\nfetched the full data but only re-rendered when the album ORDER changed\n(hasSameAlbumOrder), so for a normal list — same albums, same order — the\nfreshly fetched summary/recommendation fields were stored but never painted.\nThose fields are part of neither the album-order identity nor the mutable\nfingerprint, so a diff could not pick them up either, and the summary and\nrecommendation cover badges silently disappeared.\n\nAlways re-render on the core->full upgrade (the whole point of the hydrate),\nand drop the now-dead order-comparison helpers. Verified end to end against\nthe running app: badges are absent at core paint and present after hydrate."
+  },
+  {
+    "date": "2026-06-24",
     "category": "ui",
     "description": "Improved album card layout and spacing on mobile.",
     "hash": "e977e5703dee855bcdc08cfeb7e69a4f3881bb39",
