@@ -291,7 +291,10 @@ async function classifyWithClaude(commits) {
     .join('\n');
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    // Current, non-EOL Sonnet alias. Override via CHANGELOG_MODEL if this
+    // model is ever deprecated — avoids a repeat of the silent 404 that
+    // stalled changelog generation when claude-sonnet-4-20250514 retired.
+    model: process.env.CHANGELOG_MODEL || 'claude-sonnet-4-6',
     max_tokens: 2048,
     messages: [
       {
@@ -487,6 +490,15 @@ async function main() {
 
 main().catch((err) => {
   console.error('Changelog generation failed:', err.message);
+  // Surface the failure in the CI run so a silent green build doesn't hide a
+  // broken changelog generator (e.g. an end-of-life model id returning 404).
+  if (process.env.GITHUB_ACTIONS) {
+    const annotation = String(err.message || err)
+      .replace(/%/g, '%25')
+      .replace(/\r/g, '%0D')
+      .replace(/\n/g, '%0A');
+    console.log(`::warning title=Changelog generation failed::${annotation}`);
+  }
   // Don't fail the CI pipeline over changelog issues
   process.exit(0);
 });
