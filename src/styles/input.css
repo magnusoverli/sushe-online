@@ -2592,27 +2592,33 @@
 
 /* Mobile-specific summary badge styles */
 .summary-badge-mobile {
+  /* Bare icon (no disc) living in the title-row badge container: static so it
+     flows as a flex item there, transparent so no circle shows on the card. */
+  position: static;
   width: 24px;
   height: 24px;
-  top: 2px;
-  right: 2px;
-  background: rgba(0, 0, 0, 0.75);
-  border-radius: 50%;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  z-index: 1;
   -webkit-tap-highlight-color: transparent;
 }
 
 .summary-badge-mobile i {
-  font-size: 11px;
+  font-size: 13px;
+}
+
+/* Stay bare on hover/tap: override the base .summary-badge:hover (higher
+   specificity) and the previously-dark active background. Active keeps a subtle
+   press feedback. */
+.summary-badge-mobile:hover {
+  background: transparent;
 }
 
 .summary-badge-mobile:active {
-  background: rgba(0, 0, 0, 1);
+  background: transparent;
   transform: scale(0.95);
 }
 
@@ -2650,29 +2656,31 @@
 
 /* Mobile: mirrors .summary-badge-mobile but positioned top-left */
 .recommendation-badge-mobile {
-  position: absolute;
-  top: 2px;
-  left: 2px;
+  /* Bare icon (no disc) in the title-row badge container, mirroring
+     .summary-badge-mobile. */
+  position: static;
   width: 24px;
   height: 24px;
-  background: rgba(0, 0, 0, 0.75);
-  border-radius: 50%;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: default;
   transition: all 0.2s ease;
-  z-index: 1;
   -webkit-tap-highlight-color: transparent;
 }
 
 .recommendation-badge-mobile i {
-  font-size: 11px;
+  font-size: 13px;
   color: #3b82f6; /* blue-500 - vivid blue */
 }
 
+.recommendation-badge-mobile:hover {
+  background: transparent;
+}
+
 .recommendation-badge-mobile:active {
-  background: rgba(0, 0, 0, 1);
+  background: transparent;
   transform: scale(0.95);
 }
 

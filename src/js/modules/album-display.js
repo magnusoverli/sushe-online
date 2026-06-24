@@ -767,17 +767,18 @@ export function createAlbumDisplay(deps = {}) {
       : data.coverThumbUrl || null;
     const coverLoadMode = getCoverLoadMode(index, true);
 
-    // === SUMMARY BADGE (AI indicator on cover) ===
+    // === SUMMARY BADGE (AI indicator, shown at the right of the title row) ===
+    // Styling (bare icon, no disc) lives in .summary-badge-mobile in input.css.
     let summaryBadgeHtml = '';
     if (data.summary) {
       summaryBadgeHtml = `
-        <div class="summary-badge summary-badge-mobile claude-badge" style="position: static; background: transparent"
+        <div class="summary-badge summary-badge-mobile claude-badge"
              data-summary="${escapeHtml(data.summary)}"
-             data-source-url="${escapeHtml('')}" 
+             data-source-url="${escapeHtml('')}"
              data-source="${escapeHtml(data.summarySource || '')}"
-             data-album-name="${escapeHtml(data.albumName)}" 
+             data-album-name="${escapeHtml(data.albumName)}"
              data-artist="${escapeHtml(data.artist)}">
-          <i class="fas fa-robot" style="font-size: 13px"></i>
+          <i class="fas fa-robot"></i>
         </div>`;
     }
 
@@ -785,12 +786,12 @@ export function createAlbumDisplay(deps = {}) {
     let mobileRecommendationBadgeHtml = '';
     if (data.recommendedBy) {
       mobileRecommendationBadgeHtml = `
-        <div class="recommendation-badge recommendation-badge-mobile" style="position: static; background: transparent"
+        <div class="recommendation-badge recommendation-badge-mobile"
              data-recommended-by="${escapeHtml(data.recommendedBy)}"
              data-recommended-at="${escapeHtml(data.recommendedAt || '')}"
              data-album-name="${escapeHtml(data.albumName)}"
              data-artist="${escapeHtml(data.artist)}">
-          <i class="fas fa-thumbs-up" style="font-size: 13px"></i>
+          <i class="fas fa-thumbs-up"></i>
         </div>`;
     }
 
