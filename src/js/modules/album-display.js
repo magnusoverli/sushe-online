@@ -710,8 +710,8 @@ export function createAlbumDisplay(deps = {}) {
    *
    * LAYOUT STRUCTURE:
    * ┌────────────────────────────────────────────────────────────────────────┐
-   * │ cardWrapper (.album-card-wrapper) - h-[138px]                         │
-   * │  └─ card (.album-card.album-row) - relative, h-[138px]               │
+   * │ cardWrapper (.album-card-wrapper) - h-[145px]                         │
+   * │  └─ card (.album-card.album-row) - relative, h-[145px]               │
    * │     ├─ positionBadge (absolute, top-right of card)                   │
    * │     └─ contentRow (flex row, h-full)                                  │
    * │        ├─ coverSection (w-[88px], flex-shrink-0)                     │
@@ -749,16 +749,16 @@ export function createAlbumDisplay(deps = {}) {
     // === WRAPPER ELEMENT ===
     // Container for sortable drag functionality
     const cardWrapper = document.createElement('div');
-    cardWrapper.className = 'album-card-wrapper h-[138px]';
+    cardWrapper.className = 'album-card-wrapper h-[145px]';
 
     // === CARD ELEMENT ===
     // Main card with:
     // - album-card: Touch feedback, box-shadow transitions
     // - album-row: Inset top/bottom separators (subtle white lines)
     // - relative: Positioning context for absolute children
-    // - h-[138px]: Fixed height matching wrapper
+    // - h-[145px]: Fixed height matching wrapper
     const card = document.createElement('div');
-    card.className = 'album-card album-row relative h-[138px] bg-gray-900';
+    card.className = 'album-card album-row relative h-[145px] bg-gray-900';
     card.dataset.index = index;
 
     // === COVER IMAGE SOURCE ===
@@ -771,13 +771,13 @@ export function createAlbumDisplay(deps = {}) {
     let summaryBadgeHtml = '';
     if (data.summary) {
       summaryBadgeHtml = `
-        <div class="summary-badge summary-badge-mobile claude-badge" 
-             data-summary="${escapeHtml(data.summary)}" 
+        <div class="summary-badge summary-badge-mobile claude-badge" style="position: static; background: transparent"
+             data-summary="${escapeHtml(data.summary)}"
              data-source-url="${escapeHtml('')}" 
              data-source="${escapeHtml(data.summarySource || '')}"
              data-album-name="${escapeHtml(data.albumName)}" 
              data-artist="${escapeHtml(data.artist)}">
-          <i class="fas fa-robot"></i>
+          <i class="fas fa-robot" style="font-size: 13px"></i>
         </div>`;
     }
 
@@ -785,12 +785,12 @@ export function createAlbumDisplay(deps = {}) {
     let mobileRecommendationBadgeHtml = '';
     if (data.recommendedBy) {
       mobileRecommendationBadgeHtml = `
-        <div class="recommendation-badge recommendation-badge-mobile"
+        <div class="recommendation-badge recommendation-badge-mobile" style="position: static; background: transparent"
              data-recommended-by="${escapeHtml(data.recommendedBy)}"
              data-recommended-at="${escapeHtml(data.recommendedAt || '')}"
              data-album-name="${escapeHtml(data.albumName)}"
              data-artist="${escapeHtml(data.artist)}">
-          <i class="fas fa-thumbs-up"></i>
+          <i class="fas fa-thumbs-up" style="font-size: 13px"></i>
         </div>`;
     }
 
@@ -845,7 +845,7 @@ export function createAlbumDisplay(deps = {}) {
              stretched to the card height. Without an explicit height this column
              collapses to its content (~104px) and centres, leaving justify-evenly
              with zero free space (all three sections touch, slack pools top/bottom).
-             h-full pins it to the full 138px so justify-evenly can distribute. -->
+             h-full pins it to the full 145px so justify-evenly can distribute. -->
         <!-- Full-height column with justify-evenly so the three stacked sections
              (cover, release date, availability badges) get four equal vertical
              gaps: top-border->cover, cover->date, date->badges, and
@@ -858,7 +858,7 @@ export function createAlbumDisplay(deps = {}) {
              four gaps visually equal. The live-update twin (mobile branch of the
              release-date className reset, ~line 1310) MUST keep these same
              classes or the asymmetry returns on the next in-place update. -->
-        <div class="h-full shrink-0 w-[88px] flex flex-col items-center justify-evenly pl-1">
+        <div class="h-full shrink-0 w-[88px] flex flex-col items-center justify-evenly pl-0.5">
           <!-- Album cover with optional summary badge -->
           <div class="mobile-album-cover relative w-20 h-20 flex items-center justify-center ${!mobileCoverSrc ? 'bg-gray-800 rounded-lg' : ''} ${mobileCoverSrc && coverLoadMode === 'initial' ? 'cover-reveal-shell' : ''}">
             ${
@@ -872,8 +872,6 @@ export function createAlbumDisplay(deps = {}) {
                   })
                 : `<i class="fas fa-compact-disc text-xl text-gray-600"></i>`
             }
-            ${summaryBadgeHtml}
-            ${mobileRecommendationBadgeHtml}
           </div>
           <!-- Release date -->
           <span class="release-date-display text-xs leading-none whitespace-nowrap ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}"
@@ -885,16 +883,25 @@ export function createAlbumDisplay(deps = {}) {
         </div>
         
         <!-- INFO SECTION -->
-        <div class="flex-1 min-w-0 pl-1 pr-1 flex flex-col justify-evenly h-[130px] leading-[18px]">
+        <div class="flex-1 min-w-0 pl-0.5 pr-1 flex flex-col justify-evenly h-[130px] leading-[18px]">
           <!-- Album name -->
-          <div class="flex items-center">
-            <h3 class="font-semibold text-gray-100 text-[15px] leading-tight truncate min-w-0">
+          <!-- The right padding reserves space on the title row, so the
+               truncated title cuts off at (info-section width - this padding).
+               The summary/recommendation badges overlay that reserved zone,
+               absolutely centered on the title line. -->
+          <div class="flex items-center relative" style="padding-right: 55px">
+            <h3 class="text-gray-100 leading-tight truncate min-w-0" style="font-size: 13px; font-weight: 700">
               <i class="fas fa-compact-disc fa-xs inline-block w-4 text-center align-middle mr-1"></i>${escapeHtml(data.albumName)}
             </h3>
+            <!-- Recommendation first (left), summary last so the summary badge
+                 is always the rightmost, fixed regardless of the recommendation. -->
+            <div class="absolute flex items-center" style="top: 50%; right: 4px; transform: translateY(-50%); gap: 4px">
+              ${mobileRecommendationBadgeHtml}${summaryBadgeHtml}
+            </div>
           </div>
           <!-- Artist -->
-          <div class="flex items-center">
-            <p class="text-[12px] text-gray-400 truncate">
+          <div class="flex items-center" style="padding-right: 55px">
+            <p class="text-[12px] text-gray-400 truncate min-w-0">
               <i class="fas fa-user fa-xs inline-block w-4 text-center mr-1"></i><span data-field="artist-mobile-text">${escapeHtml(data.artist)}</span>
             </p>
           </div>
