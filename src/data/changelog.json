@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-06-25",
+    "category": "ui",
+    "description": "Moved summary and recommendation badges away from the album cover.",
+    "hash": "0d1d1028fa24c0127c9d5f2709151620f98511bf",
+    "commitMessage": "Relocate summary/recommendation badges off the cover art\n\nThe summary (AI) and recommendation badges were heavy filled discs in the\ncover-art corners, each ~30% of the cover width. Move them into the card's\ntext column so the art is unobscured:\n\n- Reserve 55px on the right of the title and artist rows (truncate the album\n  title and artist at info-width - 55px; artist gains min-w-0 so it actually\n  ellipsizes).\n- Render the badges as bare icons (no disc background), 13px, anchored to the\n  right of the title line and vertically centered on it. The summary badge is\n  always rightmost; the recommendation badge sits to its left when present.\n\nAlso tidy surrounding metrics: card height 138->145px (info column 130px),\ntrim cover-column / info-section left padding to pl-0.5, and set the title to\n13px / weight 700."
+  },
+  {
     "date": "2026-06-24",
     "category": "fix",
     "description": "Summary and recommendation badges now display correctly after loading.",
