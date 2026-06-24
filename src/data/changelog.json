@@ -1,5 +1,47 @@
 [
   {
+    "date": "2026-06-24",
+    "category": "ui",
+    "description": "Improved album card layout and spacing on mobile.",
+    "hash": "e977e5703dee855bcdc08cfeb7e69a4f3881bb39",
+    "commitMessage": "Refine mobile album card layout and spacing\n\nMobile-only changes to the album card:\n- Move the Last.fm playcount into its own metadata row between artist and\n  country, styled to match the artist/country/genre rows.\n- Give the cover column an explicit h-full so cover / release-date /\n  availability space evenly. The card shares the desktop `album-row` class,\n  and app.css's global `.album-row > div { align-items: center }` overrides\n  Tailwind items-stretch; without an explicit height the column collapsed to\n  content and justify-evenly had no room to distribute.\n- Collapse the release-date line-box with leading-none (text-xs's 16px box\n  added ~2px half-leading that skewed the gaps), and keep the live-update\n  className twin in sync (drop the stale mt-1). Zero the mobile availability\n  badge top margin so the flex container owns all spacing.\n- Resize the position badge to 19x19px / 10px font, re-centered over the\n  30px menu column with equal top/right insets.\n- Reduce info-section metadata font from 13px to 12px (album title stays 15px)."
+  },
+  {
+    "date": "2026-06-24",
+    "category": "ui",
+    "description": "Removed the Spotify now-playing bar on mobile.",
+    "hash": "e93b6a950de93a5ca67bd1fd17a5155ecd58e7ec",
+    "commitMessage": "Remove the mobile Spotify now-playing bar\n\nCompletely remove the mobile-only bottom \"now playing\" bar (shown below\n1024px when an album plays in Spotify) and all its supporting code, leaving\nthe desktop player untouched and keeping Last.fm scrobbling intact.\n\n- HTML/CSS: delete the #mobileNowPlaying markup and its toggleMobileMenu\n  references; remove all .mobile-now-playing* rules and the\n  body.now-playing-bar-visible FAB offset.\n- spotify-player.js: remove updateMobileBar + its call sites, cacheMobileElements,\n  the mobile progress-animation helpers, mobileElements, the now-dead\n  isCurrentTrackInCurrentList, and refreshMobileBarVisibility + its window global.\n  Keep initPlaybackTracking (now bar-free) so the headless poll and mobile\n  Last.fm scrobbling keep running; every !isHeadlessMode desktop path is untouched.\n- settings-drawer.js: drop the bar show/hide; keep the FAB logic.\n- Fully remove the refreshMobileBarVisibility dependency plumbing across app.js,\n  context-menus, mobile-ui, list-menus, list-action-menu, app-list-operations,\n  app-list-import, list-selection, and update its tests."
+  },
+  {
+    "date": "2026-06-24",
+    "category": "fix",
+    "description": "Fixed track pick issues and polished mobile album cards.",
+    "hash": "5d782c935ea5acd58d253d1963936d1458482561",
+    "commitMessage": "Mobile album card polish, now-playing ring removal, and track-pick fixes\n\nMobile album card:\n- Mark primary/secondary tracks with serif Roman numerals (I/II) in a\n  fixed-width gutter aligned with the metadata icons; drop the play icons\n  and stars, and always render the secondary track row.\n- Tighten cover->icon and icon->text spacing, even out the vertical rhythm,\n  brighten the metadata text, and move the Last.fm playcount onto the\n  album-title line.\n- Let the cover image fill its container (remove the inset frame and glow).\n\nRemove the now-playing animated green ring:\n- Delete now-playing.js and its test, CSS, app.js wiring, and the reapply\n  calls in album-display. Keep the now-playing bar, scrobbling, playback\n  tracking, and playback-utils.\n\nPlaycount rendering:\n- Extract album-display/playcount-view.js as the single source of truth for\n  playcount markup, used by both the initial render and playcount-sync.\n\nFixes:\n- Render the secondary track on save: cache its cell and add it to\n  extractFieldUpdateData and the incremental field update (was primary-only).\n- Preserve the list-item _id on a full-list save (replaceListItems) instead\n  of regenerating it, so track picks no longer 404 after editing details.\n\nTrack picker (edit details):\n- Replace the star markers with the card's I/II numerals, reserve a fixed\n  gutter so track names don't shift, and give primary/secondary the same\n  highlight."
+  },
+  {
+    "date": "2026-06-18",
+    "category": "perf",
+    "description": "Album covers now load faster with smarter fetching.",
+    "hash": "9dfbe3ab03db03b0dae8f9fe0df6c5068b4f3584",
+    "commitMessage": "Load album covers with queued eager fetches"
+  },
+  {
+    "date": "2026-06-18",
+    "category": "feature",
+    "description": "Improved extension badges and album adding experience.",
+    "hash": "50ab7a9393365bd308c18d0e33fb1c9be7e2b1a2",
+    "commitMessage": "Improve extension badges and album adds"
+  },
+  {
+    "date": "2026-06-17",
+    "category": "feature",
+    "description": "Added list shortcuts and RYM badges to the browser extension.",
+    "hash": "3626415fcaa8009673c25854178f8a1540d6e8f0",
+    "commitMessage": "Add extension list shortcuts and RYM badges"
+  },
+  {
     "date": "2026-06-12",
     "category": "perf",
     "description": "Faster album transfers without full page refresh",
