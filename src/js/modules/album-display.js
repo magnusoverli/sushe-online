@@ -710,8 +710,8 @@ export function createAlbumDisplay(deps = {}) {
    *
    * LAYOUT STRUCTURE:
    * ┌────────────────────────────────────────────────────────────────────────┐
-   * │ cardWrapper (.album-card-wrapper) - h-[130px]                         │
-   * │  └─ card (.album-card.album-row) - relative, h-[130px]               │
+   * │ cardWrapper (.album-card-wrapper) - h-[138px]                         │
+   * │  └─ card (.album-card.album-row) - relative, h-[138px]               │
    * │     ├─ positionBadge (absolute, top-right of card)                   │
    * │     └─ contentRow (flex row, h-full)                                  │
    * │        ├─ coverSection (w-[88px], flex-shrink-0)                     │
@@ -722,7 +722,8 @@ export function createAlbumDisplay(deps = {}) {
    * │        │   └─ availabilityBadges (.album-availability--mobile)        │
    * │        ├─ infoSection (flex-1, min-w-0 for truncation)               │
    * │        │   ├─ albumName                                               │
-   * │        │   ├─ artist + playcount                                      │
+   * │        │   ├─ artist                                                  │
+   * │        │   ├─ playcount (.data-playcount-mobile)                      │
    * │        │   ├─ country                                                 │
    * │        │   ├─ genres                                                  │
    * │        │   ├─ primaryTrack                                           │
@@ -748,16 +749,16 @@ export function createAlbumDisplay(deps = {}) {
     // === WRAPPER ELEMENT ===
     // Container for sortable drag functionality
     const cardWrapper = document.createElement('div');
-    cardWrapper.className = 'album-card-wrapper h-[130px]';
+    cardWrapper.className = 'album-card-wrapper h-[138px]';
 
     // === CARD ELEMENT ===
     // Main card with:
     // - album-card: Touch feedback, box-shadow transitions
     // - album-row: Inset top/bottom separators (subtle white lines)
     // - relative: Positioning context for absolute children
-    // - h-[130px]: Fixed height matching wrapper
+    // - h-[138px]: Fixed height matching wrapper
     const card = document.createElement('div');
-    card.className = 'album-card album-row relative h-[130px] bg-gray-900';
+    card.className = 'album-card album-row relative h-[138px] bg-gray-900';
     card.dataset.index = index;
 
     // === COVER IMAGE SOURCE ===
@@ -811,16 +812,19 @@ export function createAlbumDisplay(deps = {}) {
       };
       const c = colors[position] || colors.default;
 
-      // Positioned near the card's top-right, centered over the menu column width
+      // Positioned in the card's top-right with equal top/right insets (6.5px)
+      // so the badge is centered over the menu column width (matching the
+      // three-dot button): right = (30px column - 19px badge) / 2 = 5.5px, and
+      // top mirrors that for symmetric corner spacing.
       return `
         <div class="mobile-position-badge"
-             style="position: absolute; top: 4px; right: 4px; z-index: 10;
-                    width: 17px; height: 17px;
+             style="position: absolute; top: 5.5px; right: 5.5px; z-index: 10;
+                    width: 19px; height: 19px;
                     display: flex; align-items: center; justify-content: center;
                     border: 1px solid ${c.border}; border-radius: 50%;
                     background: rgba(17, 24, 39, 0.7);
                     box-shadow: 0 0 ${c.size} ${c.shadow};
-                    color: white; font-size: 9px; font-weight: 500; line-height: 1;
+                    color: white; font-size: 10px; font-weight: 500; line-height: 1;
                     font-variant-numeric: tabular-nums; pointer-events: none;"
              data-position-element="true">
           <span style="display: block; line-height: 1">${position}</span>
@@ -834,10 +838,27 @@ export function createAlbumDisplay(deps = {}) {
       <div class="flex items-stretch h-full">
         
         <!-- COVER SECTION -->
-        <!-- self-start pins the column to the top of the row so the cover and
-             release date stay in a fixed position whether or not the
-             availability badges below them are present. -->
-        <div class="shrink-0 w-[88px] flex flex-col items-center self-start pt-1.5 pl-1">
+        <!-- h-full is REQUIRED, not cosmetic: the card carries the shared
+             'album-row' class, and app.css's desktop-grid rule
+             '.album-row > div { align-items: center }' (specificity 0,1,1) beats
+             Tailwind's 'items-stretch' on the row wrapper, so the columns are NOT
+             stretched to the card height. Without an explicit height this column
+             collapses to its content (~104px) and centres, leaving justify-evenly
+             with zero free space (all three sections touch, slack pools top/bottom).
+             h-full pins it to the full 138px so justify-evenly can distribute. -->
+        <!-- Full-height column with justify-evenly so the three stacked sections
+             (cover, release date, availability badges) get four equal vertical
+             gaps: top-border->cover, cover->date, date->badges, and
+             badges->bottom-border all match. Competing margins are stripped
+             (no pt on the column, no mt-1 on the date, margin-top:0 on the
+             .album-availability--mobile badges) so the flex spacing is uniform.
+             The date also uses leading-none: text-xs's 16px line-box carries
+             ~2px of half-leading top/bottom that would otherwise inflate the two
+             date-adjacent gaps; collapsing the box to the 12px glyph keeps all
+             four gaps visually equal. The live-update twin (mobile branch of the
+             release-date className reset, ~line 1310) MUST keep these same
+             classes or the asymmetry returns on the next in-place update. -->
+        <div class="h-full shrink-0 w-[88px] flex flex-col items-center justify-evenly pl-1">
           <!-- Album cover with optional summary badge -->
           <div class="mobile-album-cover relative w-20 h-20 flex items-center justify-center ${!mobileCoverSrc ? 'bg-gray-800 rounded-lg' : ''} ${mobileCoverSrc && coverLoadMode === 'initial' ? 'cover-reveal-shell' : ''}">
             ${
@@ -855,7 +876,7 @@ export function createAlbumDisplay(deps = {}) {
             ${mobileRecommendationBadgeHtml}
           </div>
           <!-- Release date -->
-          <span class="release-date-display text-xs mt-1 whitespace-nowrap ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}"
+          <span class="release-date-display text-xs leading-none whitespace-nowrap ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}"
                 ${data.yearMismatch ? `title="${escapeHtml(data.yearMismatchTooltip || '')}"` : ''}>
             ${data.releaseDate}
           </span>
@@ -864,29 +885,32 @@ export function createAlbumDisplay(deps = {}) {
         </div>
         
         <!-- INFO SECTION -->
-        <div class="flex-1 min-w-0 pl-1 pr-1 flex flex-col justify-evenly h-[122px]">
-          <!-- Album name + playcount -->
-          <div class="flex items-center justify-between">
-            <h3 class="font-semibold text-gray-100 text-sm leading-tight truncate min-w-0">
+        <div class="flex-1 min-w-0 pl-1 pr-1 flex flex-col justify-evenly h-[130px] leading-[18px]">
+          <!-- Album name -->
+          <div class="flex items-center">
+            <h3 class="font-semibold text-gray-100 text-[15px] leading-tight truncate min-w-0">
               <i class="fas fa-compact-disc fa-xs inline-block w-4 text-center align-middle mr-1"></i>${escapeHtml(data.albumName)}
             </h3>
-            ${mobilePlaycountSpan(data.itemId, data.playcountDisplay)}
           </div>
           <!-- Artist -->
           <div class="flex items-center">
-            <p class="text-[13px] text-gray-400 truncate">
+            <p class="text-[12px] text-gray-400 truncate">
               <i class="fas fa-user fa-xs inline-block w-4 text-center mr-1"></i><span data-field="artist-mobile-text">${escapeHtml(data.artist)}</span>
             </p>
           </div>
+          <!-- Last.fm playcount -->
+          <div class="flex items-center">
+            ${mobilePlaycountSpan(data.itemId, data.playcountDisplay)}
+          </div>
           <!-- Country -->
           <div class="flex items-center">
-            <span class="text-[13px] text-gray-400">
+            <span class="text-[12px] text-gray-400">
               <i class="fas fa-globe fa-xs inline-block w-4 text-center mr-1"></i><span data-field="country-mobile-text">${escapeHtml(data.country || '')}</span>
             </span>
           </div>
           <!-- Genres -->
           <div class="flex items-center">
-            <span class="text-[13px] text-gray-400 truncate">
+            <span class="text-[12px] text-gray-400 truncate">
               <i class="fas fa-music fa-xs inline-block w-4 text-center mr-1"></i><span data-field="genre-mobile-text">${escapeHtml(data.genre1 && data.genre2 ? `${data.genre1} / ${data.genre2}` : data.genre1 || data.genre2 || '')}</span>
             </span>
           </div>
@@ -894,7 +918,7 @@ export function createAlbumDisplay(deps = {}) {
           <div class="flex items-center ${data.primaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}"
                data-track-play-btn="${data.primaryTrackDisplay ? 'true' : ''}"
                data-track-identifier="${data.primaryTrack || ''}">
-            <span class="text-[13px] text-green-400 truncate">
+            <span class="text-[12px] text-green-400 truncate">
               <span class="inline-block w-4 text-center mr-1 text-[11px] font-semibold font-[Georgia,serif]">I</span><span data-field="track-mobile-text">${escapeHtml(data.primaryTrackDisplay || '')}</span>
             </span>
           </div>
@@ -902,14 +926,14 @@ export function createAlbumDisplay(deps = {}) {
           <div class="flex items-center ${data.secondaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}"
                data-track-play-btn="${data.secondaryTrackDisplay ? 'true' : ''}"
                data-track-identifier="${data.secondaryTrack || ''}">
-            <span class="text-[13px] text-green-400 truncate">
+            <span class="text-[12px] text-green-400 truncate">
               <span class="inline-block w-4 text-center mr-1 text-[11px] font-semibold font-[Georgia,serif]">II</span><span data-field="secondary-track-mobile-text">${escapeHtml(data.secondaryTrackDisplay || '')}</span>
             </span>
           </div>
         </div>
         
         <!-- MENU SECTION -->
-        <div class="shrink-0 w-[25px] border-l border-gray-800/50" style="display: flex; align-items: center; justify-content: center;">
+        <div class="shrink-0 w-[30px] border-l border-gray-700/80" style="display: flex; align-items: center; justify-content: center;">
           <button data-album-menu-btn class="no-drag text-gray-400 active:text-gray-200" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;">
             <i class="fas fa-ellipsis-v fa-fw"></i>
           </button>
@@ -1296,7 +1320,7 @@ export function createAlbumDisplay(deps = {}) {
         } else {
           if (cache.releaseDate) {
             cache.releaseDate.textContent = data.releaseDate;
-            cache.releaseDate.className = `text-xs mt-1 whitespace-nowrap release-date-display ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}`;
+            cache.releaseDate.className = `release-date-display text-xs leading-none whitespace-nowrap ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}`;
             if (data.yearMismatch) {
               cache.releaseDate.title = data.yearMismatchTooltip;
             } else {

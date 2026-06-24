@@ -9,7 +9,7 @@
  * @module album-display/playcount-view
  */
 
-const MOBILE_BASE = 'ml-2 shrink-0 text-[13px]';
+const MOBILE_BASE = 'text-[12px] truncate';
 const DESKTOP_BASE = 'text-xs shrink-0';
 
 const NOT_FOUND_TITLE = 'Album not found on Last.fm';
@@ -25,13 +25,13 @@ function mobileAtoms(status, display) {
   if (status === 'not_found') {
     return {
       className: `text-red-500 ${MOBILE_BASE}`,
-      html: NOT_FOUND_ICON,
+      html: '<i class="fas fa-times fa-xs inline-block w-4 text-center mr-1"></i>',
       title: NOT_FOUND_TITLE,
     };
   }
   return {
     className: `text-gray-400 ${MOBILE_BASE}`,
-    html: `<i class="fas fa-headphones text-[10px]"></i> ${display}`,
+    html: `<i class="fas fa-headphones fa-xs inline-block w-4 text-center mr-1"></i>${display}`,
     title: '',
   };
 }
