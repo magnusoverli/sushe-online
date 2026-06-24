@@ -269,7 +269,7 @@ describe('list-selection module', () => {
     ]);
   });
 
-  it('defers hydration without rerendering unchanged list order', async () => {
+  it('rerenders on hydration to surface full-profile details even when order is unchanged', async () => {
     const scheduledTasks = [];
     const apiCalls = [];
     const setListDataCalls = [];
@@ -357,7 +357,15 @@ describe('list-selection module', () => {
       true,
       { profile: 'full' },
     ]);
-    assert.strictEqual(renderCalls.length, 1);
+    // The full profile carries details the core render cannot show (here the
+    // summary that drives the badge), and those fields are absent from the
+    // album-order identity and the mutable fingerprint, so hydration must
+    // re-render even though the album order is unchanged.
+    assert.strictEqual(renderCalls.length, 2);
+    assert.deepStrictEqual(renderCalls[1], [
+      [{ _id: 'item-1', album_id: 'album-1', summary: 'Hydrated summary' }],
+      { forceFullRebuild: true },
+    ]);
 
     scheduledTasks[1].task();
     await new Promise((resolve) => setImmediate(resolve));

@@ -54,24 +54,6 @@ export function createListSelection(deps = {}) {
       prefetchPlaycountsForRender,
     });
 
-  function getAlbumIdentity(album) {
-    return (
-      album?._id ||
-      album?.album_id ||
-      `${album?.artist || ''}::${album?.album || ''}::${album?.release_date || ''}`
-    );
-  }
-
-  function hasSameAlbumOrder(currentData, nextData) {
-    if (!Array.isArray(currentData) || !Array.isArray(nextData)) return false;
-    if (currentData.length !== nextData.length) return false;
-
-    return currentData.every(
-      (album, index) =>
-        getAlbumIdentity(album) === getAlbumIdentity(nextData[index])
-    );
-  }
-
   async function hydrateListDetails(listId) {
     if (!listId || isListDataFullyLoaded?.(listId)) return;
 
@@ -82,12 +64,15 @@ export function createListSelection(deps = {}) {
       if (getCurrentListId() !== listId) return;
       if (wasRecentLocalSave?.(listId)) return;
 
-      const currentData = getListData(listId);
       setListData(listId, fullData, true, { profile: 'full' });
       if (getCurrentListId() === listId) {
-        if (!hasSameAlbumOrder(currentData, fullData)) {
-          displayAlbums(fullData, { forceFullRebuild: true });
-        }
+        // Always rebuild on the core->full upgrade. The full profile adds data
+        // the core render cannot show — the summary and recommendation badges
+        // and track names — and those fields are part of neither the album-order
+        // identity nor the mutable fingerprint, so a diff or order check would
+        // skip them and the badges would never appear. wasRecentLocalSave above
+        // already guards against clobbering in-flight local edits.
+        displayAlbums(fullData, { forceFullRebuild: true });
       }
     } catch (error) {
       logger.warn('Failed to hydrate list details:', error);
