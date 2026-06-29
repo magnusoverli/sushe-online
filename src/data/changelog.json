@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-06-29",
+    "category": "feature",
+    "description": "Added album search to quickly find any album across all your lists from the header.",
+    "hash": "96772d3bbe6521628006c37ff1985108200e41c0",
+    "commitMessage": "Add cross-list album search\n\nA desktop header search box finds albums across all of the user's lists and,\non selection, jumps to the list containing the match and highlights that album.\n\nBackend (built reusable for a future mobile client):\n- GET /api/search/albums (services/search/album-search-service.js): case-\n  insensitive substring search scoped to the user's own lists. Every\n  whitespace token must match (AND across tokens, OR across fields); LIKE\n  wildcards are escaped and all input is parameterized. artist + album are\n  always searched; meta/notes/tracks are opt-in field groups. Auth via\n  ensureAuthAPI (session cookie OR bearer token) with a dedicated rate limiter.\n- Returns JSON with list attribution and cover URLs (no inline base64).\n\nFrontend (desktop):\n- Header search box (desktop, home only) with a field-options popover; results\n  render in a body-mounted dropdown with debounce + AbortController + a\n  sequence guard, full keyboard navigation, and field choice persisted to\n  localStorage.\n- Selecting a result switches to the list and flashes the matched row. Because\n  the album list re-renders by replacing every row element, the highlight runs\n  as a per-navigation session that re-applies to the rebuilt row via a\n  MutationObserver and resumes the fade with a negative animation-delay, so it\n  survives the post-navigation rebuild (including the cached-data path) and\n  always fades smoothly over ~3s.\n\nAdds a unit test for the search service."
+  },
+  {
     "date": "2026-06-25",
     "category": "ui",
     "description": "Moved summary and recommendation badges away from the album cover.",
