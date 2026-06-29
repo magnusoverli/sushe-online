@@ -67,6 +67,7 @@ import { createMainStatusToggler } from './modules/app-main-status.js';
 import { createAppListOperations } from './modules/app-list-operations.js';
 import { apiCall } from './modules/api-client.js';
 import { registerListActions } from './modules/list-actions.js';
+import { createAlbumSearch } from './modules/album-search.js';
 
 // Centralized state store
 import {
@@ -950,6 +951,14 @@ createAppBootstrap({
   checkListSetupStatus,
   showToast,
   importMusicbrainz: () => import('./musicbrainz.js'),
+}).initialize();
+
+// Desktop cross-list album search (header box -> jump to the matched album).
+createAlbumSearch({
+  apiCall,
+  selectList,
+  getListData,
+  logger: console,
 }).initialize();
 
 registerBeforeUnloadListSaver(getCurrentListId);

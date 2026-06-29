@@ -13,6 +13,181 @@
   }
 }
 
+/* ==========================================================================
+   Album search (desktop header box -> body-mounted results / options).
+   These surfaces are created in JS and appended to <body>; the compound
+   `.hidden` rules guarantee hide wins over Tailwind's single-class `.hidden`.
+   ========================================================================== */
+.album-search-panel {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  max-height: min(70vh, 32rem);
+  overflow-y: auto;
+  padding: 0.25rem;
+  background: #0b1020;
+  border: 1px solid rgba(75, 85, 99, 0.7);
+  border-radius: 0.625rem;
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.6);
+  overscroll-behavior: contain;
+}
+.album-search-panel.hidden {
+  display: none;
+}
+
+.album-search-result {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  scroll-margin: 0.5rem;
+}
+.album-search-result:hover,
+.album-search-result.is-active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.album-search-result-cover {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 0.25rem;
+  background: rgba(255, 255, 255, 0.04);
+}
+.album-search-result-cover.is-broken {
+  visibility: hidden;
+}
+
+.album-search-result-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.album-search-result-title {
+  color: #e5e7eb;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.album-search-result-sub {
+  color: #9ca3af;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.album-search-result-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  max-width: 9rem;
+  padding: 0.1rem 0.45rem;
+  color: #cbd5e1;
+  font-size: 0.7rem;
+  background: rgba(148, 163, 184, 0.12);
+  border-radius: 0.375rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.album-search-result-list i {
+  font-size: 0.6rem;
+  opacity: 0.7;
+}
+
+.album-search-empty,
+.album-search-hint {
+  padding: 0.6rem 0.6rem;
+  color: #9ca3af;
+  font-size: 0.78rem;
+}
+.album-search-hint {
+  border-top: 1px solid rgba(75, 85, 99, 0.4);
+  color: #6b7280;
+  font-size: 0.7rem;
+}
+
+/* Field-options popover */
+.album-search-options {
+  position: fixed;
+  z-index: 61;
+  display: block;
+  min-width: 14rem;
+  padding: 0.4rem;
+  background: #0b1020;
+  border: 1px solid rgba(75, 85, 99, 0.7);
+  border-radius: 0.625rem;
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.6);
+}
+.album-search-options.hidden {
+  display: none;
+}
+.album-search-options-title {
+  padding: 0.25rem 0.5rem 0.4rem;
+  color: #6b7280;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.album-search-option {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.5rem;
+  color: #e5e7eb;
+  font-size: 0.82rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+.album-search-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.album-search-option.is-static {
+  color: #9ca3af;
+  cursor: default;
+}
+.album-search-option.is-static i {
+  font-size: 0.7rem;
+  color: #22c55e;
+}
+.album-search-option input[type='checkbox'] {
+  accent-color: #dc2626;
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+/* Highlight the matched album row after jumping to it from search: a subtle
+   accent ring + tint + soft glow that holds long enough to spot, then fades
+   smoothly. Built from the user's accent theme variables. */
+@keyframes albumSearchFlash {
+  0%,
+  55% {
+    background-color: var(--accent-subtle, rgba(220, 38, 38, 0.22));
+    box-shadow:
+      inset 0 0 0 2px var(--accent-color, #dc2626),
+      0 0 16px -2px var(--accent-shadow, rgba(220, 38, 38, 0.55));
+  }
+  100% {
+    background-color: transparent;
+    box-shadow:
+      inset 0 0 0 2px transparent,
+      0 0 16px -2px transparent;
+  }
+}
+.album-search-flash {
+  animation: albumSearchFlash 3s ease-out forwards;
+  border-radius: 0.375rem;
+}
+
 /* Album grid column configuration with responsive behavior */
 :root {
   /* Default grid for desktop screens - 10 columns */

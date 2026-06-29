@@ -24,8 +24,53 @@ const headerComponent = (_user, activeSection = 'home') => `
       <!-- Current list name (mobile only) -->
       <span id="mobileCurrentListName" class="lg:hidden absolute left-1/2 -translate-x-1/2 text-base text-gray-300 font-medium truncate max-w-[60%] hidden"></span>
 
-      <!-- Year lock indicator (desktop only, populated by JS) -->
-      <div id="headerLockIndicator" class="hidden lg:flex items-center gap-2 text-yellow-400 text-sm flex-1 justify-center"></div>
+      <!-- Center zone (desktop only): album search + year lock indicator -->
+      <div class="hidden lg:flex flex-1 items-center justify-center gap-4 px-4 min-w-0">
+        ${
+          activeSection === 'home'
+            ? `
+        <div id="albumSearchContainer" class="relative w-full max-w-md min-w-0">
+          <i class="fas fa-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
+          <input
+            id="albumSearchInput"
+            type="search"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="Search your albums…"
+            aria-label="Search albums across your lists"
+            role="combobox"
+            aria-expanded="false"
+            aria-controls="albumSearchResults"
+            aria-autocomplete="list"
+            class="w-full rounded-lg border border-gray-700 bg-gray-900/60 py-1.5 pl-9 pr-16 text-sm text-gray-200 placeholder-gray-500 outline-none transition-colors focus:border-red-600 focus:bg-gray-900/90 focus:ring-1 focus:ring-red-600/40"
+          />
+          <button
+            id="albumSearchClear"
+            type="button"
+            title="Clear search"
+            aria-label="Clear search"
+            class="absolute right-9 top-1/2 hidden -translate-y-1/2 p-1 text-gray-500 transition-colors hover:text-gray-200"
+          >
+            <i class="fas fa-times text-xs"></i>
+          </button>
+          <button
+            id="albumSearchOptionsBtn"
+            type="button"
+            title="Choose which fields to search"
+            aria-label="Search options"
+            aria-haspopup="true"
+            aria-expanded="false"
+            class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 transition-colors hover:text-gray-200"
+          >
+            <i class="fas fa-sliders-h text-xs"></i>
+          </button>
+        </div>
+        `
+            : ''
+        }
+        <div id="headerLockIndicator" class="flex flex-shrink-0 items-center gap-2 text-sm text-yellow-400"></div>
+      </div>
 
       <!-- User menu -->
       <div class="flex items-center pr-0.5 lg:pr-3">

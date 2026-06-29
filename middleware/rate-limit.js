@@ -115,11 +115,22 @@ const sensitiveSettingsRateLimit = createRateLimiter({
     'Too many settings change attempts. Please try again in 1 hour.',
 });
 
+// Lenient rate limiting for album search - 120 requests per minute per IP.
+// Search is debounced client-side but still fires per pause-in-typing, so the
+// limit is generous; it exists only to cap abusive automated traffic.
+const searchRateLimit = createRateLimiter({
+  windowMs: 60 * 1000,
+  envVar: 'RATE_LIMIT_SEARCH_MAX',
+  defaultMax: 120,
+  handlerMessage: 'Too many search requests. Please slow down.',
+});
+
 module.exports = {
   loginRateLimit,
   registerRateLimit,
   forgotPasswordRateLimit,
   resetPasswordRateLimit,
   sensitiveSettingsRateLimit,
+  searchRateLimit,
   createRateLimiter,
 };

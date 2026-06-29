@@ -52,6 +52,9 @@ const {
   refreshPlaycountsInBackground,
 } = require('../../services/playcount-service');
 const {
+  createAlbumSearchService,
+} = require('../../services/search/album-search-service');
+const {
   createServiceAuthMiddleware,
 } = require('../../middleware/service-auth');
 const {
@@ -80,6 +83,7 @@ module.exports = (app, deps) => {
   const {
     forgotPasswordRateLimit,
     resetPasswordRateLimit,
+    searchRateLimit,
   } = require('../../middleware/rate-limit');
   const { ensureValidSpotifyToken } = require('../../utils/spotify-auth');
   const { ensureValidTidalToken } = require('../../utils/tidal-auth');
@@ -179,6 +183,9 @@ module.exports = (app, deps) => {
 
   const playcountService = createPlaycountService();
 
+  // Create album search service (cross-list substring search)
+  const searchService = createAlbumSearchService({ db, logger });
+
   // Shared dependencies for all route modules
   const sharedDeps = {
     // Core dependencies
@@ -196,6 +203,7 @@ module.exports = (app, deps) => {
     responseCache,
     forgotPasswordRateLimit,
     resetPasswordRateLimit,
+    searchRateLimit,
     requireSpotifyAuth,
     requireTidalAuth,
     requireLastfmAuth,
@@ -212,6 +220,7 @@ module.exports = (app, deps) => {
     albumService,
     recommendationService,
     playcountService,
+    searchService,
     externalIdentityService,
     coverCache,
     authService,
@@ -254,6 +263,7 @@ module.exports = (app, deps) => {
   require('./albums')(app, sharedDeps);
   require('./groups')(app, sharedDeps);
   require('./lists')(app, sharedDeps);
+  require('./search')(app, sharedDeps);
   require('./track-picks')(app, sharedDeps);
   require('./password-reset')(app, sharedDeps);
   require('./proxies')(app, sharedDeps);
