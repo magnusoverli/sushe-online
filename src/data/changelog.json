@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-06-30",
+    "category": "feature",
+    "description": "Added cross-list album search to the mobile interface.",
+    "hash": "76d24341f163e8d715df52239e3bbbf22b55a89e",
+    "commitMessage": "Add cross-list album search to mobile UI\n\nTapping the header search icon morphs the mobile header into a full-width\nsearch bar (over the list name) with a full-screen results panel; a filter\nsheet picks optional fields. Desktop and mobile share extracted modules:\nalbum-search-core (debounce/abort/sequence-guard), album-search-fields\n(persisted field set), and album-search-render (result-row markup).\n\nAlso: scroll only #albumContainer when jumping to a result (scrollIntoView\nscrolled the document on mobile and hid the fixed header) plus a sticky\nheader lock; focus the input synchronously so the mobile keyboard opens;\nhide the native search clear button so only our own clear ✕ shows."
+  },
+  {
     "date": "2026-06-29",
     "category": "feature",
     "description": "Added album search to quickly find any album across all your lists from the header.",
