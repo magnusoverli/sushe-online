@@ -88,6 +88,30 @@ describe('aggregateFromLists', () => {
     });
   });
 
+  it('uses constant SQL with a bound param for mainOnly (no per-call text variation)', async () => {
+    const logger = createMockLogger();
+    const poolAll = createMockPool([{ rows: [] }]);
+    const poolMain = createMockPool([{ rows: [] }]);
+
+    await createUserPreferences({ logger, db: poolAll }).aggregateFromLists(
+      'u'
+    );
+    await createUserPreferences({
+      logger,
+      db: poolMain,
+    }).aggregateFromLists('u', { mainOnly: true });
+
+    const [sqlAll, paramsAll] = poolAll.raw.mock.calls[0].arguments;
+    const [sqlMain, paramsMain] = poolMain.raw.mock.calls[0].arguments;
+
+    // The prepared-statement text must be identical regardless of mainOnly so
+    // the fixed statement name never binds to two different SQL strings; the
+    // filter rides a bound parameter instead of being interpolated.
+    assert.strictEqual(sqlAll, sqlMain);
+    assert.strictEqual(paramsAll[1], false);
+    assert.strictEqual(paramsMain[1], true);
+  });
+
   it('should aggregate artists correctly', async () => {
     const logger = createMockLogger();
     const pool = createMockPool([

@@ -18,6 +18,7 @@
  *     fields), which is how "radiohead kid" finds Radiohead's "Kid A".
  */
 
+const crypto = require('node:crypto');
 const { ensureDb } = require('../../db/postgres');
 
 const DEFAULT_LIMIT = 25;
@@ -56,14 +57,37 @@ function tokenize(query) {
     .map((token) => token.slice(0, MAX_TOKEN_LENGTH));
 }
 
-/** Resolve the set of SQL columns to search from the requested field groups. */
+/**
+ * Resolve the set of SQL columns to search from the requested field groups.
+ *
+ * Optional groups are appended in a FIXED order (OPTIONAL_COLUMNS key order),
+ * not the caller's selection order, so the same field *set* always yields the
+ * same column list — and therefore the same SQL text and prepared-statement
+ * name (see statementName) — regardless of which order the user toggled them.
+ */
 function resolveColumns(fields) {
   const columns = [...BASE_COLUMNS];
   const requested = Array.isArray(fields) ? fields : [];
-  for (const key of requested) {
-    if (OPTIONAL_COLUMNS[key]) columns.push(...OPTIONAL_COLUMNS[key]);
+  for (const key of Object.keys(OPTIONAL_COLUMNS)) {
+    if (requested.includes(key)) columns.push(...OPTIONAL_COLUMNS[key]);
   }
   return columns;
+}
+
+/**
+ * Derive a prepared-statement name that maps 1:1 to the SQL text.
+ *
+ * pg binds a statement name to the first text it sees on a connection and
+ * rejects reuse of that name with *different* text ("prepared statements must
+ * be unique"). This query's text varies with both the selected field columns
+ * and the number of search tokens, so a single fixed name collides as soon as
+ * either changes. Keying the name on a hash of the SQL keeps pg's plan cache
+ * (identical SQL → identical name → cached plan) while guaranteeing distinct
+ * SQL never shares a name.
+ */
+function statementName(sql) {
+  const digest = crypto.createHash('sha1').update(sql).digest('hex');
+  return `album-search-${digest.slice(0, 16)}`;
 }
 
 function clampLimit(limit) {
@@ -133,7 +157,7 @@ function createAlbumSearchService(deps = {}) {
       LIMIT ${limitPlaceholder}`;
 
     const result = await db.raw(sql, params, {
-      name: 'album-search-user-albums',
+      name: statementName(sql),
       retryable: true,
     });
 

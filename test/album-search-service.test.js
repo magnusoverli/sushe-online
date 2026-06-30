@@ -175,6 +175,20 @@ describe('album-search-service searchUserAlbums', () => {
     assert.strictEqual(result.truncated, false);
   });
 
+  it('searches optional field columns in a fixed order regardless of selection order', async () => {
+    const { service, calls } = createCapturingService();
+    await service.searchUserAlbums({
+      userId: 'user1',
+      query: 'doom',
+      fields: ['tracks', 'notes', 'meta'], // reversed from canonical order
+    });
+    // meta columns precede notes columns precede tracks columns in the SQL,
+    // matching OPTIONAL_COLUMNS key order — not the caller's argument order.
+    const { sql } = calls[0];
+    assert.ok(sql.indexOf('a.genre_1') < sql.indexOf('li.comments'));
+    assert.ok(sql.indexOf('li.comments') < sql.indexOf('a.tracks::text'));
+  });
+
   it('flags truncation and trims to the requested limit', async () => {
     const rows = Array.from({ length: 3 }, (_, i) => ({
       album_id: `alb${i}`,
@@ -194,5 +208,46 @@ describe('album-search-service searchUserAlbums', () => {
     assert.strictEqual(result.truncated, true);
     assert.strictEqual(result.results.length, 2);
     assert.strictEqual(result.total, 2);
+  });
+});
+
+describe('album-search-service prepared-statement naming', () => {
+  // pg binds a prepared-statement name to its SQL text per connection and
+  // rejects reuse of the name with different text. The query's SQL varies with
+  // both the selected fields and the token count, so the name must vary with
+  // the SQL — otherwise reused pooled connections throw "prepared statements
+  // must be unique" and the search 500s.
+  async function nameFor(args) {
+    const { service, calls } = createCapturingService();
+    await service.searchUserAlbums({ userId: 'user1', ...args });
+    return calls[0].opts.name;
+  }
+
+  it('uses a different statement name when the field set changes', async () => {
+    const base = await nameFor({ query: 'doom' });
+    const meta = await nameFor({ query: 'doom', fields: ['meta'] });
+    const notes = await nameFor({ query: 'doom', fields: ['notes'] });
+    assert.notStrictEqual(base, meta);
+    assert.notStrictEqual(base, notes);
+    assert.notStrictEqual(meta, notes);
+  });
+
+  it('uses a different statement name when the token count changes', async () => {
+    const one = await nameFor({ query: 'doom' });
+    const two = await nameFor({ query: 'doom metal' });
+    assert.notStrictEqual(one, two);
+  });
+
+  it('reuses the same statement name for identical SQL (plan-cache friendly)', async () => {
+    const a = await nameFor({ query: 'doom', fields: ['meta'] });
+    const b = await nameFor({ query: 'sludge', fields: ['meta'] });
+    // Same columns + same token count => same SQL text => same name.
+    assert.strictEqual(a, b);
+  });
+
+  it('is insensitive to the order fields were selected in', async () => {
+    const forward = await nameFor({ query: 'doom', fields: ['meta', 'notes'] });
+    const reverse = await nameFor({ query: 'doom', fields: ['notes', 'meta'] });
+    assert.strictEqual(forward, reverse);
   });
 });

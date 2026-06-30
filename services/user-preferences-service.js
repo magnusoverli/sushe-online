@@ -62,8 +62,13 @@ function createUserPreferences(deps = {}) {
 
     log.info('Aggregating preferences from lists for user:', userId);
 
+    // The main-list filter is a BOUND parameter, not interpolated text, so the
+    // SQL string is identical on every call. A prepared statement binds its
+    // name to the exact text per connection and rejects reuse of the name with
+    // different text ("prepared statements must be unique"); keeping the text
+    // constant lets the one fixed name below stay valid for both mainOnly modes.
     const query = `
-      SELECT 
+      SELECT
         l.name as list_name,
         l.year as list_year,
         l.is_main,
@@ -76,11 +81,11 @@ function createUserPreferences(deps = {}) {
       JOIN list_items li ON li.list_id = l._id
       LEFT JOIN albums a ON li.album_id = a.album_id
       WHERE l.user_id = $1
-      ${mainOnly ? 'AND l.is_main = true' : ''}
+        AND ($2::boolean = false OR l.is_main = true)
       ORDER BY l.year DESC, l.name, li.position
     `;
 
-    const result = await db.raw(query, [userId], {
+    const result = await db.raw(query, [userId, mainOnly], {
       name: 'user-prefs-aggregate-from-lists',
       retryable: true,
     });
