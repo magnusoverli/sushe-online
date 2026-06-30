@@ -1,3 +1,5 @@
+const { mobileAlbumSearchBarTemplate } = require('./mobile-album-search-bar');
+
 const headerComponent = (_user, activeSection = 'home') => `
   <header class="z-50 border-b border-gray-700/50" style="background: linear-gradient(to top, rgba(43,49,71,0.5) 0%, rgba(9,13,23,0.5) 100%), linear-gradient(90deg, #2b3147 20%, #090d17 100%)">
     <!-- Safe area fill: extends header gradient behind iOS status bar/notch -->
@@ -8,8 +10,11 @@ const headerComponent = (_user, activeSection = 'home') => `
         ${
           activeSection === 'home'
             ? `
-        <button onclick="toggleMobileMenu()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target">
+        <button onclick="toggleMobileMenu()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target" aria-label="Open menu">
           <i class="fas fa-bars text-lg"></i>
+        </button>
+        <button id="mobileAlbumSearchBtn" type="button" onclick="window.openMobileAlbumSearch && window.openMobileAlbumSearch()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target" aria-label="Search albums" aria-haspopup="dialog">
+          <i class="fas fa-search text-lg"></i>
         </button>
         `
             : `
@@ -84,6 +89,7 @@ const headerComponent = (_user, activeSection = 'home') => `
           <i class="fas fa-sign-out-alt text-lg"></i>
         </a>
       </div>
+${activeSection === 'home' ? mobileAlbumSearchBarTemplate() : ''}
     </div>
   </header>
 `;

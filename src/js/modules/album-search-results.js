@@ -7,7 +7,12 @@
  * all DOM event wiring lives in the parent controller.
  */
 
-import { escapeHtml } from './html-utils.js';
+import {
+  resultRowHtml,
+  emptyMessageHtml,
+  truncatedHintHtml,
+  messageHtml,
+} from './album-search-render.js';
 
 const PANEL_GAP = 6;
 
@@ -41,31 +46,6 @@ export function createResultsPanel(deps = {}) {
     el.className = 'album-search-panel hidden';
     doc.body.appendChild(el);
     return el;
-  }
-
-  function rowHtml(result, index) {
-    const cover = `/api/albums/${encodeURIComponent(
-      result.albumId
-    )}/cover?size=thumb`;
-    const subParts = [result.artist, result.year].filter(Boolean);
-    const sub = subParts.map((part) => escapeHtml(part)).join(' · ');
-    return `
-      <div class="album-search-result" role="option" id="albumSearchResult-${index}" data-result-index="${index}">
-        <img class="album-search-result-cover" src="${escapeHtml(
-          cover
-        )}" alt="" loading="lazy" onerror="this.classList.add('is-broken')" />
-        <span class="album-search-result-meta">
-          <span class="album-search-result-title">${escapeHtml(
-            result.album || 'Untitled'
-          )}</span>
-          <span class="album-search-result-sub">${sub}</span>
-        </span>
-        <span class="album-search-result-list" title="${escapeHtml(
-          result.listName || ''
-        )}"><i class="fas fa-list-ul"></i>${escapeHtml(
-          result.listName || ''
-        )}</span>
-      </div>`;
   }
 
   function position() {
@@ -103,16 +83,12 @@ export function createResultsPanel(deps = {}) {
     const panel = ensureEl();
 
     if (results.length === 0) {
-      panel.innerHTML = `<div class="album-search-empty">No albums match “${escapeHtml(
-        query
-      )}”.</div>`;
+      panel.innerHTML = emptyMessageHtml(query);
     } else {
       const rows = results
-        .map((result, index) => rowHtml(result, index))
+        .map((result, index) => resultRowHtml(result, index))
         .join('');
-      const hint = data.truncated
-        ? `<div class="album-search-hint">Showing the first ${results.length} — keep typing to narrow down.</div>`
-        : '';
+      const hint = data.truncated ? truncatedHintHtml(results.length) : '';
       panel.innerHTML = rows + hint;
     }
 
@@ -121,9 +97,7 @@ export function createResultsPanel(deps = {}) {
 
   function renderMessage(message) {
     const panel = ensureEl();
-    panel.innerHTML = `<div class="album-search-empty">${escapeHtml(
-      message
-    )}</div>`;
+    panel.innerHTML = messageHtml(message);
     open();
   }
 

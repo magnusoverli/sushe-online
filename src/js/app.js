@@ -68,6 +68,7 @@ import { createAppListOperations } from './modules/app-list-operations.js';
 import { apiCall } from './modules/api-client.js';
 import { registerListActions } from './modules/list-actions.js';
 import { createAlbumSearch } from './modules/album-search.js';
+import { createMobileAlbumSearch } from './modules/mobile-album-search.js';
 
 // Centralized state store
 import {
@@ -955,6 +956,14 @@ createAppBootstrap({
 
 // Desktop cross-list album search (header box -> jump to the matched album).
 createAlbumSearch({
+  apiCall,
+  selectList,
+  getListData,
+  logger: console,
+}).initialize();
+
+// Mobile cross-list album search (header morphs into a search bar -> jump).
+createMobileAlbumSearch({
   apiCall,
   selectList,
   getListData,

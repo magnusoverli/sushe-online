@@ -8,43 +8,18 @@
  */
 
 import { escapeHtml } from './html-utils.js';
+import {
+  OPTIONAL_FIELDS,
+  loadFields,
+  saveFields,
+} from './album-search-fields.js';
 
-const STORAGE_KEY = 'albumSearch.fields';
 const PANEL_GAP = 6;
-
-// Optional field groups (artist + album are always searched server-side). Keys
-// must match OPTIONAL_FIELDS in routes/api/search.js.
-const OPTIONAL_FIELDS = [
-  { key: 'meta', label: 'Year, genre & country' },
-  { key: 'notes', label: 'Notes & comments' },
-  { key: 'tracks', label: 'Track names' },
-];
 
 export function createOptionsPopover(deps = {}) {
   const { doc, storage, onChange } = deps;
   let el = null;
-  let selectedFields = loadFields();
-
-  function loadFields() {
-    try {
-      const raw = storage?.getItem(STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter((key) =>
-        OPTIONAL_FIELDS.some((field) => field.key === key)
-      );
-    } catch {
-      return [];
-    }
-  }
-
-  function saveFields() {
-    try {
-      storage?.setItem(STORAGE_KEY, JSON.stringify(selectedFields));
-    } catch {
-      /* ignore quota / disabled storage */
-    }
-  }
+  let selectedFields = loadFields(storage);
 
   function ensureEl() {
     if (el) return el;
@@ -128,7 +103,7 @@ export function createOptionsPopover(deps = {}) {
     } else {
       selectedFields = selectedFields.filter((field) => field !== key);
     }
-    saveFields();
+    saveFields(storage, selectedFields);
     if (typeof onChange === 'function') onChange();
     return true;
   }

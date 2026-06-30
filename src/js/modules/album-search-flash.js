@@ -18,6 +18,26 @@
 const FLASH_DURATION_MS = 3200;
 const MAX_PAINT_FRAMES = 30;
 
+/**
+ * Scroll ONLY the album-list container to bring `row` to its vertical center.
+ *
+ * row.scrollIntoView() would scroll every scrollable ancestor up to the
+ * document — and on mobile the document itself can scroll, so centering the row
+ * in the viewport drags the fixed header off-screen. Scrolling the container
+ * directly keeps the header pinned and is equivalent on desktop (where the
+ * document doesn't scroll anyway).
+ */
+function centerRowInContainer(container, row) {
+  if (!container || !row) return;
+  const containerRect = container.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  const delta =
+    rowRect.top -
+    containerRect.top -
+    (container.clientHeight - rowRect.height) / 2;
+  container.scrollBy({ top: delta, behavior: 'smooth' });
+}
+
 export function createAlbumFlash(deps = {}) {
   const { doc, win, getListData } = deps;
   let session = null;
@@ -63,7 +83,7 @@ export function createAlbumFlash(deps = {}) {
       if (session !== current || !row) return;
       current.row = row;
       if (!current.scrolled) {
-        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        centerRowInContainer(container, row);
         current.scrolled = true;
       }
       // Resume the animation at the current point in wall-clock time so a

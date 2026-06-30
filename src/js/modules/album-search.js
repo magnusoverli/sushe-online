@@ -20,10 +20,7 @@
 import { createResultsPanel } from './album-search-results.js';
 import { createOptionsPopover } from './album-search-options.js';
 import { createAlbumFlash } from './album-search-flash.js';
-
-const DEBOUNCE_MS = 220;
-const MIN_CHARS = 2;
-const RESULT_LIMIT = 25;
+import { createSearchRunner } from './album-search-core.js';
 
 export function createAlbumSearch(deps = {}) {
   const doc = deps.doc || (typeof document !== 'undefined' ? document : null);
@@ -37,10 +34,6 @@ export function createAlbumSearch(deps = {}) {
     return { initialize() {} };
   }
 
-  let debounceTimer = null;
-  let abortController = null;
-  let requestSeq = 0;
-  let lastQuery = '';
   let repositionScheduled = false;
 
   const flash = createAlbumFlash({ doc, win, getListData });
@@ -49,6 +42,16 @@ export function createAlbumSearch(deps = {}) {
     doc,
     storage,
     onChange: rerunCurrentQuery,
+  });
+
+  const runner = createSearchRunner({
+    apiCall,
+    getFields: options.getFields,
+    onResults: (data, query) => panel.render(data, query),
+    onError: () =>
+      panel.renderMessage('Search is unavailable right now. Please try again.'),
+    onCleared: () => panel.close(),
+    logger,
   });
 
   function getInput() {
@@ -63,60 +66,14 @@ export function createAlbumSearch(deps = {}) {
   // ---- search execution -----------------------------------------------------
 
   function onInputChange(value) {
-    clearTimeout(debounceTimer);
-    const query = value.trim();
     toggleClearButton(value.length > 0);
-
-    if (query.length < MIN_CHARS) {
-      lastQuery = '';
-      cancelInflight();
-      panel.close();
-      return;
-    }
-
-    debounceTimer = setTimeout(() => runSearch(query), DEBOUNCE_MS);
-  }
-
-  function cancelInflight() {
-    if (abortController) {
-      abortController.abort();
-      abortController = null;
-    }
-  }
-
-  async function runSearch(query) {
-    lastQuery = query;
-    cancelInflight();
-    abortController = new AbortController();
-    const seq = ++requestSeq;
-
-    const params = new URLSearchParams({
-      q: query,
-      limit: String(RESULT_LIMIT),
-    });
-    const fields = options.getFields();
-    if (fields.length > 0) {
-      params.set('fields', fields.join(','));
-    }
-
-    try {
-      const data = await apiCall(`/api/search/albums?${params.toString()}`, {
-        signal: abortController.signal,
-      });
-      if (seq !== requestSeq) return; // a newer search superseded this one
-      panel.render(data, query);
-    } catch (error) {
-      if (error?.name === 'AbortError') return;
-      if (seq !== requestSeq) return;
-      logger.warn('Album search failed:', error);
-      panel.renderMessage('Search is unavailable right now. Please try again.');
-    }
+    runner.schedule(value);
   }
 
   function rerunCurrentQuery() {
     const input = getInput();
     const query = (input?.value || '').trim();
-    if (query.length >= MIN_CHARS) runSearch(query);
+    if (query.length >= runner.minChars) runner.run(query);
   }
 
   function clearSearch() {
@@ -126,10 +83,7 @@ export function createAlbumSearch(deps = {}) {
       input.focus();
     }
     toggleClearButton(false);
-    lastQuery = '';
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-    cancelInflight();
+    runner.reset();
     panel.close();
   }
 
@@ -184,8 +138,8 @@ export function createAlbumSearch(deps = {}) {
         if (panel.isOpen()) {
           event.preventDefault();
           panel.moveActive(1);
-        } else if (lastQuery) {
-          runSearch(lastQuery);
+        } else if (runner.getLastQuery()) {
+          runner.run(runner.getLastQuery());
         }
         break;
       case 'ArrowUp':
