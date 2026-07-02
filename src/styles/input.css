@@ -2,6 +2,60 @@
 
 @config '../../tailwind.config.js';
 
+/* ============================================================
+   Design tokens (single source of truth).
+   @theme: utility-generating tokens (NEW names only — never redefine
+   Tailwind built-ins, which would restyle the whole app).
+   :root: var()-only tokens referenced from hand-written CSS.
+   Values are chosen to preserve every current computed value, so adding
+   this block changes nothing visually until call sites are migrated.
+   ============================================================ */
+@theme {
+  --text-2xs: 11px;
+  --text-2xs--line-height: 1rem;
+  --text-3xs: 10px;
+  --text-3xs--line-height: 0.875rem;
+}
+
+:root {
+  /* Surface / border / text roles (mapped to the current gray palette) */
+  --surface-1: #111827;
+  --surface-2: #1f2937;
+  --surface-raised: #374151;
+  --surface-navy: #2b3147;
+  --border: #374151;
+  --border-subtle: #333;
+  --text: #e5e7eb;
+  --text-muted: #9ca3af;
+
+  /* z-index scale (values preserve current stacking) */
+  --z-dropdown: 60;
+  --z-sticky-header: 50;
+  --z-drawer: 9999;
+  --z-modal: 10000;
+  --z-modal-elevated: 10001;
+  --z-modal-top: 10002;
+  --z-toast: 10050;
+  --z-drag: 100000;
+
+  /* Radius scale */
+  --radius-control: 4px;
+  --radius-input: 0.375rem;
+  --radius-card: 8px;
+  --radius-pill: 9999px;
+
+  /* Scrollbar */
+  --scrollbar-width: 8px;
+  --scrollbar-track: #111827;
+  --scrollbar-thumb: #374151;
+  --scrollbar-thumb-hover: #4b5563;
+
+  /* Rank medals (gold / silver / bronze) */
+  --medal-gold: #eab308;
+  --medal-silver: #9ca3af;
+  --medal-bronze: #b45309;
+}
+
 /*
   The default border color has changed to `currentcolor` in Tailwind CSS v4,
   so we've added these compatibility styles to make sure everything still
