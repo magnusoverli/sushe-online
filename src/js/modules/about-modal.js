@@ -9,6 +9,7 @@
  */
 
 import { escapeHtml } from './html-utils.js';
+import { createModal } from './modal-factory.js';
 import changelogData from '../../data/changelog.json';
 
 /**
@@ -232,16 +233,12 @@ export function initAboutModal() {
   // Render initial content
   content.innerHTML = renderContent();
 
-  function open() {
-    modal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-    attachHandlers();
-  }
-
-  function close() {
-    modal.classList.add('hidden');
-    document.body.style.overflow = '';
-  }
+  const controller = createModal({
+    element: modal,
+    backdrop: modal,
+    closeButton: document.getElementById('aboutModalClose'),
+    label: "What's New",
+  });
 
   /**
    * Toggle inline expansion for a changelog entry.
@@ -259,37 +256,29 @@ export function initAboutModal() {
     }
   }
 
-  function attachHandlers() {
-    // Close button
-    const closeBtn = document.getElementById('aboutModalClose');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', close, { once: true });
-    }
-
-    // Show more
-    const showMoreBtn = document.getElementById('aboutShowMore');
-    if (showMoreBtn) {
-      showMoreBtn.addEventListener(
-        'click',
-        () => {
-          const entries = Array.isArray(changelogData) ? changelogData : [];
-          const remaining = entries.slice(INITIAL_COUNT);
-          const list = document.getElementById('aboutChangelogList');
-          if (list && remaining.length > 0) {
-            const groups = groupByDate(remaining, INITIAL_COUNT);
-            const extraHtml = groups
-              .map(
-                (group) =>
-                  `<div class="border-t border-gray-800/50"></div>${renderGroup(group)}`
-              )
-              .join('');
-            list.insertAdjacentHTML('beforeend', extraHtml);
-          }
-          showMoreBtn.remove();
-        },
-        { once: true }
-      );
-    }
+  // Show more (attached once; the button removes itself after use)
+  const showMoreBtn = document.getElementById('aboutShowMore');
+  if (showMoreBtn) {
+    showMoreBtn.addEventListener(
+      'click',
+      () => {
+        const entries = Array.isArray(changelogData) ? changelogData : [];
+        const remaining = entries.slice(INITIAL_COUNT);
+        const list = document.getElementById('aboutChangelogList');
+        if (list && remaining.length > 0) {
+          const groups = groupByDate(remaining, INITIAL_COUNT);
+          const extraHtml = groups
+            .map(
+              (group) =>
+                `<div class="border-t border-gray-800/50"></div>${renderGroup(group)}`
+            )
+            .join('');
+          list.insertAdjacentHTML('beforeend', extraHtml);
+        }
+        showMoreBtn.remove();
+      },
+      { once: true }
+    );
   }
 
   // Delegated click for entry expansion toggles
@@ -300,18 +289,7 @@ export function initAboutModal() {
     }
   });
 
-  // Backdrop click closes
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) close();
-  });
-
-  // Escape key closes
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
-      close();
-    }
-  });
-
-  // Expose globally for the header button
-  window.openAboutModal = open;
+  // Escape, backdrop, close button, scroll lock and focus trap are all handled
+  // by the shared modal controller. Expose open for the header button.
+  window.openAboutModal = () => controller.open();
 }

@@ -9,6 +9,7 @@
 
 import { escapeHtml } from './html-utils.js';
 import { apiCall } from './utils.js';
+import { createModal } from './modal-factory.js';
 
 // Lazy-loaded to avoid pulling in the 508KB musicbrainz chunk at startup.
 // searchArtistImageRacing is only needed when viewing similar artists.
@@ -24,6 +25,7 @@ async function getSearchArtistImageRacing() {
 
 // Module state
 let discoveryModal = null;
+let discoveryController = null;
 let similarArtistsAbortController = null;
 
 /**
@@ -73,23 +75,20 @@ function createModalElement() {
   document.body.appendChild(modal);
   discoveryModal = modal;
 
-  // Close button handler
-  modal
-    .querySelector('#discoveryModalClose')
-    .addEventListener('click', hideDiscoveryModal);
-
-  // Click outside to close
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      hideDiscoveryModal();
-    }
-  });
-
-  // Escape key to close
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
-      hideDiscoveryModal();
-    }
+  // Escape, backdrop and close button, plus scroll lock and focus trap, are all
+  // handled by the shared controller. Aborting the in-flight fetch runs on close.
+  discoveryController = createModal({
+    element: modal,
+    backdrop: modal,
+    closeButton: modal.querySelector('#discoveryModalClose'),
+    dialog: modal.querySelector('.discovery-modal-content'),
+    labelledBy: 'discoveryModalTitle',
+    onClose: () => {
+      if (similarArtistsAbortController) {
+        similarArtistsAbortController.abort();
+        similarArtistsAbortController = null;
+      }
+    },
   });
 }
 
@@ -123,8 +122,7 @@ export function showDiscoveryModal(type, data = {}) {
   content.innerHTML = renderSkeletonLoaders();
 
   // Show modal
-  discoveryModal.classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
+  discoveryController.open();
 
   // Fetch similar artists
   fetchSimilarArtists(data.artist, data.albumId || null);
@@ -134,15 +132,12 @@ export function showDiscoveryModal(type, data = {}) {
  * Hide the discovery modal
  */
 export function hideDiscoveryModal() {
-  // Abort any ongoing artist image searches
-  if (similarArtistsAbortController) {
+  // The controller's onClose aborts any ongoing artist image searches.
+  if (discoveryController) {
+    discoveryController.close();
+  } else if (similarArtistsAbortController) {
     similarArtistsAbortController.abort();
     similarArtistsAbortController = null;
-  }
-
-  if (discoveryModal) {
-    discoveryModal.classList.add('hidden');
-    document.body.style.overflow = '';
   }
 }
 

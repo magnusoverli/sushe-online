@@ -9,7 +9,7 @@
  */
 
 import { escapeHtmlAttr } from './html-utils.js';
-import { setupModalBehavior } from '../utils/modal-helpers.js';
+import { createModal } from './modal-factory.js';
 import { deleteCollection } from '../utils/delete-collection.js';
 
 /**
@@ -34,6 +34,10 @@ export function createListCrud(deps = {}) {
     getCurrentContextGroup,
     setCurrentContextGroup,
   } = deps;
+
+  // Shared controller for the rename/edit-list modal: initialized in
+  // initializeRenameList, opened from openRenameModal (a peer function).
+  let renameListController = null;
 
   // ========================================================
   // Category (Group) Context Menu
@@ -176,15 +180,19 @@ export function createListCrud(deps = {}) {
     const cancelBtn = modal.querySelector('#cancelRenameCategoryBtn');
     const confirmBtn = modal.querySelector('#confirmRenameCategoryBtn');
 
-    // Focus and select all text
+    const controller = createModal({
+      element: modal,
+      backdrop: modal,
+      closeButton: cancelBtn,
+      label: 'Rename Category',
+      onClose: () => modal.remove(),
+    });
+
+    // Focus and select the input after the controller moves focus into it.
     setTimeout(() => {
       input.focus();
       input.select();
     }, 50);
-
-    const closeModal = () => {
-      modal.remove();
-    };
 
     const doRename = async () => {
       const newName = input.value.trim();
@@ -196,7 +204,7 @@ export function createListCrud(deps = {}) {
       }
 
       if (newName === currentName) {
-        closeModal();
+        controller.close();
         return;
       }
 
@@ -207,7 +215,7 @@ export function createListCrud(deps = {}) {
         });
 
         showToast(`Category renamed to "${newName}"`);
-        closeModal();
+        controller.close();
 
         // Refresh groups and lists
         await refreshGroupsAndLists();
@@ -218,25 +226,17 @@ export function createListCrud(deps = {}) {
       }
     };
 
-    cancelBtn.onclick = closeModal;
     confirmBtn.onclick = doRename;
 
-    // Handle enter key
+    // Enter submits; Escape, backdrop and cancel are handled by the controller.
     input.onkeydown = (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         doRename();
-      } else if (e.key === 'Escape') {
-        closeModal();
       }
     };
 
-    // Close on backdrop click
-    modal.onclick = (e) => {
-      if (e.target === modal) {
-        closeModal();
-      }
-    };
+    controller.open();
   }
 
   // ========================================================
@@ -325,34 +325,35 @@ export function createListCrud(deps = {}) {
 
     categorySelect.addEventListener('change', handleCategoryChange);
 
+    // Reset the form fields (shared by open and close).
+    const resetForm = () => {
+      nameInput.value = '';
+      categorySelect.value = '';
+      newYearInput.value = '';
+      newCollectionInput.value = '';
+      newYearContainer.classList.add('hidden');
+      newCollectionContainer.classList.add('hidden');
+      if (categoryError) categoryError.classList.add('hidden');
+    };
+
+    // Backdrop, Escape, close button, scroll lock and focus trap via the shared
+    // controller; the form resets on close.
+    const controller = createModal({
+      element: modal,
+      backdrop: modal,
+      closeButton: cancelBtn,
+      label: 'Create List',
+      initialFocus: '#newListName',
+      onClose: resetForm,
+    });
+    const closeModal = () => controller.close();
+
     // Open modal
     createBtn.onclick = () => {
       populateCategoryDropdown();
-      modal.classList.remove('hidden');
-      nameInput.value = '';
-      categorySelect.value = '';
-      newYearInput.value = '';
-      newCollectionInput.value = '';
-      newYearContainer.classList.add('hidden');
-      newCollectionContainer.classList.add('hidden');
-      if (categoryError) categoryError.classList.add('hidden');
-      nameInput.focus();
+      resetForm();
+      controller.open();
     };
-
-    // Close modal
-    const closeModal = () => {
-      modal.classList.add('hidden');
-      nameInput.value = '';
-      categorySelect.value = '';
-      newYearInput.value = '';
-      newCollectionInput.value = '';
-      newYearContainer.classList.add('hidden');
-      newCollectionContainer.classList.add('hidden');
-      if (categoryError) categoryError.classList.add('hidden');
-    };
-
-    cancelBtn.onclick = closeModal;
-    setupModalBehavior(modal, closeModal);
 
     /**
      * Validate a year value
@@ -527,23 +528,26 @@ export function createListCrud(deps = {}) {
 
     if (!createBtn || !modal) return;
 
+    const resetForm = () => {
+      nameInput.value = '';
+      if (errorEl) errorEl.classList.add('hidden');
+    };
+
+    const controller = createModal({
+      element: modal,
+      backdrop: modal,
+      closeButton: cancelBtn,
+      label: 'Create Collection',
+      initialFocus: '#newCollectionName',
+      onClose: resetForm,
+    });
+    const closeModal = () => controller.close();
+
     // Open modal
     createBtn.onclick = () => {
-      modal.classList.remove('hidden');
-      nameInput.value = '';
-      if (errorEl) errorEl.classList.add('hidden');
-      nameInput.focus();
+      resetForm();
+      controller.open();
     };
-
-    // Close modal
-    const closeModal = () => {
-      modal.classList.add('hidden');
-      nameInput.value = '';
-      if (errorEl) errorEl.classList.add('hidden');
-    };
-
-    cancelBtn.onclick = closeModal;
-    setupModalBehavior(modal, closeModal);
 
     // Create collection
     const createCollection = async () => {
@@ -616,16 +620,20 @@ export function createListCrud(deps = {}) {
 
     if (!modal) return;
 
-    // Close modal function
-    const closeModal = () => {
-      modal.classList.add('hidden');
-      nameInput.value = '';
-      if (yearInput) yearInput.value = '';
-      if (yearError) yearError.classList.add('hidden');
-    };
-
-    cancelBtn.onclick = closeModal;
-    setupModalBehavior(modal, closeModal);
+    // Backdrop, Escape, close button, scroll lock and focus trap via the shared
+    // controller (opened from openRenameModal); the form resets on close.
+    renameListController = createModal({
+      element: modal,
+      backdrop: modal,
+      closeButton: cancelBtn,
+      label: 'Edit List',
+      onClose: () => {
+        nameInput.value = '';
+        if (yearInput) yearInput.value = '';
+        if (yearError) yearError.classList.add('hidden');
+      },
+    });
+    const closeModal = () => renameListController.close();
 
     // Validate year input (optional for editing)
     const validateYear = (yearValue) => {
@@ -789,9 +797,10 @@ export function createListCrud(deps = {}) {
       yearError.classList.add('hidden');
     }
 
-    modal.classList.remove('hidden');
+    if (renameListController) renameListController.open();
 
-    // Select all text in the input for easy editing
+    // Select all text in the input for easy editing (the controller has already
+    // moved focus into it).
     setTimeout(() => {
       nameInput.focus();
       nameInput.select();

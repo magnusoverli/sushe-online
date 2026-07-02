@@ -8,7 +8,6 @@
  */
 
 import { showToast, getAlbumKey, apiCall } from './utils.js';
-import { setupModalBehavior } from '../utils/modal-helpers.js';
 // jsPDF is imported dynamically inside downloadListAsPDF so the ~127KB-gzipped
 // PDF library stays out of the eagerly-loaded bundle and is fetched only when
 // a user actually exports a list as PDF.
@@ -422,12 +421,23 @@ export function createImportConflictHandler(deps = {}) {
 
     // Click-outside / ESC to dismiss, routed through the existing cancel
     // handlers so pending-import state is cleared (conflict) or we step back
-    // to the chooser (rename) — matching the Cancel buttons exactly.
+    // to the chooser (rename) — matching the Cancel buttons exactly. This is a
+    // multi-step wizard whose two modals hand off to each other, so it manages
+    // its own visibility rather than a single-modal createModal controller.
+    const attachDismiss = (modal, dismiss) => {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) dismiss();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden'))
+          dismiss();
+      });
+    };
     if (conflictModal && importCancelBtn) {
-      setupModalBehavior(conflictModal, () => importCancelBtn.click());
+      attachDismiss(conflictModal, () => importCancelBtn.click());
     }
     if (renameModal && cancelImportRenameBtn) {
-      setupModalBehavior(renameModal, () => cancelImportRenameBtn.click());
+      attachDismiss(renameModal, () => cancelImportRenameBtn.click());
     }
 
     // Overwrite option
