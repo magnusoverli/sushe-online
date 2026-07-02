@@ -150,6 +150,8 @@ function setupModalController() {
     closeButton: closeBtn,
     closeOnEscape: true,
     closeOnBackdrop: true,
+    // Accessible dialog: focus trap + focus restore (Escape/backdrop still work)
+    label: 'Album match review',
     onClose: () => {
       currentData = null;
       currentIndex = 0;

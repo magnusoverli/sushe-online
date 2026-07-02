@@ -101,6 +101,8 @@ function showSimilarAlbumModal(newAlbum, existingMatch) {
       onClose: () => closeModal('cancelled'),
       closeOnEscape: true,
       closeOnBackdrop: true,
+      // Accessible dialog: focus trap + focus restore (Escape/backdrop still work)
+      label: 'Similar album found',
     });
 
     // Attach button handlers via controller for automatic cleanup
