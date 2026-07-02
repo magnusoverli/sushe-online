@@ -165,6 +165,9 @@ function setupModalController() {
     backdrop,
     closeButton: closeBtn,
     closeOnEscape: false,
+    // Accessible dialog: focus trap + restore. Tab is not among the remapped
+    // keys (Escape/s/Enter), so the trap does not conflict.
+    label: 'Review duplicate albums',
     onClose: () => {
       if (onComplete) onComplete();
     },

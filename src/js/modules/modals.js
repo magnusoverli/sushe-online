@@ -40,6 +40,7 @@ function setupConfirmationModal({
     element: modal,
     backdrop: modal,
     closeButton: cancelBtn,
+    labelledBy: 'confirmationTitle',
     onClose: () => {
       if (requiresCheckbox) {
         checkbox.checked = false;
@@ -208,6 +209,7 @@ export function showReasoningModal(
       element: modal,
       backdrop: modal,
       closeButton: cancelBtn,
+      label: 'Recommend album',
       onClose: () => resolve(null),
     });
 
@@ -283,6 +285,7 @@ export function showViewReasoningModal(rec) {
     element: modal,
     backdrop: modal,
     closeButton: closeBtn,
+    label: 'Recommendation reason',
   });
 
   modalController.open();
