@@ -378,7 +378,7 @@
     <!-- Mobile Menu Drawer -->
     <div id="mobileMenu" class="mobile-only fixed inset-0 z-50 pointer-events-none" style="visibility: hidden;">
       <!-- Backdrop -->
-      <div id="mobileMenuBackdrop" class="absolute inset-0 bg-black opacity-0 transition-opacity" style="transition-duration: var(--sidebar-transition-duration);" onclick="toggleMobileMenu()"></div>
+      <div id="mobileMenuBackdrop" class="absolute inset-0 mobile-sidebar-backdrop opacity-0 transition-opacity" style="transition-duration: var(--sidebar-transition-duration);" onclick="toggleMobileMenu()"></div>
       
       <!-- Drawer -->
       <div id="mobileMenuDrawer" class="absolute left-0 top-0 bottom-0 w-72 max-w-[80vw] border-r border-gray-800 overflow-hidden flex flex-col transition-transform" style="background: linear-gradient(to bottom, #2B3147 10%, #090D17 70%); transition-duration: var(--sidebar-transition-duration); transform: translateX(-100%);">
@@ -517,7 +517,7 @@
         if (window.collapseGroupsForActiveList) window.collapseGroupsForActiveList();
         // Trigger reflow to ensure transition runs
         void drawer.offsetWidth;
-        backdrop.style.opacity = '0.5';
+        backdrop.style.opacity = '1';
         drawer.style.transform = 'translateX(0)';
         if (fab) {
           fab.style.opacity = '0';
@@ -563,7 +563,7 @@
           // Fade backdrop proportionally
           const drawerWidth = drawer.offsetWidth;
           const progress = Math.min(Math.abs(deltaX) / drawerWidth, 1);
-          if (backdrop) backdrop.style.opacity = String(0.5 * (1 - progress));
+          if (backdrop) backdrop.style.opacity = String(1 - progress);
         }
       }, { passive: true });
 
@@ -581,7 +581,7 @@
         } else {
           // Snap back open
           drawer.style.transform = 'translateX(0)';
-          if (backdrop) backdrop.style.opacity = '0.5';
+          if (backdrop) backdrop.style.opacity = '1';
         }
       }, { passive: true });
     })();

@@ -1400,12 +1400,16 @@
 }
 
 /* Backdrop */
+.mobile-sidebar-backdrop,
 .settings-drawer-backdrop {
-  position: absolute;
-  inset: 0;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+}
+
+.settings-drawer-backdrop {
+  position: absolute;
+  inset: 0;
   opacity: 0;
   transition: opacity 0.3s ease;
   touch-action: none;
@@ -1413,6 +1417,7 @@
 
 /* Optimize backdrop blur on mobile for performance */
 @media (max-width: 1023px) {
+  .mobile-sidebar-backdrop,
   .settings-drawer-backdrop {
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
