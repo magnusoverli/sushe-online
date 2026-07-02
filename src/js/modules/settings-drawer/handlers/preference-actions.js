@@ -5,6 +5,11 @@
  * and visual formatting updates.
  */
 
+import {
+  adjustColor,
+  colorWithOpacity,
+} from '../../../../../utils/color-utils.js';
+
 export function createSettingsPreferenceActions(deps = {}) {
   const doc =
     deps.doc || (typeof document !== 'undefined' ? document : undefined);
@@ -165,7 +170,22 @@ export function createSettingsPreferenceActions(deps = {}) {
         body: JSON.stringify({ accentColor: color }),
       });
 
-      doc.documentElement.style.setProperty('--accent-color', color);
+      // Refresh the FULL derived accent set (not just --accent-color) using the
+      // same formulas as the server's generateAccentCssVars, so accent-derived
+      // styles (button hover, focus rings, glows) update live instead of going
+      // stale until the next page load.
+      const rootStyle = doc.documentElement.style;
+      rootStyle.setProperty('--accent-color', color);
+      rootStyle.setProperty('--accent-hover', adjustColor(color, -30));
+      rootStyle.setProperty('--accent-light', adjustColor(color, 40));
+      rootStyle.setProperty('--accent-dark', adjustColor(color, -50));
+      rootStyle.setProperty('--accent-shadow', colorWithOpacity(color, 0.4));
+      rootStyle.setProperty('--accent-glow', colorWithOpacity(color, 0.5));
+      rootStyle.setProperty('--accent-subtle', colorWithOpacity(color, 0.2));
+      rootStyle.setProperty(
+        '--accent-subtle-strong',
+        colorWithOpacity(color, 0.3)
+      );
 
       showToast('Accent color updated', 'success');
 

@@ -159,10 +159,10 @@ export function createListCrud(deps = {}) {
         <p id="renameCategoryError" class="text-xs text-red-500 mt-2 hidden"></p>
       </div>
       <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
-        <button id="cancelRenameCategoryBtn" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200">
+        <button id="cancelRenameCategoryBtn" class="btn-modal-cancel">
           Cancel
         </button>
-        <button id="confirmRenameCategoryBtn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-sm transition duration-200">
+        <button id="confirmRenameCategoryBtn" class="btn-primary">
           Rename
         </button>
       </div>

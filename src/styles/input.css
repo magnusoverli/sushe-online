@@ -560,6 +560,33 @@
     @apply px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200;
   }
 
+  /* Canonical primary (confirm) button — accent-themed. One identity for the
+     affirmative action across every modal footer. */
+  .btn-primary {
+    @apply px-4 py-2 text-white rounded-sm transition duration-200 font-semibold;
+    background-color: var(--accent-color, #dc2626);
+  }
+  .btn-primary:hover {
+    background-color: var(--accent-hover, #b91c1c);
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Destructive button — fixed semantic red (never the accent). */
+  .btn-danger {
+    @apply px-4 py-2 text-white rounded-sm transition duration-200 font-semibold;
+    background-color: #dc2626;
+  }
+  .btn-danger:hover {
+    background-color: #b91c1c;
+  }
+  .btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   /* Context menu item (~27 occurrences) */
   .ctx-menu-item {
     @apply w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap;

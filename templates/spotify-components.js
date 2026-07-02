@@ -68,7 +68,7 @@ function createSpotifyComponents(deps) {
     `,
     footer: `
         <button id="cancelImportRenameBtn" class="btn-modal-cancel">Cancel</button>
-        <button id="confirmImportRenameBtn" class="btn-modal-confirm">Import with New Name</button>
+        <button id="confirmImportRenameBtn" class="btn-primary">Import with New Name</button>
     `,
   })}
 `;
@@ -254,13 +254,13 @@ function createSpotifyComponents(deps) {
       <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
         <button 
           id="cancelCreateBtn" 
-          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200"
+          class="btn-modal-cancel"
         >
           Cancel
         </button>
         <button 
           id="confirmCreateBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-sm transition duration-200 font-semibold"
+          class="btn-primary"
         >
           Create List
         </button>
@@ -301,13 +301,13 @@ function createSpotifyComponents(deps) {
       <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
         <button 
           id="cancelCreateCollectionBtn" 
-          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200"
+          class="btn-modal-cancel"
         >
           Cancel
         </button>
         <button 
           id="confirmCreateCollectionBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-sm transition duration-200 font-semibold"
+          class="btn-primary"
         >
           Create Collection
         </button>
@@ -363,13 +363,13 @@ function createSpotifyComponents(deps) {
       <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
         <button 
           id="cancelRenameBtn" 
-          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200"
+          class="btn-modal-cancel"
         >
           Cancel
         </button>
         <button 
           id="confirmRenameBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-sm transition duration-200 font-semibold"
+          class="btn-primary"
         >
           Save Changes
         </button>
@@ -629,7 +629,7 @@ function createSpotifyComponents(deps) {
     `,
       footer: `
         <button id="confirmationCancelBtn" class="btn-modal-cancel">Cancel</button>
-        <button id="confirmationConfirmBtn" class="btn-modal-confirm">Remove</button>
+        <button id="confirmationConfirmBtn" class="btn-danger">Remove</button>
     `,
     });
 
@@ -665,7 +665,7 @@ function createSpotifyComponents(deps) {
     `,
       footer: `
         <button id="reasoningCancelBtn" class="btn-modal-cancel">Cancel</button>
-        <button id="reasoningSubmitBtn" class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-sm transition duration-200 font-semibold">Recommend</button>
+        <button id="reasoningSubmitBtn" class="btn-primary">Recommend</button>
     `,
     });
 
@@ -795,7 +795,7 @@ function createSpotifyComponents(deps) {
         <button id="listSetupDismiss" class="px-4 py-2 text-gray-400 hover:text-gray-300 transition text-sm">
           Remind me later
         </button>
-        <button id="listSetupSave" class="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-sm transition font-medium disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+        <button id="listSetupSave" class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled>
           <i class="fas fa-check mr-2"></i>Save Changes
         </button>
       </div>
@@ -833,13 +833,13 @@ function createSpotifyComponents(deps) {
       <div class="p-4 border-t border-gray-800 flex gap-3 justify-end flex-shrink-0">
         <button 
           id="releaseSelectionCancelBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-sm transition duration-200"
+          class="btn-modal-cancel"
         >
           Cancel
         </button>
         <button 
           id="releaseSelectionConfirmBtn" 
-          class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-sm transition duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           disabled
         >
           Apply Selection
