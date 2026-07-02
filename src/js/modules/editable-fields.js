@@ -361,12 +361,17 @@ export function createEditableFields(deps = {}) {
     let highlightedIndex = -1;
     let isDropdownOpen = false;
 
-    // Create container for input + dropdown
-    const container = document.createElement('div');
-    container.className = 'relative';
-    container.style.zIndex = '1000';
+    // Guards against duplicate saves when blur + click-outside fire together.
+    let editingClosed = false;
 
-    // Create input
+    // Remove any orphaned genre dropdown stranded in <body> by a previous edit
+    // (the dropdown is portaled to <body>, so a mid-edit list rebuild could
+    // leave one behind).
+    document
+      .querySelectorAll('body > .genre-edit-dropdown')
+      .forEach((el) => el.remove());
+
+    // Create input (stays inside the genre cell)
     const input = document.createElement('input');
     input.type = 'text';
     input.className =
@@ -375,12 +380,54 @@ export function createEditableFields(deps = {}) {
     input.placeholder = `Search ${genreField === 'genre_1' ? 'primary' : 'secondary'} genre...`;
     input.autocomplete = 'off';
 
-    // Create dropdown list
+    // Create dropdown list.
+    // The dropdown is portaled to <body> with position:fixed rather than nested
+    // in the cell, because the genre cell carries `opacity: 0.7` (which renders
+    // the dropdown translucent and traps its z-index in a stacking context) and
+    // #albumContainer has `overflow-y: auto` (which clips anything spilling out
+    // of a row). Positioning is computed from the input's bounding rect. This
+    // mirrors the column-toggle dropdown pattern in album-display.js.
     const dropdown = document.createElement('div');
     dropdown.className =
-      'absolute left-0 right-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded-sm shadow-lg max-h-48 overflow-y-auto';
+      'genre-edit-dropdown fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg max-h-48 overflow-y-auto';
     dropdown.style.display = 'none';
     dropdown.style.zIndex = '1001';
+    // Clicking inside the dropdown (option, scrollbar, padding) must not blur the
+    // input or steal focus, so the edit session survives until we decide.
+    dropdown.addEventListener('mousedown', (e) => e.preventDefault());
+
+    /** Anchor the fixed dropdown to the input, flipping above when needed. */
+    const positionDropdown = () => {
+      const rect = input.getBoundingClientRect();
+      dropdown.style.left = `${rect.left}px`;
+      dropdown.style.width = `${rect.width}px`;
+      // Measure after width/content are applied so the flip check is accurate.
+      const dropdownHeight = dropdown.offsetHeight;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow < dropdownHeight + 8 && rect.top > spaceBelow) {
+        dropdown.style.top = `${rect.top - dropdownHeight - 4}px`;
+      } else {
+        dropdown.style.top = `${rect.bottom + 4}px`;
+      }
+    };
+
+    // Keep the dropdown glued to the input while the list/window scrolls.
+    // Capture phase is required: #albumContainer's scroll doesn't bubble.
+    const handleReposition = () => {
+      // Self-heal if a list rebuild detached the input mid-edit.
+      if (!input.isConnected) {
+        teardownDropdown();
+        return;
+      }
+      if (dropdown.style.display !== 'none') positionDropdown();
+    };
+
+    /** Remove the portaled dropdown and its global listeners. Idempotent. */
+    const teardownDropdown = () => {
+      window.removeEventListener('scroll', handleReposition, true);
+      window.removeEventListener('resize', handleReposition);
+      dropdown.remove();
+    };
 
     // Store the original onclick handler
     const originalOnClick = genreDiv.onclick;
@@ -390,6 +437,9 @@ export function createEditableFields(deps = {}) {
     let handleClickOutside;
 
     const restoreDisplay = (valueToDisplay) => {
+      editingClosed = true;
+      // Tear down the portaled dropdown and its scroll/resize listeners
+      teardownDropdown();
       // Remove the click outside listener if it exists
       if (handleClickOutside) {
         document.removeEventListener('click', handleClickOutside);
@@ -428,6 +478,8 @@ export function createEditableFields(deps = {}) {
     };
 
     const saveGenre = async (newGenre) => {
+      // Guard against duplicate saves (blur + click-outside can both fire)
+      if (editingClosed) return;
       // Trim the input
       newGenre = newGenre.trim();
 
@@ -651,6 +703,7 @@ export function createEditableFields(deps = {}) {
         dropdown.style.display = 'block';
         isDropdownOpen = true;
         renderDropdown(input.value);
+        positionDropdown();
       }
     };
 
@@ -731,19 +784,22 @@ export function createEditableFields(deps = {}) {
       }
     });
 
-    // Define handleClickOutside
+    // Define handleClickOutside. The dropdown now lives in <body>, so it must be
+    // excluded explicitly (a click on it is no longer "inside" the cell).
     handleClickOutside = (e) => {
-      if (!container.contains(e.target)) {
+      if (!genreDiv.contains(e.target) && !dropdown.contains(e.target)) {
         hideDropdown();
         saveGenre(input.value);
       }
     };
 
-    // Assemble and render
-    container.appendChild(input);
-    container.appendChild(dropdown);
+    // Assemble and render: the input stays in the cell; the dropdown is portaled
+    // to <body> and positioned on demand.
     genreDiv.innerHTML = '';
-    genreDiv.appendChild(container);
+    genreDiv.appendChild(input);
+    document.body.appendChild(dropdown);
+    window.addEventListener('scroll', handleReposition, true);
+    window.addEventListener('resize', handleReposition);
     input.focus();
     input.select();
 
