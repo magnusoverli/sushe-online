@@ -137,7 +137,7 @@ export function createListCrud(deps = {}) {
     // Use the existing confirmation modal pattern with an input
     const modal = document.createElement('div');
     modal.className =
-      'fixed inset-0 modal-overlay z-50 flex items-center justify-center p-4 safe-area-modal';
+      'fixed inset-0 modal-overlay modal-layer flex items-center justify-center p-4 safe-area-modal';
     modal.id = 'renameCategoryModal';
     modal.innerHTML = `
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">

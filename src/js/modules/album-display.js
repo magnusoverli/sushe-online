@@ -1874,7 +1874,7 @@ export function createAlbumDisplay(deps = {}) {
 
     const modal = document.createElement('div');
     modal.className =
-      'fixed inset-0 z-50 flex items-center justify-center p-4 safe-area-modal';
+      'fixed inset-0 modal-layer flex items-center justify-center p-4 safe-area-modal';
     modal.setAttribute('data-recommendation-modal', 'true');
     modal.innerHTML = `
       <div class="absolute inset-0 modal-overlay" data-backdrop></div>

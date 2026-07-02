@@ -33,7 +33,7 @@ function modalShell({
     ? `<div class="p-6 border-t border-gray-800 flex gap-3 justify-end">${footer}</div>`
     : '';
 
-  return `<div id="${id}" class="hidden fixed inset-0 modal-overlay z-50 flex items-center justify-center p-4 safe-area-modal${extraOverlayClass ? ' ' + extraOverlayClass : ''}">
+  return `<div id="${id}" class="hidden fixed inset-0 modal-overlay modal-layer flex items-center justify-center p-4 safe-area-modal${extraOverlayClass ? ' ' + extraOverlayClass : ''}">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full ${maxWidth}${extraContainerClass ? ' ' + extraContainerClass : ''}">
       ${header}
       <div class="p-6${title ? '' : ' pt-6'}">${body}</div>

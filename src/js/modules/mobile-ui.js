@@ -456,7 +456,7 @@ export function createMobileUI(deps = {}) {
 
     // Create the edit modal
     const editModal = document.createElement('div');
-    editModal.className = 'mobile-edit-modal fixed inset-0 z-50';
+    editModal.className = 'mobile-edit-modal fixed inset-0 modal-layer';
     editModal.innerHTML = `
       <!-- Backdrop: desktop only; on mobile the panel is a full-screen sheet -->
       <div class="hidden lg:block absolute inset-0 modal-overlay" data-backdrop></div>
@@ -1100,7 +1100,7 @@ export function createMobileUI(deps = {}) {
 
     const summaryModal = document.createElement('div');
     summaryModal.className =
-      'fixed inset-0 z-50 flex items-center justify-center p-4 safe-area-modal';
+      'fixed inset-0 modal-layer flex items-center justify-center p-4 safe-area-modal';
     summaryModal.innerHTML = `
       <!-- Backdrop -->
       <div class="absolute inset-0 modal-overlay" data-backdrop></div>

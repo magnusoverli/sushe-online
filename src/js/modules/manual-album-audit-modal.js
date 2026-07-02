@@ -85,7 +85,7 @@ function createModalDOM() {
   modalElement = document.createElement('div');
   modalElement.id = 'manualAlbumAuditModal';
   modalElement.className =
-    'hidden fixed inset-0 modal-overlay z-[10001] flex items-center justify-center p-4 safe-area-modal';
+    'hidden fixed inset-0 modal-overlay modal-layer-elevated flex items-center justify-center p-4 safe-area-modal';
   modalElement.innerHTML = `
     <div class="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
       <!-- Header -->

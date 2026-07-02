@@ -2317,6 +2317,18 @@
   color: #fff;
 }
 
+/* Modal stacking layers (MODAL-4): keep modals above the settings drawer
+   (--z-drawer). Bound to the WS2 z-index scale. */
+.modal-layer {
+  z-index: var(--z-modal);
+}
+.modal-layer-elevated {
+  z-index: var(--z-modal-elevated);
+}
+.modal-layer-top {
+  z-index: var(--z-modal-top);
+}
+
 /* Lighter blur on mobile for scroll/compositing performance. */
 @media (max-width: 1023px) {
   .modal-overlay {

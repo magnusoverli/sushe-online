@@ -121,7 +121,7 @@ function createModalDOM() {
   modalElement = document.createElement('div');
   modalElement.id = 'duplicateReviewModal';
   modalElement.className =
-    'fixed inset-0 z-[10002] flex items-center justify-center p-4 safe-area-modal duplicate-review-modal hidden';
+    'fixed inset-0 modal-layer-top flex items-center justify-center p-4 safe-area-modal duplicate-review-modal hidden';
   modalElement.innerHTML = `
     <div class="settings-modal-backdrop"></div>
     <div class="settings-modal-content duplicate-review-modal-content max-w-5xl w-full">
