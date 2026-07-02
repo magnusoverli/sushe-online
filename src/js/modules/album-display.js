@@ -40,6 +40,7 @@ import {
 import { createPlaycountSync } from './album-display/playcount-sync.js';
 import { renderAvailabilityBadges } from './album-display/availability-badges.js';
 import { getPositionBadgeColor } from './album-display/position-badge.js';
+import { createModal } from './modal-factory.js';
 import {
   mobilePlaycountSpan,
   desktopPlaycountSpan,
@@ -1902,25 +1903,22 @@ export function createAlbumDisplay(deps = {}) {
 
     document.body.appendChild(modal);
 
-    const closeModal = () => {
-      modal.remove();
-      const fabEl = document.getElementById('addAlbumFAB');
-      if (fabEl && getCurrentList()) {
-        fabEl.style.display = 'flex';
-      }
-    };
-
-    const backdrop = modal.querySelector('[data-backdrop]');
-    if (backdrop) backdrop.addEventListener('click', closeModal);
-
-    const closeBtn = modal.querySelector('[data-close-rec]');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        closeModal();
-      });
-    }
+    // Backdrop, close button, Escape and scroll lock via the shared controller;
+    // restore the FAB on close.
+    const controller = createModal({
+      element: modal,
+      backdrop: modal.querySelector('[data-backdrop]'),
+      closeButton: modal.querySelector('[data-close-rec]'),
+      label: 'Recommendation',
+      onClose: () => {
+        modal.remove();
+        const fabEl = document.getElementById('addAlbumFAB');
+        if (fabEl && getCurrentList()) {
+          fabEl.style.display = 'flex';
+        }
+      },
+    });
+    controller.open();
   }
 
   /**

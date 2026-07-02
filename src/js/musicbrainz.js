@@ -1,5 +1,6 @@
 // MusicBrainz API integration
 import { isMobileViewport } from './utils/viewport.js';
+import { createModal } from './modules/modal-factory.js';
 import { isAlbumInList, showToast } from './modules/utils.js';
 import { escapeHtmlAttr } from './modules/html-utils.js';
 import { checkAndPromptSimilar } from './modules/similar-album-modal.js';
@@ -741,6 +742,7 @@ function disconnectImageObservers() {
 let currentArtist = null;
 let modal = null;
 let modalElements = {};
+let addAlbumController = null;
 let currentLoadingController = null;
 let currentReleaseGroups = [];
 
@@ -1247,12 +1249,21 @@ function initializeAddAlbumFeature() {
   };
   setupCloseHandlers();
 
-  // Modal backdrop click handler - only on desktop
-  modal.onclick = (e) => {
-    if (e.target === modal && !isMobileViewport()) {
-      closeAddAlbumModal();
-    }
-  };
+  // Backdrop, Escape, scroll lock and focus trap via the shared controller. The
+  // in-flight search aborts and the modal state resets on close (all paths).
+  addAlbumController = createModal({
+    element: modal,
+    backdrop: modal,
+    label: 'Add album',
+    initialFocus: '#artistSearchInput',
+    onClose: () => {
+      if (currentLoadingController) {
+        currentLoadingController.abort();
+        currentLoadingController = null;
+      }
+      resetModalState();
+    },
+  });
 
   // Search functionality - same for both mobile and desktop
   modalElements.searchArtistBtn.onclick = performSearch;
@@ -1303,17 +1314,6 @@ function initializeAddAlbumFeature() {
 
   // Populate country dropdown
   populateCountryDropdown();
-
-  // ESC key to close (desktop only)
-  document.addEventListener('keydown', (e) => {
-    if (
-      e.key === 'Escape' &&
-      !modal.classList.contains('hidden') &&
-      !isMobileViewport()
-    ) {
-      closeAddAlbumModal();
-    }
-  });
 
   // Handle window resize to ensure proper modal behavior
   let resizeTimeout;
@@ -1408,27 +1408,21 @@ window.openAddAlbumModal = function () {
   warmupConnections();
 
   console.log('Opening modal...');
-  modal.classList.remove('hidden');
+  addAlbumController.open();
 
   // Reset search mode to artist when opening the modal
   searchMode = 'artist';
   updateSearchMode('artist');
 
-  // Focus the search input
+  // Clear the search input (the controller has moved focus into it)
   if (modalElements.artistSearchInput) {
     modalElements.artistSearchInput.value = '';
-    setTimeout(() => modalElements.artistSearchInput.focus(), 100);
   }
 
   resetModalState();
 
   // Populate country dropdown when modal opens
   populateCountryDropdown();
-
-  // Handle body scroll for mobile
-  if (isMobileViewport()) {
-    document.body.style.overflow = 'hidden';
-  }
 };
 
 // Unified close modal function
@@ -1678,17 +1672,9 @@ async function finishManualAdd(album) {
 }
 
 function closeAddAlbumModal() {
-  if (currentLoadingController) {
-    currentLoadingController.abort();
-    currentLoadingController = null;
-  }
-
-  modal.classList.add('hidden');
-  resetModalState();
-
-  // Restore body scroll on mobile
-  if (isMobileViewport()) {
-    document.body.style.overflow = '';
+  // The controller's onClose aborts the in-flight search and resets state.
+  if (addAlbumController) {
+    addAlbumController.close();
   }
 }
 

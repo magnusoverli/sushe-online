@@ -10,6 +10,7 @@
 import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
 import { escapeHtmlAttr as escapeHtml } from './html-utils.js';
 import { createActionSheet } from './ui-factories.js';
+import { createModal } from './modal-factory.js';
 import { createTransferHelpers } from './album-transfer.js';
 import { fetchSpotifyDevices } from '../utils/playback-service.js';
 import { createMobileAlbumActions } from './mobile-ui/album-actions.js';
@@ -658,31 +659,23 @@ export function createMobileUI(deps = {}) {
 
     document.body.appendChild(editModal);
 
-    // Close the editor and reset scroll. Shared by the close button and the
-    // backdrop so both paths behave identically.
-    const closeEditor = () => {
-      editModal.remove();
-      window.scrollTo(0, 0);
-      document.body.scrollTop = 0;
-    };
-
-    // Click-outside-to-close. The [data-backdrop] child is `hidden lg:block`,
-    // so this is reachable only on desktop; on mobile the panel is a
-    // full-screen sheet with no backdrop to click, which is intended.
-    const editBackdrop = editModal.querySelector('[data-backdrop]');
-    if (editBackdrop) {
-      editBackdrop.addEventListener('click', closeEditor);
-    }
-
-    // Attach close button handler
-    const closeBtn = editModal.querySelector('[data-close-editor]');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        closeEditor();
-      });
-    }
+    // Backdrop (desktop-only [data-backdrop]), close button, Escape and scroll
+    // lock via the shared controller. On close, remove the modal and reset
+    // scroll. The panel is a full-screen sheet on mobile with no backdrop to
+    // click, which is intended.
+    const editController = createModal({
+      element: editModal,
+      backdrop: editModal.querySelector('[data-backdrop]'),
+      closeButton: editModal.querySelector('[data-close-editor]'),
+      label: 'Edit album',
+      onClose: () => {
+        editModal.remove();
+        window.scrollTo(0, 0);
+        document.body.scrollTop = 0;
+      },
+    });
+    const closeEditor = () => editController.close();
+    editController.open();
 
     // Cover art editing state
     let pendingCoverData = null; // { base64: string, format: string }
@@ -973,9 +966,7 @@ export function createMobileUI(deps = {}) {
       albumsToSave[index] = updatedAlbum;
       setListData(currentList, albumsToSave, false);
 
-      editModal.remove();
-      window.scrollTo(0, 0);
-      document.body.scrollTop = 0;
+      closeEditor();
 
       // Cover changes need a full rebuild; incremental updates skip covers
       displayAlbums(
@@ -1130,29 +1121,22 @@ export function createMobileUI(deps = {}) {
     `;
     document.body.appendChild(summaryModal);
 
-    // Attach close handlers
-    const backdrop = summaryModal.querySelector('[data-backdrop]');
-    const closeBtn = summaryModal.querySelector('[data-close-summary]');
-
-    const closeModal = () => {
-      summaryModal.remove();
-      const fabElement = document.getElementById('addAlbumFAB');
-      if (fabElement && getCurrentList()) {
-        fabElement.style.display = 'flex';
-      }
-    };
-
-    if (backdrop) {
-      backdrop.addEventListener('click', closeModal);
-    }
-
-    if (closeBtn) {
-      closeBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        closeModal();
-      });
-    }
+    // Backdrop, close button, Escape and scroll lock via the shared controller;
+    // restore the FAB on close.
+    const summaryController = createModal({
+      element: summaryModal,
+      backdrop: summaryModal.querySelector('[data-backdrop]'),
+      closeButton: summaryModal.querySelector('[data-close-summary]'),
+      label: 'Album summary',
+      onClose: () => {
+        summaryModal.remove();
+        const fabElement = document.getElementById('addAlbumFAB');
+        if (fabElement && getCurrentList()) {
+          fabElement.style.display = 'flex';
+        }
+      },
+    });
+    summaryController.open();
   }
 
   // Return public API
