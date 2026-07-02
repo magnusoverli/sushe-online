@@ -191,7 +191,7 @@ function createSpotifyComponents(deps) {
       <!-- Modal Content -->
       <div class="p-6 space-y-4">
         <div>
-          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newListName">
+          <label class="form-label" for="newListName">
             List Name <span class="text-red-500">*</span>
           </label>
           <input 
@@ -205,7 +205,7 @@ function createSpotifyComponents(deps) {
         </div>
         
         <div>
-          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newListCategory">
+          <label class="form-label" for="newListCategory">
             Category <span class="text-red-500">*</span>
           </label>
           <select 
@@ -220,7 +220,7 @@ function createSpotifyComponents(deps) {
         
         <!-- Dynamic input for new year (hidden by default) -->
         <div id="newYearInputContainer" class="hidden">
-          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newYearInput">
+          <label class="form-label" for="newYearInput">
             New Year
           </label>
           <input 
@@ -235,7 +235,7 @@ function createSpotifyComponents(deps) {
         
         <!-- Dynamic input for new collection (hidden by default) -->
         <div id="newCollectionInputContainer" class="hidden">
-          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newCollectionInput">
+          <label class="form-label" for="newCollectionInput">
             Collection Name
           </label>
           <input 
@@ -282,7 +282,7 @@ function createSpotifyComponents(deps) {
       <!-- Modal Content -->
       <div class="p-6 space-y-4">
         <div>
-          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newCollectionName">
+          <label class="form-label" for="newCollectionName">
             Collection Name <span class="text-red-500">*</span>
           </label>
           <input 
@@ -329,7 +329,7 @@ function createSpotifyComponents(deps) {
       <!-- Modal Content -->
       <div class="p-6 space-y-4">
         <div>
-          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newListNameInput">
+          <label class="form-label" for="newListNameInput">
             List Name
           </label>
           <input 
@@ -343,7 +343,7 @@ function createSpotifyComponents(deps) {
         </div>
         
         <div>
-          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="editListYear">
+          <label class="form-label" for="editListYear">
             Year
           </label>
           <input 
