@@ -587,6 +587,14 @@
     cursor: not-allowed;
   }
 
+  /* Inline grid-cell editors (country/genre inputs, comment textareas) */
+  .inline-edit-input {
+    @apply w-full bg-gray-800 text-gray-300 text-sm p-1 rounded-sm border border-gray-700 focus:outline-hidden focus:border-gray-500;
+  }
+  .inline-edit-textarea {
+    @apply w-full bg-gray-800 text-gray-300 text-sm p-2 rounded-sm border border-gray-700 focus:outline-hidden focus:border-gray-500 resize-none;
+  }
+
   /* Context menu item (~27 occurrences) */
   .ctx-menu-item {
     @apply w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap;

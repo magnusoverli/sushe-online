@@ -198,7 +198,7 @@ function createSpotifyComponents(deps) {
             type="text" 
             id="newListName" 
             placeholder="Enter list name..." 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
+            class="form-input-modal"
             maxlength="50"
           >
           <p class="text-xs text-gray-500 mt-2">Give your list a unique name</p>
@@ -210,7 +210,7 @@ function createSpotifyComponents(deps) {
           </label>
           <select 
             id="newListCategory" 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white focus:outline-hidden focus:border-gray-500 transition duration-200 cursor-pointer"
+            class="form-input-modal cursor-pointer"
           >
             <option value="" disabled selected>Select a category...</option>
             <!-- Options populated dynamically by JavaScript -->
@@ -227,7 +227,7 @@ function createSpotifyComponents(deps) {
             type="number" 
             id="newYearInput" 
             placeholder="e.g. 2025" 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
+            class="form-input-modal"
             min="1000"
             max="9999"
           >
@@ -242,7 +242,7 @@ function createSpotifyComponents(deps) {
             type="text" 
             id="newCollectionInput" 
             placeholder="e.g. Favorites, To Review..." 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
+            class="form-input-modal"
             maxlength="50"
           >
         </div>
@@ -289,7 +289,7 @@ function createSpotifyComponents(deps) {
             type="text" 
             id="newCollectionName" 
             placeholder="e.g. Favorites, To Review, Throwbacks..." 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
+            class="form-input-modal"
             maxlength="50"
           >
           <p class="text-xs text-gray-500 mt-2">Give your collection a unique name (cannot be a year)</p>
@@ -336,7 +336,7 @@ function createSpotifyComponents(deps) {
             type="text" 
             id="newListNameInput" 
             placeholder="Enter new name..." 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
+            class="form-input-modal"
             maxlength="50"
           >
           <p class="text-xs text-gray-500 mt-2">Enter a new unique name for this list</p>
@@ -350,7 +350,7 @@ function createSpotifyComponents(deps) {
             type="number" 
             id="editListYear" 
             placeholder="e.g. 2025 (optional)" 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
+            class="form-input-modal"
             min="1000"
             max="9999"
           >

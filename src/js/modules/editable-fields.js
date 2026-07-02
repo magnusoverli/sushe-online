@@ -176,8 +176,7 @@ export function createEditableFields(deps = {}) {
     // Create input with datalist
     const input = document.createElement('input');
     input.type = 'text';
-    input.className =
-      'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded-sm border border-gray-700 focus:outline-hidden focus:border-gray-500';
+    input.className = 'inline-edit-input';
     input.value = currentCountry;
     input.placeholder = 'Type to search countries...';
     input.setAttribute('list', `country-list-${currentList}-${albumIndex}`);
@@ -374,8 +373,7 @@ export function createEditableFields(deps = {}) {
     // Create input (stays inside the genre cell)
     const input = document.createElement('input');
     input.type = 'text';
-    input.className =
-      'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded-sm border border-gray-700 focus:outline-hidden focus:border-gray-500';
+    input.className = 'inline-edit-input';
     input.value = currentGenre;
     input.placeholder = `Search ${genreField === 'genre_1' ? 'primary' : 'secondary'} genre...`;
     input.autocomplete = 'off';
@@ -828,8 +826,7 @@ export function createEditableFields(deps = {}) {
 
     // Create textarea
     const textarea = document.createElement('textarea');
-    textarea.className =
-      'w-full bg-gray-800 text-gray-300 text-sm p-2 rounded-sm border border-gray-700 focus:outline-hidden focus:border-gray-500 resize-none';
+    textarea.className = 'inline-edit-textarea';
     textarea.value = currentComment;
     textarea.rows = 2;
 
@@ -971,8 +968,7 @@ export function createEditableFields(deps = {}) {
 
     // Create textarea
     const textarea = document.createElement('textarea');
-    textarea.className =
-      'w-full bg-gray-800 text-gray-300 text-sm p-2 rounded-sm border border-gray-700 focus:outline-hidden focus:border-gray-500 resize-none';
+    textarea.className = 'inline-edit-textarea';
     textarea.value = currentComment;
     textarea.rows = 2;
 
