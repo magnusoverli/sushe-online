@@ -24,7 +24,7 @@ function modalShell({
   const header =
     title != null
       ? `<div class="p-6 border-b border-gray-800">
-        <h3 class="text-2xl font-bold text-white">${title}</h3>
+        <h3 class="text-xl font-semibold text-white">${title}</h3>
         ${subtitle ? `<p class="text-sm text-gray-400 mt-1">${subtitle}</p>` : ''}
       </div>`
       : '';
@@ -34,7 +34,7 @@ function modalShell({
     : '';
 
   return `<div id="${id}" class="hidden fixed inset-0 modal-overlay modal-layer flex items-center justify-center p-4 safe-area-modal${extraOverlayClass ? ' ' + extraOverlayClass : ''}">
-    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full ${maxWidth}${extraContainerClass ? ' ' + extraContainerClass : ''}">
+    <div class="bg-gray-800 border border-gray-800 rounded-lg shadow-2xl w-full ${maxWidth}${extraContainerClass ? ' ' + extraContainerClass : ''}">
       ${header}
       <div class="p-6${title ? '' : ' pt-6'}">${body}</div>
       ${footerHtml}
