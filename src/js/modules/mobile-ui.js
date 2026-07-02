@@ -624,7 +624,7 @@ export function createMobileUI(deps = {}) {
                     const isPrimary = trackName === (album.primary_track || '');
                     const isSecondary =
                       trackName === (album.secondary_track || '');
-                    const indicator = `<span class="track-pick-indicator inline-block w-4 text-center mr-1 text-[11px] font-semibold font-[Georgia,serif] text-green-400">${isPrimary ? 'I' : isSecondary ? 'II' : ''}</span>`;
+                    const indicator = `<span class="track-pick-indicator inline-block w-4 text-center mr-1 text-2xs font-semibold font-[Georgia,serif] text-green-400">${isPrimary ? 'I' : isSecondary ? 'II' : ''}</span>`;
                     const bgClass =
                       isPrimary || isSecondary ? 'bg-gray-700/30' : '';
                     return `
@@ -888,7 +888,7 @@ export function createMobileUI(deps = {}) {
                       const trackLength = formatTrackTime(getTrackLength(t));
                       const isPrimary = trackName === currentPrimaryTrack;
                       const isSecondary = trackName === currentSecondaryTrack;
-                      const indicator = `<span class="track-pick-indicator inline-block w-4 text-center mr-1 text-[11px] font-semibold font-[Georgia,serif] text-green-400">${isPrimary ? 'I' : isSecondary ? 'II' : ''}</span>`;
+                      const indicator = `<span class="track-pick-indicator inline-block w-4 text-center mr-1 text-2xs font-semibold font-[Georgia,serif] text-green-400">${isPrimary ? 'I' : isSecondary ? 'II' : ''}</span>`;
                       const bgClass =
                         isPrimary || isSecondary ? 'bg-gray-700/30' : '';
                       return `

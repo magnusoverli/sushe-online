@@ -13,7 +13,7 @@ const MOBILE_BASE = 'text-[12px] truncate';
 const DESKTOP_BASE = 'text-xs shrink-0';
 
 const NOT_FOUND_TITLE = 'Album not found on Last.fm';
-const NOT_FOUND_ICON = '<i class="fas fa-times text-[10px]"></i>';
+const NOT_FOUND_ICON = '<i class="fas fa-times text-3xs"></i>';
 
 /**
  * Visual atoms (class string, inner HTML, title) for a resolved mobile status.
@@ -53,7 +53,7 @@ function desktopAtoms(status, display, playcount) {
   }
   return {
     className: `text-gray-500 ${DESKTOP_BASE}`,
-    html: `<i class="fas fa-headphones text-[10px] mr-1"></i>${display}`,
+    html: `<i class="fas fa-headphones text-3xs mr-1"></i>${display}`,
     title: `${playcount} plays on Last.fm`,
   };
 }

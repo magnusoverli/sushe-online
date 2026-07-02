@@ -450,7 +450,7 @@ export function createAlbumDisplay(deps = {}) {
         ${
           data.primaryTrackDisplay
             ? `<div class="flex items-center min-w-0 overflow-hidden w-full">
-            <span class="inline-block w-4 text-center mr-1 shrink-0 text-[11px] font-semibold font-[Georgia,serif] text-green-400" title="Primary track">I</span>
+            <span class="inline-block w-4 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Primary track">I</span>
             <span class="album-cell-text ${data.primaryTrackClass} truncate hover:text-gray-100 flex-1 min-w-0" title="${data.primaryTrack || ''}">${data.primaryTrackDisplay}</span>
             ${data.primaryTrackDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.primaryTrackDuration}</span>` : ''}
           </div>`
@@ -461,7 +461,7 @@ export function createAlbumDisplay(deps = {}) {
         ${
           data.hasSecondaryTrack
             ? `<div class="flex items-center min-w-0 mt-1 overflow-hidden w-full">
-            <span class="inline-block w-4 text-center mr-1 shrink-0 text-[11px] font-semibold font-[Georgia,serif] text-green-400" title="Secondary track">II</span>
+            <span class="inline-block w-4 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Secondary track">II</span>
             <span class="album-cell-text ${data.secondaryTrackClass} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${data.secondaryTrack || ''}">${data.secondaryTrackDisplay}</span>
             ${data.secondaryTrackDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.secondaryTrackDuration}</span>` : ''}
           </div>`
@@ -920,7 +920,7 @@ export function createAlbumDisplay(deps = {}) {
                data-track-play-btn="${data.primaryTrackDisplay ? 'true' : ''}"
                data-track-identifier="${data.primaryTrack || ''}">
             <span class="text-[12px] text-green-400 truncate">
-              <span class="inline-block w-4 text-center mr-1 text-[11px] font-semibold font-[Georgia,serif]">I</span><span data-field="track-mobile-text">${escapeHtml(data.primaryTrackDisplay || '')}</span>
+              <span class="inline-block w-4 text-center mr-1 text-2xs font-semibold font-[Georgia,serif]">I</span><span data-field="track-mobile-text">${escapeHtml(data.primaryTrackDisplay || '')}</span>
             </span>
           </div>
           <!-- Secondary track (marker: 2) — always rendered for a consistent layout -->
@@ -928,7 +928,7 @@ export function createAlbumDisplay(deps = {}) {
                data-track-play-btn="${data.secondaryTrackDisplay ? 'true' : ''}"
                data-track-identifier="${data.secondaryTrack || ''}">
             <span class="text-[12px] text-green-400 truncate">
-              <span class="inline-block w-4 text-center mr-1 text-[11px] font-semibold font-[Georgia,serif]">II</span><span data-field="secondary-track-mobile-text">${escapeHtml(data.secondaryTrackDisplay || '')}</span>
+              <span class="inline-block w-4 text-center mr-1 text-2xs font-semibold font-[Georgia,serif]">II</span><span data-field="secondary-track-mobile-text">${escapeHtml(data.secondaryTrackDisplay || '')}</span>
             </span>
           </div>
         </div>

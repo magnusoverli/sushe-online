@@ -766,7 +766,7 @@ function renderDeviceList(devices) {
         <i class="${getDeviceIcon(device.type)} text-sm ${device.is_active ? 'text-green-500' : 'text-gray-400'}"></i>
         <div class="flex-1 text-left">
           <p class="text-sm text-white truncate">${device.name}</p>
-          <p class="text-[10px] text-gray-500">${device.type}${device.volume_percent !== undefined ? ` • ${device.volume_percent}%` : ''}</p>
+          <p class="text-3xs text-gray-500">${device.type}${device.volume_percent !== undefined ? ` • ${device.volume_percent}%` : ''}</p>
         </div>
         ${device.is_active ? '<i class="fas fa-broadcast-tower text-green-500 text-xs"></i>' : ''}
       </button>
