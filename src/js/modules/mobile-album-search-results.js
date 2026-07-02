@@ -15,11 +15,33 @@ import {
   messageHtml,
 } from './album-search-render.js';
 
+const MOBILE_RESULTS_TRANSITION_MS = 260;
+
 export function createMobileResults(deps = {}) {
-  const { doc, onSelect, onUserScroll } = deps;
+  const { doc, win, onSelect, onUserScroll } = deps;
   let el = null;
   let results = [];
   let renderedQuery = '';
+  let closeTimer = null;
+  let transitionSequence = 0;
+
+  function afterFrame(callback) {
+    if (typeof win?.requestAnimationFrame === 'function') {
+      win.requestAnimationFrame(callback);
+      return;
+    }
+    if (typeof globalThis.requestAnimationFrame === 'function') {
+      globalThis.requestAnimationFrame(callback);
+      return;
+    }
+    setTimeout(callback, 0);
+  }
+
+  function clearCloseTimer() {
+    if (!closeTimer) return;
+    (win?.clearTimeout || clearTimeout)(closeTimer);
+    closeTimer = null;
+  }
 
   function ensureEl() {
     if (el) return el;
@@ -52,11 +74,34 @@ export function createMobileResults(deps = {}) {
   }
 
   function open() {
-    ensureEl().classList.remove('hidden');
+    const panel = ensureEl();
+    const sequence = ++transitionSequence;
+    clearCloseTimer();
+    panel.classList.remove('hidden');
+    afterFrame(() => {
+      if (sequence !== transitionSequence) return;
+      panel.classList.add('is-open');
+    });
   }
 
-  function close() {
-    if (el) el.classList.add('hidden');
+  function close(options = {}) {
+    if (!el) return;
+    const sequence = ++transitionSequence;
+    clearCloseTimer();
+    el.classList.remove('is-open');
+    if (options.immediate === true) {
+      el.classList.add('hidden');
+      return;
+    }
+    closeTimer = (win?.setTimeout || setTimeout)(() => {
+      if (
+        sequence === transitionSequence &&
+        !el?.classList.contains('is-open')
+      ) {
+        el?.classList.add('hidden');
+      }
+      closeTimer = null;
+    }, MOBILE_RESULTS_TRANSITION_MS);
   }
 
   function isOpen() {
@@ -86,12 +131,14 @@ export function createMobileResults(deps = {}) {
       panel.innerHTML = rows + hint;
     }
     panel.scrollTop = 0;
+    open();
   }
 
   function renderMessage(message) {
     renderedQuery = '';
     ensureEl().innerHTML = messageHtml(message);
     results = [];
+    open();
   }
 
   // Returns true if the tap hit a result row (and selection was reported).

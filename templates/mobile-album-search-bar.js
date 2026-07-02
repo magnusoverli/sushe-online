@@ -1,5 +1,6 @@
 /**
- * Mobile album-search bar markup — morphs over the header when search opens.
+ * Mobile album-search bar markup — the real header enters search mode when it
+ * opens, so this sits in normal header flow instead of overlaying the row.
  *
  * Kept in its own module so templates/auth-templates.js stays within the
  * maintainability file-size budget. The behaviour (open/close, search,
@@ -7,12 +8,12 @@
  * appearance lives in public/styles/app.css under `.album-search-mobile-*`.
  */
 const mobileAlbumSearchBarTemplate = () => `
-      <!-- Mobile album search bar: morphs over the header when search is open -->
-      <div id="mobileAlbumSearchBar" role="search" class="album-search-mobile-bar lg:hidden absolute inset-0 z-10 hidden items-center gap-2 px-3">
+      <!-- Mobile album search bar: shown when the header enters search mode -->
+      <div id="mobileAlbumSearchBar" role="search" aria-hidden="true" inert class="album-search-mobile-bar lg:hidden flex items-center gap-2 flex-1 min-w-0">
         <button id="mobileAlbumSearchBack" type="button" aria-label="Close search" class="p-2 -m-2 text-gray-300 active:text-white touch-target">
           <i class="fas fa-arrow-left text-lg"></i>
         </button>
-        <div class="relative flex-1 min-w-0">
+        <div class="album-search-mobile-input-wrap relative flex-1 min-w-0">
           <input
             id="mobileAlbumSearchInput"
             type="search"

@@ -798,12 +798,12 @@ describe('templates utilities', () => {
       assert.ok(result.includes('fa-sliders-h'));
     });
 
-    it('should include logout link in header', () => {
+    it('should not include logout link in header', () => {
       const user = { username: 'test' };
       const result = templates.headerComponent(user);
 
-      assert.ok(result.includes('href="/logout"'));
-      assert.ok(result.includes('fa-sign-out-alt'));
+      assert.ok(!result.includes('href="/logout"'));
+      assert.ok(!result.includes('fa-sign-out-alt'));
     });
 
     it('should render mobile menu button for home section', () => {

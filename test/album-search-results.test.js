@@ -50,6 +50,27 @@ function createDoc(panel) {
   };
 }
 
+function createManualWin() {
+  const frames = [];
+  const timers = [];
+  return {
+    frames,
+    timers,
+    requestAnimationFrame(callback) {
+      frames.push(callback);
+      return callback;
+    },
+    setTimeout(callback) {
+      timers.push(callback);
+      return callback;
+    },
+    clearTimeout(handle) {
+      const index = timers.indexOf(handle);
+      if (index !== -1) timers.splice(index, 1);
+    },
+  };
+}
+
 describe('album search result surfaces', () => {
   let createResultsPanel;
   let createMobileResults;
@@ -79,5 +100,19 @@ describe('album search result surfaces', () => {
 
     assert.strictEqual(panel.hasRenderedQuery('kid a'), true);
     assert.strictEqual(panel.hasRenderedQuery('kid b'), false);
+  });
+
+  it('ignores a stale mobile open frame after close starts', () => {
+    const panelEl = createElement();
+    const win = createManualWin();
+    const panel = createMobileResults({ doc: createDoc(panelEl), win });
+
+    panel.render({ results: [] }, 'kid a');
+    panel.close();
+    win.frames.forEach((callback) => callback());
+    win.timers.forEach((callback) => callback());
+
+    assert.strictEqual(panelEl.classList.contains('is-open'), false);
+    assert.strictEqual(panelEl.classList.contains('hidden'), true);
   });
 });

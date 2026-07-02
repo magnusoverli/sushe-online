@@ -258,20 +258,145 @@
 }
 
 /* ── Mobile album search ───────────────────────────────────────────────────
-   On mobile the header MORPHS into #mobileAlbumSearchBar and the results fill
-   a full-width panel pinned just below it. The bar reuses the header's own
-   gradient so the swap is seamless; result rows reuse the shared
-   .album-search-result styles, sized up a touch for tapping. These classes
-   live here (not as Tailwind utilities) because templates/auth-templates.js is
-   outside the Tailwind content scan. */
-.album-search-mobile-bar {
-  background:
-    linear-gradient(
-      to top,
-      rgba(43, 49, 71, 0.5) 0%,
-      rgba(9, 13, 23, 0.5) 100%
-    ),
-    linear-gradient(90deg, #2b3147 20%, #090d17 100%);
+   On mobile the real header enters search mode and #mobileAlbumSearchBar takes
+   over the row in normal flow. The results fill a full-width panel pinned just
+   below the header. Result rows reuse the shared .album-search-result styles,
+   sized up a touch for tapping. These classes live here (not as Tailwind
+   utilities) because templates/auth-templates.js is outside the Tailwind
+   content scan. */
+@media (max-width: 1023px) {
+  .mobile-header-row {
+    gap: 0.75rem;
+  }
+
+  .mobile-header-left,
+  .mobile-header-actions,
+  .album-search-mobile-bar {
+    transition:
+      flex-basis 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      max-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 220ms ease,
+      transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  #mobileCurrentListName {
+    transition: opacity 220ms ease;
+  }
+
+  .mobile-header-left {
+    max-width: 6rem;
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .mobile-header-actions {
+    max-width: 9rem;
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .album-search-mobile-bar {
+    overflow: hidden;
+    flex-basis: 0;
+    flex-grow: 0;
+    flex-shrink: 1;
+    max-width: 0;
+    opacity: 0;
+    transform: translateX(-2px);
+    transform-origin: left center;
+    pointer-events: none;
+  }
+
+  #mobileAlbumSearchBack,
+  #mobileAlbumSearchOptionsBtn,
+  .album-search-mobile-input-wrap {
+    transition:
+      opacity 220ms ease,
+      transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  #mobileAlbumSearchBack,
+  #mobileAlbumSearchOptionsBtn {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+
+  .album-search-mobile-input-wrap {
+    opacity: 0;
+    transform: translateX(-6px) scaleX(0.12);
+    transform-origin: left center;
+  }
+
+  header.mobile-search-active .mobile-header-left,
+  header.mobile-search-active .mobile-header-actions,
+  header.mobile-search-closing .mobile-header-left,
+  header.mobile-search-closing .mobile-header-actions {
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  header.mobile-search-active .mobile-header-left,
+  header.mobile-search-active .mobile-header-actions {
+    max-width: 0;
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+
+  header.mobile-search-active #mobileCurrentListName {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  header.mobile-search-closing #mobileCurrentListName {
+    transition-delay: 150ms;
+    pointer-events: none;
+  }
+
+  header.mobile-search-active .album-search-mobile-bar {
+    flex-basis: 100%;
+    flex-grow: 1;
+    max-width: 100%;
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+    transition-delay: 20ms, 20ms, 40ms, 20ms;
+  }
+
+  header.mobile-search-closing .mobile-header-left,
+  header.mobile-search-closing .mobile-header-actions {
+    transition-delay: 90ms, 90ms, 150ms, 110ms;
+  }
+
+  header.mobile-search-closing .album-search-mobile-bar {
+    flex-grow: 1;
+    transition-delay: 70ms, 70ms, 110ms, 90ms;
+  }
+
+  header.mobile-search-closing #mobileAlbumSearchBack,
+  header.mobile-search-closing #mobileAlbumSearchOptionsBtn,
+  header.mobile-search-closing .album-search-mobile-input-wrap {
+    transition-delay: 80ms, 0ms;
+  }
+
+  header.mobile-search-active #mobileAlbumSearchBack,
+  header.mobile-search-active #mobileAlbumSearchOptionsBtn,
+  header.mobile-search-active .album-search-mobile-input-wrap {
+    opacity: 1;
+    transform: translateX(0) scaleX(1);
+    transition-delay: 70ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-header-left,
+    .mobile-header-actions,
+    .album-search-mobile-bar,
+    #mobileCurrentListName,
+    #mobileAlbumSearchBack,
+    #mobileAlbumSearchOptionsBtn,
+    .album-search-mobile-input-wrap {
+      transition: none;
+    }
+  }
 }
 
 .album-search-mobile-input {
@@ -297,6 +422,12 @@
   box-shadow: 0 0 0 1px var(--accent-shadow, rgba(220, 38, 38, 0.4));
 }
 
+#addAlbumFAB.search-mode-hidden {
+  opacity: 0 !important;
+  transform: scale(0.92) !important;
+  pointer-events: none !important;
+}
+
 .album-search-mobile-panel {
   position: fixed;
   left: 0;
@@ -319,9 +450,26 @@
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  opacity: 0;
+  transform: translateY(-16px);
+  pointer-events: none;
+  transition:
+    opacity 220ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .album-search-mobile-panel.hidden {
   display: none;
+}
+.album-search-mobile-panel.is-open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .album-search-mobile-panel {
+    transition: none;
+  }
 }
 
 /* Bigger tap targets than the desktop dropdown. */

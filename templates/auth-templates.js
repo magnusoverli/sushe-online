@@ -4,16 +4,16 @@ const headerComponent = (_user, activeSection = 'home') => `
   <header class="z-50 border-b border-gray-700/50" style="background: linear-gradient(to top, rgba(43,49,71,0.5) 0%, rgba(9,13,23,0.5) 100%), linear-gradient(90deg, #2b3147 20%, #090d17 100%)">
     <!-- Safe area fill: extends header gradient behind iOS status bar/notch -->
     <div class="fixed top-0 left-0 right-0 z-50" style="height: env(safe-area-inset-top, 0px); background: linear-gradient(90deg, #2b3147 20%, #090d17 100%)"></div>
-    <div class="relative flex items-center justify-between h-12 lg:h-14 px-3 lg:px-0">
+    <div class="mobile-header-row relative flex items-center justify-between h-12 lg:h-14 px-3 lg:px-0">
       <!-- Mobile menu button -->
-      <div class="flex items-center gap-2 lg:w-[14.5rem] lg:justify-center lg:gap-0">
+      <div class="mobile-header-left flex items-center gap-3 pl-1 lg:w-[14.5rem] lg:justify-center lg:gap-0 lg:pl-0">
         ${
           activeSection === 'home'
             ? `
         <button onclick="toggleMobileMenu()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target" aria-label="Open menu">
           <i class="fas fa-bars text-lg"></i>
         </button>
-        <button id="mobileAlbumSearchBtn" type="button" onclick="window.openMobileAlbumSearch && window.openMobileAlbumSearch()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target" aria-label="Search albums" aria-haspopup="dialog">
+        <button id="mobileAlbumSearchBtn" type="button" onclick="window.openMobileAlbumSearch && window.openMobileAlbumSearch()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target" aria-label="Search albums" aria-haspopup="dialog" aria-expanded="false">
           <i class="fas fa-search text-lg"></i>
         </button>
         `
@@ -77,19 +77,17 @@ const headerComponent = (_user, activeSection = 'home') => `
         <div id="headerLockIndicator" class="flex flex-shrink-0 items-center gap-2 text-sm text-yellow-400"></div>
       </div>
 
+${activeSection === 'home' ? mobileAlbumSearchBarTemplate() : ''}
+
       <!-- User menu -->
-      <div class="flex items-center pr-0.5 lg:pr-3">
+      <div class="mobile-header-actions flex items-center pr-0.5 lg:pr-3">
         <button onclick="window.openAboutModal && window.openAboutModal()" class="p-2 -m-2 flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target" title="About" id="aboutButton">
           <i class="fas fa-info-circle text-lg"></i>
         </button>
         <button onclick="window.openSettingsDrawer && window.openSettingsDrawer()" class="p-2 -m-2 flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-3 lg:ml-4" title="Settings" id="newSettingsButton">
           <i class="fas fa-sliders-h text-lg"></i>
         </button>
-        <a href="/logout" class="p-2 -m-2 flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-3 lg:ml-4" title="Logout">
-          <i class="fas fa-sign-out-alt text-lg"></i>
-        </a>
       </div>
-${activeSection === 'home' ? mobileAlbumSearchBarTemplate() : ''}
     </div>
   </header>
 `;

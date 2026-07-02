@@ -1,8 +1,8 @@
 /**
  * Mobile cross-list album search.
  *
- * Tapping the header search icon MORPHS the mobile header into a full-width
- * search bar (#mobileAlbumSearchBar, which covers the header) and opens a
+ * Tapping the header search icon puts the mobile header into search mode: the
+ * normal controls collapse and #mobileAlbumSearchBar takes over the row. It opens a
  * full-screen results panel below it. On selecting a result it switches to the
  * matched list and flashes/scrolls the album into view — the same outcome as
  * the desktop header search.
@@ -29,6 +29,9 @@ import {
 import { escapeHtml } from './html-utils.js';
 
 const SEARCH_UNAVAILABLE = 'Search is unavailable right now. Please try again.';
+const SEARCH_HEADER_TRANSITION_MS = 370;
+const SEARCH_RESULTS_TRANSITION_MS = 260;
+const SEARCH_FAB_TRANSITION_MS = 220;
 
 export function createMobileAlbumSearch(deps = {}) {
   const doc = deps.doc || (typeof document !== 'undefined' ? document : null);
@@ -48,10 +51,17 @@ export function createMobileAlbumSearch(deps = {}) {
   let filterSheet = null;
   let selectedFields = loadFields(storage);
   let preservedQuery = '';
+  let closeTimer = null;
+  let openTimer = null;
+  let fabTimer = null;
+  let fabTransitionToken = 0;
+  let closeResolve = null;
+  let finishPendingClose = null;
 
   const flash = createAlbumFlash({ doc, win, getListData });
   const results = createMobileResults({
     doc,
+    win,
     onSelect: selectResult,
     onUserScroll: hideKeyboardForResultScroll,
   });
@@ -60,16 +70,74 @@ export function createMobileAlbumSearch(deps = {}) {
     getFields: () => selectedFields,
     onResults: (data, query) => results.render(data, query),
     onError: () => results.renderMessage(SEARCH_UNAVAILABLE),
-    onCleared: () => results.renderIdle(),
+    onCleared: () => results.close(),
     logger,
   });
 
   const bar = () => doc.getElementById('mobileAlbumSearchBar');
   const input = () => doc.getElementById('mobileAlbumSearchInput');
 
+  function header() {
+    return bar()?.closest?.('header') || null;
+  }
+
+  function setSearchPhase(nextPhase) {
+    const searchBar = bar();
+    const h = header();
+    const isActive = nextPhase === 'opening' || nextPhase === 'open';
+    h?.classList.toggle('mobile-search-active', isActive);
+    h?.classList.toggle('mobile-search-opening', nextPhase === 'opening');
+    h?.classList.toggle('mobile-search-open', nextPhase === 'open');
+    h?.classList.toggle('mobile-search-closing', nextPhase === 'closing');
+    searchBar?.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+    if (isActive) searchBar?.removeAttribute('inert');
+    else searchBar?.setAttribute('inert', '');
+    doc
+      .getElementById('mobileAlbumSearchBtn')
+      ?.setAttribute('aria-expanded', isActive ? 'true' : 'false');
+  }
+
   function toggleClear(visible) {
     const btn = doc.getElementById('mobileAlbumSearchClear');
     if (btn) btn.classList.toggle('hidden', !visible);
+  }
+
+  function afterFrame(callback) {
+    if (typeof win.requestAnimationFrame === 'function') {
+      win.requestAnimationFrame(callback);
+      return;
+    }
+    if (typeof globalThis.requestAnimationFrame === 'function') {
+      globalThis.requestAnimationFrame(callback);
+      return;
+    }
+    setTimeout(callback, 0);
+  }
+
+  function clearCloseTimer(options = {}) {
+    if (closeTimer) {
+      (win.clearTimeout || clearTimeout)(closeTimer);
+      closeTimer = null;
+    }
+    if (options.finish === true && finishPendingClose) {
+      finishPendingClose();
+      return;
+    }
+    closeResolve?.();
+    closeResolve = null;
+    finishPendingClose = null;
+  }
+
+  function clearOpenTimer() {
+    if (!openTimer) return;
+    (win.clearTimeout || clearTimeout)(openTimer);
+    openTimer = null;
+  }
+
+  function clearFabTimer() {
+    if (!fabTimer) return;
+    (win.clearTimeout || clearTimeout)(fabTimer);
+    fabTimer = null;
   }
 
   function keyboardInset() {
@@ -84,15 +152,35 @@ export function createMobileAlbumSearch(deps = {}) {
   function hideFab() {
     const fab = doc.getElementById('addAlbumFAB');
     if (!fab) return;
-    fabPrevDisplay = fab.style.display;
-    fab.style.display = 'none';
+    const token = ++fabTransitionToken;
+    if (fabPrevDisplay === null) fabPrevDisplay = fab.style.display;
+    clearFabTimer();
+    fab.classList.add('search-mode-hidden');
+    fab.setAttribute('aria-hidden', 'true');
+    fab.setAttribute('inert', '');
+    fabTimer = (win.setTimeout || setTimeout)(() => {
+      if (token !== fabTransitionToken) {
+        fabTimer = null;
+        return;
+      }
+      fab.style.display = 'none';
+      fabTimer = null;
+    }, SEARCH_FAB_TRANSITION_MS);
   }
 
   function restoreFab() {
     const fab = doc.getElementById('addAlbumFAB');
     if (!fab) return;
-    fab.style.display = fabPrevDisplay || '';
+    const token = ++fabTransitionToken;
+    clearFabTimer();
+    fab.style.display = fabPrevDisplay === null ? '' : fabPrevDisplay;
     fabPrevDisplay = null;
+    fab.removeAttribute('aria-hidden');
+    fab.removeAttribute('inert');
+    afterFrame(() => {
+      if (token !== fabTransitionToken) return;
+      fab.classList.remove('search-mode-hidden');
+    });
   }
 
   // ---- open / close (header morph) -----------------------------------------
@@ -108,7 +196,7 @@ export function createMobileAlbumSearch(deps = {}) {
     const el = input();
     if (doc.activeElement !== el) return;
     el.blur();
-    win.requestAnimationFrame(positionResults);
+    afterFrame(positionResults);
   }
 
   function showCurrentQueryResults() {
@@ -117,14 +205,11 @@ export function createMobileAlbumSearch(deps = {}) {
     toggleClear(query.length > 0);
     if (query.length < runner.minChars) {
       runner.reset();
-      results.renderIdle();
-      results.open();
+      results.close();
       return;
     }
     if (results.hasRenderedQuery(query)) results.open();
     else {
-      results.renderIdle();
-      results.open();
       runner.run(query);
     }
   }
@@ -133,10 +218,11 @@ export function createMobileAlbumSearch(deps = {}) {
     if (open) return;
     const b = bar();
     if (!b) return;
+    clearCloseTimer({ finish: true });
     open = true;
+    clearOpenTimer();
 
-    b.classList.remove('hidden');
-    b.classList.add('flex');
+    setSearchPhase('opening');
     doc.body.style.overflow = 'hidden';
     hideFab();
     // The search is a modal surface: keep the list behind the panel out of the
@@ -155,41 +241,75 @@ export function createMobileAlbumSearch(deps = {}) {
       // (already-visible) input.
       el.focus({ preventScroll: true });
     }
+
+    openTimer = (win.setTimeout || setTimeout)(() => {
+      if (!open) return;
+      setSearchPhase('open');
+      openTimer = null;
+    }, SEARCH_HEADER_TRANSITION_MS);
   }
 
   function closeSearch(restoreFocus = true, options = {}) {
-    if (!open) return;
+    if (!open) return Promise.resolve();
     open = false;
     const preserveQuery = options.preserveQuery === true;
+    const animate = options.immediate !== true;
+    const shouldClearVisuals = !preserveQuery;
+    clearOpenTimer();
 
     filterSheet?.close();
-    const b = bar();
-    if (b) {
-      b.classList.add('hidden');
-      b.classList.remove('flex');
-    }
+    setSearchPhase(animate ? 'closing' : 'closed');
     const el = input();
     if (el) {
       if (preserveQuery) preservedQuery = el.value || preservedQuery;
-      else {
-        preservedQuery = '';
-        el.value = '';
-      }
-      el.blur();
+      else preservedQuery = '';
+      const blurInput = () => {
+        if (!open && doc.activeElement === el) el.blur();
+      };
+      if (animate) afterFrame(blurInput);
+      else blurInput();
     }
-    toggleClear(preserveQuery && (el?.value || '').length > 0);
+    if (preserveQuery) toggleClear((el?.value || '').length > 0);
     if (!preserveQuery) runner.reset();
-    results.close();
-    doc.getElementById('albumContainer')?.removeAttribute('inert');
-    doc.body.style.overflow = '';
-    // Reset any iOS keyboard-induced document scroll — the fixed layout assumes
-    // the window stays at the top (matches the mobile edit modal's close).
-    win.scrollTo(0, 0);
-    doc.body.scrollTop = 0;
-    restoreFab();
-    // Return focus to the trigger so keyboard / screen-reader users keep their
-    // place; skipped when a result was chosen (the list switch takes focus).
-    if (restoreFocus) doc.getElementById('mobileAlbumSearchBtn')?.focus();
+    results.close({ immediate: !animate });
+
+    clearCloseTimer();
+    return new Promise((resolve) => {
+      closeResolve = resolve;
+      const finishClose = () => {
+        if (open) return;
+        closeTimer = null;
+        closeResolve = null;
+        finishPendingClose = null;
+        setSearchPhase('closed');
+        if (shouldClearVisuals) {
+          const currentInput = input();
+          if (currentInput) currentInput.value = '';
+          toggleClear(false);
+        }
+        doc.getElementById('albumContainer')?.removeAttribute('inert');
+        doc.body.style.overflow = '';
+        // Reset any iOS keyboard-induced document scroll — the fixed layout assumes
+        // the window stays at the top (matches the mobile edit modal's close).
+        win.scrollTo(0, 0);
+        doc.body.scrollTop = 0;
+        restoreFab();
+        // Return focus to the trigger so keyboard / screen-reader users keep their
+        // place; skipped when a result was chosen (the list switch takes focus).
+        if (restoreFocus) doc.getElementById('mobileAlbumSearchBtn')?.focus();
+        resolve();
+      };
+      finishPendingClose = finishClose;
+
+      if (animate) {
+        closeTimer = (win.setTimeout || setTimeout)(
+          finishClose,
+          Math.max(SEARCH_HEADER_TRANSITION_MS, SEARCH_RESULTS_TRANSITION_MS)
+        );
+        return;
+      }
+      finishClose();
+    });
   }
 
   function clearInput() {
@@ -201,14 +321,14 @@ export function createMobileAlbumSearch(deps = {}) {
     }
     toggleClear(false);
     runner.reset();
-    results.renderIdle();
+    results.close();
   }
 
   // ---- selecting a result ---------------------------------------------------
 
   async function selectResult(result) {
     if (!result) return;
-    closeSearch(false, { preserveQuery: true });
+    await closeSearch(false, { preserveQuery: true });
 
     if (
       typeof selectList === 'function' &&
@@ -325,7 +445,7 @@ export function createMobileAlbumSearch(deps = {}) {
   function scheduleReposition() {
     if (!open || repositionScheduled) return;
     repositionScheduled = true;
-    win.requestAnimationFrame(() => {
+    afterFrame(() => {
       repositionScheduled = false;
       if (open) positionResults();
     });
