@@ -5,9 +5,6 @@
  */
 
 export function createSettingsAdminUserActions(deps = {}) {
-  const doc =
-    deps.doc || (typeof document !== 'undefined' ? document : undefined);
-
   const {
     showConfirmation,
     apiCall,
@@ -80,9 +77,8 @@ export function createSettingsAdminUserActions(deps = {}) {
       const response = await apiCall(`/admin/user-lists/${userId}`);
 
       if (response.lists) {
-        const modal = createUserListsModal(response.lists);
-        doc.body.appendChild(modal);
-        modal.classList.remove('hidden');
+        // createUserListsModal appends the modal and opens it via the controller.
+        createUserListsModal(response.lists);
       }
     } catch (error) {
       console.error('Error fetching user lists:', error);
@@ -95,6 +91,7 @@ export function createSettingsAdminUserActions(deps = {}) {
   function createUserListsModal(lists) {
     const { modal, close } = createSettingsModalBase({
       id: 'userListsModal',
+      appendToBody: true,
       title: 'User Lists',
       bodyHtml: `
           ${

@@ -40,6 +40,9 @@ export function createModal(options) {
     closeButton,
     closeOnEscape = true,
     closeOnBackdrop = true,
+    // Lock body scroll while open. Off for bottom sheets that use a
+    // replace-at-z-level pattern (their scroll state would otherwise leak).
+    lockScroll = true,
     onOpen,
     onClose,
     beforeClose,
@@ -144,8 +147,10 @@ export function createModal(options) {
 
     // Nesting-safe scroll lock: remember the prior value so closing an inner
     // modal doesn't unlock scroll while an outer modal is still open.
-    prevBodyOverflow = document.body.style.overflow || '';
-    document.body.style.overflow = 'hidden';
+    if (lockScroll) {
+      prevBodyOverflow = document.body.style.overflow || '';
+      document.body.style.overflow = 'hidden';
+    }
 
     // Accessibility (opt-in)
     if (a11yEnabled) {
@@ -191,7 +196,9 @@ export function createModal(options) {
       focusManager.deactivate();
     }
 
-    document.body.style.overflow = prevBodyOverflow;
+    if (lockScroll) {
+      document.body.style.overflow = prevBodyOverflow;
+    }
 
     removeAllListeners();
 

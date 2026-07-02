@@ -18,7 +18,7 @@ export function createSettingsContributorManagerActions(deps = {}) {
   } = deps;
 
   async function createContributorModal(year) {
-    const { modal, close } = createSettingsModalBase({
+    const { modal, close, open } = createSettingsModalBase({
       id: `contributor-modal-${year}`,
       title: '<i class="fas fa-users mr-2"></i>Manage Contributors - ' + year,
       bodyHtml: `
@@ -51,7 +51,7 @@ export function createSettingsContributorManagerActions(deps = {}) {
         body.innerHTML =
           '<p class="text-gray-500 text-sm text-center py-4">No users have main lists for this year.</p>';
         saveBtn.disabled = true;
-        return modal;
+        return { modal, open };
       }
 
       const eligibleUsers = response.eligibleUsers;
@@ -208,16 +208,16 @@ export function createSettingsContributorManagerActions(deps = {}) {
       saveBtn.disabled = true;
     }
 
-    return modal;
+    return { modal, open };
   }
 
   async function handleShowContributorManager(year) {
-    const modal = await createContributorModal(year);
+    const { modal, open } = await createContributorModal(year);
     doc.body.appendChild(modal);
 
-    setTimeoutFn(() => {
-      modal.classList.remove('hidden');
-    }, 10);
+    // Open on the next tick so the entrance transition fires after the element
+    // is in the DOM.
+    setTimeoutFn(() => open(), 10);
   }
 
   return {

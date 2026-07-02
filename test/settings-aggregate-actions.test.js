@@ -67,7 +67,11 @@ describe('settings aggregate actions', () => {
       loadCategoryData: async (categoryId) => loads.push(categoryId),
       handleShowContributorManager: async () => {},
       handleShowRecommenderManager: async () => {},
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
       doc: {
         querySelector() {
           return null;
@@ -113,7 +117,11 @@ describe('settings aggregate actions', () => {
       loadCategoryData: async () => {},
       handleShowContributorManager: async () => {},
       handleShowRecommenderManager: async () => {},
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
       doc: {
         querySelector() {
           return null;
@@ -204,7 +212,11 @@ describe('settings aggregate actions', () => {
       loadCategoryData: async () => {},
       handleShowContributorManager: async () => {},
       handleShowRecommenderManager: async () => {},
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
       doc,
       win: {},
       async refreshLockedYearStatus(year) {
@@ -278,7 +290,11 @@ describe('settings aggregate actions', () => {
       loadCategoryData: async () => {},
       handleShowContributorManager: async () => {},
       handleShowRecommenderManager: async (year) => managerCalls.push(year),
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
       doc,
     });
 
@@ -343,7 +359,11 @@ describe('settings aggregate actions', () => {
       loadCategoryData: async () => {},
       handleShowContributorManager: async () => {},
       handleShowRecommenderManager: async () => {},
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
       doc: {
         querySelector() {
           return null;

@@ -322,12 +322,12 @@ export function createSettingsAdminActions(deps = {}) {
   }
 
   async function handleRestoreDatabase() {
-    const modal = await createRestoreModal();
+    const { modal, open } = await createRestoreModal();
     doc.body.appendChild(modal);
 
-    setTimeoutFn(() => {
-      modal.classList.remove('hidden');
-    }, 10);
+    // Open on the next tick so the entrance transition fires after the element
+    // is in the DOM.
+    setTimeoutFn(() => open(), 10);
   }
 
   async function handleDownloadBackup(event) {
@@ -342,7 +342,7 @@ export function createSettingsAdminActions(deps = {}) {
       return;
     }
 
-    const { modal, close } = createSettingsModalBase({
+    const { modal, close, open } = createSettingsModalBase({
       id: 'downloadBackupModal',
       title:
         '<i class="fas fa-download mr-2 text-blue-400"></i>Download Backup',
@@ -362,24 +362,15 @@ export function createSettingsAdminActions(deps = {}) {
 
     doc.body.appendChild(modal);
 
-    setTimeoutFn(() => {
-      modal.classList.remove('hidden');
-    }, 10);
+    setTimeoutFn(() => open(), 10);
 
     const closeBtn = modal.querySelector('#closeDownloadBackupModalBtn');
     const spinnerEl = modal.querySelector('#downloadBackupSpinner');
     const progressText = modal.querySelector('#downloadBackupProgressText');
     const errorEl = modal.querySelector('#downloadBackupError');
 
-    const closeModal = () => {
-      modal.classList.add('hidden');
-      setTimeoutFn(() => {
-        if (doc.body.contains(modal)) {
-          doc.body.removeChild(modal);
-        }
-      }, 300);
-      close();
-    };
+    // The controller handles hide + element removal on close.
+    const closeModal = () => close();
 
     closeBtn?.addEventListener('click', closeModal);
     if (closeBtn) {
@@ -447,7 +438,7 @@ export function createSettingsAdminActions(deps = {}) {
   }
 
   async function createRestoreModal() {
-    const { modal, close } = createSettingsModalBase({
+    const { modal, close, open } = createSettingsModalBase({
       id: 'restoreDatabaseModal',
       title: '<i class="fas fa-upload mr-2 text-red-500"></i>Restore Database',
       bodyHtml: `
@@ -499,7 +490,7 @@ export function createSettingsAdminActions(deps = {}) {
       await handleConfirmRestore(modal);
     });
 
-    return modal;
+    return { modal, open };
   }
 
   async function handleConfirmRestore(modal) {

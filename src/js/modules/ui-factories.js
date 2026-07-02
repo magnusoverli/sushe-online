@@ -5,6 +5,8 @@
  * Eliminates boilerplate DOM creation, event wiring, and cleanup logic.
  */
 
+import { createModal } from './modal-factory.js';
+
 /**
  * Create a settings modal with standard structure and close behavior.
  *
@@ -34,8 +36,11 @@ export function createSettingsModal({
   onClose,
 }) {
   const modal = document.createElement('div');
-  modal.className = startHidden ? 'settings-modal hidden' : 'settings-modal';
+  // Always build hidden; the controller's open() reveals it (and applies scroll
+  // lock, focus trap and Escape/backdrop handling).
+  modal.className = 'settings-modal hidden';
   modal.id = id;
+  const titleId = `${id}-title`;
 
   const contentStyle = [
     maxWidth ? `max-width: ${maxWidth}` : '',
@@ -50,7 +55,7 @@ export function createSettingsModal({
     <div class="settings-modal-backdrop"></div>
     <div class="settings-modal-content"${contentStyle ? ` style="${contentStyle}"` : ''}>
       <div class="settings-modal-header">
-        <h3 class="settings-modal-title">${title}</h3>
+        <h3 class="settings-modal-title" id="${titleId}">${title}</h3>
         <button class="settings-modal-close" aria-label="Close">
           <i class="fas fa-times"></i>
         </button>
@@ -60,30 +65,39 @@ export function createSettingsModal({
     </div>
   `;
 
-  const closeModal = () => {
-    modal.classList.add('hidden');
-    setTimeout(() => {
-      if (document.body.contains(modal)) {
-        document.body.removeChild(modal);
-      }
-      if (onClose) {
-        onClose();
-      }
-    }, 300);
-  };
-
-  modal
-    .querySelector('.settings-modal-backdrop')
-    ?.addEventListener('click', closeModal);
-  modal
-    .querySelector('.settings-modal-close')
-    ?.addEventListener('click', closeModal);
-
   if (appendToBody) {
     document.body.appendChild(modal);
   }
 
-  return { modal, close: closeModal };
+  const controller = createModal({
+    element: modal,
+    dialog: modal.querySelector('.settings-modal-content'),
+    backdrop: modal.querySelector('.settings-modal-backdrop'),
+    closeButton: modal.querySelector('.settings-modal-close'),
+    labelledBy: titleId,
+    onClose: () => {
+      // Keep the exit animation: hide first (createModal added .hidden), then
+      // remove the element after the transition.
+      setTimeout(() => {
+        if (document.body.contains(modal)) {
+          document.body.removeChild(modal);
+        }
+        if (onClose) {
+          onClose();
+        }
+      }, 300);
+    },
+  });
+
+  if (!startHidden) {
+    controller.open();
+  }
+
+  return {
+    modal,
+    open: () => controller.open(),
+    close: () => controller.close(),
+  };
 }
 
 /**
@@ -149,35 +163,34 @@ export function createActionSheet({
 
   document.body.appendChild(sheet);
 
-  const closeSheet = () => {
-    sheet.remove();
-    if (restoreFAB) {
-      const fabElement = document.getElementById('addAlbumFAB');
-      if (checkCurrentList) {
-        // eslint-disable-next-line no-undef
-        if (fabElement && typeof currentList !== 'undefined' && currentList) {
-          fabElement.style.display = 'flex';
-        }
-      } else {
-        if (fabElement) {
+  // Backdrop, cancel button, Escape and tracked cleanup via the shared
+  // controller. Scroll lock is OFF: sheets use a replace-at-z-level pattern
+  // (an existing sheet is removed directly, bypassing close), so a locked
+  // scroll state could otherwise leak.
+  const controller = createModal({
+    element: sheet,
+    backdrop: sheet.querySelector('[data-backdrop]'),
+    closeButton: sheet.querySelector('[data-action="cancel"]'),
+    lockScroll: false,
+    onClose: () => {
+      sheet.remove();
+      if (restoreFAB) {
+        const fabElement = document.getElementById('addAlbumFAB');
+        if (checkCurrentList) {
+          // eslint-disable-next-line no-undef
+          if (fabElement && typeof currentList !== 'undefined' && currentList) {
+            fabElement.style.display = 'flex';
+          }
+        } else if (fabElement) {
           fabElement.style.display = 'flex';
         }
       }
-    }
-    if (onClose) {
-      onClose();
-    }
-  };
+      if (onClose) {
+        onClose();
+      }
+    },
+  });
+  controller.open();
 
-  const backdrop = sheet.querySelector('[data-backdrop]');
-  const cancelBtn = sheet.querySelector('[data-action="cancel"]');
-
-  if (backdrop) {
-    backdrop.addEventListener('click', closeSheet);
-  }
-  if (cancelBtn) {
-    cancelBtn.addEventListener('click', closeSheet);
-  }
-
-  return { sheet, close: closeSheet };
+  return { sheet, close: () => controller.close() };
 }

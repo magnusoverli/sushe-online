@@ -23,9 +23,8 @@ export function createSettingsTelegramActions(deps = {}) {
   let telegramModalState = null;
 
   async function handleConfigureTelegram() {
+    // createTelegramModal appends the modal and opens it via the controller.
     const modal = createTelegramModal();
-    doc.body.appendChild(modal);
-    modal.classList.remove('hidden');
 
     telegramModalState = {
       currentStep: 1,
@@ -51,6 +50,7 @@ export function createSettingsTelegramActions(deps = {}) {
   function createTelegramModal() {
     const { modal, close } = createSettingsModalBase({
       id: 'telegramSetupModal',
+      appendToBody: true,
       title:
         '<i class="fab fa-telegram text-blue-400 mr-2"></i>\n            Configure Telegram',
       maxWidth: '32rem',

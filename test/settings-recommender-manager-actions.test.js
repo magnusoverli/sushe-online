@@ -71,7 +71,13 @@ describe('settings recommender manager actions', () => {
       showToast: () => {},
       categoryData: {},
       loadCategoryData: async () => {},
-      createSettingsModalBase: () => ({ modal, close() {} }),
+      createSettingsModalBase: () => ({
+        modal,
+        open() {
+          modal.classList.remove('hidden');
+        },
+        close() {},
+      }),
       doc: {
         body: {
           appendChild(node) {
@@ -158,6 +164,9 @@ describe('settings recommender manager actions', () => {
       loadCategoryData: async (categoryId) => loads.push(categoryId),
       createSettingsModalBase: () => ({
         modal,
+        open() {
+          modal.classList.remove('hidden');
+        },
         close() {
           closeCalls += 1;
         },
@@ -228,7 +237,13 @@ describe('settings recommender manager actions', () => {
       showToast: () => {},
       categoryData: {},
       loadCategoryData: async () => {},
-      createSettingsModalBase: () => ({ modal, close() {} }),
+      createSettingsModalBase: () => ({
+        modal,
+        open() {
+          modal.classList.remove('hidden');
+        },
+        close() {},
+      }),
       doc: {
         body: {
           appendChild() {},

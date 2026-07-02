@@ -49,7 +49,11 @@ describe('settings admin user actions', () => {
       showToast: (...args) => toasts.push(args),
       categoryData,
       loadCategoryData: async (categoryId) => loads.push(categoryId),
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
       doc: { body: { appendChild() {} } },
     });
 
@@ -80,7 +84,11 @@ describe('settings admin user actions', () => {
       showToast: () => {},
       categoryData: {},
       loadCategoryData: async () => {},
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
       doc: { body: { appendChild() {} } },
     });
 
@@ -116,7 +124,9 @@ describe('settings admin user actions', () => {
       loadCategoryData: async () => {},
       createSettingsModalBase: (options) => {
         modalOptions = options;
-        return { modal, close() {} };
+        if (options.appendToBody) appended.push(modal);
+        modal.classList.remove('hidden');
+        return { modal, open() {}, close() {} };
       },
       doc: {
         body: {
@@ -151,7 +161,11 @@ describe('settings admin user actions', () => {
       showToast: (...args) => toasts.push(args),
       categoryData,
       loadCategoryData: async (categoryId) => loads.push(categoryId),
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
       doc: { body: { appendChild() {} } },
     });
 

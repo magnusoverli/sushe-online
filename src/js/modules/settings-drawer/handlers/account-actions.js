@@ -114,9 +114,8 @@ export function createSettingsAccountActions(deps = {}) {
   }
 
   async function handleChangePassword() {
+    // createPasswordModal appends the modal and opens it via the controller.
     const modal = createPasswordModal();
-    doc.body.appendChild(modal);
-    modal.classList.remove('hidden');
 
     setTimeoutFn(() => {
       const currentPasswordInput = modal.querySelector('#currentPasswordInput');
@@ -219,6 +218,7 @@ export function createSettingsAccountActions(deps = {}) {
   function createPasswordModal() {
     const { modal, close } = createSettingsModalBase({
       id: 'passwordChangeModal',
+      appendToBody: true,
       title: 'Change Password',
       bodyHtml: `
           <form id="passwordChangeForm">

@@ -55,7 +55,11 @@ describe('settings admin actions', () => {
       showToast: (...args) => toasts.push(args),
       categoryData,
       loadCategoryData: async (categoryId) => loads.push(categoryId),
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
     });
 
     await actions.handleAdminEventAction('evt1', 'approve', {
@@ -86,7 +90,11 @@ describe('settings admin actions', () => {
       showToast: () => {},
       categoryData: {},
       loadCategoryData: async () => {},
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
     });
 
     await actions.handleAdminEventAction('evt1', 'reject', {
@@ -160,7 +168,13 @@ describe('settings admin actions', () => {
         showToast: (...args) => toasts.push(args),
         categoryData: {},
         loadCategoryData: async () => {},
-        createSettingsModalBase: () => ({ modal, close() {} }),
+        createSettingsModalBase: () => ({
+          modal,
+          open() {
+            modal.classList.remove('hidden');
+          },
+          close() {},
+        }),
       });
 
       await actions.handleRestoreDatabase();
@@ -224,7 +238,13 @@ describe('settings admin actions', () => {
       showToast: () => {},
       categoryData: {},
       loadCategoryData: async () => {},
-      createSettingsModalBase: () => ({ modal, close() {} }),
+      createSettingsModalBase: () => ({
+        modal,
+        open() {
+          modal.classList.remove('hidden');
+        },
+        close() {},
+      }),
     });
 
     await actions.handleRestoreDatabase();
@@ -300,7 +320,13 @@ describe('settings admin actions', () => {
       showToast: () => {},
       categoryData: {},
       loadCategoryData: async () => {},
-      createSettingsModalBase: () => ({ modal, close() {} }),
+      createSettingsModalBase: () => ({
+        modal,
+        open() {
+          modal.classList.remove('hidden');
+        },
+        close() {},
+      }),
     });
 
     await actions.handleRestoreDatabase();
@@ -400,7 +426,13 @@ describe('settings admin actions', () => {
       showToast: () => {},
       categoryData: {},
       loadCategoryData: async () => {},
-      createSettingsModalBase: () => ({ modal, close() {} }),
+      createSettingsModalBase: () => ({
+        modal,
+        open() {
+          modal.classList.remove('hidden');
+        },
+        close() {},
+      }),
     });
 
     await actions.handleDownloadBackup({
@@ -476,6 +508,9 @@ describe('settings admin actions', () => {
       loadCategoryData: async () => {},
       createSettingsModalBase: () => ({
         modal,
+        open() {
+          modal.classList.remove('hidden');
+        },
         close() {
           closeCalls++;
         },

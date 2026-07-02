@@ -101,7 +101,11 @@ describe('settings telegram actions', () => {
     const actions = createSettingsTelegramActions({
       doc,
       setTimeoutFn: (fn) => fn(),
-      createSettingsModalBase: () => ({ modal, close() {} }),
+      createSettingsModalBase: (opts) => {
+        if (opts.appendToBody) doc.body.appendChild(modal);
+        modal.classList.remove('hidden');
+        return { modal, open() {}, close() {} };
+      },
       showToast: () => {},
       apiCall: async () => ({ success: true }),
       categoryData: {},
@@ -141,7 +145,11 @@ describe('settings telegram actions', () => {
           return createElement();
         },
       },
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
       showToast: (...args) => toasts.push(args),
       apiCall: async (...args) => {
         apiCalls.push(args);
@@ -188,7 +196,11 @@ describe('settings telegram actions', () => {
           return createElement();
         },
       },
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
       showToast: (...args) => toasts.push(args),
       apiCall: async (...args) => {
         apiCalls.push(args);
@@ -239,7 +251,11 @@ describe('settings telegram actions', () => {
           return createElement();
         },
       },
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
       showToast: (...args) => toasts.push(args),
       apiCall: async (...args) => {
         apiCalls.push(args);

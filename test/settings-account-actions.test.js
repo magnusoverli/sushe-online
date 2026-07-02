@@ -81,7 +81,11 @@ describe('settings account actions', () => {
       showConfirmation: async () => true,
       apiCall: async () => ({ success: true }),
       loadCategoryData: async () => {},
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
     });
 
     handleEditEmail();
@@ -126,7 +130,11 @@ describe('settings account actions', () => {
         return { success: true };
       },
       loadCategoryData: async () => {},
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
     });
 
     await handleSaveEmail();
@@ -167,7 +175,11 @@ describe('settings account actions', () => {
         return { success: true };
       },
       loadCategoryData: async () => {},
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
     });
 
     await handleSaveUsername();
@@ -203,7 +215,11 @@ describe('settings account actions', () => {
         return { success: true };
       },
       loadCategoryData: async (categoryId) => loaded.push(categoryId),
-      createSettingsModalBase: () => ({ modal: createElement(), close() {} }),
+      createSettingsModalBase: () => ({
+        modal: createElement(),
+        open() {},
+        close() {},
+      }),
     });
 
     await handleRequestAdmin();
@@ -257,10 +273,11 @@ describe('settings account actions', () => {
       showConfirmation: async () => true,
       apiCall: async () => ({ success: true }),
       loadCategoryData: async () => {},
-      createSettingsModalBase: () => ({
-        modal,
-        close() {},
-      }),
+      createSettingsModalBase: (opts) => {
+        if (opts.appendToBody) doc.body.appendChild(modal);
+        modal.classList.remove('hidden');
+        return { modal, open() {}, close() {} };
+      },
     });
 
     await handleChangePassword();

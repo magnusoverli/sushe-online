@@ -18,7 +18,7 @@ export function createSettingsRecommenderManagerActions(deps = {}) {
   } = deps;
 
   async function createRecommenderModal(year) {
-    const { modal, close } = createSettingsModalBase({
+    const { modal, close, open } = createSettingsModalBase({
       id: `recommender-modal-${year}`,
       title:
         '<i class="fas fa-thumbs-up text-blue-400 mr-2"></i>Manage Recommenders - ' +
@@ -53,7 +53,7 @@ export function createSettingsRecommenderManagerActions(deps = {}) {
         body.innerHTML =
           '<p class="text-gray-500 text-sm text-center py-4">No approved users found.</p>';
         saveBtn.disabled = true;
-        return modal;
+        return { modal, open };
       }
 
       const users = response.users;
@@ -206,16 +206,16 @@ export function createSettingsRecommenderManagerActions(deps = {}) {
       saveBtn.disabled = true;
     }
 
-    return modal;
+    return { modal, open };
   }
 
   async function handleShowRecommenderManager(year) {
-    const modal = await createRecommenderModal(year);
+    const { modal, open } = await createRecommenderModal(year);
     doc.body.appendChild(modal);
 
-    setTimeoutFn(() => {
-      modal.classList.remove('hidden');
-    }, 10);
+    // Open on the next tick so the entrance transition fires after the element
+    // is in the DOM.
+    setTimeoutFn(() => open(), 10);
   }
 
   return {
