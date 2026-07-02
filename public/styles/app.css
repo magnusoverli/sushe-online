@@ -30,7 +30,7 @@
 
 .album-search-panel {
   position: fixed;
-  z-index: 60;
+  z-index: var(--z-dropdown);
   display: flex;
   flex-direction: column;
   max-height: min(70vh, 32rem);
@@ -207,8 +207,7 @@
 @media (max-width: 1023px) {
   .app-layout > header {
     position: sticky;
-    top: 0;
-    z-index: 50;
+    top: 0;$1z-index: var(--z-sticky-header);
   }
 }
 

@@ -106,7 +106,7 @@
       cursor: grabbing;
       /* Apply fallback element styling immediately - matches what will be dragged */
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -120,7 +120,7 @@
       cursor: grabbing;
       /* Apply fallback element styling immediately - matches what will be dragged */
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -134,7 +134,7 @@
       cursor: grabbing;
       /* Apply fallback element styling immediately - matches what will be dragged */
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -150,7 +150,7 @@
       background-color: var(--accent-subtle) !important;
       cursor: grabbing;
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -163,7 +163,7 @@
       background-color: var(--accent-subtle) !important;
       cursor: grabbing;
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -194,7 +194,7 @@
   /* SortableJS fallback element for touch devices */
   /* Apply all visual styling to the wrapper for clean appearance */
   @apply cursor-grabbing;
-  z-index: 100000;
+  z-index: var(--z-drag);
   /* Visual styling on wrapper itself */
   opacity: 0.9;
   box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
@@ -244,7 +244,7 @@
       cursor: grabbing;
       /* Apply fallback element styling immediately - matches what will be dragged */
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -260,7 +260,7 @@
       background-color: var(--accent-subtle) !important;
       cursor: grabbing;
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -309,7 +309,7 @@
       cursor: grabbing;
       /* Apply fallback element styling immediately - matches what will be dragged */
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -323,7 +323,7 @@
       cursor: grabbing;
       /* Apply fallback element styling immediately - matches what will be dragged */
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -337,7 +337,7 @@
       background-color: var(--accent-subtle) !important;
       cursor: grabbing;
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -379,7 +379,7 @@
       cursor: grabbing;
       /* Apply fallback element styling immediately - matches what will be dragged */
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -393,7 +393,7 @@
       cursor: grabbing;
       /* Apply fallback element styling immediately - matches what will be dragged */
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -409,7 +409,7 @@
       background-color: var(--accent-subtle) !important;
       cursor: grabbing;
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -422,7 +422,7 @@
       background-color: var(--accent-subtle) !important;
       cursor: grabbing;
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -446,7 +446,7 @@
       background-color: var(--accent-subtle) !important;
       cursor: grabbing;
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -459,7 +459,7 @@
       background-color: var(--accent-subtle) !important;
       cursor: grabbing;
       opacity: 0.9;
-      z-index: 100000;
+      z-index: var(--z-drag);
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Remove all borders during drag */
       border: none !important;
@@ -1324,7 +1324,7 @@
  */
 #modalPortal {
   position: relative;
-  z-index: 10001;
+  z-index: var(--z-modal-elevated);
 }
 
 /* ============================================
@@ -1335,7 +1335,7 @@
 .settings-drawer {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: var(--z-drawer);
   pointer-events: none;
 }
 
@@ -2320,7 +2320,7 @@
 .settings-modal {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2894,7 +2894,7 @@
 /* Base summary tooltip styles */
 .summary-tooltip {
   position: fixed;
-  z-index: 10000;
+  z-index: var(--z-modal);
   background: #1a1a1a;
   border: 1px solid #333;
   border-radius: 8px;
@@ -3028,7 +3028,7 @@
 
 .lastfm-tooltip {
   position: fixed;
-  z-index: 10000;
+  z-index: var(--z-modal);
   background: #1a1a1a;
   border: 1px solid #333;
   border-radius: 8px;
