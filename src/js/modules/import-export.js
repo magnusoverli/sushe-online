@@ -8,6 +8,7 @@
  */
 
 import { showToast, getAlbumKey, apiCall } from './utils.js';
+import { setupModalBehavior } from '../utils/modal-helpers.js';
 // jsPDF is imported dynamically inside downloadListAsPDF so the ~127KB-gzipped
 // PDF library stays out of the eagerly-loaded bundle and is fetched only when
 // a user actually exports a list as PDF.
@@ -417,6 +418,16 @@ export function createImportConflictHandler(deps = {}) {
     ) {
       // Elements don't exist on this page, skip initialization
       return;
+    }
+
+    // Click-outside / ESC to dismiss, routed through the existing cancel
+    // handlers so pending-import state is cleared (conflict) or we step back
+    // to the chooser (rename) — matching the Cancel buttons exactly.
+    if (conflictModal && importCancelBtn) {
+      setupModalBehavior(conflictModal, () => importCancelBtn.click());
+    }
+    if (renameModal && cancelImportRenameBtn) {
+      setupModalBehavior(renameModal, () => cancelImportRenameBtn.click());
     }
 
     // Overwrite option

@@ -2205,6 +2205,63 @@
   }
 }
 
+/*
+ * Modal entrance motion.
+ *
+ * Modals appear either by flipping `display` (toggling the `hidden` class) or by
+ * being appended to the DOM — neither of which can be transitioned. CSS
+ * animations, however, replay every time an element becomes displayed, so a
+ * short keyframe entrance gives every modal a consistent, quick fade/rise with
+ * no JS. The backdrop fades its dim+blur in; the modal box rises and settles.
+ * Kept brief (<=200ms, decelerating) so it reads as responsive, not sluggish.
+ */
+@keyframes modalBackdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalBoxIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-overlay,
+.settings-modal-backdrop {
+  animation: modalBackdropIn 216ms ease-out;
+}
+
+/*
+ * The modal box: the direct child of an overlay container (pattern A), the
+ * sibling following a [data-backdrop] child (pattern B), or a settings-modal
+ * panel. No element matches more than one of these, so the box animates once.
+ * A plain decelerating ease (no overshoot) so it settles without bouncing.
+ */
+.modal-overlay > *,
+[data-backdrop] ~ *,
+.settings-modal-content {
+  animation: modalBoxIn 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-overlay,
+  .settings-modal-backdrop,
+  .modal-overlay > *,
+  [data-backdrop] ~ *,
+  .settings-modal-content {
+    animation: none;
+  }
+}
+
 /* Settings Modal Styles */
 .settings-modal {
   position: fixed;

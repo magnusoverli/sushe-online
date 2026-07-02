@@ -218,33 +218,26 @@ export function createMobileUI(deps = {}) {
     hiddenInput.id = containerId.replace('Container', '');
     hiddenInput.value = currentValue;
 
-    // Create the dropdown overlay
+    // Transparent full-screen click-catcher: closes the dropdown on an outside
+    // click without dimming the page (so it behaves like a native <select>).
     const overlay = document.createElement('div');
-    overlay.className = 'fixed inset-0 z-[60] modal-overlay hidden';
+    overlay.className = 'fixed inset-0 z-[60] hidden';
     overlay.style.display = 'none';
 
-    // Create the dropdown panel
+    // Compact popover anchored beneath the trigger (positioned on open).
+    // Native-select look: no title bar, just a search field + options list.
     const panel = document.createElement('div');
     panel.className =
-      'fixed inset-x-4 top-1/2 -translate-y-1/2 z-[61] bg-gray-800 rounded-xl shadow-2xl max-h-[70vh] flex flex-col overflow-hidden';
+      'fixed z-[61] bg-gray-800 border border-gray-700 rounded-lg shadow-2xl flex flex-col overflow-hidden';
     panel.innerHTML = `
-      <div class="p-4 border-b border-gray-700 shrink-0">
-        <div class="flex items-center justify-between mb-3">
-          <h4 class="text-white font-medium">Select Genre</h4>
-          <button type="button" class="genre-select-close p-2 -m-2 text-gray-400 hover:text-white">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
-        </div>
-        <input type="text" class="genre-search-input w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500" placeholder="Search genres...">
+      <div class="p-2 border-b border-gray-700 shrink-0">
+        <input type="text" class="genre-search-input w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md text-white placeholder-gray-500 text-sm focus:outline-hidden focus:border-gray-500" placeholder="Search genres...">
       </div>
-      <div class="genre-options-list flex-1 overflow-y-auto overscroll-contain"></div>
+      <div class="genre-options-list flex-1 min-h-0 overflow-y-auto overscroll-contain"></div>
     `;
 
     const searchInput = panel.querySelector('.genre-search-input');
     const optionsList = panel.querySelector('.genre-options-list');
-    const closeBtn = panel.querySelector('.genre-select-close');
 
     /**
      * Render options list with filtering and highlighting
@@ -362,11 +355,31 @@ export function createMobileUI(deps = {}) {
 
     const openDropdown = () => {
       overlay.style.display = 'block';
+
+      // Anchor the popover to the trigger, matching its width; flip above when
+      // there isn't enough room below.
+      const rect = button.getBoundingClientRect();
+      const gap = 4;
+      const cap = 320;
+      const spaceBelow = window.innerHeight - rect.bottom - gap;
+      const spaceAbove = rect.top - gap;
+      panel.style.left = `${rect.left}px`;
+      panel.style.width = `${rect.width}px`;
+      if (spaceBelow >= cap || spaceBelow >= spaceAbove) {
+        panel.style.top = `${rect.bottom + gap}px`;
+        panel.style.bottom = 'auto';
+        panel.style.maxHeight = `${Math.min(cap, spaceBelow)}px`;
+      } else {
+        panel.style.top = 'auto';
+        panel.style.bottom = `${window.innerHeight - rect.top + gap}px`;
+        panel.style.maxHeight = `${Math.min(cap, spaceAbove)}px`;
+      }
+
       document.body.appendChild(panel);
       searchInput.value = '';
       renderOptions();
-      // Focus search input after a small delay for mobile
-      setTimeout(() => searchInput.focus(), 100);
+      // Focus the search field (small delay so mobile keyboards behave)
+      setTimeout(() => searchInput.focus(), 50);
     };
 
     const closeDropdown = () => {
@@ -383,7 +396,6 @@ export function createMobileUI(deps = {}) {
     };
 
     overlay.onclick = () => closeDropdown();
-    closeBtn.onclick = () => closeDropdown();
 
     searchInput.addEventListener('input', (e) => {
       renderOptions(e.target.value);
@@ -646,15 +658,29 @@ export function createMobileUI(deps = {}) {
 
     document.body.appendChild(editModal);
 
+    // Close the editor and reset scroll. Shared by the close button and the
+    // backdrop so both paths behave identically.
+    const closeEditor = () => {
+      editModal.remove();
+      window.scrollTo(0, 0);
+      document.body.scrollTop = 0;
+    };
+
+    // Click-outside-to-close. The [data-backdrop] child is `hidden lg:block`,
+    // so this is reachable only on desktop; on mobile the panel is a
+    // full-screen sheet with no backdrop to click, which is intended.
+    const editBackdrop = editModal.querySelector('[data-backdrop]');
+    if (editBackdrop) {
+      editBackdrop.addEventListener('click', closeEditor);
+    }
+
     // Attach close button handler
     const closeBtn = editModal.querySelector('[data-close-editor]');
     if (closeBtn) {
       closeBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        editModal.remove();
-        window.scrollTo(0, 0);
-        document.body.scrollTop = 0;
+        closeEditor();
       });
     }
 
