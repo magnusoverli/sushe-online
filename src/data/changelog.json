@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-07-02",
+    "category": "security",
+    "description": "Fixed a vulnerability allowing malicious content in album data.",
+    "hash": "28d1346a5639f160a156b990e250d6707aca7149",
+    "commitMessage": "Add canonical HTML escaper; fix album XSS and stale medal colors\n\n- New utils/escape-html.js: one escaper shared by the server and the Vite\n  bundle; utils/template-helpers.js and src/js/modules/html-utils.js now\n  re-export it (escapeHtml + escapeHtmlAttr collapse to one implementation).\n- Escape album/artist on the mobile action sheet and the desktop album row\n  (both were interpolated raw into innerHTML while the same values were\n  already escaped in adjacent data-* attributes).\n- New src/js/modules/album-display/position-badge.js color contract; fix\n  updatePositionNumbers to recolor the mobile rank badge (.mobile-position-badge)\n  on drag-reorder instead of guarding on a dead .position-badge class.\n- Replace dead hover:bg-gray-750 (no such Tailwind shade) with gray-700 in\n  album-context-menu and discovery.\n- Tests: escape-html, album-actions-menu-template (XSS guard), position-badge;\n  update html-utils escaper test to the canonical behavior.\n\nImplements WS1 (correctness & security) of the UI standardization plan."
+  },
+  {
+    "date": "2026-07-02",
     "category": "fix",
     "description": "Improved how modals close and genre selector behaves.",
     "hash": "55842b38a0f72ccc38ad9a2682ea592cd7e6d2fe",
