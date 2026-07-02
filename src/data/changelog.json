@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-07-02",
+    "category": "fix",
+    "description": "Fixed broken, unscrollable genre dropdown in album editor.",
+    "hash": "45cca398f5121dd9c6354080ece63e7ee8cef1f6",
+    "commitMessage": "Fix garbled, unscrollable genre edit dropdown\n\nThe inline genre-edit dropdown was built as an absolutely-positioned child\nof the genre cell. That cell carries `opacity: 0.7`, which rendered the\ndropdown translucent and trapped its z-index in a stacking context, and it\nlives inside #albumContainer's `overflow-y: auto`, which clipped it. The\nresult was a see-through, occluded, unscrollable dropdown.\n\nPortal the dropdown to <body> with position:fixed (mirroring the\ncolumn-toggle dropdown pattern), anchored to the input's bounding rect with\nabove/below flip, repositioned on scroll/resize, and torn down on every\nexit path. Also exclude the portaled dropdown from the click-outside check,\nkeep input focus on dropdown mousedown, guard against duplicate saves, and\nself-heal if a list rebuild detaches the input mid-edit."
+  },
+  {
+    "date": "2026-07-02",
     "category": "ui",
     "description": "Improved modal backdrops and aligned desktop track picks layout.",
     "hash": "574cc2a8f153e1acad7f7d2d9a752009966a1679",
