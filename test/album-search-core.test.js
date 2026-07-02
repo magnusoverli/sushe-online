@@ -5,10 +5,12 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe('album-search-core createSearchRunner', () => {
   let createSearchRunner;
+  let shouldSwitchToSearchResultList;
 
   beforeEach(async () => {
     const module = await import('../src/js/modules/album-search-core.js');
     createSearchRunner = module.createSearchRunner;
+    shouldSwitchToSearchResultList = module.shouldSwitchToSearchResultList;
   });
 
   function setup(overrides = {}) {
@@ -133,5 +135,26 @@ describe('album-search-core createSearchRunner', () => {
     await wait(5);
     assert.strictEqual(calls.length, 2);
     assert.strictEqual(calls[1].q, 'kid');
+  });
+
+  it('does not switch lists when a search result is already in the current list', () => {
+    assert.strictEqual(
+      shouldSwitchToSearchResultList({ listId: 'list-1' }, () => 'list-1'),
+      false
+    );
+  });
+
+  it('switches lists when a search result belongs to a different list', () => {
+    assert.strictEqual(
+      shouldSwitchToSearchResultList({ listId: 'list-2' }, () => 'list-1'),
+      true
+    );
+  });
+
+  it('keeps switching behavior when current-list lookup is unavailable', () => {
+    assert.strictEqual(
+      shouldSwitchToSearchResultList({ listId: 'list-2' }),
+      true
+    );
   });
 });

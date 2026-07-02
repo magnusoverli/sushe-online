@@ -21,6 +21,7 @@ export function createResultsPanel(deps = {}) {
   let el = null;
   let results = [];
   let activeIndex = -1;
+  let renderedQuery = '';
 
   function getInput() {
     return doc.getElementById('albumSearchInput');
@@ -80,6 +81,7 @@ export function createResultsPanel(deps = {}) {
   function render(data, query) {
     results = Array.isArray(data?.results) ? data.results : [];
     activeIndex = -1;
+    renderedQuery = String(query || '').trim();
     const panel = ensureEl();
 
     if (results.length === 0) {
@@ -96,6 +98,7 @@ export function createResultsPanel(deps = {}) {
   }
 
   function renderMessage(message) {
+    renderedQuery = '';
     const panel = ensureEl();
     panel.innerHTML = messageHtml(message);
     open();
@@ -149,6 +152,10 @@ export function createResultsPanel(deps = {}) {
     return results.length;
   }
 
+  function hasRenderedQuery(query) {
+    return !!el && renderedQuery === String(query || '').trim();
+  }
+
   return {
     render,
     renderMessage,
@@ -160,6 +167,7 @@ export function createResultsPanel(deps = {}) {
     handleClick,
     contains,
     count,
+    hasRenderedQuery,
     reposition: position,
   };
 }

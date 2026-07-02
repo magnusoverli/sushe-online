@@ -11,6 +11,11 @@ export const DEBOUNCE_MS = 220;
 export const MIN_CHARS = 2;
 export const RESULT_LIMIT = 25;
 
+export function shouldSwitchToSearchResultList(result, getCurrentListId) {
+  if (!result?.listId || typeof getCurrentListId !== 'function') return true;
+  return String(getCurrentListId() || '') !== String(result.listId);
+}
+
 /**
  * @param {Object} deps
  * @param {(url: string, options?: Object) => Promise<any>} deps.apiCall

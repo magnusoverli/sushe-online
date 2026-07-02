@@ -16,9 +16,10 @@ import {
 } from './album-search-render.js';
 
 export function createMobileResults(deps = {}) {
-  const { doc, onSelect } = deps;
+  const { doc, onSelect, onUserScroll } = deps;
   let el = null;
   let results = [];
+  let renderedQuery = '';
 
   function ensureEl() {
     if (el) return el;
@@ -26,21 +27,28 @@ export function createMobileResults(deps = {}) {
     el.id = 'mobileAlbumSearchResults';
     el.setAttribute('role', 'listbox');
     el.className = 'album-search-mobile-panel hidden';
+    if (typeof onUserScroll === 'function') {
+      el.addEventListener('touchmove', onUserScroll, { passive: true });
+      el.addEventListener('wheel', onUserScroll, { passive: true });
+    }
     doc.body.appendChild(el);
     return el;
   }
 
   /**
-   * Pin the panel's top to the bottom edge of the morphed header bar, and
-   * (when given) cap its height to the space above the keyboard.
+   * Pin the panel from the bottom edge of the morphed header bar to the bottom
+   * of the screen. Keyboard avoidance is padding inside the sheet, not a shorter
+   * sheet, so the album list never shines through below the search surface.
    */
-  function position(top, height) {
+  function position(top, keyboardInset = 0) {
     const panel = ensureEl();
     panel.style.top = `${Math.round(top)}px`;
-    if (typeof height === 'number') {
-      panel.style.height = `${Math.round(height)}px`;
-      panel.style.bottom = 'auto';
-    }
+    panel.style.bottom = '0';
+    panel.style.height = '';
+    panel.style.setProperty(
+      '--album-search-mobile-keyboard-inset',
+      `${Math.round(Math.max(0, keyboardInset))}px`
+    );
   }
 
   function open() {
@@ -58,6 +66,7 @@ export function createMobileResults(deps = {}) {
   /** The resting state before a query is typed. */
   function renderIdle() {
     results = [];
+    renderedQuery = '';
     ensureEl().innerHTML = `
       <div class="album-search-mobile-idle">
         <i class="fas fa-search" aria-hidden="true"></i>
@@ -67,6 +76,7 @@ export function createMobileResults(deps = {}) {
 
   function render(data, query) {
     results = Array.isArray(data?.results) ? data.results : [];
+    renderedQuery = String(query || '').trim();
     const panel = ensureEl();
     if (results.length === 0) {
       panel.innerHTML = emptyMessageHtml(query);
@@ -79,6 +89,7 @@ export function createMobileResults(deps = {}) {
   }
 
   function renderMessage(message) {
+    renderedQuery = '';
     ensureEl().innerHTML = messageHtml(message);
     results = [];
   }
@@ -98,6 +109,10 @@ export function createMobileResults(deps = {}) {
     return !!el && el.contains(node);
   }
 
+  function hasRenderedQuery(query) {
+    return !!el && renderedQuery === String(query || '').trim();
+  }
+
   return {
     render,
     renderIdle,
@@ -108,5 +123,6 @@ export function createMobileResults(deps = {}) {
     position,
     handleClick,
     contains,
+    hasRenderedQuery,
   };
 }

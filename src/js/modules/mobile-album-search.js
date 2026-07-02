@@ -14,7 +14,10 @@
  * out from under us.
  */
 
-import { createSearchRunner } from './album-search-core.js';
+import {
+  createSearchRunner,
+  shouldSwitchToSearchResultList,
+} from './album-search-core.js';
 import { createAlbumFlash } from './album-search-flash.js';
 import { createMobileResults } from './mobile-album-search-results.js';
 import { createActionSheet } from './ui-factories.js';
@@ -33,7 +36,7 @@ export function createMobileAlbumSearch(deps = {}) {
   const storage =
     deps.storage || (typeof localStorage !== 'undefined' ? localStorage : null);
   const logger = deps.logger || console;
-  const { apiCall, selectList, getListData } = deps;
+  const { apiCall, selectList, getCurrentListId, getListData } = deps;
 
   if (!doc || !win || typeof apiCall !== 'function') {
     return { initialize() {} };
@@ -44,9 +47,14 @@ export function createMobileAlbumSearch(deps = {}) {
   let repositionScheduled = false;
   let filterSheet = null;
   let selectedFields = loadFields(storage);
+  let preservedQuery = '';
 
   const flash = createAlbumFlash({ doc, win, getListData });
-  const results = createMobileResults({ doc, onSelect: selectResult });
+  const results = createMobileResults({
+    doc,
+    onSelect: selectResult,
+    onUserScroll: hideKeyboardForResultScroll,
+  });
   const runner = createSearchRunner({
     apiCall,
     getFields: () => selectedFields,
@@ -62,6 +70,13 @@ export function createMobileAlbumSearch(deps = {}) {
   function toggleClear(visible) {
     const btn = doc.getElementById('mobileAlbumSearchClear');
     if (btn) btn.classList.toggle('hidden', !visible);
+  }
+
+  function keyboardInset() {
+    const el = input();
+    const vv = win.visualViewport;
+    if (!vv || doc.activeElement !== el) return 0;
+    return Math.max(0, win.innerHeight - (vv.offsetTop + vv.height));
   }
 
   // ---- FAB visibility (capture/restore exactly, like the mobile sheets) -----
@@ -86,11 +101,32 @@ export function createMobileAlbumSearch(deps = {}) {
     const b = bar();
     if (!b) return;
     const top = b.getBoundingClientRect().bottom;
-    // Size the panel to the VISUAL viewport so its content stays above the
-    // on-screen keyboard rather than extending behind it.
-    const vv = win.visualViewport;
-    const visibleBottom = vv ? vv.offsetTop + vv.height : win.innerHeight;
-    results.position(top, Math.max(0, visibleBottom - top));
+    results.position(top, keyboardInset());
+  }
+
+  function hideKeyboardForResultScroll() {
+    const el = input();
+    if (doc.activeElement !== el) return;
+    el.blur();
+    win.requestAnimationFrame(positionResults);
+  }
+
+  function showCurrentQueryResults() {
+    const el = input();
+    const query = (el?.value || '').trim();
+    toggleClear(query.length > 0);
+    if (query.length < runner.minChars) {
+      runner.reset();
+      results.renderIdle();
+      results.open();
+      return;
+    }
+    if (results.hasRenderedQuery(query)) results.open();
+    else {
+      results.renderIdle();
+      results.open();
+      runner.run(query);
+    }
   }
 
   function openSearch() {
@@ -107,14 +143,12 @@ export function createMobileAlbumSearch(deps = {}) {
     // tab order / accessibility tree while it's open.
     doc.getElementById('albumContainer')?.setAttribute('inert', '');
 
-    results.renderIdle();
-    positionResults();
-    results.open();
-
     const el = input();
+    if (el && !el.value && preservedQuery) el.value = preservedQuery;
+    positionResults();
+    showCurrentQueryResults();
+
     if (el) {
-      el.value = '';
-      toggleClear(false);
       // Focus synchronously, inside the tap gesture, so the mobile keyboard
       // opens immediately — a deferred focus() is ignored by iOS Safari.
       // preventScroll stops iOS from scrolling the document toward the
@@ -123,9 +157,10 @@ export function createMobileAlbumSearch(deps = {}) {
     }
   }
 
-  function closeSearch(restoreFocus = true) {
+  function closeSearch(restoreFocus = true, options = {}) {
     if (!open) return;
     open = false;
+    const preserveQuery = options.preserveQuery === true;
 
     filterSheet?.close();
     const b = bar();
@@ -135,11 +170,15 @@ export function createMobileAlbumSearch(deps = {}) {
     }
     const el = input();
     if (el) {
-      el.value = '';
+      if (preserveQuery) preservedQuery = el.value || preservedQuery;
+      else {
+        preservedQuery = '';
+        el.value = '';
+      }
       el.blur();
     }
-    toggleClear(false);
-    runner.reset();
+    toggleClear(preserveQuery && (el?.value || '').length > 0);
+    if (!preserveQuery) runner.reset();
     results.close();
     doc.getElementById('albumContainer')?.removeAttribute('inert');
     doc.body.style.overflow = '';
@@ -157,6 +196,7 @@ export function createMobileAlbumSearch(deps = {}) {
     const el = input();
     if (el) {
       el.value = '';
+      preservedQuery = '';
       el.focus();
     }
     toggleClear(false);
@@ -168,9 +208,12 @@ export function createMobileAlbumSearch(deps = {}) {
 
   async function selectResult(result) {
     if (!result) return;
-    closeSearch(false);
+    closeSearch(false, { preserveQuery: true });
 
-    if (typeof selectList === 'function') {
+    if (
+      typeof selectList === 'function' &&
+      shouldSwitchToSearchResultList(result, getCurrentListId)
+    ) {
       try {
         await selectList(result.listId);
       } catch (error) {
@@ -196,14 +239,14 @@ export function createMobileAlbumSearch(deps = {}) {
         <span>${escapeHtml(field.label)}</span>
         <input type="checkbox" data-mobile-search-field="${field.key}" ${
           selectedFields.includes(field.key) ? 'checked' : ''
-        } class="w-5 h-5 accent-red-600" />
+        } class="app-checkbox album-search-mobile-field-checkbox" />
       </label>`
     ).join('');
 
     const contentHtml = `
       <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">Search in</h3>
       <div class="flex items-center gap-2 py-3 px-1 border-b border-gray-800 text-gray-400">
-        <i class="fas fa-check text-red-600"></i><span>Artist &amp; album title</span>
+        <i class="fas fa-check album-search-required-icon"></i><span>Artist &amp; album title</span>
       </div>
       ${rows}
       <button type="button" data-action="cancel" class="mt-4 w-full py-3 rounded-lg bg-gray-800 text-gray-200 font-medium touch-target">Done</button>`;
@@ -238,6 +281,7 @@ export function createMobileAlbumSearch(deps = {}) {
   function handleInput(event) {
     if (event.target?.id !== 'mobileAlbumSearchInput') return;
     const value = event.target.value || '';
+    preservedQuery = value;
     toggleClear(value.length > 0);
     runner.schedule(value);
   }
@@ -261,6 +305,10 @@ export function createMobileAlbumSearch(deps = {}) {
     if (target.closest?.('#mobileAlbumSearchOptionsBtn')) {
       event.preventDefault();
       openFilterSheet();
+      return;
+    }
+    if (target.closest?.('#mobileAlbumSearchInput')) {
+      showCurrentQueryResults();
       return;
     }
     results.handleClick(target);

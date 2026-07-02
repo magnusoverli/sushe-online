@@ -36,7 +36,7 @@ export function createOptionsPopover(deps = {}) {
       ${OPTIONAL_FIELDS.map(
         (field) => `
         <label class="album-search-option">
-          <input type="checkbox" data-search-field="${field.key}" />
+          <input type="checkbox" data-search-field="${field.key}" class="app-checkbox" />
           <span>${escapeHtml(field.label)}</span>
         </label>`
       ).join('')}

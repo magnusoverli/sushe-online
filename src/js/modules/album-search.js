@@ -20,7 +20,10 @@
 import { createResultsPanel } from './album-search-results.js';
 import { createOptionsPopover } from './album-search-options.js';
 import { createAlbumFlash } from './album-search-flash.js';
-import { createSearchRunner } from './album-search-core.js';
+import {
+  createSearchRunner,
+  shouldSwitchToSearchResultList,
+} from './album-search-core.js';
 
 export function createAlbumSearch(deps = {}) {
   const doc = deps.doc || (typeof document !== 'undefined' ? document : null);
@@ -28,7 +31,7 @@ export function createAlbumSearch(deps = {}) {
   const storage =
     deps.storage || (typeof localStorage !== 'undefined' ? localStorage : null);
   const logger = deps.logger || console;
-  const { apiCall, selectList, getListData } = deps;
+  const { apiCall, selectList, getCurrentListId, getListData } = deps;
 
   if (!doc || !win || typeof apiCall !== 'function') {
     return { initialize() {} };
@@ -76,6 +79,18 @@ export function createAlbumSearch(deps = {}) {
     if (query.length >= runner.minChars) runner.run(query);
   }
 
+  function showCurrentQueryResults() {
+    const input = getInput();
+    const query = (input?.value || '').trim();
+    toggleClearButton(query.length > 0);
+    if (query.length < runner.minChars) {
+      panel.close();
+      return;
+    }
+    if (panel.hasRenderedQuery(query)) panel.open();
+    else runner.run(query);
+  }
+
   function clearSearch() {
     const input = getInput();
     if (input) {
@@ -96,7 +111,10 @@ export function createAlbumSearch(deps = {}) {
     const input = getInput();
     if (input) input.blur();
 
-    if (typeof selectList === 'function') {
+    if (
+      typeof selectList === 'function' &&
+      shouldSwitchToSearchResultList(result, getCurrentListId)
+    ) {
       try {
         await selectList(result.listId);
       } catch (error) {
@@ -129,6 +147,11 @@ export function createAlbumSearch(deps = {}) {
   function handleInput(event) {
     if (event.target?.id !== 'albumSearchInput') return;
     onInputChange(event.target.value || '');
+  }
+
+  function handleFocusIn(event) {
+    if (event.target?.id !== 'albumSearchInput') return;
+    showCurrentQueryResults();
   }
 
   function handleKeydown(event) {
@@ -185,6 +208,11 @@ export function createAlbumSearch(deps = {}) {
       return;
     }
 
+    if (target.closest('#albumSearchInput')) {
+      showCurrentQueryResults();
+      return;
+    }
+
     // Select a result row.
     if (panel.handleClick(target)) return;
 
@@ -208,6 +236,7 @@ export function createAlbumSearch(deps = {}) {
 
   function initialize() {
     doc.addEventListener('input', handleInput);
+    doc.addEventListener('focusin', handleFocusIn);
     doc.addEventListener('keydown', handleKeydown);
     doc.addEventListener('click', handleClick);
     doc.addEventListener('change', handleChange);

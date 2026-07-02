@@ -957,6 +957,7 @@ createAppBootstrap({
 createAlbumSearch({
   apiCall,
   selectList,
+  getCurrentListId,
   getListData,
   logger: console,
 }).initialize();
@@ -965,6 +966,7 @@ createAlbumSearch({
 createMobileAlbumSearch({
   apiCall,
   selectList,
+  getCurrentListId,
   getListData,
   logger: console,
 }).initialize();
