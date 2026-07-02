@@ -12,14 +12,14 @@ describe('position-badge color contract', () => {
     getPositionBadgeColor = mod.getPositionBadgeColor;
   });
 
-  it('returns gold/silver/bronze at 8px for ranks 1-3', () => {
+  it('returns gold/silver/bronze medal tokens at 8px for ranks 1-3', () => {
     assert.deepStrictEqual(getPositionBadgeColor(1), {
-      border: '#eab308',
+      border: 'var(--medal-gold)',
       shadow: 'rgba(255,215,0,1.0)',
       size: '8px',
     });
-    assert.strictEqual(getPositionBadgeColor(2).border, '#9ca3af');
-    assert.strictEqual(getPositionBadgeColor(3).border, '#b45309');
+    assert.strictEqual(getPositionBadgeColor(2).border, 'var(--medal-silver)');
+    assert.strictEqual(getPositionBadgeColor(3).border, 'var(--medal-bronze)');
     assert.strictEqual(getPositionBadgeColor(2).size, '8px');
   });
 
