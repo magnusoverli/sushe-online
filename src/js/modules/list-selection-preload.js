@@ -1,3 +1,4 @@
+import { isMobileViewport } from '../utils/viewport.js';
 const INITIAL_DESKTOP_COVER_PRELOAD_COUNT = 16;
 const INITIAL_MOBILE_COVER_PRELOAD_COUNT = 8;
 const INITIAL_COVER_PRELOAD_TIMEOUT_MS = 650;
@@ -21,7 +22,7 @@ export function createListSelectionPreloader(deps = {}) {
     });
 
   function getInitialCoverPreloadCount() {
-    return win?.innerWidth < 1024
+    return isMobileViewport(win)
       ? INITIAL_MOBILE_COVER_PRELOAD_COUNT
       : INITIAL_DESKTOP_COVER_PRELOAD_COUNT;
   }

@@ -1,3 +1,4 @@
+import { isMobileViewport } from '../utils/viewport.js';
 /**
  * Refreshes lock status UI for the currently selected list year.
  */
@@ -42,7 +43,7 @@ export function createYearLockStatusRefresh(deps = {}) {
       return;
     }
 
-    const isMobile = (win?.innerWidth || 0) < 1024;
+    const isMobile = isMobileViewport(win);
     sorting.initializeUnifiedSorting(container, isMobile);
     clearYearLockUI(container);
   }

@@ -1,3 +1,4 @@
+import { isMobileViewport } from '../utils/viewport.js';
 /**
  * Tidal Widget - Sidebar widget for Tidal users
  * Shows connection status and provides quick access info
@@ -45,7 +46,7 @@ function showState(state) {
  */
 export function initTidalWidget() {
   // Only initialize on desktop
-  if (window.innerWidth < 1024) {
+  if (isMobileViewport()) {
     return;
   }
 

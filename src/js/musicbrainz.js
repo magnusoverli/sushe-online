@@ -1,4 +1,5 @@
 // MusicBrainz API integration
+import { isMobileViewport } from './utils/viewport.js';
 import { isAlbumInList, showToast } from './modules/utils.js';
 import { escapeHtmlAttr } from './modules/html-utils.js';
 import { checkAndPromptSimilar } from './modules/similar-album-modal.js';
@@ -1248,7 +1249,7 @@ function initializeAddAlbumFeature() {
 
   // Modal backdrop click handler - only on desktop
   modal.onclick = (e) => {
-    if (e.target === modal && window.innerWidth >= 1024) {
+    if (e.target === modal && !isMobileViewport()) {
       closeAddAlbumModal();
     }
   };
@@ -1308,7 +1309,7 @@ function initializeAddAlbumFeature() {
     if (
       e.key === 'Escape' &&
       !modal.classList.contains('hidden') &&
-      window.innerWidth >= 1024
+      !isMobileViewport()
     ) {
       closeAddAlbumModal();
     }
@@ -1322,7 +1323,7 @@ function initializeAddAlbumFeature() {
       // Re-setup handlers if needed after resize
       if (!modal.classList.contains('hidden')) {
         // Ensure proper modal styling based on new viewport
-        const isMobile = window.innerWidth < 1024;
+        const isMobile = isMobileViewport();
         modal.style.overflow = isMobile ? 'hidden' : '';
       }
     }, 250);
@@ -1352,7 +1353,7 @@ function updateSearchMode(mode) {
 
   // Update search button text - responsive based on viewport
   const buttonText = mode === 'artist' ? 'Search Artists' : 'Search Albums';
-  const isMobile = window.innerWidth < 1024;
+  const isMobile = isMobileViewport();
 
   if (modalElements.searchArtistBtn) {
     modalElements.searchArtistBtn.innerHTML = isMobile
@@ -1425,7 +1426,7 @@ window.openAddAlbumModal = function () {
   populateCountryDropdown();
 
   // Handle body scroll for mobile
-  if (window.innerWidth < 1024) {
+  if (isMobileViewport()) {
     document.body.style.overflow = 'hidden';
   }
 };
@@ -1496,10 +1497,9 @@ function populateCountryDropdown() {
 }
 
 function resetCoverPreview() {
-  const defaultContent =
-    window.innerWidth < 1024
-      ? '<i class="fas fa-image text-2xl text-gray-600"></i>'
-      : `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
+  const defaultContent = isMobileViewport()
+    ? '<i class="fas fa-image text-2xl text-gray-600"></i>'
+    : `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
         <circle cx="8.5" cy="8.5" r="1.5"></circle>
         <polyline points="21 15 16 10 5 21"></polyline>
@@ -1687,7 +1687,7 @@ function closeAddAlbumModal() {
   resetModalState();
 
   // Restore body scroll on mobile
-  if (window.innerWidth < 1024) {
+  if (isMobileViewport()) {
     document.body.style.overflow = '';
   }
 }

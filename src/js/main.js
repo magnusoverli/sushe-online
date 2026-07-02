@@ -1,3 +1,4 @@
+import { isMobileViewport } from './utils/viewport.js';
 import './app.js';
 import { scheduleDeferredStartup } from './modules/post-render-scheduler.js';
 
@@ -74,7 +75,7 @@ async function initSidebarWidget(isMobile) {
 
 // Initialize music service widgets when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  const isMobile = window.innerWidth < 1024;
+  const isMobile = isMobileViewport();
 
   scheduleDeferredStartup(
     () => {

@@ -7,6 +7,7 @@
  * @param {Object} deps - External dependencies
  * @returns {Object} Public API
  */
+import { isMobileViewport } from '../utils/viewport.js';
 import { createTrackPickService } from './track-pick-service.js';
 
 export function createTrackSelection(deps = {}) {
@@ -93,7 +94,7 @@ export function createTrackSelection(deps = {}) {
    * Handles both mobile cards and desktop table rows.
    */
   function updateTrackCellDisplayDual(albumIndex, trackPicks, tracks) {
-    const isMobile = window.innerWidth < 1024;
+    const isMobile = isMobileViewport();
 
     function processTrack(trackIdentifier) {
       if (!trackIdentifier) return null;

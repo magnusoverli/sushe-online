@@ -4,6 +4,7 @@
  * Frontend helpers for checking year lock status and handling locked year UI
  */
 
+import { isMobileViewport } from '../utils/viewport.js';
 import { apiCall } from './utils.js';
 
 /**
@@ -107,7 +108,7 @@ export function isListLockedSync(year, isMain) {
  * @param {number} year - The locked year
  */
 export function showYearLockUI(container, year) {
-  const isMobile = window.innerWidth < 1024;
+  const isMobile = isMobileViewport();
 
   // Desktop: populate header lock indicator
   const headerIndicator = document.getElementById('headerLockIndicator');

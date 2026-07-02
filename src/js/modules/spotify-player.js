@@ -4,6 +4,7 @@
  * Features: Smooth animations, adaptive polling, optimistic UI
  */
 
+import { isMobileViewport } from '../utils/viewport.js';
 import { showToast } from './utils.js';
 import { getDeviceIcon } from '../utils/device-icons.js';
 import { formatTime } from './time-utils.js';
@@ -1412,7 +1413,7 @@ function handleVisibilityChange() {
  */
 export function initMiniplayer() {
   // Only initialize on desktop
-  if (window.innerWidth < 1024) {
+  if (isMobileViewport()) {
     return;
   }
 

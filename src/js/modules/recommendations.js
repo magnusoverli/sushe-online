@@ -1,3 +1,4 @@
+import { isMobileViewport } from '../utils/viewport.js';
 import { createContextSubmenuController } from '../utils/context-submenu-controller.js';
 import {
   formatInUserListsTooltip as formatInUserListsTooltipBase,
@@ -1058,7 +1059,7 @@ export function createRecommendations(deps = {}) {
     const container = document.getElementById('albumContainer');
     if (!container) return;
 
-    const isMobile = window.innerWidth < 1024;
+    const isMobile = isMobileViewport();
 
     container.innerHTML = '';
 

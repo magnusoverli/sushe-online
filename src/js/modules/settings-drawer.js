@@ -7,6 +7,7 @@
  * @module settings-drawer
  */
 
+import { isMobileViewport } from '../utils/viewport.js';
 import { openDuplicateReviewModal } from './duplicate-review-modal.js';
 import { openManualAlbumAudit } from './manual-album-audit-modal.js';
 import { createSettingsModal as createSettingsModalBase } from './ui-factories.js';
@@ -425,7 +426,7 @@ export function createSettingsDrawer(deps = {}) {
     });
 
     const activeNavItem = document.querySelector('.settings-nav-item.active');
-    if (activeNavItem && window.innerWidth <= 1023) {
+    if (activeNavItem && isMobileViewport()) {
       activeNavItem.scrollIntoView({
         behavior: 'smooth',
         block: 'nearest',
@@ -575,7 +576,7 @@ export function createSettingsDrawer(deps = {}) {
    */
   function updateActionBar(categoryId) {
     const actionBar = document.getElementById('settingsActionBar');
-    if (!actionBar || window.innerWidth >= 1024) return;
+    if (!actionBar || !isMobileViewport()) return;
 
     const actions = {
       account:

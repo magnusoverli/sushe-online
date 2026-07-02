@@ -7,6 +7,7 @@
  * @module album-display
  */
 
+import { isMobileViewport } from '../utils/viewport.js';
 import {
   formatReleaseDate,
   isYearMismatch,
@@ -2169,7 +2170,7 @@ export function createAlbumDisplay(deps = {}) {
    */
   function displayAlbums(albums, options = {}) {
     const { forceFullRebuild = false, _skipCoverFetch = false } = options;
-    const isMobile = window.innerWidth < 1024;
+    const isMobile = isMobileViewport();
     const container = document.getElementById('albumContainer');
 
     if (!container) {
@@ -2560,7 +2561,7 @@ export function createAlbumDisplay(deps = {}) {
    * @param {string} summaryData.summarySource - Summary source
    */
   async function updateAlbumSummaryInPlace(albumId, summaryData) {
-    const isMobile = window.innerWidth < 1024;
+    const isMobile = isMobileViewport();
     const container = document.getElementById('albumContainer');
     if (!container) return;
 
@@ -2655,7 +2656,7 @@ export function createAlbumDisplay(deps = {}) {
 
   // Listen for column visibility changes from external sources (e.g. settings drawer)
   window.addEventListener('columnvisibilitychange', () => {
-    const isMobile = window.innerWidth < 1024;
+    const isMobile = isMobileViewport();
     if (isMobile) return; // Column visibility only applies to desktop
     applyVisibilityInPlace();
   });
