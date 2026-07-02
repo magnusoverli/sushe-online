@@ -128,7 +128,7 @@ function createModalDOM() {
   modalElement = document.createElement('div');
   modalElement.id = 'similarAlbumModal';
   modalElement.className =
-    'hidden fixed inset-0 bg-black bg-opacity-70 z-[10001] flex items-center justify-center p-4 safe-area-modal';
+    'hidden fixed inset-0 modal-overlay z-[10001] flex items-center justify-center p-4 safe-area-modal';
   modalElement.innerHTML = `
     <div class="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
       <!-- Header -->

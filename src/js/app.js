@@ -554,7 +554,6 @@ const getMobileUIModule = createLazyModule(() =>
         showDiscoveryModal(type, data);
       });
     },
-    playSpecificTrack,
     getSortedGroups,
     refreshGroupsAndLists,
     isViewingRecommendations,

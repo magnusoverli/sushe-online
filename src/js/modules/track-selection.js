@@ -128,12 +128,12 @@ export function createTrackSelection(deps = {}) {
         cellHtml = `
           <div class="flex flex-col gap-0.5">
             <div class="flex items-center gap-1 ${primary.trackClass}">
-              <span class="text-yellow-400 text-[10px]" title="Primary pick">\u2605</span>
+              <span class="inline-block w-4 text-center text-[11px] font-semibold font-[Georgia,serif] text-green-400" title="Primary pick">I</span>
               <span class="truncate">${primary.displayName}</span>
               ${primary.formatted ? `<span class="text-gray-500 text-xs ml-auto shrink-0">${primary.formatted}</span>` : ''}
             </div>
             <div class="flex items-center gap-1 text-gray-500 text-xs">
-              <span class="text-gray-600 text-[10px]" title="Secondary pick">\u2606</span>
+              <span class="inline-block w-4 text-center text-[11px] font-semibold font-[Georgia,serif] text-green-400" title="Secondary pick">II</span>
               <span class="truncate">${secondary.displayName}</span>
               ${secondary.formatted ? `<span class="text-gray-600 text-xs ml-auto shrink-0">${secondary.formatted}</span>` : ''}
             </div>
@@ -141,14 +141,14 @@ export function createTrackSelection(deps = {}) {
       } else if (primary) {
         cellHtml = `
           <div class="flex items-center gap-1 ${primary.trackClass}">
-            <span class="text-yellow-400 text-[10px]" title="Primary pick">\u2605</span>
+            <span class="inline-block w-4 text-center text-[11px] font-semibold font-[Georgia,serif] text-green-400" title="Primary pick">I</span>
             <span class="truncate">${primary.displayName}</span>
             ${primary.formatted ? `<span class="text-gray-500 text-xs ml-auto shrink-0">${primary.formatted}</span>` : ''}
           </div>`;
       } else if (secondary) {
         cellHtml = `
           <div class="flex items-center gap-1 text-gray-500 text-xs">
-            <span class="text-gray-600 text-[10px]" title="Secondary pick">\u2606</span>
+            <span class="inline-block w-4 text-center text-[11px] font-semibold font-[Georgia,serif] text-green-400" title="Secondary pick">II</span>
             <span class="truncate">${secondary.displayName}</span>
             ${secondary.formatted ? `<span class="text-gray-600 text-xs ml-auto shrink-0">${secondary.formatted}</span>` : ''}
           </div>`;
@@ -159,7 +159,7 @@ export function createTrackSelection(deps = {}) {
       // Desktop: match createDesktopAlbumRow() HTML structure exactly
       const primaryHtml = primary
         ? `<div class="flex items-center min-w-0 overflow-hidden w-full">
-            <span class="text-yellow-400 mr-1.5 text-base shrink-0" title="Primary track">\u2605</span>
+            <span class="inline-block w-4 text-center mr-1 shrink-0 text-[11px] font-semibold font-[Georgia,serif] text-green-400" title="Primary track">I</span>
             <span class="album-cell-text ${primary.trackClass} truncate hover:text-gray-100 flex-1 min-w-0" title="${primary.name}">${primary.displayName}</span>
             ${primary.formatted ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${primary.formatted}</span>` : ''}
           </div>`
@@ -169,7 +169,7 @@ export function createTrackSelection(deps = {}) {
 
       const secondaryHtml = secondary
         ? `<div class="flex items-center min-w-0 mt-1 overflow-hidden w-full">
-            <span class="text-yellow-400 mr-1.5 text-base shrink-0" title="Secondary track">\u2606</span>
+            <span class="inline-block w-4 text-center mr-1 shrink-0 text-[11px] font-semibold font-[Georgia,serif] text-green-400" title="Secondary track">II</span>
             <span class="album-cell-text ${secondary.trackClass} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${secondary.name}">${secondary.displayName}</span>
             ${secondary.formatted ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${secondary.formatted}</span>` : ''}
           </div>`
@@ -272,7 +272,7 @@ export function createTrackSelection(deps = {}) {
     header.className =
       'sticky top-0 bg-gray-900 border-b border-gray-700 px-3 py-2 text-xs text-gray-400';
     header.innerHTML =
-      'Click: select \u2606 &nbsp;|&nbsp; Click again: promote to \u2605 &nbsp;|&nbsp; Click \u2605: deselect';
+      'Click: select <span class="font-[Georgia,serif] font-semibold text-green-400">II</span> &nbsp;|&nbsp; Click again: promote to <span class="font-[Georgia,serif] font-semibold text-green-400">I</span> &nbsp;|&nbsp; Click <span class="font-[Georgia,serif] font-semibold text-green-400">I</span>: deselect';
     menu.appendChild(header);
 
     // Clear button
@@ -377,19 +377,16 @@ export function createTrackSelection(deps = {}) {
         const name = opt.dataset.trackName;
         const indicator = opt.querySelector('.track-indicator');
 
-        opt.classList.remove(
-          'bg-yellow-900/30',
-          'bg-gray-800/50',
-          'text-white',
-          'text-gray-300'
-        );
+        opt.classList.remove('bg-gray-700/30', 'text-white', 'text-gray-300');
 
         if (name === selectedPrimary) {
-          indicator.innerHTML = '<span class="text-yellow-400">\u2605</span>';
-          opt.classList.add('bg-yellow-900/30', 'text-white');
+          indicator.innerHTML =
+            '<span class="text-[11px] font-semibold font-[Georgia,serif] text-green-400">I</span>';
+          opt.classList.add('bg-gray-700/30', 'text-white');
         } else if (name === selectedSecondary) {
-          indicator.innerHTML = '<span class="text-gray-400">\u2606</span>';
-          opt.classList.add('bg-gray-800/50', 'text-gray-300');
+          indicator.innerHTML =
+            '<span class="text-[11px] font-semibold font-[Georgia,serif] text-green-400">II</span>';
+          opt.classList.add('bg-gray-700/30', 'text-white');
         } else {
           indicator.innerHTML = '';
           opt.classList.add('text-gray-300');

@@ -138,7 +138,7 @@ export function createActionSheet({
 
   const panelExtraClasses = panelClasses ? ` ${panelClasses}` : '';
   sheet.innerHTML = `
-    <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
+    <div class="absolute inset-0 modal-overlay" data-backdrop></div>
     <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom${panelExtraClasses}">
       <div class="p-4">
         <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>

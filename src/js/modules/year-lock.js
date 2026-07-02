@@ -126,7 +126,7 @@ export function showYearLockUI(container, year) {
     if (!existingBanner) {
       const banner = document.createElement('div');
       banner.className =
-        'year-locked-banner bg-yellow-900 bg-opacity-20 border border-yellow-700 rounded-lg p-3 mb-4 flex items-center gap-3 text-yellow-200';
+        'year-locked-banner bg-yellow-900/20 border border-yellow-700 rounded-lg p-3 mb-4 flex items-center gap-3 text-yellow-200';
       banner.innerHTML = `
         <i class="fas fa-lock text-yellow-500"></i>
         <span class="text-sm">

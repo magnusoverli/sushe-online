@@ -48,7 +48,6 @@ import { createMobileListMenus } from './mobile-ui/list-menus.js';
  * @param {Function} deps.getAvailableGenres - Get available genres list
  * @param {Function} deps.setCurrentContextAlbum - Set current context album index
  * @param {Function} deps.showDiscoveryModal - Show discovery modal for Last.fm features
- * @param {Function} deps.playSpecificTrack - Play a specific track by name
  * @param {Function} deps.getSortedGroups - Get groups sorted by sort_order
  * @param {Function} deps.refreshGroupsAndLists - Refresh groups and lists after changes
  * @param {Function} deps.isViewingRecommendations - Check if currently viewing recommendations
@@ -88,7 +87,6 @@ export function createMobileUI(deps = {}) {
     getAvailableGenres,
     setCurrentContextAlbum,
     showDiscoveryModal,
-    playSpecificTrack,
     getSortedGroups,
     refreshGroupsAndLists,
     isViewingRecommendations,
@@ -222,8 +220,7 @@ export function createMobileUI(deps = {}) {
 
     // Create the dropdown overlay
     const overlay = document.createElement('div');
-    overlay.className =
-      'fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm hidden';
+    overlay.className = 'fixed inset-0 z-[60] modal-overlay hidden';
     overlay.style.display = 'none';
 
     // Create the dropdown panel
@@ -439,9 +436,7 @@ export function createMobileUI(deps = {}) {
       : new Date().toISOString().split('T')[0];
 
     // Remove any existing edit modals first
-    const existingModals = document.querySelectorAll(
-      '.fixed.inset-0.z-50.bg-gray-900'
-    );
+    const existingModals = document.querySelectorAll('.mobile-edit-modal');
     existingModals.forEach((modal) => modal.remove());
 
     const availableCountries = getAvailableCountries();
@@ -449,9 +444,12 @@ export function createMobileUI(deps = {}) {
 
     // Create the edit modal
     const editModal = document.createElement('div');
-    editModal.className =
-      'fixed inset-0 z-50 bg-gray-900 flex flex-col overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:max-w-2xl lg:max-h-[85vh] lg:mx-auto lg:mt-20 lg:mb-8 lg:rounded-lg lg:shadow-2xl';
+    editModal.className = 'mobile-edit-modal fixed inset-0 z-50';
     editModal.innerHTML = `
+      <!-- Backdrop: desktop only; on mobile the panel is a full-screen sheet -->
+      <div class="hidden lg:block absolute inset-0 modal-overlay" data-backdrop></div>
+      <!-- Panel -->
+      <div class="relative bg-gray-900 flex flex-col overflow-hidden w-full h-full pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:h-auto lg:max-w-2xl lg:max-h-[85vh] lg:mx-auto lg:mt-20 lg:mb-8 lg:rounded-lg lg:shadow-2xl">
       <!-- Header -->
       <div class="flex items-center justify-between p-4 border-b border-gray-800 shrink-0">
         <button data-close-editor class="p-2 -m-2 text-gray-400 hover:text-white">
@@ -602,7 +600,7 @@ export function createMobileUI(deps = {}) {
               <button type="button" id="fetchTracksBtn" class="text-xs text-red-500 hover:underline">Get</button>
             </div>
             <div class="text-xs text-gray-500 mb-2">Click once = secondary (<span class="font-[Georgia,serif] font-semibold text-green-400">II</span>) | Click again = primary (<span class="font-[Georgia,serif] font-semibold text-green-400">I</span>)</div>
-            <div id="trackPickContainer" data-album-index="${index}" data-list-item-id="${album._id || ''}">
+            <div id="trackPickContainer" data-list-item-id="${album._id || ''}">
             ${
               Array.isArray(album.tracks) && album.tracks.length > 0
                 ? `
@@ -625,9 +623,6 @@ export function createMobileUI(deps = {}) {
                     ${indicator}
                     <span class="text-gray-300 flex-1 min-w-0 truncate">${trackName}</span>
                     ${trackLength ? `<span class="text-gray-500 text-xs shrink-0">${trackLength}</span>` : ''}
-                    <button type="button" class="track-play-btn shrink-0 w-7 h-7 flex items-center justify-center text-green-400 hover:text-green-300 active:scale-95" data-track="${trackName.replace(/"/g, '&quot;')}" title="Play track">
-                      <i class="fas fa-play text-xs"></i>
-                    </button>
                   </li>`;
                   })
                   .join('')}
@@ -645,6 +640,7 @@ export function createMobileUI(deps = {}) {
           <!-- Spacer for bottom padding -->
           <div class="h-4"></div>
         </form>
+      </div>
       </div>
     `;
 
@@ -810,14 +806,7 @@ export function createMobileUI(deps = {}) {
       if (!trackPickContainer) return;
       const items = trackPickContainer.querySelectorAll('.track-pick-item');
       items.forEach((item) => {
-        item.onclick = async (e) => {
-          // Don't trigger if clicking the play button
-          if (
-            e.target.closest('.track-play-btn') ||
-            e.target.classList.contains('track-play-btn')
-          )
-            return;
-
+        item.onclick = async () => {
           const trackName = item.dataset.track;
           const listItemId = trackPickContainer.dataset.listItemId;
 
@@ -852,26 +841,9 @@ export function createMobileUI(deps = {}) {
       });
     }
 
-    function setupTrackPlayButtons() {
-      if (!trackPickContainer || !playSpecificTrack) return;
-      const albumIndex = parseInt(trackPickContainer.dataset.albumIndex, 10);
-      const buttons = trackPickContainer.querySelectorAll('.track-play-btn');
-      buttons.forEach((btn) => {
-        btn.onclick = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const trackName = btn.dataset.track;
-          if (trackName) {
-            playSpecificTrack(albumIndex, trackName);
-          }
-        };
-      });
-    }
-
     // Fetch track list when button is clicked
     const fetchBtn = document.getElementById('fetchTracksBtn');
     setupTrackPickItems();
-    setupTrackPlayButtons();
 
     if (fetchBtn) {
       fetchBtn.onclick = async () => {
@@ -901,9 +873,6 @@ export function createMobileUI(deps = {}) {
                     ${indicator}
                     <span class="text-gray-300 flex-1 min-w-0 truncate">${trackName}</span>
                     ${trackLength ? `<span class="text-gray-500 text-xs shrink-0">${trackLength}</span>` : ''}
-                    <button type="button" class="track-play-btn shrink-0 w-7 h-7 flex items-center justify-center text-green-400 hover:text-green-300 active:scale-95" data-track="${trackName.replace(/"/g, '&quot;')}" title="Play track">
-                      <i class="fas fa-play text-xs"></i>
-                    </button>
                   </li>`;
                     })
                     .join('')}</ul>`
@@ -911,7 +880,6 @@ export function createMobileUI(deps = {}) {
                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
                      placeholder="Enter track number (primary)">`;
             setupTrackPickItems();
-            setupTrackPlayButtons();
           }
           showToast('Tracks loaded');
         } catch (err) {
@@ -1095,9 +1063,7 @@ export function createMobileUI(deps = {}) {
     }
 
     // Remove any existing modals first
-    const existingModals = document.querySelectorAll(
-      '.fixed.inset-0.z-50.bg-gray-900'
-    );
+    const existingModals = document.querySelectorAll('.mobile-edit-modal');
     existingModals.forEach((modal) => modal.remove());
 
     // Hide FAB when modal is shown
@@ -1111,7 +1077,7 @@ export function createMobileUI(deps = {}) {
       'fixed inset-0 z-50 flex items-center justify-center p-4 safe-area-modal';
     summaryModal.innerHTML = `
       <!-- Backdrop -->
-      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
+      <div class="absolute inset-0 modal-overlay" data-backdrop></div>
       
       <!-- Modal Content -->
       <div class="relative bg-gray-900 rounded-lg shadow-2xl flex flex-col w-full max-w-lg max-h-[85vh] overflow-hidden">

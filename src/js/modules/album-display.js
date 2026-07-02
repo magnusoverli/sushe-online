@@ -448,7 +448,7 @@ export function createAlbumDisplay(deps = {}) {
         ${
           data.primaryTrackDisplay
             ? `<div class="flex items-center min-w-0 overflow-hidden w-full">
-            <span class="text-yellow-400 mr-1.5 text-base shrink-0" title="Primary track">★</span>
+            <span class="inline-block w-4 text-center mr-1 shrink-0 text-[11px] font-semibold font-[Georgia,serif] text-green-400" title="Primary track">I</span>
             <span class="album-cell-text ${data.primaryTrackClass} truncate hover:text-gray-100 flex-1 min-w-0" title="${data.primaryTrack || ''}">${data.primaryTrackDisplay}</span>
             ${data.primaryTrackDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.primaryTrackDuration}</span>` : ''}
           </div>`
@@ -459,7 +459,7 @@ export function createAlbumDisplay(deps = {}) {
         ${
           data.hasSecondaryTrack
             ? `<div class="flex items-center min-w-0 mt-1 overflow-hidden w-full">
-            <span class="text-yellow-400 mr-1.5 text-base shrink-0" title="Secondary track">☆</span>
+            <span class="inline-block w-4 text-center mr-1 shrink-0 text-[11px] font-semibold font-[Georgia,serif] text-green-400" title="Secondary track">II</span>
             <span class="album-cell-text ${data.secondaryTrackClass} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${data.secondaryTrack || ''}">${data.secondaryTrackDisplay}</span>
             ${data.secondaryTrackDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.secondaryTrackDuration}</span>` : ''}
           </div>`
@@ -1902,7 +1902,7 @@ export function createAlbumDisplay(deps = {}) {
       'fixed inset-0 z-50 flex items-center justify-center p-4 safe-area-modal';
     modal.setAttribute('data-recommendation-modal', 'true');
     modal.innerHTML = `
-      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
+      <div class="absolute inset-0 modal-overlay" data-backdrop></div>
       <div class="relative bg-gray-900 rounded-lg shadow-2xl flex flex-col w-full max-w-lg overflow-hidden">
         <div class="flex items-center justify-between p-4 border-b border-gray-800 shrink-0">
           <button data-close-rec class="p-2 -m-2 text-gray-400 hover:text-white active:text-white">
