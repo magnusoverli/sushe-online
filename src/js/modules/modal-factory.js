@@ -13,6 +13,8 @@
  * @module modal-factory
  */
 
+import { createFocusManager, applyInert, releaseInert } from './modal-a11y.js';
+
 /**
  * @typedef {Object} ModalOptions
  * @property {HTMLElement} element - Modal element
@@ -41,10 +43,29 @@ export function createModal(options) {
     onOpen,
     onClose,
     beforeClose,
+    // Accessibility (opt-in): pass `dialog` (the inner panel) to make this an
+    // accessible dialog with a focus trap + focus restore. Existing callers
+    // that omit these are behaviourally unchanged.
+    dialog,
+    label,
+    labelledBy,
+    initialFocus = null,
+    inertTargets,
   } = options;
 
   if (!element) {
     throw new Error('Modal element is required');
+  }
+
+  const a11yEnabled = !!(dialog || labelledBy || label || inertTargets);
+  const dialogEl = dialog || element;
+  const focusManager = a11yEnabled
+    ? createFocusManager(dialogEl, { initialFocus })
+    : null;
+  let prevBodyOverflow = '';
+
+  function handleTab(e) {
+    if (focusManager) focusManager.handleTab(e);
   }
 
   // Track all event listeners for cleanup
@@ -121,7 +142,21 @@ export function createModal(options) {
     element.classList.remove('hidden');
     isOpen = true;
 
+    // Nesting-safe scroll lock: remember the prior value so closing an inner
+    // modal doesn't unlock scroll while an outer modal is still open.
+    prevBodyOverflow = document.body.style.overflow || '';
     document.body.style.overflow = 'hidden';
+
+    // Accessibility (opt-in)
+    if (a11yEnabled) {
+      dialogEl.setAttribute('role', 'dialog');
+      dialogEl.setAttribute('aria-modal', 'true');
+      if (labelledBy) dialogEl.setAttribute('aria-labelledby', labelledBy);
+      else if (label) dialogEl.setAttribute('aria-label', label);
+      applyInert(inertTargets);
+      focusManager.activate();
+      addListener(document, 'keydown', handleTab);
+    }
 
     // Attach event listeners
     if (closeOnEscape) {
@@ -151,7 +186,12 @@ export function createModal(options) {
     element.classList.add('hidden');
     isOpen = false;
 
-    document.body.style.overflow = '';
+    if (a11yEnabled) {
+      releaseInert(inertTargets);
+      focusManager.deactivate();
+    }
+
+    document.body.style.overflow = prevBodyOverflow;
 
     removeAllListeners();
 

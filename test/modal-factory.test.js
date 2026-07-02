@@ -569,4 +569,56 @@ describe('modal-factory', async () => {
       restore();
     });
   });
+
+  describe('nesting-safe scroll lock', () => {
+    it('restores the previous body overflow on close, not always empty', () => {
+      const { restore } = setupMockDocument();
+      document.body.style.overflow = 'scroll';
+      const element = createMockElement();
+      const controller = createModal({ element });
+      controller.open();
+      assert.strictEqual(document.body.style.overflow, 'hidden');
+      controller.close();
+      assert.strictEqual(document.body.style.overflow, 'scroll');
+      restore();
+    });
+  });
+
+  describe('accessibility (opt-in)', () => {
+    it('does not set dialog attributes when no a11y options are passed', () => {
+      const { restore } = setupMockDocument();
+      const element = createMockElement();
+      element.setAttribute = mock.fn();
+      const controller = createModal({ element });
+      controller.open();
+      assert.strictEqual(element.setAttribute.mock.callCount(), 0);
+      controller.close();
+      restore();
+    });
+
+    it('sets role=dialog / aria-modal / aria-label when a dialog scope is given', () => {
+      const { restore } = setupMockDocument();
+      const attrs = {};
+      const dialog = {
+        setAttribute: (k, v) => {
+          attrs[k] = v;
+        },
+        querySelectorAll: () => [],
+        querySelector: () => null,
+        contains: () => true,
+      };
+      const element = createMockElement();
+      const controller = createModal({
+        element,
+        dialog,
+        label: 'Test dialog',
+      });
+      controller.open();
+      assert.strictEqual(attrs.role, 'dialog');
+      assert.strictEqual(attrs['aria-modal'], 'true');
+      assert.strictEqual(attrs['aria-label'], 'Test dialog');
+      controller.close();
+      restore();
+    });
+  });
 });

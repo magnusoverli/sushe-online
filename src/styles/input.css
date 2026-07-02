@@ -2299,6 +2299,24 @@
   -webkit-backdrop-filter: blur(4px);
 }
 
+/* Canonical modal close button — a comfortable 44px hit area. A plain class
+   (not a Tailwind utility) so it is never purged. */
+.modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.modal-close:hover {
+  color: #fff;
+}
+
 /* Lighter blur on mobile for scroll/compositing performance. */
 @media (max-width: 1023px) {
   .modal-overlay {

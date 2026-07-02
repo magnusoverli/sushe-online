@@ -12,6 +12,19 @@ export const escapeHtml = escapeHtmlModule.escapeHtml;
 export const escapeHtmlAttr = escapeHtmlModule.escapeHtml;
 
 /**
+ * Canonical modal close button markup: a labelled 44px hit-area button with the
+ * shared .modal-close styling and a FontAwesome times icon.
+ * @param {object} [opts]
+ * @param {string} [opts.label='Close'] - accessible label
+ * @param {string} [opts.extraClass=''] - extra classes on the button
+ * @returns {string} button HTML
+ */
+export function closeButtonHTML({ label = 'Close', extraClass = '' } = {}) {
+  const cls = extraClass ? `modal-close ${extraClass}` : 'modal-close';
+  return `<button type="button" class="${cls}" aria-label="${escapeHtmlAttr(label)}"><i class="fas fa-times" aria-hidden="true"></i></button>`;
+}
+
+/**
  * Album placeholder SVG for missing cover images
  * @param {number} size - Size in pixels (default 120)
  * @returns {string} Data URI for placeholder SVG
