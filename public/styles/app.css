@@ -170,7 +170,7 @@
   color: #22c55e;
 }
 .album-search-option input[type='checkbox'] {
-  accent-color: #dc2626;
+  accent-color: var(--accent-color, #dc2626);
   width: 0.95rem;
   height: 0.95rem;
 }
@@ -207,7 +207,8 @@
 @media (max-width: 1023px) {
   .app-layout > header {
     position: sticky;
-    top: 0;$1z-index: var(--z-sticky-header);
+    top: 0;
+    z-index: var(--z-sticky-header);
   }
 }
 
@@ -245,8 +246,8 @@
   color: #6b7280;
 }
 .album-search-mobile-input:focus {
-  border-color: #dc2626;
-  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.4);
+  border-color: var(--accent-color, #dc2626);
+  box-shadow: 0 0 0 1px var(--accent-shadow, rgba(220, 38, 38, 0.4));
 }
 
 .album-search-mobile-panel {
@@ -858,7 +859,7 @@ body {
 }
 
 .genre-cell select:focus {
-  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+  box-shadow: 0 0 0 2px var(--accent-subtle, rgba(220, 38, 38, 0.2));
 }
 
 /* Style the disabled instruction option */
