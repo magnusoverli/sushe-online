@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-07-02",
+    "category": "ui",
+    "description": "Improved modal backdrops and aligned desktop track picks layout.",
+    "hash": "574cc2a8f153e1acad7f7d2d9a752009966a1679",
+    "commitMessage": "Standardize modal backdrops and align desktop track picks\n\nUnify modal appearance and finish the desktop/mobile track-pick alignment.\n\nModal backdrops (Tailwind v4 dropped bg-opacity-*, which silently rendered\nsolid opaque backdrops with no blur):\n- Add a canonical .modal-overlay class (rgba(0,0,0,.5) + 4px blur desktop /\n  2px mobile), matching the settings-drawer look.\n- Retune .settings-modal-backdrop to the same values so all settings-drawer\n  child modals and the duplicate-review modal align via CSS.\n- Migrate every dead `bg-black bg-opacity-50/70` overlay to .modal-overlay\n  (confirmation/reasoning modals, modalShell, spotify-components dialogs,\n  discovery, rename-category, similar-album, manual-audit, list wizard,\n  recommendation detail, mobile AI summary, mobile action sheet), align the\n  About modal + genre overlay, and fix a dead bg-opacity-20 year-lock banner.\n\nAlbum edit-details modal: restructure the desktop dialog into a positioning\ncontainer + [data-backdrop] child + panel so it now shows the standard\ndim+blur backdrop on desktop, while mobile stays a full-screen sheet. Move\nbg-gray-900 onto the panel, add a stable .mobile-edit-modal marker, and\nrepoint the two stale-modal cleanup selectors and the scoped text-wrap CSS\nrule to it.\n\nDesktop track picks: replace the star glyphs with the green serif Roman\nnumerals (I = primary, II = secondary) used on mobile, across the initial\nrow render, the cell-update path, and the picker menu.\n\nRemove the per-track play affordance from the album edit-details track picker\n(frontend only; the shared playSpecificTrack path used by album-card\ntap-to-play is untouched). Delete the stale track-play e2e spec and dead\nlogic tests."
+  },
+  {
     "date": "2026-06-30",
     "category": "feature",
     "description": "Added cross-list album search to the mobile interface.",
