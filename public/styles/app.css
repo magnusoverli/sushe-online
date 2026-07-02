@@ -959,6 +959,14 @@ input[list]::-webkit-list-button {
   background-color: #059669;
 }
 
+.toast.warning {
+  background-color: #d97706;
+}
+
+.toast.info {
+  background-color: #2563eb;
+}
+
 /* Line clamp for comments */
 .line-clamp-2 {
   display: -webkit-box;

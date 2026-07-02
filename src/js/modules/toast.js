@@ -29,7 +29,8 @@
 export function calculateToastDuration(message, type) {
   if (type === 'success' && message.includes('successfully')) {
     return 5000;
-  } else if (type === 'error') {
+  } else if (type === 'error' || type === 'warning') {
+    // Warnings, like errors, stay long enough to be read.
     return 5000;
   } else if (message.includes('...')) {
     return 10000;
