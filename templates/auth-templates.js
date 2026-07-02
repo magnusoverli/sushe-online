@@ -108,11 +108,11 @@ function createAuthTemplates(deps = {}) {
     <form method="post" action="/register" class="space-y-6">
       <input type="hidden" name="_csrf" value="${req.csrfToken()}" />
       <div>
-        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="email">
+        <label class="form-label" for="email">
           Email Address
         </label>
         <input
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200"
+          class="spotify-input form-input"
           name="email"
           id="email"
           type="email"
@@ -123,11 +123,11 @@ function createAuthTemplates(deps = {}) {
       </div>
 
       <div>
-        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="username">
+        <label class="form-label" for="username">
           Username
         </label>
         <input
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200"
+          class="spotify-input form-input"
           name="username"
           id="username"
           type="text"
@@ -140,11 +140,11 @@ function createAuthTemplates(deps = {}) {
       </div>
 
       <div>
-        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="password">
+        <label class="form-label" for="password">
           Password
         </label>
         <input
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200"
+          class="spotify-input form-input"
           name="password"
           id="password"
           type="password"
@@ -156,11 +156,11 @@ function createAuthTemplates(deps = {}) {
       </div>
 
       <div>
-        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="confirmPassword">
+        <label class="form-label" for="confirmPassword">
           Confirm Password
         </label>
         <input
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200"
+          class="spotify-input form-input"
           name="confirmPassword"
           id="confirmPassword"
           type="password"
@@ -172,7 +172,7 @@ function createAuthTemplates(deps = {}) {
       </div>
 
       <button
-        class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-sm transition duration-200 transform hover:scale-105 uppercase tracking-wider"
+        class="btn-submit"
         type="submit"
       >
         Create Account
@@ -205,11 +205,11 @@ function createAuthTemplates(deps = {}) {
     <form method="post" action="/forgot" class="space-y-6">
       <input type="hidden" name="_csrf" value="${req.csrfToken()}" />
       <div>
-        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="email">
+        <label class="form-label" for="email">
           Email Address
         </label>
         <input
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200"
+          class="spotify-input form-input"
           name="email"
           id="email"
           type="email"
@@ -218,7 +218,7 @@ function createAuthTemplates(deps = {}) {
         />
       </div>
       <button
-        class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-sm transition duration-200 transform hover:scale-105 uppercase tracking-wider"
+        class="btn-submit"
         type="submit"
       >
         Reset password
@@ -246,11 +246,11 @@ function createAuthTemplates(deps = {}) {
     <form method="post" action="/reset/${token}" class="space-y-6">
       <input type="hidden" name="_csrf" value="${csrfToken}" />
       <div>
-        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="password">
+        <label class="form-label" for="password">
           New Password
         </label>
         <input
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200"
+          class="spotify-input form-input"
           name="password"
           id="password"
           type="password"
@@ -260,7 +260,7 @@ function createAuthTemplates(deps = {}) {
         />
       </div>
       <button
-        class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-sm transition duration-200 transform hover:scale-105 uppercase tracking-wider"
+        class="btn-submit"
         type="submit"
       >
         Reset Password
