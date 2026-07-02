@@ -149,18 +149,11 @@ describe('HTML Utils Module - Unit Tests', () => {
     });
   });
 
-  describe('escapeHtml (DOM-based) logic simulation', () => {
-    // The actual escapeHtml uses document.createElement which isn't available in Node.
-    // For Node.js, the same result can be achieved with string replacement.
-    // This test validates the expected behavior.
-    function escapeHtml(str) {
-      if (!str) return '';
-      // Simulate what textContent -> innerHTML does
-      return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-    }
+  describe('escapeHtml (canonical shared escaper)', () => {
+    // html-utils.js now re-exports the canonical escaper from
+    // utils/escape-html.js under both the escapeHtml and escapeHtmlAttr names,
+    // so escapeHtml now also escapes quotes (strictly more correct).
+    const { escapeHtml } = require('../utils/escape-html');
 
     it('should return empty string for falsy values', () => {
       assert.strictEqual(escapeHtml(null), '');
@@ -177,6 +170,11 @@ describe('HTML Utils Module - Unit Tests', () => {
         escapeHtml('<script>alert(1)</script>'),
         '&lt;script&gt;alert(1)&lt;/script&gt;'
       );
+    });
+
+    it('should now also escape both quote styles', () => {
+      assert.strictEqual(escapeHtml('"x"'), '&quot;x&quot;');
+      assert.strictEqual(escapeHtml("It's"), 'It&#39;s');
     });
 
     it('should preserve normal text', () => {

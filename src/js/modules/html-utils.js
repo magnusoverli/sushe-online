@@ -1,36 +1,15 @@
 /**
- * HTML utility functions for safe string handling
- * Consolidated from multiple modal and display modules
+ * HTML utility functions for safe string handling.
+ *
+ * escapeHtml / escapeHtmlAttr both re-export the single canonical escaper in
+ * utils/escape-html.js (shared with the server), so element-text and
+ * attribute escaping use one implementation. Both names are kept so every
+ * existing import keeps resolving.
  */
+import * as escapeHtmlModule from '../../../utils/escape-html.js';
 
-/**
- * Escape HTML special characters to prevent XSS
- * Uses DOM-based approach for reliable escaping
- * @param {string} str - String to escape
- * @returns {string} Escaped string safe for HTML insertion
- */
-export function escapeHtml(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-/**
- * Escape HTML using string replacement (faster for known safe contexts)
- * Use this when you need attribute-safe escaping
- * @param {string} str - String to escape
- * @returns {string} Escaped string
- */
-export function escapeHtmlAttr(str) {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+export const escapeHtml = escapeHtmlModule.escapeHtml;
+export const escapeHtmlAttr = escapeHtmlModule.escapeHtml;
 
 /**
  * Album placeholder SVG for missing cover images

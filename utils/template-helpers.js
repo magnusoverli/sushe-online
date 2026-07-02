@@ -1,15 +1,7 @@
+const { escapeHtml } = require('./escape-html');
+
 function createAssetHelper(assetVersion) {
   return (assetPath) => `${assetPath}?v=${assetVersion}`;
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function safeJsonStringify(obj) {

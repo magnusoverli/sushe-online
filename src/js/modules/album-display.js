@@ -38,6 +38,7 @@ import {
 } from './album-display/album-data.js';
 import { createPlaycountSync } from './album-display/playcount-sync.js';
 import { renderAvailabilityBadges } from './album-display/availability-badges.js';
+import { getPositionBadgeColor } from './album-display/position-badge.js';
 import {
   mobilePlaycountSpan,
   desktopPlaycountSpan,
@@ -426,14 +427,14 @@ export function createAlbumDisplay(deps = {}) {
       </div>`,
       album: `<div class="album-cell flex flex-col justify-start">
         <div class="flex items-center gap-2">
-          <span class="album-name font-semibold text-gray-200 truncate">${data.albumName}</span>
+          <span class="album-name font-semibold text-gray-200 truncate">${escapeHtml(data.albumName)}</span>
           ${desktopPlaycountSpan(data.itemId, data.playcountDisplay, data.playcount)}
         </div>
         <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
         ${renderAvailabilityBadges(data.availability)}
       </div>`,
       artist: `<div class="artist-cell flex items-center">
-        <span class="album-cell-text ${data.artist ? 'text-gray-200' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${data.artist}</span>
+        <span class="album-cell-text ${data.artist ? 'text-gray-200' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${escapeHtml(data.artist)}</span>
       </div>`,
       country: `<div class="flex items-center country-cell">
         <span class="album-cell-text ${data.countryClass} truncate cursor-pointer hover:text-gray-100">${data.countryDisplay}</span>
@@ -800,18 +801,9 @@ export function createAlbumDisplay(deps = {}) {
     const getPositionBadgeHtml = (position) => {
       if (position === null) return '';
 
-      // Color coding: gold (1st), silver (2nd), bronze (3rd), gray (rest)
-      const colors = {
-        1: { border: '#eab308', shadow: 'rgba(255,215,0,1.0)', size: '8px' },
-        2: { border: '#9ca3af', shadow: 'rgba(192,192,192,1.0)', size: '8px' },
-        3: { border: '#b45309', shadow: 'rgba(205,127,50,1.0)', size: '8px' },
-        default: {
-          border: '#6b7280',
-          shadow: 'rgba(255,255,255,0.25)',
-          size: '5px',
-        },
-      };
-      const c = colors[position] || colors.default;
+      // Color coding: gold (1st), silver (2nd), bronze (3rd), gray (rest).
+      // Shared with the drag-reorder recolor so the two never diverge.
+      const c = getPositionBadgeColor(position);
 
       // Positioned in the card's top-right with equal top/right insets (6.5px)
       // so the badge is centered over the menu column width (matching the
@@ -1645,32 +1637,14 @@ export function createAlbumDisplay(deps = {}) {
         const textEl = positionEl.querySelector('span') || positionEl;
         textEl.textContent = position;
 
-        if (positionEl.classList.contains('position-badge')) {
-          positionEl.classList.remove(
-            'border-yellow-500',
-            'border-gray-400',
-            'border-amber-700',
-            'border-gray-500'
-          );
-          if (position === 1) {
-            positionEl.classList.add('border-yellow-500');
-          } else if (position === 2) {
-            positionEl.classList.add('border-gray-400');
-          } else if (position === 3) {
-            positionEl.classList.add('border-amber-700');
-          } else {
-            positionEl.classList.add('border-gray-500');
-          }
-
-          if (position === 1) {
-            positionEl.style.boxShadow = '0 0 8px rgba(255,215,0,1.0)';
-          } else if (position === 2) {
-            positionEl.style.boxShadow = '0 0 8px rgba(192,192,192,1.0)';
-          } else if (position === 3) {
-            positionEl.style.boxShadow = '0 0 8px rgba(205,127,50,1.0)';
-          } else {
-            positionEl.style.boxShadow = '0 0 5px rgba(255,255,255,0.25)';
-          }
+        // Mobile rank badge uses inline styles (class name is
+        // .mobile-position-badge), so recolor via style.* from the same shared
+        // contract the initial render uses — keeps medal colors correct after
+        // a drag-reorder.
+        if (positionEl.classList.contains('mobile-position-badge')) {
+          const c = getPositionBadgeColor(position);
+          positionEl.style.borderColor = c.border;
+          positionEl.style.boxShadow = `0 0 ${c.size} ${c.shadow}`;
         }
       }
     }

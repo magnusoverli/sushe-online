@@ -315,7 +315,7 @@ function renderSimilarArtistsList(artists) {
       const rymUrl = getRymArtistUrl(artist.name);
 
       return `
-      <div class="flex items-center gap-3 sm:gap-4 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
+      <div class="flex items-center gap-3 sm:gap-4 p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors">
         <!-- Artist Image (lazy-loaded) -->
         <div class="artist-image-container w-12 h-12 sm:w-14 sm:h-14 bg-gray-700 rounded-full shrink-0 overflow-hidden animate-pulse flex items-center justify-center"
              data-artist="${escapeHtml(artist.name)}">

@@ -593,7 +593,9 @@
     const YEAR = <%= year %>;
     const USER_ID = '<%- user?._id || '' %>';
     
-    // HTML escape function to prevent XSS
+    // HTML escape function to prevent XSS. Canonical source is
+    // utils/escape-html.js; this inline copy exists because this standalone
+    // page ships no JS bundle (converting it is tracked as MARKUP-8).
     function escapeHtml(str) {
       if (!str) return '';
       return String(str)
@@ -601,7 +603,7 @@
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+        .replace(/'/g, '&#39;');
     }
     
     // Fetch wrapper with error handling

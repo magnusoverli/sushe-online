@@ -536,7 +536,7 @@ export function createAlbumContextMenu(deps = {}) {
       candidatesContainer.innerHTML = data.candidates
         .map(
           (candidate) => `
-      <label class="release-candidate flex items-center gap-4 p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 border-2 ${candidate.isCurrent ? 'border-yellow-500' : 'border-transparent'} transition-colors">
+      <label class="release-candidate flex items-center gap-4 p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-700 border-2 ${candidate.isCurrent ? 'border-yellow-500' : 'border-transparent'} transition-colors">
         <input type="radio" name="releaseCandidate" value="${candidate.id}" class="hidden" ${candidate.isCurrent ? 'checked' : ''}>
         <div class="flex-shrink-0 w-16 h-16 bg-gray-700 rounded overflow-hidden">
           ${

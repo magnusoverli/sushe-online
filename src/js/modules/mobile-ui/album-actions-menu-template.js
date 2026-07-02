@@ -1,3 +1,5 @@
+import { escapeHtml } from '../html-utils.js';
+
 export function buildAlbumActionMenuHtml({
   album,
   hasAnyService,
@@ -8,8 +10,8 @@ export function buildAlbumActionMenuHtml({
 }) {
   return `
 
-          <h3 class="font-semibold text-white mb-1 truncate">${album.album}</h3>
-          <p class="text-sm text-gray-400 mb-4 truncate">${album.artist}</p>
+          <h3 class="font-semibold text-white mb-1 truncate">${escapeHtml(album.album)}</h3>
+          <p class="text-sm text-gray-400 mb-4 truncate">${escapeHtml(album.artist)}</p>
           
           <button data-action="edit"
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
