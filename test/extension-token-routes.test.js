@@ -182,8 +182,19 @@ function createTestApp(options = {}) {
     raw: mock.fn((sql, params) => mockPool.query(sql, params)),
   };
 
-  // Mock auth-utils for token operations
+  // Mock auth-utils for token operations. hashExtensionToken/extensionTokenLookup
+  // use the real implementations so auth-service (which imports them) hashes
+  // correctly and the storage assertions hold.
+  const crypto = require('crypto');
   const mockAuthUtils = {
+    hashExtensionToken: (t) =>
+      crypto.createHash('sha256').update(t).digest('hex'),
+    extensionTokenLookup: (t) => t.slice(0, 8),
+    timingSafeEqualHex: (a, b) =>
+      typeof a === 'string' &&
+      typeof b === 'string' &&
+      a.length === b.length &&
+      crypto.timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex')),
     generateExtensionToken:
       options.generateToken || mock.fn(() => 'test-token-abc123'),
     validateExtensionToken:
@@ -353,7 +364,28 @@ describe('POST /api/auth/extension-token', () => {
     assert.strictEqual(mockPool.query.mock.calls.length, 1);
     const call = mockPool.query.mock.calls[0];
     assert.ok(call.arguments[0].includes('INSERT INTO extension_tokens'));
+    // Params: [user_id, token_hash, token_lookup, expires_at, user_agent]
     assert.strictEqual(call.arguments[1][0], 'user-123'); // user_id
+  });
+
+  it('stores only a hash, never the raw token', async () => {
+    const crypto = require('crypto');
+    const rawToken = 'raw-secret-token-value';
+    const { app, mockPool } = createTestApp({
+      generateToken: () => rawToken,
+    });
+
+    await request(app).post('/api/auth/extension-token');
+
+    const params = mockPool.query.mock.calls[0].arguments[1];
+    const expectedHash = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
+    assert.strictEqual(params[1], expectedHash); // token_hash
+    assert.strictEqual(params[2], rawToken.slice(0, 8)); // token_lookup
+    // The raw token must not appear anywhere in the stored parameters.
+    assert.ok(!params.includes(rawToken));
   });
 
   it('should capture user agent', async () => {
@@ -364,7 +396,7 @@ describe('POST /api/auth/extension-token', () => {
       .set('User-Agent', 'Chrome Extension/2.0');
 
     const call = mockPool.query.mock.calls[0];
-    assert.strictEqual(call.arguments[1][3], 'Chrome Extension/2.0');
+    assert.strictEqual(call.arguments[1][4], 'Chrome Extension/2.0');
   });
 
   it('should use "Unknown" for missing user agent', async () => {
@@ -374,7 +406,7 @@ describe('POST /api/auth/extension-token', () => {
 
     const call = mockPool.query.mock.calls[0];
     // User-Agent might be set by supertest, check if it's captured
-    assert.ok(call.arguments[1][3]);
+    assert.ok(call.arguments[1][4]);
   });
 
   it('should reject unauthenticated request', async () => {

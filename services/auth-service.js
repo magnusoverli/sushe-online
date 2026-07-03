@@ -13,6 +13,10 @@ const { ensureDb } = require('../db/postgres');
 const {
   createUsersRepository,
 } = require('../db/repositories/users-repository');
+const {
+  hashExtensionToken,
+  extensionTokenLookup,
+} = require('./auth-utils-service');
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -354,10 +358,18 @@ function createAuthService(deps = {}) {
     const token = generateToken();
     const expiresAt = new Date(Date.now() + EXTENSION_TOKEN_EXPIRY_MS);
 
+    // Store only the hash + a short non-secret lookup prefix. The raw token is
+    // returned to the caller once and is never recoverable from the database.
     await db.raw(
-      `INSERT INTO extension_tokens (user_id, token, expires_at, user_agent)
-       VALUES ($1, $2, $3, $4)`,
-      [userId, token, expiresAt, userAgent],
+      `INSERT INTO extension_tokens (user_id, token_hash, token_lookup, expires_at, user_agent)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        userId,
+        hashExtensionToken(token),
+        extensionTokenLookup(token),
+        expiresAt,
+        userAgent,
+      ],
       { name: 'extension-tokens-insert' }
     );
 
@@ -376,8 +388,8 @@ function createAuthService(deps = {}) {
     const result = await db.raw(
       `UPDATE extension_tokens
        SET is_revoked = TRUE
-       WHERE token = $1 AND user_id = $2`,
-      [token, userId],
+       WHERE token_lookup = $1 AND token_hash = $2 AND user_id = $3`,
+      [extensionTokenLookup(token), hashExtensionToken(token), userId],
       { name: 'extension-tokens-revoke' }
     );
     return { revoked: result.rowCount > 0 };

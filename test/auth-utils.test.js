@@ -1,7 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { createMockLogger } = require('./helpers');
-const { createAuthUtils } = require('../services/auth-utils-service.js');
+const {
+  createAuthUtils,
+  hashExtensionToken,
+  extensionTokenLookup,
+} = require('../services/auth-utils-service.js');
 
 // Create instance with mock logger for all tests
 const mockLogger = createMockLogger();
@@ -188,16 +192,10 @@ test('validateExtensionToken should return null for token not found in database'
 });
 
 test('validateExtensionToken should return null for revoked token', async () => {
+  // The lookup query filters `WHERE is_revoked = FALSE`, so a revoked token's
+  // row is never returned — model that by returning no rows.
   const mockPool = {
-    raw: async () => ({
-      rows: [
-        {
-          user_id: 123,
-          expires_at: new Date(Date.now() + 3600000),
-          is_revoked: true,
-        },
-      ],
-    }),
+    raw: async () => ({ rows: [] }),
   };
 
   const validFormatToken = generateExtensionToken();
@@ -206,50 +204,57 @@ test('validateExtensionToken should return null for revoked token', async () => 
 });
 
 test('validateExtensionToken should return null for expired token', async () => {
+  const validFormatToken = generateExtensionToken();
   const mockPool = {
     raw: async () => ({
       rows: [
         {
+          id: 1,
           user_id: 123,
-          expires_at: new Date(Date.now() - 1000),
+          expires_at: new Date(Date.now() - 1000), // Expired
           is_revoked: false,
-        }, // Expired
+          token_hash: hashExtensionToken(validFormatToken),
+        },
       ],
     }),
   };
 
-  const validFormatToken = generateExtensionToken();
   const result = await validateExtensionToken(validFormatToken, mockPool);
   assert.strictEqual(result, null);
 });
 
 test('validateExtensionToken should return user_id for valid token and update last_used_at', async () => {
-  let updateCalled = false;
+  const validFormatToken = generateExtensionToken();
+  let updateParams = null;
   const mockPool = {
-    raw: async (sql) => {
+    raw: async (sql, params) => {
       if (sql.includes('SELECT')) {
+        // Confirm the query looks up by the non-secret prefix, not the token.
+        assert.strictEqual(params[0], extensionTokenLookup(validFormatToken));
         return {
           rows: [
             {
+              id: 99,
               user_id: 456,
               expires_at: new Date(Date.now() + 3600000),
               is_revoked: false,
+              token_hash: hashExtensionToken(validFormatToken),
             },
           ],
         };
       }
       if (sql.includes('UPDATE')) {
-        updateCalled = true;
+        updateParams = params;
         return { rowCount: 1 };
       }
       return { rows: [] };
     },
   };
 
-  const validFormatToken = generateExtensionToken();
   const result = await validateExtensionToken(validFormatToken, mockPool);
   assert.strictEqual(result, 456);
-  assert.strictEqual(updateCalled, true);
+  // last_used_at is touched by row id, never by the raw token value.
+  assert.deepStrictEqual(updateParams, [99]);
 });
 
 test('validateExtensionToken should return null on database error', async () => {

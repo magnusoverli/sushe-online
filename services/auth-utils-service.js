@@ -7,6 +7,44 @@
 const crypto = require('crypto');
 const { ensureDb } = require('../db/postgres');
 
+// Length of the non-secret token prefix stored in `token_lookup` for indexed
+// lookups. Kept short so it leaks negligible information while still narrowing
+// candidate rows to (almost always) one before the constant-time hash compare.
+const EXTENSION_TOKEN_LOOKUP_LEN = 8;
+
+/**
+ * Hash a raw extension token for storage/comparison (SHA-256 hex). Tokens are
+ * 256-bit random values, so a fast hash is sufficient — a slow KDF would only
+ * add latency to every authenticated API request without adding real security.
+ * @param {string} token
+ * @returns {string} 64-char hex digest
+ */
+function hashExtensionToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+/**
+ * Non-secret indexed lookup prefix for a raw token.
+ * @param {string} token
+ * @returns {string}
+ */
+function extensionTokenLookup(token) {
+  return token.slice(0, EXTENSION_TOKEN_LOOKUP_LEN);
+}
+
+/**
+ * Constant-time comparison of two equal-length hex digests.
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean}
+ */
+function timingSafeEqualHex(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
+}
+
 function createAuthUtils(deps = {}) {
   const logger = deps.logger || require('../utils/logger');
 
@@ -44,21 +82,26 @@ function createAuthUtils(deps = {}) {
     }
     const datastore = ensureDb(db, 'auth-utils.validateExtensionToken');
 
+    const lookup = extensionTokenLookup(token);
+    const hash = hashExtensionToken(token);
+
     try {
+      // Look up by the short non-secret prefix (indexed), then constant-time
+      // compare the full hash. Tokens are stored only as hashes, so a leaked
+      // database dump does not expose usable credentials.
       const result = await datastore.raw(
-        `SELECT user_id, expires_at, is_revoked
+        `SELECT id, user_id, expires_at, is_revoked, token_hash
          FROM extension_tokens
-         WHERE token = $1`,
-        [token],
+         WHERE token_lookup = $1 AND is_revoked = FALSE`,
+        [lookup],
         { name: 'auth-utils-validate-extension-token', retryable: true }
       );
 
-      if (result.rows.length === 0) {
-        return null;
-      }
+      const tokenData = result.rows.find(
+        (row) => row.token_hash && timingSafeEqualHex(row.token_hash, hash)
+      );
 
-      const tokenData = result.rows[0];
-      if (tokenData.is_revoked) {
+      if (!tokenData) {
         return null;
       }
 
@@ -69,8 +112,8 @@ function createAuthUtils(deps = {}) {
       await datastore.raw(
         `UPDATE extension_tokens
          SET last_used_at = NOW()
-         WHERE token = $1`,
-        [token],
+         WHERE id = $1`,
+        [tokenData.id],
         { name: 'auth-utils-touch-extension-token' }
       );
 
@@ -114,4 +157,10 @@ function createAuthUtils(deps = {}) {
 
 const defaultInstance = createAuthUtils();
 
-module.exports = { createAuthUtils, ...defaultInstance };
+module.exports = {
+  createAuthUtils,
+  hashExtensionToken,
+  extensionTokenLookup,
+  timingSafeEqualHex,
+  ...defaultInstance,
+};
