@@ -1,6 +1,55 @@
 [
   {
     "date": "2026-07-02",
+    "category": "ui",
+    "description": "Mobile sidebar backdrop appearance updated.",
+    "hash": "cb79492b9091646ef48a09d79ce1c0259ced1163",
+    "commitMessage": "Adjust mobile sidebar backdrop"
+  },
+  {
+    "date": "2026-07-02",
+    "category": "ui",
+    "description": "Mobile album search transitions are smoother and more polished.",
+    "hash": "97686f48183af7759c641c221b615394e5a79f27",
+    "commitMessage": "Polish mobile album search transitions"
+  },
+  {
+    "date": "2026-07-02",
+    "category": "ui",
+    "description": "Album search looks and behaves consistently across all views.",
+    "hash": "6a8c829e801813bc54d5c9735394eb76017c00f8",
+    "commitMessage": "Align album search surfaces and behavior"
+  },
+  {
+    "date": "2026-07-02",
+    "category": "fix",
+    "description": "Modals now always appear above the settings drawer.",
+    "hash": "fec9d68fc776a20b58cf8a0345be1e1c117fbc06",
+    "commitMessage": "Raise modals above the settings drawer via z-index tokens (MODAL-4)\n\nBody-appended modals sat at z-50 — below the z-9999 settings drawer — so a\nmodal could open behind it. Replace the ad-hoc modal z-index literals with\nshared .modal-layer classes bound to the WS2 z-index scale: the z-50 overlays\n(discovery, mobile edit/summary, recommendation, rename-category, and the\nserver modalShell) -> .modal-layer (var(--z-modal)=10000, above the drawer);\nsimilar-album/manual-audit z-[10001] -> .modal-layer-elevated; duplicate-review\nz-[10002] -> .modal-layer-top. Computed values for the elevated/top modals are\nunchanged; the body modals are intentionally raised. The column-toggle dropdown\nkeeps z-50 (it should stay below modals).\n\nImplements WS4 step 10 of the UI standardization plan."
+  },
+  {
+    "date": "2026-07-02",
+    "category": "ui",
+    "description": "Rank medals now consistently show gold, silver, and bronze.",
+    "hash": "402fa198cab1cb1ce1b4b0f3487f23b755bf4053",
+    "commitMessage": "Reconcile the rank medal to one gold/silver/bronze (WS2 §8)\n\nThe rank medal existed in three color treatments; unify them on the --medal-*\ntokens. The mobile card badge (position-badge.js) now references\nvar(--medal-gold/silver/bronze) — value-preserving, since --medal-gold=#eab308\nequals the previous mobile gold. The aggregate page's .position-badge medals\nadopt the same tokens, so its gold (#fbbf24 -> #eab308) and bronze\n(#d97706 -> #b45309) now match the rest of the app; glow shadows updated to\nsuit. One canonical medal palette in :root drives both.\n\nImplements WS2 step 8 (medal reconcile) of the UI standardization plan."
+  },
+  {
+    "date": "2026-07-02",
+    "category": "ui",
+    "description": "Info and warning notifications are now visually distinct by severity.",
+    "hash": "51f2d0aa9a729e86bb16ab26eb56ebf254c78a86",
+    "commitMessage": "Give info and warning toasts visible severity (FEEDBACK-4)\n\nOnly .toast.error (red) and .toast.success (green) were styled, so the 35 info\nand 2 warning toasts all rendered as the same neutral gray. Add solid\n.toast.info (blue #2563eb) and .toast.warning (amber #d97706) matching the\ntoast's solid style, and extend calculateToastDuration so warnings hold for 5s\nlike errors instead of the 3s default. A \"list deleted on another device\"\nwarning no longer looks identical to \"Preparing export...\".\n\nImplements WS9 FEEDBACK-4 of the UI standardization plan."
+  },
+  {
+    "date": "2026-07-02",
+    "category": "ui",
+    "description": "Checkboxes now follow your accent color theme.",
+    "hash": "014e4e5c7ed65ad73f165f5dbdfbf3e2f3d2be5a",
+    "commitMessage": "Add accent-aware .app-checkbox and adopt it (CHK-1)\n\nNew .app-checkbox component class (accent-color: var(--accent-color)) so\ncheckboxes honor the user's accent instead of a hardcoded red. Migrate the\nlogin \"remember me\" checkbox and the confirmation-modal checkbox off their\nad-hoc text-red-600/focus:ring-red Tailwind treatments to .app-checkbox.\nCheckbox ids/names preserved so handlers keep binding.\n\nContinues WS7 CHK-1 of the UI standardization plan."
+  },
+  {
+    "date": "2026-07-02",
     "category": "security",
     "description": "Fixed a vulnerability allowing malicious content in album data.",
     "hash": "28d1346a5639f160a156b990e250d6707aca7149",
