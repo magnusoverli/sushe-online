@@ -61,7 +61,7 @@ export function createMobileAlbumSearch(deps = {}) {
     getFields: () => selectedFields,
     onResults: (data, query) => results.render(data, query),
     onError: () => results.renderMessage(SEARCH_UNAVAILABLE),
-    onCleared: () => results.close(),
+    onCleared: () => results.renderIdle(),
     logger,
   });
 
@@ -73,7 +73,7 @@ export function createMobileAlbumSearch(deps = {}) {
     lifecycle.toggleClear(query.length > 0);
     if (query.length < runner.minChars) {
       runner.reset();
-      results.close();
+      results.renderIdle();
       return;
     }
     if (results.hasRenderedQuery(query)) results.open();
@@ -122,7 +122,7 @@ export function createMobileAlbumSearch(deps = {}) {
     }
     lifecycle.toggleClear(false);
     runner.reset();
-    results.close();
+    results.renderIdle();
   }
 
   // ---- selecting a result ---------------------------------------------------
@@ -149,6 +149,10 @@ export function createMobileAlbumSearch(deps = {}) {
     // scrolls only #albumContainer, so the header stays put.
     win.scrollTo(0, 0);
     flash.flash(result.listId, result.albumId);
+    // Land focus on the (freshly re-rendered) trigger — the close above ran
+    // with restoreFocus=false because selectList rebuilds the header, so
+    // without this AT focus would be stranded on <body>.
+    doc.getElementById('mobileAlbumSearchBtn')?.focus({ preventScroll: true });
   }
 
   // ---- field filter sheet ---------------------------------------------------
@@ -178,6 +182,9 @@ export function createMobileAlbumSearch(deps = {}) {
       lgHidden: false,
       hideFAB: false,
       restoreFAB: false,
+      // Matches the trigger's aria-haspopup="dialog" promise: role/aria-modal,
+      // focus trap, and focus restore come from createModal's a11y path.
+      label: 'Choose which fields to search',
       onClose: () => {
         filterSheet = null;
       },
@@ -238,6 +245,9 @@ export function createMobileAlbumSearch(deps = {}) {
   function handleKeydown(event) {
     if (!lifecycle.isOpen()) return;
     if (event.key === 'Escape') {
+      // The field-options sheet is the top layer; its own controller (which
+      // runs after this handler) closes just the sheet, not the whole search.
+      if (filterSheet) return;
       event.preventDefault();
       closeSearch();
     }
@@ -262,6 +272,16 @@ export function createMobileAlbumSearch(deps = {}) {
     doc.addEventListener('keydown', handleKeydown);
     win.addEventListener('resize', scheduleReposition);
     win.visualViewport?.addEventListener('resize', scheduleReposition);
+    // The desktop layout hides the bar and its back button, so crossing the
+    // breakpoint while open must tear search mode down — otherwise the page
+    // stays scroll-locked and inert with no visible way out.
+    win
+      .matchMedia?.('(min-width: 1024px)')
+      ?.addEventListener?.('change', (event) => {
+        if (event.matches && lifecycle.isOpen()) {
+          closeSearch(false, { immediate: true });
+        }
+      });
   }
 
   return { initialize, open: openSearch, close: closeSearch };

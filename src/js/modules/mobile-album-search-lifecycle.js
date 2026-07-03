@@ -21,6 +21,15 @@ export function createMobileSearchLifecycle(deps = {}) {
     return bar()?.closest?.('header') || null;
   }
 
+  // The morph CSS is transition:none under reduced motion, so the close must
+  // tear down (inert, scroll lock, FAB, focus) immediately too — otherwise the
+  // header looks restored while the list stays dead for the timer's 370ms.
+  function prefersReducedMotion() {
+    return (
+      win.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
+    );
+  }
+
   function setSearchPhase(nextPhase) {
     const searchBar = bar();
     const h = header();
@@ -166,8 +175,20 @@ export function createMobileSearchLifecycle(deps = {}) {
     open = false;
     const restoreFocus = options.restoreFocus !== false;
     const preserveQuery = options.preserveQuery === true;
-    const animate = options.immediate !== true;
+    const animate = options.immediate !== true && !prefersReducedMotion();
     clearOpenTimer();
+
+    // Hand focus to the trigger BEFORE the bar goes inert below — inert on the
+    // focused input's ancestor would otherwise drop focus onto <body> for the
+    // whole close animation. finishClose re-asserts the same target.
+    if (restoreFocus) {
+      const active = doc.activeElement;
+      if (active && bar()?.contains?.(active)) {
+        doc
+          .getElementById('mobileAlbumSearchBtn')
+          ?.focus({ preventScroll: true });
+      }
+    }
 
     setSearchPhase(animate ? 'closing' : 'closed');
     const el = input();

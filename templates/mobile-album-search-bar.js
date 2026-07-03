@@ -23,7 +23,7 @@ const mobileAlbumSearchBarTemplate = () => `
             placeholder="Search your albums…"
             aria-label="Search albums across your lists"
             role="combobox"
-            aria-expanded="true"
+            aria-expanded="false"
             aria-controls="mobileAlbumSearchResults"
             aria-autocomplete="list"
             class="album-search-mobile-input"

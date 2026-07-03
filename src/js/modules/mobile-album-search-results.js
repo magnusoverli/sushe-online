@@ -43,6 +43,14 @@ export function createMobileResults(deps = {}) {
     closeTimer = null;
   }
 
+  // Keep the combobox input's popup state truthful (mirrors the desktop
+  // dropdown's setExpanded).
+  function setExpanded(expanded) {
+    doc
+      .getElementById('mobileAlbumSearchInput')
+      ?.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  }
+
   function ensureEl() {
     if (el) return el;
     el = doc.createElement('div');
@@ -78,6 +86,7 @@ export function createMobileResults(deps = {}) {
     const sequence = ++transitionSequence;
     clearCloseTimer();
     panel.classList.remove('hidden');
+    setExpanded(true);
     afterFrame(() => {
       if (sequence !== transitionSequence) return;
       panel.classList.add('is-open');
@@ -88,6 +97,7 @@ export function createMobileResults(deps = {}) {
     if (!el) return;
     const sequence = ++transitionSequence;
     clearCloseTimer();
+    setExpanded(false);
     el.classList.remove('is-open');
     if (options.immediate === true) {
       el.classList.add('hidden');
@@ -117,6 +127,7 @@ export function createMobileResults(deps = {}) {
         <i class="fas fa-search" aria-hidden="true"></i>
         <p>Search albums across all your lists.</p>
       </div>`;
+    open();
   }
 
   function render(data, query) {

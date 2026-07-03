@@ -111,6 +111,10 @@ export function createSettingsModal({
  * @param {boolean} [options.hideFAB=true] - Whether to hide the FAB on open
  * @param {boolean} [options.restoreFAB=true] - Whether to restore the FAB on close
  * @param {boolean} [options.checkCurrentList=true] - Check currentList before restoring FAB
+ * @param {string} [options.label] - Accessible name for the sheet; providing it
+ *   (or labelledBy) makes the panel a real dialog via createModal's a11y path
+ *   (role/aria-modal, focus moved in, Tab trap, focus restore on close)
+ * @param {string} [options.labelledBy] - ID of an element naming the sheet
  * @param {Function} [options.onClose] - Extra cleanup callback when sheet closes
  * @returns {{ sheet: HTMLElement, close: Function }}
  */
@@ -122,6 +126,8 @@ export function createActionSheet({
   hideFAB = true,
   restoreFAB = true,
   checkCurrentList = true,
+  label,
+  labelledBy,
   onClose,
 }) {
   // Remove any existing action sheet at this z-level
@@ -153,7 +159,7 @@ export function createActionSheet({
   const panelExtraClasses = panelClasses ? ` ${panelClasses}` : '';
   sheet.innerHTML = `
     <div class="absolute inset-0 modal-overlay" data-backdrop></div>
-    <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom${panelExtraClasses}">
+    <div data-sheet-panel class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom${panelExtraClasses}">
       <div class="p-4">
         <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
         ${contentHtml}
@@ -169,8 +175,14 @@ export function createActionSheet({
   // scroll state could otherwise leak.
   const controller = createModal({
     element: sheet,
+    dialog:
+      label || labelledBy
+        ? sheet.querySelector('[data-sheet-panel]')
+        : undefined,
     backdrop: sheet.querySelector('[data-backdrop]'),
     closeButton: sheet.querySelector('[data-action="cancel"]'),
+    label,
+    labelledBy,
     lockScroll: false,
     onClose: () => {
       sheet.remove();
