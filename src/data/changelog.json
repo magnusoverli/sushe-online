@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-07-03",
+    "category": "ui",
+    "description": "Improved accessibility for mobile album search.",
+    "hash": "4ca549e26de130a35c7be421b6f3cab311cbda04",
+    "commitMessage": "Polish mobile album search accessibility\n\n- keep combobox expanded state in sync with the results panel\n\n- handle reduced motion and breakpoint closes safely\n\n- make the mobile filter sheet use dialog accessibility behavior"
+  },
+  {
+    "date": "2026-07-03",
     "category": "fix",
     "description": "Fixed album presence badge placement on RYM pages.",
     "hash": "7f079b102d51b3de6d5888a54be98e8c073d3c92",
