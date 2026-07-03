@@ -5,9 +5,10 @@
  * allowing users to confirm if it's the same album or a different one.
  */
 
-import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
+import { getPlaceholderSvg } from './html-utils.js';
 import { apiCall } from './utils.js';
 import { createModal } from './modal-factory.js';
+import { renderComparisonCard } from './album-comparison.js';
 import { markAlbumsDistinct } from '../utils/album-api.js';
 
 let modalElement = null;
@@ -180,45 +181,22 @@ function populateModal(newAlbum, existingMatch) {
 
   container.innerHTML = `
     <div class="grid grid-cols-2 gap-4">
-      <!-- New Album (left) -->
-      <div class="bg-gray-800 rounded-lg p-4">
-        <div class="text-xs text-gray-500 uppercase tracking-wide mb-2">Adding</div>
-        <div class="aspect-square mb-3 bg-gray-900 rounded overflow-hidden">
-          <img 
-            src="${newCoverUrl || placeholderSvg}" 
-            alt="${newAlbum.album}"
-            class="w-full h-full object-cover"
-            onerror="this.src='${placeholderSvg}'"
-          />
-        </div>
-        <div class="text-white font-semibold truncate" title="${escapeHtml(newAlbum.album)}">
-          ${escapeHtml(newAlbum.album)}
-        </div>
-        <div class="text-gray-400 text-sm truncate" title="${escapeHtml(newAlbum.artist)}">
-          ${escapeHtml(newAlbum.artist)}
-        </div>
-      </div>
-      
-      <!-- Existing Album (right) -->
-      <div class="bg-gray-800 rounded-lg p-4 border-2 border-yellow-600/50">
-        <div class="text-xs text-yellow-500 uppercase tracking-wide mb-2">
-          Already Exists (${existingMatch.confidence}% match)
-        </div>
-        <div class="aspect-square mb-3 bg-gray-900 rounded overflow-hidden">
-          <img 
-            src="${existingCoverUrl || placeholderSvg}" 
-            alt="${existingMatch.album}"
-            class="w-full h-full object-cover"
-            onerror="this.src='${placeholderSvg}'"
-          />
-        </div>
-        <div class="text-white font-semibold truncate" title="${escapeHtml(existingMatch.album)}">
-          ${escapeHtml(existingMatch.album)}
-        </div>
-        <div class="text-gray-400 text-sm truncate" title="${escapeHtml(existingMatch.artist)}">
-          ${escapeHtml(existingMatch.artist)}
-        </div>
-      </div>
+      ${renderComparisonCard({
+        album: newAlbum.album,
+        artist: newAlbum.artist,
+        coverUrl: newCoverUrl,
+        placeholderSvg,
+        label: 'Adding',
+      })}
+      ${renderComparisonCard({
+        album: existingMatch.album,
+        artist: existingMatch.artist,
+        coverUrl: existingCoverUrl,
+        placeholderSvg,
+        label: `Already Exists (${existingMatch.confidence}% match)`,
+        labelClass: 'text-yellow-500',
+        borderClass: 'border-2 border-yellow-600/50',
+      })}
     </div>
     
     <!-- Match Explanation -->
