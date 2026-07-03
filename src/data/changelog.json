@@ -1,5 +1,19 @@
 [
   {
+    "date": "2026-07-03",
+    "category": "fix",
+    "description": "Fixed album presence badge placement on RYM pages.",
+    "hash": "7f079b102d51b3de6d5888a54be98e8c073d3c92",
+    "commitMessage": "Fix RYM album presence badge placement\n\n- only badge text album links, avoiding cover-link duplicates\n\n- ignore non-album RYM release URLs for presence badges\n\n- bump extension manifest to 1.9.3"
+  },
+  {
+    "date": "2026-07-02",
+    "category": "ui",
+    "description": "Improved keyboard and screen reader accessibility for dialogs.",
+    "hash": "bc7e4bcd54197ab3955ac3d1e9a774c59418552c",
+    "commitMessage": "Make the remaining createModal dialogs accessible (MODAL-10)\n\nOpt the confirmation, reasoning, view-reasoning and duplicate-review modals\ninto the createModal a11y (role=dialog, focus trap, focus restore) by passing a\nlabel / aria-labelledby. Additive — existing behaviour unchanged, including\nduplicate-review's closeOnEscape:false and its s/Enter/Escape key remap (Tab is\nnot remapped, so the trap does not conflict).\n\nCompletes the a11y half of WS4 (MODAL-10)."
+  },
+  {
     "date": "2026-07-02",
     "category": "ui",
     "description": "Mobile sidebar backdrop appearance updated.",
