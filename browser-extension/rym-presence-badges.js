@@ -60,6 +60,13 @@
     return anchor.textContent.trim().length > 0 && !anchor.querySelector('img');
   }
 
+  function getBadgeAlbumIdentityFromUrl(url) {
+    const releaseMatch = String(url || '').match(/\/release\/([^/?#]+)\//);
+    if (!releaseMatch || releaseMatch[1].toLowerCase() !== 'album') return null;
+
+    return albumIdentity.getAlbumIdentityFromUrl(url);
+  }
+
   function shouldReplaceTarget(existing, candidateAnchor) {
     return (
       !isTextAlbumLink(existing.anchor) && isTextAlbumLink(candidateAnchor)
@@ -84,8 +91,9 @@
 
     for (const anchor of anchors) {
       if (targetByContainer.size >= maxAlbumsPerScan) break;
+      if (!isTextAlbumLink(anchor)) continue;
 
-      const identity = albumIdentity.getAlbumIdentityFromUrl(anchor.href);
+      const identity = getBadgeAlbumIdentityFromUrl(anchor.href);
       if (!identity) continue;
 
       addTarget(targetByContainer, identity, anchor, getAlbumContainer(anchor));
@@ -93,7 +101,7 @@
 
     const targets = Array.from(targetByContainer.values());
 
-    const pageIdentity = albumIdentity.getAlbumIdentityFromUrl(location.href);
+    const pageIdentity = getBadgeAlbumIdentityFromUrl(location.href);
     const pageTarget = findCurrentPageTarget();
     if (
       pageIdentity &&
