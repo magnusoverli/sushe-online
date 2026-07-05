@@ -57,7 +57,6 @@ export function createRecommendations(deps = {}) {
     clearPlaycountCache,
     updateListNavActiveState,
     updateHeaderTitle,
-    updateMobileHeader,
     showLoadingSpinner,
     refreshRecommendationYears,
     playAlbumByMetadata,
@@ -496,7 +495,6 @@ export function createRecommendations(deps = {}) {
       // === IMMEDIATE UI UPDATES ===
       updateListNavActiveState('', year);
       updateHeaderTitle(`${year} Recommendations`);
-      updateMobileHeader();
 
       const fab = document.getElementById('addAlbumFAB');
       if (fab) {

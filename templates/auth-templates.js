@@ -13,7 +13,7 @@ const headerComponent = (_user, activeSection = 'home') => `
         <button onclick="toggleMobileMenu()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target" aria-label="Open menu">
           <i class="fas fa-bars text-lg"></i>
         </button>
-        <button id="mobileAlbumSearchBtn" type="button" onclick="window.openMobileAlbumSearch && window.openMobileAlbumSearch()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target" aria-label="Search albums" aria-haspopup="dialog" aria-expanded="false">
+        <button id="mobileAlbumSearchBtn" type="button" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target" aria-label="Search albums" aria-controls="mobileAlbumSearchBar" aria-expanded="false">
           <i class="fas fa-search text-lg"></i>
         </button>
         `

@@ -22,39 +22,6 @@ describe('app-shell-ui module', () => {
     createAppShellUi = module.createAppShellUi;
   });
 
-  it('updates mobile header when user and header renderer exist', () => {
-    const headerContainer = { innerHTML: '' };
-    const doc = {
-      getElementById(id) {
-        if (id === 'dynamicHeader') return headerContainer;
-        return null;
-      },
-      createElement() {
-        return null;
-      },
-    };
-
-    const calls = [];
-    const win = {
-      currentUser: { name: 'alice' },
-      headerComponent: (...args) => {
-        calls.push(args);
-        return '<header>ok</header>';
-      },
-    };
-
-    const ui = createAppShellUi({
-      doc,
-      win,
-      getCurrentListId: () => 'list-123',
-    });
-
-    ui.updateMobileHeader();
-
-    assert.deepStrictEqual(calls[0], [win.currentUser, 'home', 'list-123']);
-    assert.strictEqual(headerContainer.innerHTML, '<header>ok</header>');
-  });
-
   it('shows loading spinner in target container', () => {
     const created = [];
     const doc = {

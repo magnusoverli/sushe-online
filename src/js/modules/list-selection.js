@@ -29,7 +29,6 @@ export function createListSelection(deps = {}) {
     getLists,
     updateListNavActiveState,
     updateHeaderTitle,
-    updateMobileHeader,
     showLoadingSpinner,
     getListData,
     isListDataLoaded,
@@ -119,7 +118,6 @@ export function createListSelection(deps = {}) {
       const listName = getLists()[listId]?.name || '';
       updateListNavActiveState(listId);
       updateHeaderTitle(listName);
-      updateMobileHeader();
 
       const fab = doc?.getElementById('addAlbumFAB');
       if (fab) {

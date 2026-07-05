@@ -12,9 +12,9 @@
  *   - createOptionsPopover — the body-mounted field-options popover.
  *   - createAlbumFlash     — the rebuild-resilient jump-to-album highlight.
  *
- * Input handling is DELEGATED from document (not bound to the input element)
- * because selectList() re-renders the header; the dropdown and popover are
- * mounted on <body> so a header re-render never destroys them.
+ * Input handling is delegated from document (not bound to the input element)
+ * so the controller stays independent of the header template. The dropdown and
+ * popover are mounted on <body>, keeping search surfaces outside header layout.
  */
 
 import { createResultsPanel } from './album-search-results.js';

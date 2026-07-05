@@ -14,8 +14,11 @@ import {
   truncatedHintHtml,
   messageHtml,
 } from './album-search-render.js';
-
-const MOBILE_RESULTS_TRANSITION_MS = 260;
+import { afterFrame } from './dom-timing.js';
+import {
+  MOBILE_ALBUM_SEARCH_RESULT_ID_PREFIX,
+  MOBILE_ALBUM_SEARCH_TIMING,
+} from './mobile-album-search-constants.js';
 
 export function createMobileResults(deps = {}) {
   const { doc, win, onSelect, onUserScroll } = deps;
@@ -24,18 +27,6 @@ export function createMobileResults(deps = {}) {
   let renderedQuery = '';
   let closeTimer = null;
   let transitionSequence = 0;
-
-  function afterFrame(callback) {
-    if (typeof win?.requestAnimationFrame === 'function') {
-      win.requestAnimationFrame(callback);
-      return;
-    }
-    if (typeof globalThis.requestAnimationFrame === 'function') {
-      globalThis.requestAnimationFrame(callback);
-      return;
-    }
-    setTimeout(callback, 0);
-  }
 
   function clearCloseTimer() {
     if (!closeTimer) return;
@@ -87,7 +78,7 @@ export function createMobileResults(deps = {}) {
     clearCloseTimer();
     panel.classList.remove('hidden');
     setExpanded(true);
-    afterFrame(() => {
+    afterFrame(win, () => {
       if (sequence !== transitionSequence) return;
       panel.classList.add('is-open');
     });
@@ -111,7 +102,7 @@ export function createMobileResults(deps = {}) {
         el?.classList.add('hidden');
       }
       closeTimer = null;
-    }, MOBILE_RESULTS_TRANSITION_MS);
+    }, MOBILE_ALBUM_SEARCH_TIMING.resultsTransitionMs);
   }
 
   function isOpen() {
@@ -137,7 +128,13 @@ export function createMobileResults(deps = {}) {
     if (results.length === 0) {
       panel.innerHTML = emptyMessageHtml(query);
     } else {
-      const rows = results.map((r, index) => resultRowHtml(r, index)).join('');
+      const rows = results
+        .map((result, index) =>
+          resultRowHtml(result, index, {
+            idPrefix: MOBILE_ALBUM_SEARCH_RESULT_ID_PREFIX,
+          })
+        )
+        .join('');
       const hint = data.truncated ? truncatedHintHtml(results.length) : '';
       panel.innerHTML = rows + hint;
     }

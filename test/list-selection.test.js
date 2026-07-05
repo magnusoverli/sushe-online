@@ -68,9 +68,6 @@ describe('list-selection module', () => {
       updateHeaderTitle(name) {
         states.push(['updateHeaderTitle', name]);
       },
-      updateMobileHeader() {
-        states.push(['updateMobileHeader']);
-      },
       showLoadingSpinner(target) {
         spinnerTarget = target;
       },
@@ -110,12 +107,12 @@ describe('list-selection module', () => {
     ]);
     assert.strictEqual(apiCalls[1][0], '/api/user/last-list');
     assert.deepStrictEqual(states[1], ['setCurrentRecommendationsYear', null]);
-    assert.deepStrictEqual(states[6], [
+    assert.deepStrictEqual(states[5], [
       'setListData',
       'list-1',
       [{ album_id: 'fetched' }],
     ]);
-    assert.deepStrictEqual(states[7], [
+    assert.deepStrictEqual(states[6], [
       'displayAlbums',
       [{ album_id: 'fetched' }],
       { forceFullRebuild: true },
@@ -148,7 +145,6 @@ describe('list-selection module', () => {
       getLists: () => ({ 'list-2': { name: 'List Two' } }),
       updateListNavActiveState() {},
       updateHeaderTitle() {},
-      updateMobileHeader() {},
       showLoadingSpinner() {},
       getListData: () => cached,
       isListDataLoaded: () => true,
@@ -198,7 +194,6 @@ describe('list-selection module', () => {
       getLists: () => ({ bad: { name: 'Bad List' } }),
       updateListNavActiveState() {},
       updateHeaderTitle() {},
-      updateMobileHeader() {},
       showLoadingSpinner() {},
       getListData: () => null,
       isListDataLoaded: () => false,
@@ -251,7 +246,6 @@ describe('list-selection module', () => {
       getLists: () => ({ 'quota-list': { name: 'Quota List' } }),
       updateListNavActiveState() {},
       updateHeaderTitle() {},
-      updateMobileHeader() {},
       showLoadingSpinner() {},
       getListData: () => [],
       isListDataLoaded: () => true,
@@ -299,7 +293,6 @@ describe('list-selection module', () => {
       getLists: () => ({ 'list-1': { name: 'List One' } }),
       updateListNavActiveState() {},
       updateHeaderTitle() {},
-      updateMobileHeader() {},
       showLoadingSpinner() {},
       getListData: () => [{ _id: 'item-1', album_id: 'album-1' }],
       isListDataLoaded: () => true,
@@ -399,7 +392,6 @@ describe('list-selection module', () => {
       getLists: () => ({ 'list-1': { name: 'List One' } }),
       updateListNavActiveState() {},
       updateHeaderTitle() {},
-      updateMobileHeader() {},
       showLoadingSpinner() {},
       getListData: () => [
         { _id: 'item-1', album_id: 'album-1' },
@@ -484,7 +476,6 @@ describe('list-selection module', () => {
       getLists: () => ({ 'list-1': { name: 'List One' } }),
       updateListNavActiveState() {},
       updateHeaderTitle() {},
-      updateMobileHeader() {},
       showLoadingSpinner() {},
       getListData: () => [
         { album_id: 'album-1', cover_thumb_url: '/thumb-1.jpg' },
@@ -551,7 +542,6 @@ describe('list-selection module', () => {
       getLists: () => ({ 'list-1': { name: 'List One' } }),
       updateListNavActiveState() {},
       updateHeaderTitle() {},
-      updateMobileHeader() {},
       showLoadingSpinner() {},
       getListData: () => [{ _id: 'item-1', album_id: 'album-1' }],
       isListDataLoaded: () => true,
@@ -610,7 +600,6 @@ describe('list-selection module', () => {
       getLists: () => ({ 'list-1': { name: 'List One' } }),
       updateListNavActiveState() {},
       updateHeaderTitle() {},
-      updateMobileHeader() {},
       showLoadingSpinner() {},
       getListData: () => [{ _id: 'item-1', album_id: 'album-1' }],
       isListDataLoaded: () => true,
@@ -681,7 +670,6 @@ describe('list-selection module', () => {
       getLists: () => ({ 'list-1': { name: 'List One' } }),
       updateListNavActiveState() {},
       updateHeaderTitle() {},
-      updateMobileHeader() {},
       showLoadingSpinner() {},
       getListData: () => [
         { album_id: 'album-1', cover_thumb_url: '/thumb-1.jpg' },
@@ -742,7 +730,6 @@ describe('list-selection module', () => {
       getLists: () => ({ 'list-1': { name: 'List One' } }),
       updateListNavActiveState() {},
       updateHeaderTitle() {},
-      updateMobileHeader() {},
       showLoadingSpinner() {},
       getListData: () => [
         { album_id: 'album-1', cover_thumb_url: '/thumb-1.jpg' },
@@ -817,7 +804,6 @@ describe('list-selection module', () => {
         getLists: () => ({ 'list-1': { name: 'List One' } }),
         updateListNavActiveState() {},
         updateHeaderTitle() {},
-        updateMobileHeader() {},
         showLoadingSpinner() {},
         getListData: () => albums,
         isListDataLoaded: () => true,
@@ -866,7 +852,6 @@ describe('list-selection module', () => {
       getLists: () => ({ 'list-1': { name: 'List One' } }),
       updateListNavActiveState() {},
       updateHeaderTitle() {},
-      updateMobileHeader() {},
       showLoadingSpinner() {},
       getListData: () => [{ album_id: 'core' }],
       isListDataLoaded: () => true,

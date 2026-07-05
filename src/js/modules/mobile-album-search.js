@@ -215,11 +215,13 @@ export function createMobileAlbumSearch(deps = {}) {
   }
 
   function handleClick(event) {
-    // The trigger button opens via its inline onclick (window.openMobileAlbumSearch),
-    // matching the header's other buttons; everything else is delegated here and
-    // only relevant while the search is open.
-    if (!lifecycle.isOpen()) return;
     const target = event.target;
+    if (target.closest?.('#mobileAlbumSearchBtn')) {
+      event.preventDefault();
+      openSearch();
+      return;
+    }
+    if (!lifecycle.isOpen()) return;
     if (target.closest?.('#mobileAlbumSearchBack')) {
       event.preventDefault();
       closeSearch();
@@ -263,10 +265,6 @@ export function createMobileAlbumSearch(deps = {}) {
   }
 
   function initialize() {
-    // Expose the opener for the header's inline onclick (mirrors the About /
-    // Settings buttons, which call window.* handlers).
-    win.openMobileAlbumSearch = openSearch;
-
     doc.addEventListener('input', handleInput);
     doc.addEventListener('click', handleClick);
     doc.addEventListener('keydown', handleKeydown);

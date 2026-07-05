@@ -1,6 +1,9 @@
-const SEARCH_HEADER_TRANSITION_MS = 370;
-const SEARCH_RESULTS_TRANSITION_MS = 260;
-const SEARCH_FAB_TRANSITION_MS = 220;
+import { afterFrame as runAfterFrame } from './dom-timing.js';
+import { applyInert, releaseInert } from './modal-a11y.js';
+import {
+  MOBILE_ALBUM_SEARCH_PHASE,
+  MOBILE_ALBUM_SEARCH_TIMING,
+} from './mobile-album-search-constants.js';
 
 export function createMobileSearchLifecycle(deps = {}) {
   const { doc, win } = deps;
@@ -8,6 +11,7 @@ export function createMobileSearchLifecycle(deps = {}) {
   let fabPrevDisplay = null;
   let closeTimer = null;
   let openTimer = null;
+  let resultsOpenTimer = null;
   let fabTimer = null;
   let fabTransitionToken = 0;
   let closeResolve = null;
@@ -19,6 +23,26 @@ export function createMobileSearchLifecycle(deps = {}) {
 
   function header() {
     return bar()?.closest?.('header') || null;
+  }
+
+  function headerChromeElements() {
+    const h = header();
+    return [
+      h?.querySelector?.('.mobile-header-left'),
+      h?.querySelector?.('#mobileCurrentListName'),
+      h?.querySelector?.('.mobile-header-actions'),
+    ].filter(Boolean);
+  }
+
+  function setA11yHidden(el, hidden) {
+    if (!el) return;
+    if (hidden) {
+      el.setAttribute?.('aria-hidden', 'true');
+      applyInert(el);
+      return;
+    }
+    el.removeAttribute?.('aria-hidden');
+    releaseInert(el);
   }
 
   // The morph CSS is transition:none under reduced motion, so the close must
@@ -33,14 +57,24 @@ export function createMobileSearchLifecycle(deps = {}) {
   function setSearchPhase(nextPhase) {
     const searchBar = bar();
     const h = header();
-    const isActive = nextPhase === 'opening' || nextPhase === 'open';
+    const isActive =
+      nextPhase === MOBILE_ALBUM_SEARCH_PHASE.OPENING ||
+      nextPhase === MOBILE_ALBUM_SEARCH_PHASE.OPEN;
     h?.classList.toggle('mobile-search-active', isActive);
-    h?.classList.toggle('mobile-search-opening', nextPhase === 'opening');
-    h?.classList.toggle('mobile-search-open', nextPhase === 'open');
-    h?.classList.toggle('mobile-search-closing', nextPhase === 'closing');
-    searchBar?.setAttribute('aria-hidden', isActive ? 'false' : 'true');
-    if (isActive) searchBar?.removeAttribute('inert');
-    else searchBar?.setAttribute('inert', '');
+    h?.classList.toggle(
+      'mobile-search-opening',
+      nextPhase === MOBILE_ALBUM_SEARCH_PHASE.OPENING
+    );
+    h?.classList.toggle(
+      'mobile-search-open',
+      nextPhase === MOBILE_ALBUM_SEARCH_PHASE.OPEN
+    );
+    h?.classList.toggle(
+      'mobile-search-closing',
+      nextPhase === MOBILE_ALBUM_SEARCH_PHASE.CLOSING
+    );
+    setA11yHidden(searchBar, !isActive);
+    headerChromeElements().forEach((el) => setA11yHidden(el, isActive));
     doc
       .getElementById('mobileAlbumSearchBtn')
       ?.setAttribute('aria-expanded', isActive ? 'true' : 'false');
@@ -53,15 +87,7 @@ export function createMobileSearchLifecycle(deps = {}) {
   }
 
   function afterFrame(callback) {
-    if (typeof win.requestAnimationFrame === 'function') {
-      win.requestAnimationFrame(callback);
-      return;
-    }
-    if (typeof globalThis.requestAnimationFrame === 'function') {
-      globalThis.requestAnimationFrame(callback);
-      return;
-    }
-    setTimeout(callback, 0);
+    runAfterFrame(win, callback);
   }
 
   function clearCloseTimer(options = {}) {
@@ -82,6 +108,12 @@ export function createMobileSearchLifecycle(deps = {}) {
     if (!openTimer) return;
     (win.clearTimeout || clearTimeout)(openTimer);
     openTimer = null;
+  }
+
+  function clearResultsOpenTimer() {
+    if (!resultsOpenTimer) return;
+    (win.clearTimeout || clearTimeout)(resultsOpenTimer);
+    resultsOpenTimer = null;
   }
 
   function clearFabTimer() {
@@ -117,8 +149,7 @@ export function createMobileSearchLifecycle(deps = {}) {
     if (fabPrevDisplay === null) fabPrevDisplay = fab.style.display;
     clearFabTimer();
     fab.classList.add('search-mode-hidden');
-    fab.setAttribute('aria-hidden', 'true');
-    fab.setAttribute('inert', '');
+    setA11yHidden(fab, true);
     fabTimer = (win.setTimeout || setTimeout)(() => {
       if (token !== fabTransitionToken) {
         fabTimer = null;
@@ -126,7 +157,7 @@ export function createMobileSearchLifecycle(deps = {}) {
       }
       fab.style.display = 'none';
       fabTimer = null;
-    }, SEARCH_FAB_TRANSITION_MS);
+    }, MOBILE_ALBUM_SEARCH_TIMING.fabTransitionMs);
   }
 
   function restoreFab() {
@@ -136,8 +167,7 @@ export function createMobileSearchLifecycle(deps = {}) {
     clearFabTimer();
     fab.style.display = fabPrevDisplay === null ? '' : fabPrevDisplay;
     fabPrevDisplay = null;
-    fab.removeAttribute('aria-hidden');
-    fab.removeAttribute('inert');
+    setA11yHidden(fab, false);
     afterFrame(() => {
       if (token !== fabTransitionToken) return;
       fab.classList.remove('search-mode-hidden');
@@ -150,23 +180,39 @@ export function createMobileSearchLifecycle(deps = {}) {
     clearCloseTimer({ finish: true });
     open = true;
     clearOpenTimer();
-    setSearchPhase('opening');
+    clearResultsOpenTimer();
+    setSearchPhase(MOBILE_ALBUM_SEARCH_PHASE.OPENING);
     doc.body.style.overflow = 'hidden';
     hideFab();
-    doc.getElementById('albumContainer')?.setAttribute('inert', '');
+    applyInert(doc.getElementById('albumContainer'));
 
     const el = input();
     const preservedQuery = options.getPreservedQuery?.() || '';
     if (el && !el.value && preservedQuery) el.value = preservedQuery;
     options.positionResults?.();
-    options.showCurrentQueryResults?.();
     el?.focus({ preventScroll: true });
+
+    const showResults = () => {
+      resultsOpenTimer = null;
+      if (open) options.showCurrentQueryResults?.();
+    };
+
+    if (prefersReducedMotion()) {
+      setSearchPhase(MOBILE_ALBUM_SEARCH_PHASE.OPEN);
+      showResults();
+      return true;
+    }
+
+    resultsOpenTimer = (win.setTimeout || setTimeout)(
+      showResults,
+      MOBILE_ALBUM_SEARCH_TIMING.resultsOpenDelayMs
+    );
 
     openTimer = (win.setTimeout || setTimeout)(() => {
       if (!open) return;
-      setSearchPhase('open');
+      setSearchPhase(MOBILE_ALBUM_SEARCH_PHASE.OPEN);
       openTimer = null;
-    }, SEARCH_HEADER_TRANSITION_MS);
+    }, MOBILE_ALBUM_SEARCH_TIMING.headerTransitionMs);
     return true;
   }
 
@@ -177,6 +223,7 @@ export function createMobileSearchLifecycle(deps = {}) {
     const preserveQuery = options.preserveQuery === true;
     const animate = options.immediate !== true && !prefersReducedMotion();
     clearOpenTimer();
+    clearResultsOpenTimer();
 
     // Hand focus to the trigger BEFORE the bar goes inert below — inert on the
     // focused input's ancestor would otherwise drop focus onto <body> for the
@@ -190,7 +237,11 @@ export function createMobileSearchLifecycle(deps = {}) {
       }
     }
 
-    setSearchPhase(animate ? 'closing' : 'closed');
+    setSearchPhase(
+      animate
+        ? MOBILE_ALBUM_SEARCH_PHASE.CLOSING
+        : MOBILE_ALBUM_SEARCH_PHASE.CLOSED
+    );
     const el = input();
     if (el) {
       if (preserveQuery) options.onPreserveQuery?.(el.value);
@@ -213,9 +264,9 @@ export function createMobileSearchLifecycle(deps = {}) {
         closeTimer = null;
         closeResolve = null;
         finishPendingClose = null;
-        setSearchPhase('closed');
+        setSearchPhase(MOBILE_ALBUM_SEARCH_PHASE.CLOSED);
         if (!preserveQuery) options.clearVisuals?.();
-        doc.getElementById('albumContainer')?.removeAttribute('inert');
+        releaseInert(doc.getElementById('albumContainer'));
         doc.body.style.overflow = '';
         win.scrollTo(0, 0);
         doc.body.scrollTop = 0;
@@ -228,7 +279,10 @@ export function createMobileSearchLifecycle(deps = {}) {
       if (animate) {
         closeTimer = (win.setTimeout || setTimeout)(
           finishClose,
-          Math.max(SEARCH_HEADER_TRANSITION_MS, SEARCH_RESULTS_TRANSITION_MS)
+          Math.max(
+            MOBILE_ALBUM_SEARCH_TIMING.headerTransitionMs,
+            MOBILE_ALBUM_SEARCH_TIMING.resultsTransitionMs
+          )
         );
         return;
       }

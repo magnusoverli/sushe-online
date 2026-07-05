@@ -2,7 +2,7 @@
  * Album-search results dropdown.
  *
  * Owns the body-mounted #albumSearchResults listbox (mounted outside the header
- * so a header re-render never destroys it), the current result set, and the
+ * so header layout changes never destroy it), the current result set, and the
  * keyboard-active row. Selection is reported back through the onSelect callback;
  * all DOM event wiring lives in the parent controller.
  */

@@ -5,10 +5,12 @@
  * public/styles/app.css under `.album-search-result*`.
  */
 
-import { escapeHtml } from './html-utils.js';
+import { escapeHtml, escapeHtmlAttr } from './html-utils.js';
 
 /** One result row. `index` is used as the data hook + (desktop) ARIA option id. */
-export function resultRowHtml(result, index) {
+export function resultRowHtml(result, index, options = {}) {
+  const idPrefix = options.idPrefix || 'albumSearchResult';
+  const optionId = `${idPrefix}-${index}`;
   const cover = `/api/albums/${encodeURIComponent(
     result.albumId
   )}/cover?size=thumb`;
@@ -17,7 +19,9 @@ export function resultRowHtml(result, index) {
     .map((part) => escapeHtml(part))
     .join(' · ');
   return `
-    <div class="album-search-result" role="option" id="albumSearchResult-${index}" data-result-index="${index}">
+    <div class="album-search-result" role="option" id="${escapeHtmlAttr(
+      optionId
+    )}" data-result-index="${index}">
       <img class="album-search-result-cover" src="${escapeHtml(
         cover
       )}" alt="" loading="lazy" onerror="this.classList.add('is-broken')" />

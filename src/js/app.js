@@ -145,12 +145,8 @@ function setPendingImportFilenameValue(filename) {
 // State variables scoped to app.js — passed to extracted modules via DI getters/setters.
 // The canonical shared state (lists, groups, currentListId, etc.) lives in app-state.js.
 
-const {
-  updateMobileHeader,
-  showLoadingSpinner,
-  updateHeaderTitle,
-  isTextTruncated,
-} = createAppShellUi({ getCurrentListId });
+const { showLoadingSpinner, updateHeaderTitle, isTextTruncated } =
+  createAppShellUi();
 
 const {
   convertFlashToToast,
@@ -253,7 +249,6 @@ const getRecommendationsModule = createLazyModule(() =>
     clearPlaycountCache,
     updateListNavActiveState,
     updateHeaderTitle,
-    updateMobileHeader,
     showLoadingSpinner,
     refreshRecommendationYears,
     playAlbumByMetadata: (artist, album, options) =>
@@ -839,7 +834,6 @@ const getListSelectionModule = createLazyModule(() =>
     getLists,
     updateListNavActiveState,
     updateHeaderTitle,
-    updateMobileHeader,
     showLoadingSpinner,
     getListData,
     isListDataLoaded,

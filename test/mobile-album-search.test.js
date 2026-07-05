@@ -40,9 +40,16 @@ function createElement(id, doc, options = {}) {
     getBoundingClientRect() {
       return { bottom: 48 };
     },
+    querySelector(selector) {
+      return options.selectors?.[selector] || null;
+    },
     closest(selector) {
       if (selector === 'header') return options.header || null;
+      if (selector === `#${id}`) return this;
       return null;
+    },
+    contains(node) {
+      return node === this || (options.children || []).includes(node);
     },
     focus() {
       doc.activeElement = this;
@@ -53,7 +60,7 @@ function createElement(id, doc, options = {}) {
   };
 }
 
-function createManualWin() {
+function createManualWin(options = {}) {
   const frames = [];
   const timers = [];
   return {
@@ -74,6 +81,15 @@ function createManualWin() {
       const index = timers.indexOf(handle);
       if (index !== -1) timers.splice(index, 1);
     },
+    addEventListener() {},
+    matchMedia(query) {
+      return {
+        matches:
+          query === '(prefers-reduced-motion: reduce)' &&
+          options.reducedMotion === true,
+        addEventListener() {},
+      };
+    },
     runFrames() {
       const pending = frames.splice(0);
       pending.forEach((callback) => callback());
@@ -88,8 +104,9 @@ function createManualWin() {
   };
 }
 
-function createHarness() {
+function createHarness(options = {}) {
   const elements = {};
+  const listeners = {};
   const doc = {
     activeElement: null,
     body: {
@@ -97,7 +114,9 @@ function createHarness() {
       scrollTop: 0,
       appendChild() {},
     },
-    addEventListener() {},
+    addEventListener(type, handler) {
+      listeners[type] = handler;
+    },
     createElement() {
       return createElement('mobileAlbumSearchResults', doc);
     },
@@ -105,9 +124,18 @@ function createHarness() {
       return elements[id] || null;
     },
   };
-  const header = createElement('header', doc);
+  const headerSelectors = {};
+  const header = createElement('header', doc, { selectors: headerSelectors });
+  elements.mobileHeaderLeft = createElement('mobileHeaderLeft', doc);
+  elements.mobileHeaderActions = createElement('mobileHeaderActions', doc);
+  elements.mobileCurrentListName = createElement('mobileCurrentListName', doc);
+  headerSelectors['.mobile-header-left'] = elements.mobileHeaderLeft;
+  headerSelectors['.mobile-header-actions'] = elements.mobileHeaderActions;
+  headerSelectors['#mobileCurrentListName'] = elements.mobileCurrentListName;
+  const searchBarChildren = [];
   elements.mobileAlbumSearchBar = createElement('mobileAlbumSearchBar', doc, {
     header,
+    children: searchBarChildren,
   });
   elements.mobileAlbumSearchInput = createElement(
     'mobileAlbumSearchInput',
@@ -123,11 +151,94 @@ function createHarness() {
   elements.mobileAlbumSearchBtn = createElement('mobileAlbumSearchBtn', doc);
   elements.addAlbumFAB = createElement('addAlbumFAB', doc);
   elements.albumContainer = createElement('albumContainer', doc);
+  searchBarChildren.push(
+    elements.mobileAlbumSearchInput,
+    elements.mobileAlbumSearchClear
+  );
 
-  return { doc, elements, header, win: createManualWin() };
+  return { doc, elements, header, listeners, win: createManualWin(options) };
 }
 
 describe('mobile album search', () => {
+  it('opens from the delegated header trigger and hides inactive chrome from assistive tech', async () => {
+    const { createMobileAlbumSearch } =
+      await import('../src/js/modules/mobile-album-search.js');
+    const { doc, elements, header, listeners, win } = createHarness();
+    const search = createMobileAlbumSearch({
+      doc,
+      win,
+      apiCall: async () => ({ results: [] }),
+    });
+    search.initialize();
+
+    let prevented = false;
+    listeners.click({
+      target: elements.mobileAlbumSearchBtn,
+      preventDefault() {
+        prevented = true;
+      },
+    });
+
+    assert.strictEqual(prevented, true);
+    assert.strictEqual(doc.activeElement, elements.mobileAlbumSearchInput);
+    assert.strictEqual(header.classList.contains('mobile-search-active'), true);
+    assert.strictEqual(
+      header.classList.contains('mobile-search-opening'),
+      true
+    );
+    assert.strictEqual(
+      elements.mobileAlbumSearchBtn.attributes.get('aria-expanded'),
+      'true'
+    );
+    assert.strictEqual(
+      win.timers.some((timer) => timer.delay === 80),
+      true
+    );
+    for (const el of [
+      elements.mobileHeaderLeft,
+      elements.mobileHeaderActions,
+      elements.mobileCurrentListName,
+    ]) {
+      assert.strictEqual(el.attributes.get('aria-hidden'), 'true');
+      assert.strictEqual(el.attributes.has('inert'), true);
+    }
+
+    win.runTimer(370);
+
+    assert.strictEqual(
+      header.classList.contains('mobile-search-opening'),
+      false
+    );
+    assert.strictEqual(header.classList.contains('mobile-search-open'), true);
+  });
+
+  it('settles the open phase immediately when reduced motion is requested', async () => {
+    const { createMobileAlbumSearch } =
+      await import('../src/js/modules/mobile-album-search.js');
+    const { doc, header, win } = createHarness({ reducedMotion: true });
+    const search = createMobileAlbumSearch({
+      doc,
+      win,
+      apiCall: async () => ({ results: [] }),
+    });
+
+    search.open();
+
+    assert.strictEqual(
+      header.classList.contains('mobile-search-opening'),
+      false
+    );
+    assert.strictEqual(header.classList.contains('mobile-search-open'), true);
+    assert.strictEqual(
+      win.timers.some((timer) => timer.delay === 370),
+      false
+    );
+    assert.strictEqual(
+      win.timers.some((timer) => timer.delay === 80),
+      false
+    );
+  });
+
   it('keeps typed text visible until the close animation finishes', async () => {
     const { createMobileAlbumSearch } =
       await import('../src/js/modules/mobile-album-search.js');
@@ -145,8 +256,16 @@ describe('mobile album search', () => {
     const closePromise = search.close();
 
     assert.strictEqual(
+      win.timers.some((timer) => timer.delay === 80),
+      false
+    );
+    assert.strictEqual(
       header.classList.contains('mobile-search-closing'),
       true
+    );
+    assert.strictEqual(
+      elements.mobileHeaderLeft.attributes.has('aria-hidden'),
+      false
     );
     assert.strictEqual(elements.mobileAlbumSearchInput.value, 'kid a');
     assert.strictEqual(

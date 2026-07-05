@@ -6,19 +6,6 @@
 
 export function createAppShellUi(deps = {}) {
   const doc = deps.doc || (typeof document !== 'undefined' ? document : null);
-  const win = deps.win || (typeof window !== 'undefined' ? window : null);
-  const getCurrentListId = deps.getCurrentListId || (() => null);
-
-  function updateMobileHeader() {
-    const headerContainer = doc?.getElementById('dynamicHeader');
-    if (headerContainer && win?.currentUser && win?.headerComponent) {
-      headerContainer.innerHTML = win.headerComponent(
-        win.currentUser,
-        'home',
-        getCurrentListId() || ''
-      );
-    }
-  }
 
   function showLoadingSpinner(container) {
     container.replaceChildren();
@@ -58,7 +45,6 @@ export function createAppShellUi(deps = {}) {
   }
 
   return {
-    updateMobileHeader,
     showLoadingSpinner,
     updateHeaderTitle,
     isTextTruncated,

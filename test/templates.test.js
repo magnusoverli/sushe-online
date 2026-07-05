@@ -812,6 +812,9 @@ describe('templates utilities', () => {
 
       assert.ok(result.includes('toggleMobileMenu'));
       assert.ok(result.includes('fa-bars'));
+      assert.ok(result.includes('id="mobileAlbumSearchBtn"'));
+      assert.ok(result.includes('aria-controls="mobileAlbumSearchBar"'));
+      assert.ok(!result.includes('openMobileAlbumSearch'));
     });
 
     it('should default to home section', () => {

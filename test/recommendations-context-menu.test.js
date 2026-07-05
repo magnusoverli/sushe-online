@@ -60,7 +60,6 @@ function buildDeps(overrides = {}) {
     clearPlaycountCache: () => {},
     updateListNavActiveState: () => {},
     updateHeaderTitle: () => {},
-    updateMobileHeader: () => {},
     showLoadingSpinner: () => {},
     refreshRecommendationYears: () => {},
     playAlbumByMetadata: () => {},

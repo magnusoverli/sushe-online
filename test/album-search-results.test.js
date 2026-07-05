@@ -102,6 +102,30 @@ describe('album search result surfaces', () => {
     assert.strictEqual(panel.hasRenderedQuery('kid b'), false);
   });
 
+  it('uses distinct option ids for desktop and mobile result surfaces', () => {
+    const result = {
+      albumId: 'album-1',
+      album: 'Kid A',
+      artist: 'Radiohead',
+      listName: 'Favorites',
+    };
+    const desktopEl = createElement();
+    const mobileEl = createElement();
+
+    createResultsPanel({ doc: createDoc(desktopEl) }).render(
+      { results: [result] },
+      'kid'
+    );
+    createMobileResults({ doc: createDoc(mobileEl) }).render(
+      { results: [result] },
+      'kid'
+    );
+
+    assert.match(desktopEl.innerHTML, /id="albumSearchResult-0"/);
+    assert.match(mobileEl.innerHTML, /id="mobileAlbumSearchResult-0"/);
+    assert.doesNotMatch(mobileEl.innerHTML, /id="albumSearchResult-0"/);
+  });
+
   it('ignores a stale mobile open frame after close starts', () => {
     const panelEl = createElement();
     const win = createManualWin();
