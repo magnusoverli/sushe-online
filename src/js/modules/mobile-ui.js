@@ -10,7 +10,7 @@
 import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
 import { escapeHtmlAttr as escapeHtml } from './html-utils.js';
 import { createActionSheet } from './ui-factories.js';
-import { createModal } from './modal-factory.js';
+import { createModal, destroyModalForElement } from './modal-factory.js';
 import { createTransferHelpers } from './album-transfer.js';
 import { fetchSpotifyDevices } from '../utils/playback-service.js';
 import { createMobileAlbumActions } from './mobile-ui/album-actions.js';
@@ -450,7 +450,7 @@ export function createMobileUI(deps = {}) {
 
     // Remove any existing edit modals first
     const existingModals = document.querySelectorAll('.mobile-edit-modal');
-    existingModals.forEach((modal) => modal.remove());
+    existingModals.forEach((modal) => destroyModalForElement(modal));
 
     const availableCountries = getAvailableCountries();
     const availableGenres = getAvailableGenres();
@@ -1081,7 +1081,7 @@ export function createMobileUI(deps = {}) {
 
     // Remove any existing modals first
     const existingModals = document.querySelectorAll('.mobile-edit-modal');
-    existingModals.forEach((modal) => modal.remove());
+    existingModals.forEach((modal) => destroyModalForElement(modal));
 
     // Hide FAB when modal is shown
     const fab = document.getElementById('addAlbumFAB');

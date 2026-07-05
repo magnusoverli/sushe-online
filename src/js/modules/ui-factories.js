@@ -5,7 +5,7 @@
  * Eliminates boilerplate DOM creation, event wiring, and cleanup logic.
  */
 
-import { createModal } from './modal-factory.js';
+import { createModal, destroyModalForElement } from './modal-factory.js';
 
 /**
  * Create a settings modal with standard structure and close behavior.
@@ -138,7 +138,7 @@ export function createActionSheet({
       : `.fixed.inset-0.z-\\[${zIndex}\\]`;
   const existingSheet = document.querySelector(escapedSelector);
   if (existingSheet) {
-    existingSheet.remove();
+    destroyModalForElement(existingSheet);
   }
 
   // Hide FAB if requested
@@ -170,9 +170,8 @@ export function createActionSheet({
   document.body.appendChild(sheet);
 
   // Backdrop, cancel button, Escape and tracked cleanup via the shared
-  // controller. Scroll lock is OFF: sheets use a replace-at-z-level pattern
-  // (an existing sheet is removed directly, bypassing close), so a locked
-  // scroll state could otherwise leak.
+  // controller. Scroll lock is OFF so replacing sheets at the same z-level does
+  // not unexpectedly affect page scroll.
   const controller = createModal({
     element: sheet,
     dialog:

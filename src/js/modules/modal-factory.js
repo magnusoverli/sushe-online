@@ -15,6 +15,28 @@
 
 import { createFocusManager, applyInert, releaseInert } from './modal-a11y.js';
 
+const modalControllers = new WeakMap();
+
+/**
+ * Destroy a managed modal by element, falling back to raw DOM removal for
+ * legacy overlays that were not created through createModal.
+ *
+ * @param {HTMLElement} element - Modal element to destroy
+ * @returns {boolean} True when a managed controller handled the destroy
+ */
+export function destroyModalForElement(element) {
+  if (!element) return false;
+
+  const controller = modalControllers.get(element);
+  if (!controller) {
+    element.remove();
+    return false;
+  }
+
+  controller.destroy();
+  return true;
+}
+
 /**
  * @typedef {Object} ModalOptions
  * @property {HTMLElement} element - Modal element
@@ -213,6 +235,7 @@ export function createModal(options) {
    * Destroy the modal and remove from DOM
    */
   function destroy() {
+    modalControllers.delete(element);
     close();
     element.remove();
   }
@@ -236,7 +259,7 @@ export function createModal(options) {
     }
   }
 
-  return {
+  const controller = {
     open,
     close,
     destroy,
@@ -244,4 +267,7 @@ export function createModal(options) {
     isOpen: getIsOpen,
     addListener,
   };
+
+  modalControllers.set(element, controller);
+  return controller;
 }

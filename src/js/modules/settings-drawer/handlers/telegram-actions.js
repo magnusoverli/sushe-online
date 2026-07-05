@@ -160,7 +160,9 @@ export function createSettingsTelegramActions(deps = {}) {
       handleSelectTelegramTopic(modal, e.target.value)
     );
     testBtn?.addEventListener('click', () => handleSendTelegramTest(modal));
-    saveBtn?.addEventListener('click', () => handleSaveTelegramConfig(modal));
+    saveBtn?.addEventListener('click', () =>
+      handleSaveTelegramConfig(modal, close)
+    );
 
     const tokenInput = modal.querySelector('#telegramBotToken');
     tokenInput?.addEventListener('keypress', (e) => {
@@ -491,7 +493,7 @@ export function createSettingsTelegramActions(deps = {}) {
     }
   }
 
-  async function handleSaveTelegramConfig(modal) {
+  async function handleSaveTelegramConfig(modal, close) {
     if (
       !telegramModalState ||
       !telegramModalState.botToken ||
@@ -536,16 +538,9 @@ export function createSettingsTelegramActions(deps = {}) {
         showToast('Telegram notifications enabled!', 'success');
 
         setTimeoutFn(() => {
-          modal.classList.add('hidden');
-          setTimeoutFn(() => {
-            if (doc.body.contains(modal)) {
-              doc.body.removeChild(modal);
-            }
-            telegramModalState = null;
-
-            categoryData.admin = null;
-            loadCategoryData('admin');
-          }, 300);
+          close();
+          categoryData.admin = null;
+          loadCategoryData('admin');
         }, 1000);
       } else {
         throw new Error(response.error || 'Failed to save configuration');
