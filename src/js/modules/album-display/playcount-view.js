@@ -110,8 +110,10 @@ export function applyMobilePlaycount(el, status, display) {
   el.innerHTML = html;
   if (title) {
     el.title = title;
-  } else {
+  } else if (typeof el.removeAttribute === 'function') {
     el.removeAttribute('title');
+  } else {
+    el.title = '';
   }
   el.dataset.status = status;
   el.classList.remove('hidden');
