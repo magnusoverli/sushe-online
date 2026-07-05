@@ -45,9 +45,7 @@ export function createMobileSearchLifecycle(deps = {}) {
     releaseInert(el);
   }
 
-  // The morph CSS is transition:none under reduced motion, so the close must
-  // tear down (inert, scroll lock, FAB, focus) immediately too — otherwise the
-  // header looks restored while the list stays dead for the timer's 370ms.
+  // Reduced-motion CSS skips transitions, so close teardown must be immediate.
   function prefersReducedMotion() {
     return (
       win.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
@@ -225,9 +223,7 @@ export function createMobileSearchLifecycle(deps = {}) {
     clearOpenTimer();
     clearResultsOpenTimer();
 
-    // Hand focus to the trigger BEFORE the bar goes inert below — inert on the
-    // focused input's ancestor would otherwise drop focus onto <body> for the
-    // whole close animation. finishClose re-asserts the same target.
+    // Move focus before the bar becomes inert; finishClose re-asserts it.
     if (restoreFocus) {
       const active = doc.activeElement;
       if (active && bar()?.contains?.(active)) {
