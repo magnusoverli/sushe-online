@@ -100,7 +100,6 @@ function createSpotifyComponents(deps) {
     ${menuItem({ id: 'reidentifyAlbumOption', icon: 'fa-sync-alt', label: 'Re-identify Album', hoverColor: 'hover:text-yellow-400', hidden: true, iconColor: 'text-yellow-400' })}
     <div class="context-menu-divider"></div>
     ${menuItem({ id: 'removeAlbumOption', icon: 'fa-times', label: 'Remove from List', hoverColor: 'hover:text-red-400' })}
-    </button>
   </div>
   
   <!-- Submenu for Move to List - Years -->

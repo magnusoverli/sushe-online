@@ -316,7 +316,7 @@
     /* Floating reveal button */
     .reveal-button-container {
       position: fixed;
-      bottom: 2rem;
+      bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
       left: 50%;
       transform: translateX(-50%);
       z-index: 100;
@@ -560,6 +560,35 @@
     @keyframes miniBurstParticle {
       0% { opacity: 1; transform: translate(0, 0) scale(1); }
       100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.3); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .animate-fade-in,
+      .burn-overlay.burning,
+      .burn-overlay.burning::before,
+      .ember.active,
+      .reveal-button,
+      .screen-flash,
+      .firework.launching,
+      .firework.exploding,
+      .firework-particle.active,
+      .sparkle-trail.active,
+      .confetti.active,
+      .golden-rays,
+      .golden-rays::before,
+      .golden-rays::after {
+        animation: none !important;
+      }
+
+      .burn-overlay.burning,
+      .screen-flash,
+      .firework,
+      .firework-particle,
+      .sparkle-trail,
+      .confetti,
+      .golden-rays {
+        opacity: 0 !important;
+      }
     }
     
   </style>
