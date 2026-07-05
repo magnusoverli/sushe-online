@@ -40,7 +40,7 @@ import {
 import { createPlaycountSync } from './album-display/playcount-sync.js';
 import { renderAvailabilityBadges } from './album-display/availability-badges.js';
 import { getPositionBadgeColor } from './album-display/position-badge.js';
-import { createModal } from './modal-factory.js';
+import { createModal, destroyModalForElement } from './modal-factory.js';
 import {
   mobilePlaycountSpan,
   desktopPlaycountSpan,
@@ -1865,7 +1865,7 @@ export function createAlbumDisplay(deps = {}) {
 
     // Remove any existing recommendation modals
     const existing = document.querySelectorAll('[data-recommendation-modal]');
-    existing.forEach((m) => m.remove());
+    existing.forEach((modal) => destroyModalForElement(modal));
 
     // Hide FAB when modal is shown
     const fab = document.getElementById('addAlbumFAB');

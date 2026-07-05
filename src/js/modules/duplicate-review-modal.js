@@ -8,7 +8,7 @@
 
 import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
 import { showToast, apiCall } from './utils.js';
-import { createModal } from './modal-factory.js';
+import { createModal, destroyModalForElement } from './modal-factory.js';
 import { markAlbumsDistinct } from '../utils/album-api.js';
 
 let modalElement = null;
@@ -115,7 +115,13 @@ export function openDuplicateReviewModal(scanData, onCompleteCallback = null) {
 
 function createModalDOM() {
   if (modalElement) {
-    modalElement.remove();
+    // Replacing stale DOM should clean listeners without completing the active
+    // review promise; completion is reserved for explicit close/finish paths.
+    const activeOnComplete = onComplete;
+    onComplete = null;
+    destroyModalForElement(modalElement);
+    onComplete = activeOnComplete;
+    modalController = null;
   }
 
   modalElement = document.createElement('div');

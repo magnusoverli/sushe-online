@@ -56,10 +56,12 @@ function setupMockDocument() {
 }
 
 let createModal;
+let destroyModalForElement;
 
 describe('modal-factory', async () => {
   const mod = await import('../src/js/modules/modal-factory.js');
   createModal = mod.createModal;
+  destroyModalForElement = mod.destroyModalForElement;
 
   describe('createModal - basic API', () => {
     it('should throw if element is not provided', () => {
@@ -488,6 +490,36 @@ describe('modal-factory', async () => {
 
       controller.destroy();
 
+      assert.strictEqual(element.remove.mock.calls.length, 1);
+      restore();
+    });
+
+    it('should destroy a managed modal by element and clean up listeners', () => {
+      const { restore } = setupMockDocument();
+      const element = createMockElement();
+      const controller = createModal({ element, closeOnEscape: true });
+
+      controller.open();
+      const handled = destroyModalForElement(element);
+
+      assert.strictEqual(handled, true);
+      assert.strictEqual(controller.isOpen(), false);
+      assert.strictEqual(element.remove.mock.calls.length, 1);
+
+      const keydownRemove = document.removeEventListener.mock.calls.find(
+        (c) => c.arguments[0] === 'keydown'
+      );
+      assert.ok(keydownRemove, 'Should remove keydown listener from document');
+      restore();
+    });
+
+    it('should remove unmanaged modal elements as a fallback', () => {
+      const { restore } = setupMockDocument();
+      const element = createMockElement();
+
+      const handled = destroyModalForElement(element);
+
+      assert.strictEqual(handled, false);
       assert.strictEqual(element.remove.mock.calls.length, 1);
       restore();
     });

@@ -9,7 +9,7 @@
 
 import { escapeHtml } from './html-utils.js';
 import { apiCall } from './utils.js';
-import { createModal } from './modal-factory.js';
+import { createModal, destroyModalForElement } from './modal-factory.js';
 
 // Lazy-loaded to avoid pulling in the 508KB musicbrainz chunk at startup.
 // searchArtistImageRacing is only needed when viewing similar artists.
@@ -41,7 +41,11 @@ export function initDiscovery() {
 function createModalElement() {
   // Remove existing modal if any
   const existing = document.getElementById('discoveryModal');
-  if (existing) existing.remove();
+  if (existing) {
+    destroyModalForElement(existing);
+    discoveryModal = null;
+    discoveryController = null;
+  }
 
   const modal = document.createElement('div');
   modal.id = 'discoveryModal';

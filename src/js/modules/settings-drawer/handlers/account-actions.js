@@ -250,17 +250,17 @@ export function createSettingsAccountActions(deps = {}) {
 
     form?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      await handleSavePassword(modal);
+      await handleSavePassword(modal, close);
     });
 
     saveBtn?.addEventListener('click', async () => {
-      await handleSavePassword(modal);
+      await handleSavePassword(modal, close);
     });
 
     return modal;
   }
 
-  async function handleSavePassword(modal) {
+  async function handleSavePassword(modal, close) {
     const currentPassword = modal.querySelector('#currentPasswordInput').value;
     const newPassword = modal.querySelector('#newPasswordInput').value;
     const confirmPassword = modal.querySelector('#confirmPasswordInput').value;
@@ -303,10 +303,7 @@ export function createSettingsAccountActions(deps = {}) {
 
       if (response.success) {
         showToast('Password updated successfully', 'success');
-        modal.classList.add('hidden');
-        setTimeoutFn(() => {
-          doc.body.removeChild(modal);
-        }, 300);
+        close();
       }
     } catch (error) {
       console.error('Error changing password:', error);
