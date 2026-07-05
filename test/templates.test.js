@@ -349,8 +349,11 @@ describe('templates utilities', () => {
     it('should include asset helper functions', () => {
       const result = templates.htmlTemplate('<div>Content</div>');
 
-      // Should have versioned assets
-      assert.ok(result.includes('?v='));
+      // Should have cache-busted assets.
+      assert.ok(
+        result.includes('/styles/output-') ||
+          result.includes('/styles/output.css?v=')
+      );
     });
   });
 
@@ -755,8 +758,13 @@ describe('templates utilities', () => {
       const user = { username: 'test' };
       const result = templates.spotifyTemplate(user);
 
-      assert.ok(result.includes('/styles/output.css'));
-      assert.ok(result.includes('/styles/app.css'));
+      assert.ok(
+        result.includes('/styles/output-') ||
+          result.includes('/styles/output.css?v=')
+      );
+      assert.ok(
+        result.includes('/styles/app-') || result.includes('/styles/app.css?v=')
+      );
     });
 
     it('should render viewport height script with valid template literal syntax', () => {

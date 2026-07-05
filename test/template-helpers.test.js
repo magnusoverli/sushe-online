@@ -17,6 +17,16 @@ describe('template-helpers', () => {
     assert.strictEqual(asset('/styles/app.css'), '/styles/app.css?v=abc123');
   });
 
+  it('uses hashed asset paths when present', () => {
+    const asset = createAssetHelper('abc123', {
+      hashedAssets: { '/styles/app.css': '/styles/app-abcdef123456.css' },
+    });
+    assert.strictEqual(
+      asset('/styles/app.css'),
+      '/styles/app-abcdef123456.css'
+    );
+  });
+
   it('escapes html and serializes safe json', () => {
     assert.strictEqual(
       escapeHtml(`<script>alert('x')</script>`),

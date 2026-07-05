@@ -1,7 +1,9 @@
 const { escapeHtml } = require('./escape-html');
 
-function createAssetHelper(assetVersion) {
-  return (assetPath) => `${assetPath}?v=${assetVersion}`;
+function createAssetHelper(assetVersion, options = {}) {
+  const hashedAssets = options.hashedAssets || {};
+  return (assetPath) =>
+    hashedAssets[assetPath] || `${assetPath}?v=${assetVersion}`;
 }
 
 function safeJsonStringify(obj) {

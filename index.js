@@ -38,6 +38,7 @@ const logger = require('./utils/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/error-handler');
 const requestIdMiddleware = require('./middleware/request-id');
 const { metricsMiddleware } = require('./utils/metrics');
+const { createHashedStyleMiddleware } = require('./utils/static-assets');
 const { responseCache } = require('./middleware/response-cache');
 const { setup: setupWebSocket, broadcast } = require('./utils/websocket');
 const { composeForgotPasswordEmail } = require('./utils/forgot-email');
@@ -163,6 +164,8 @@ app.use(createCorsMiddleware());
 
 // Apply compression for requests above 1KB (before static so assets are compressed too)
 app.use(compression({ threshold: 1024 }));
+
+app.use(createHashedStyleMiddleware());
 
 // Static files are built with hashed filenames, so they can be cached
 // immutably. Dynamic/API responses get no-store headers below.
