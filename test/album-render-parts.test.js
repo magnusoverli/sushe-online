@@ -42,7 +42,7 @@ describe('album render parts', () => {
       renderDesktopGenreCell(album, 1, { includeTitle: true }),
       renderDesktopGenreCell(album, 2, {
         emptyTextClass: 'text-gray-600 italic',
-        fallback: 'No genre',
+        emptyText: 'No genre',
         includeTitle: true,
       }),
     ].join('');
@@ -95,7 +95,7 @@ describe('album render parts', () => {
       }),
       renderMobileGenreRow(album, {
         emptyHtml: '<span class="text-gray-600 italic">No genre</span>',
-        fallback: 'No genre',
+        emptyText: 'No genre',
       }),
     ].join('');
 

@@ -665,7 +665,7 @@ export function createRecommendations(deps = {}) {
           })}
           ${renderMobileGenreRow(albumData, {
             emptyHtml: '<span class="text-gray-600 italic">No genre</span>',
-            fallback: 'No genre',
+            emptyText: 'No genre',
             iconClass: 'fas fa-tag fa-xs mr-2 shrink-0',
             separator: ', ',
             textClass:
@@ -1218,16 +1218,16 @@ export function createRecommendations(deps = {}) {
             })}
             ${renderDesktopGenreCell(albumData, 1, {
               cellClass: 'genre-1-cell flex items-center min-w-0',
+              emptyText: 'No genre',
               emptyTextClass: 'text-gray-600 italic',
-              fallback: 'No genre',
               includeTitle: true,
               interactive: false,
               textClass: 'text-gray-400',
             })}
             ${renderDesktopGenreCell(albumData, 2, {
               cellClass: 'genre-2-cell flex items-center min-w-0',
+              emptyText: 'No genre',
               emptyTextClass: 'text-gray-600 italic',
-              fallback: 'No genre',
               includeTitle: true,
               interactive: false,
               textClass: 'text-gray-400',
