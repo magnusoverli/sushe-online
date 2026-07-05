@@ -18,6 +18,8 @@
     "test:security": "npm audit --audit-level=moderate",
     "test:security:full": "npm audit && npm outdated",
     "test:all": "npm run lint && npm test && npm run test:security",
+    "ci:local": "bash scripts/local-ci.sh",
+    "ci:local:e2e": "RUN_E2E=1 bash scripts/local-ci.sh",
     "lint": "eslint .",
     "lint:strict": "npm run format:check:source && eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
