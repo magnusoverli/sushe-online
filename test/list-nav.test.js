@@ -7,9 +7,103 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 
-// Since we're testing ES modules from Node.js CommonJS tests, we'll test
-// the module's logic patterns rather than importing it directly.
-// The build process validates the module compiles correctly.
+function createClassList() {
+  const classes = new Set();
+  return {
+    add(...names) {
+      names.forEach((name) => classes.add(name));
+    },
+    remove(...names) {
+      names.forEach((name) => classes.delete(name));
+    },
+    contains(name) {
+      return classes.has(name);
+    },
+  };
+}
+
+function createFakeButton(dataset = {}) {
+  return {
+    dataset,
+    classList: createClassList(),
+    onclick: null,
+    addEventListener() {},
+    querySelector() {
+      return { classList: createClassList() };
+    },
+  };
+}
+
+function createFakeListItem() {
+  const children = new Map();
+  return {
+    className: '',
+    _innerHTML: '',
+    set innerHTML(value) {
+      this._innerHTML = value;
+      const listId = value.match(/data-list-id="([^"]+)"/)?.[1];
+      const menuListId = value.match(/data-list-menu-btn="([^"]+)"/)?.[1];
+
+      if (listId) {
+        children.set('[data-list-id]', createFakeButton({ listId }));
+      }
+      if (menuListId) {
+        children.set('[data-list-menu-btn]', createFakeButton({ menuListId }));
+      }
+    },
+    get innerHTML() {
+      return this._innerHTML;
+    },
+    querySelector(selector) {
+      return children.get(selector) || null;
+    },
+  };
+}
+
+async function withFakeDocument(callback) {
+  const previousDocument = global.document;
+  global.document = {
+    createElement() {
+      return createFakeListItem();
+    },
+  };
+
+  try {
+    await callback();
+  } finally {
+    if (previousDocument === undefined) {
+      delete global.document;
+    } else {
+      global.document = previousDocument;
+    }
+  }
+}
+
+function createSidebarSelectionDeps(overrides = {}) {
+  const calls = {
+    selectedLists: [],
+    mobileToggles: 0,
+  };
+
+  return {
+    calls,
+    deps: {
+      getListMetadata: () => ({ name: 'List One' }),
+      getCurrentList: () => 'list-1',
+      getCurrentRecommendationsYear: () => null,
+      selectList: (listId) => calls.selectedLists.push(listId),
+      toggleMobileLists: () => {
+        calls.mobileToggles += 1;
+      },
+      hideAllContextMenus() {},
+      positionContextMenu() {},
+      ...overrides,
+    },
+  };
+}
+
+// Most of these tests cover logic patterns directly; targeted behavior tests
+// import the module and use a tiny fake DOM surface.
 
 describe('List Navigation Module - Unit Tests', () => {
   describe('groupListsByYear logic', () => {
@@ -252,6 +346,67 @@ describe('List Navigation Module - Unit Tests', () => {
       const isActive = currentList === listName;
 
       assert.strictEqual(isActive, false);
+    });
+  });
+
+  describe('Sidebar list selection behavior', () => {
+    it('ignores desktop clicks on the active list', async () => {
+      const { createListNav } = await import('../src/js/modules/list-nav.js');
+      const { deps, calls } = createSidebarSelectionDeps();
+      const listNav = createListNav(deps);
+
+      await withFakeDocument(() => {
+        const item = listNav.createListButton('list-1', false);
+        item.querySelector('[data-list-id]').onclick();
+      });
+
+      assert.deepStrictEqual(calls.selectedLists, []);
+    });
+
+    it('keeps the mobile drawer open when tapping the active list', async () => {
+      const { createListNav } = await import('../src/js/modules/list-nav.js');
+      const { deps, calls } = createSidebarSelectionDeps();
+      const listNav = createListNav(deps);
+
+      await withFakeDocument(() => {
+        const item = listNav.createListButton('list-1', true);
+        item.querySelector('[data-list-id]').onclick();
+      });
+
+      assert.deepStrictEqual(calls.selectedLists, []);
+      assert.strictEqual(calls.mobileToggles, 0);
+    });
+
+    it('still selects and closes mobile drawer for inactive lists', async () => {
+      const { createListNav } = await import('../src/js/modules/list-nav.js');
+      const { deps, calls } = createSidebarSelectionDeps({
+        getCurrentList: () => 'list-2',
+      });
+      const listNav = createListNav(deps);
+
+      await withFakeDocument(() => {
+        const item = listNav.createListButton('list-1', true);
+        item.querySelector('[data-list-id]').onclick();
+      });
+
+      assert.deepStrictEqual(calls.selectedLists, ['list-1']);
+      assert.strictEqual(calls.mobileToggles, 1);
+    });
+
+    it('selects the current list when returning from recommendations', async () => {
+      const { createListNav } = await import('../src/js/modules/list-nav.js');
+      const { deps, calls } = createSidebarSelectionDeps({
+        getCurrentRecommendationsYear: () => 2024,
+      });
+      const listNav = createListNav(deps);
+
+      await withFakeDocument(() => {
+        const item = listNav.createListButton('list-1', true);
+        item.querySelector('[data-list-id]').onclick();
+      });
+
+      assert.deepStrictEqual(calls.selectedLists, ['list-1']);
+      assert.strictEqual(calls.mobileToggles, 1);
     });
   });
 
