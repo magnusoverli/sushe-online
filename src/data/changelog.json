@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-07-05",
+    "category": "fix",
+    "description": "Fixed mobile search header display and behavior.",
+    "hash": "7d5b53d2ba711836dca209d6196cd766b6d086e1",
+    "commitMessage": "Refine mobile search header implementation\n\n- Move mobile search opening into delegated module handling\n\n- Centralize mobile search timing/state constants and frame helper\n\n- Improve header search accessibility and transition sequencing\n\n- Scope frontend source as ESM for Node tests"
+  },
+  {
     "date": "2026-07-03",
     "category": "ui",
     "description": "Improved accessibility for mobile album search.",
