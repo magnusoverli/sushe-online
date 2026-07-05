@@ -230,6 +230,9 @@ export function createAlbumDisplay(deps = {}) {
     if (comment === 'Comment') comment = '';
     let comment2 = album.comments_2 || '';
     if (comment2 === 'Comment 2') comment2 = '';
+    const availability = Array.isArray(album.availability)
+      ? album.availability
+      : [];
 
     const primaryTrack = album.primary_track || '';
 
@@ -316,7 +319,54 @@ export function createAlbumDisplay(deps = {}) {
       primaryTrackDuration,
       secondaryTrack,
       secondaryTrackDisplay,
+      availability,
     };
+  }
+
+  function updateAvailabilityBadges(
+    row,
+    cache,
+    releaseDate,
+    availability,
+    isMobile
+  ) {
+    const html = renderAvailabilityBadges(
+      availability,
+      isMobile ? { variant: 'mobile' } : {}
+    );
+    const existing =
+      cache.availabilityBadges || row.querySelector('.album-availability');
+
+    if (existing) {
+      if (html) {
+        existing.outerHTML = html;
+        cache.availabilityBadges = row.querySelector('.album-availability');
+      } else {
+        existing.remove();
+        cache.availabilityBadges = null;
+      }
+      return;
+    }
+
+    if (html && releaseDate) {
+      releaseDate.insertAdjacentHTML('afterend', html);
+      cache.availabilityBadges = row.querySelector('.album-availability');
+    }
+  }
+
+  function playTrackButton(index, trackIdentifier) {
+    if (trackIdentifier && typeof playSpecificTrack === 'function') {
+      playSpecificTrack(index, trackIdentifier);
+      return;
+    }
+
+    const albumsForTrackPlay = getListData(getCurrentList());
+    const albumForTrackPlay = albumsForTrackPlay && albumsForTrackPlay[index];
+    if (albumForTrackPlay) {
+      const albumId =
+        `${albumForTrackPlay.artist}::${albumForTrackPlay.album}::${albumForTrackPlay.release_date || ''}`.toLowerCase();
+      playTrackSafe(albumId);
+    }
   }
 
   /**
@@ -886,7 +936,7 @@ export function createAlbumDisplay(deps = {}) {
                absolutely centered on the title line. -->
           <div class="flex items-center relative" style="padding-right: 55px">
             <h3 class="text-gray-100 leading-tight truncate min-w-0" style="font-size: 13px; font-weight: 700">
-              <i class="fas fa-compact-disc fa-xs inline-block w-4 text-center align-middle mr-1"></i>${escapeHtml(data.albumName)}
+              <i class="fas fa-compact-disc fa-xs inline-block w-4 text-center align-middle mr-1"></i><span data-field="album-mobile-title">${escapeHtml(data.albumName)}</span>
             </h3>
             <!-- Recommendation first (left), summary last so the summary badge
                  is always the rightmost, fixed regardless of the recommendation. -->
@@ -1121,21 +1171,7 @@ export function createAlbumDisplay(deps = {}) {
       trackPlayBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
-        const trackIdentifier = trackPlayBtn.dataset.trackIdentifier;
-        if (trackIdentifier && typeof playSpecificTrack === 'function') {
-          // Play the specific track using its identifier
-          playSpecificTrack(index, trackIdentifier);
-        } else {
-          // Fallback to album's default track
-          const albumsForTrackPlay = getListData(getCurrentList());
-          const albumForTrackPlay =
-            albumsForTrackPlay && albumsForTrackPlay[index];
-          if (albumForTrackPlay) {
-            const albumId =
-              `${albumForTrackPlay.artist}::${albumForTrackPlay.album}::${albumForTrackPlay.release_date || ''}`.toLowerCase();
-            playTrackSafe(albumId);
-          }
-        }
+        playTrackButton(index, trackPlayBtn.dataset.trackIdentifier);
       });
     });
   }
@@ -1320,6 +1356,10 @@ export function createAlbumDisplay(deps = {}) {
             }
           }
         } else {
+          if (cache.albumTitle) {
+            cache.albumTitle.textContent = data.albumName;
+          }
+
           if (cache.releaseDate) {
             cache.releaseDate.textContent = data.releaseDate;
             cache.releaseDate.className = `release-date-display text-xs leading-none whitespace-nowrap ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}`;
@@ -1330,6 +1370,14 @@ export function createAlbumDisplay(deps = {}) {
             }
           }
         }
+
+        updateAvailabilityBadges(
+          row,
+          cache,
+          cache.releaseDate,
+          data.availability,
+          isMobile
+        );
 
         if (!isMobile) {
           // Update country using cached span
@@ -1430,6 +1478,11 @@ export function createAlbumDisplay(deps = {}) {
                 'data-track-play-btn',
                 hasTrack ? 'true' : ''
               );
+              if (hasTrack) {
+                trackPlayBtn.dataset.trackIdentifier = data.primaryTrack;
+              } else {
+                delete trackPlayBtn.dataset.trackIdentifier;
+              }
 
               if (hasTrack) {
                 trackPlayBtn.classList.add(
@@ -1438,6 +1491,9 @@ export function createAlbumDisplay(deps = {}) {
                 );
                 const newBtn = trackPlayBtn.cloneNode(true);
                 trackPlayBtn.parentNode.replaceChild(newBtn, trackPlayBtn);
+                cache.trackText = newBtn.querySelector(
+                  '[data-field="track-mobile-text"]'
+                );
 
                 newBtn.addEventListener(
                   'touchstart',
@@ -1454,13 +1510,7 @@ export function createAlbumDisplay(deps = {}) {
                 newBtn.addEventListener('click', (e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  const albumsForPlay = getListData(getCurrentList());
-                  const albumForPlay = albumsForPlay && albumsForPlay[index];
-                  if (albumForPlay) {
-                    const albumId =
-                      `${albumForPlay.artist}::${albumForPlay.album}::${albumForPlay.release_date || ''}`.toLowerCase();
-                    playTrackSafe(albumId);
-                  }
+                  playTrackButton(index, newBtn.dataset.trackIdentifier);
                 });
               } else {
                 trackPlayBtn.classList.remove(
@@ -1484,6 +1534,11 @@ export function createAlbumDisplay(deps = {}) {
                 'data-track-play-btn',
                 hasSecondary ? 'true' : ''
               );
+              if (hasSecondary) {
+                secondaryPlayBtn.dataset.trackIdentifier = data.secondaryTrack;
+              } else {
+                delete secondaryPlayBtn.dataset.trackIdentifier;
+              }
 
               if (hasSecondary) {
                 secondaryPlayBtn.classList.add(
@@ -1512,13 +1567,10 @@ export function createAlbumDisplay(deps = {}) {
                 newSecondaryBtn.addEventListener('click', (e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  const albumsForPlay = getListData(getCurrentList());
-                  const albumForPlay = albumsForPlay && albumsForPlay[index];
-                  if (albumForPlay) {
-                    const albumId =
-                      `${albumForPlay.artist}::${albumForPlay.album}::${albumForPlay.release_date || ''}`.toLowerCase();
-                    playTrackSafe(albumId);
-                  }
+                  playTrackButton(
+                    index,
+                    newSecondaryBtn.dataset.trackIdentifier
+                  );
                 });
               } else {
                 secondaryPlayBtn.classList.remove(

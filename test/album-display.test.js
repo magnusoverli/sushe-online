@@ -276,6 +276,53 @@ describe('album-display module', () => {
       }
     });
 
+    it('renders mobile hooks for mutable title and availability fields', () => {
+      const previousCreateElement = globalThis.document.createElement;
+      globalThis.document.createElement = () => ({
+        className: '',
+        dataset: {},
+        style: {},
+        children: [],
+        innerHTML: '',
+        appendChild(child) {
+          this.children.push(child);
+        },
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        addEventListener: () => {},
+      });
+
+      try {
+        const module = createAlbumDisplay({
+          getCurrentList: () => 'list-1',
+          getListMetadata: () => ({ isMain: false }),
+          getListData: () => [],
+          getTrackName: (track) => track?.name || track || '',
+          getTrackLength: () => null,
+          formatTrackTime: () => '',
+        });
+
+        const wrapper = module.createAlbumItem(
+          {
+            album: 'Mutable Album',
+            artist: 'Artist',
+            album_id: 'album-1',
+            availability: ['spotify'],
+          },
+          0,
+          true
+        );
+        const card = wrapper.children[0];
+
+        assert.match(card.innerHTML, /data-field="album-mobile-title"/);
+        assert.match(card.innerHTML, /Mutable Album/);
+        assert.match(card.innerHTML, /album-availability--mobile/);
+        assert.match(card.innerHTML, /fa-spotify/);
+      } finally {
+        globalThis.document.createElement = previousCreateElement;
+      }
+    });
+
     it('should handle empty dependencies gracefully', () => {
       // Should not throw when called with empty deps
       const module = createAlbumDisplay({});
@@ -551,9 +598,12 @@ describe('album-display module', () => {
 
     // Helper: build a fingerprint string from an album object, matching the
     // format used by extractMutableFingerprints in album-display-shared.js.
-    // Format: "_id|artist|album|release_date|country|genre_1|genre_2|comments|comments_2|primary_track|secondary_track"
+    // Format: "_id|artist|album|release_date|country|genre_1|genre_2|comments|comments_2|primary_track|secondary_track|availability"
     function fp(a) {
-      return `${a._id || ''}|${a.artist || ''}|${a.album || ''}|${a.release_date || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}|${a.comments_2 || ''}|${a.primary_track || ''}|${a.secondary_track || ''}`;
+      const availability = Array.isArray(a.availability)
+        ? [...a.availability].sort().join(',')
+        : '';
+      return `${a._id || ''}|${a.artist || ''}|${a.album || ''}|${a.release_date || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}|${a.comments_2 || ''}|${a.primary_track || ''}|${a.secondary_track || ''}|${availability}`;
     }
 
     it('should return SINGLE_ADD when one album is added', () => {
@@ -592,6 +642,28 @@ describe('album-display module', () => {
       ];
       const newAlbums = [
         { artist: 'A', album: '1', release_date: '', country: 'UK' },
+      ];
+      const result = module.detectUpdateType(oldAlbums.map(fp), newAlbums);
+      assert.strictEqual(result, 'FIELD_UPDATE');
+    });
+
+    it('should return FIELD_UPDATE for availability changes', () => {
+      const module = createAlbumDisplay({});
+      const oldAlbums = [
+        {
+          artist: 'A',
+          album: '1',
+          release_date: '',
+          availability: ['spotify'],
+        },
+      ];
+      const newAlbums = [
+        {
+          artist: 'A',
+          album: '1',
+          release_date: '',
+          availability: ['spotify', 'qobuz'],
+        },
       ];
       const result = module.detectUpdateType(oldAlbums.map(fp), newAlbums);
       assert.strictEqual(result, 'FIELD_UPDATE');
