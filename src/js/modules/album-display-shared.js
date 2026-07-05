@@ -12,6 +12,10 @@ const MAX_COVER_RETRIES = 2;
 // cover settles (load or error).
 const MAX_CONCURRENT_COVER_LOADS = 12;
 
+function availabilityFingerprint(availability) {
+  return Array.isArray(availability) ? [...availability].sort().join(',') : '';
+}
+
 function addRetryParam(url) {
   try {
     const origin = globalThis.location?.origin || 'http://localhost';
@@ -32,7 +36,7 @@ function addRetryParam(url) {
  * @returns {string} Pipe-separated fingerprint string
  */
 export function albumMutableFingerprint(album) {
-  return `${album._id || ''}|${album.artist || ''}|${album.album || ''}|${album.release_date || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}|${album.primary_track || ''}|${album.secondary_track || ''}`;
+  return `${album._id || ''}|${album.artist || ''}|${album.album || ''}|${album.release_date || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}|${album.primary_track || ''}|${album.secondary_track || ''}|${availabilityFingerprint(album.availability)}`;
 }
 
 function renderCoverPlaceholder(parent) {
@@ -62,7 +66,6 @@ export function createAlbumDisplayShared(deps = {}) {
     isColumnVisible,
   } = deps;
 
-  let fingerprintCache = new WeakMap();
   let rowElementsCache = new WeakMap();
 
   function handleCoverError(image) {
@@ -215,6 +218,7 @@ export function createAlbumDisplayShared(deps = {}) {
         row.querySelector('.position-display'),
       albumName: row.querySelector('.album-name'),
       releaseDate: row.querySelector('.release-date-display'),
+      availabilityBadges: row.querySelector('.album-availability'),
       artist: row.querySelector('.artist-cell span'),
       countryCell: row.querySelector('.country-cell'),
       genre1Cell: row.querySelector('.genre-1-cell'),
@@ -250,7 +254,9 @@ export function createAlbumDisplayShared(deps = {}) {
   function cacheMobileCardElements(card) {
     const cache = {
       position: card.querySelector('[data-position-element="true"]'),
+      albumTitle: card.querySelector('[data-field="album-mobile-title"]'),
       releaseDate: card.querySelector('.release-date-display'),
+      availabilityBadges: card.querySelector('.album-availability'),
       artistText: card.querySelector('[data-field="artist-mobile-text"]'),
       countryText: card.querySelector('[data-field="country-mobile-text"]'),
       genreText: card.querySelector('[data-field="genre-mobile-text"]'),
@@ -281,27 +287,13 @@ export function createAlbumDisplayShared(deps = {}) {
   function generateAlbumFingerprint(albums) {
     if (!albums || albums.length === 0) return '';
 
-    const cached = fingerprintCache.get(albums);
-    if (cached !== undefined) {
-      return cached;
-    }
-
     const fingerprint = albums
-      .map(
-        (album) =>
-          `${album._id || ''}|${album.primary_track || ''}|${album.secondary_track || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}`
-      )
+      .map((album) => albumMutableFingerprint(album))
       .join('::');
-
-    fingerprintCache.set(albums, fingerprint);
     return fingerprint;
   }
 
-  function invalidateFingerprint(albums) {
-    if (albums) {
-      fingerprintCache.delete(albums);
-    }
-  }
+  function invalidateFingerprint() {}
 
   function extractMutableFingerprints(albums) {
     if (!albums || albums.length === 0) return null;
@@ -309,9 +301,7 @@ export function createAlbumDisplayShared(deps = {}) {
     return albums.map((album) => albumMutableFingerprint(album));
   }
 
-  function resetFingerprintCache() {
-    fingerprintCache = new WeakMap();
-  }
+  function resetFingerprintCache() {}
 
   return {
     applyVisibilityInPlace,

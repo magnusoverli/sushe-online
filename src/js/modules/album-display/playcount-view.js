@@ -108,7 +108,11 @@ export function applyMobilePlaycount(el, status, display) {
   const { className, html, title } = mobileAtoms(status, display);
   el.className = className;
   el.innerHTML = html;
-  if (title) el.title = title;
+  if (title) {
+    el.title = title;
+  } else {
+    el.removeAttribute('title');
+  }
   el.dataset.status = status;
   el.classList.remove('hidden');
 }

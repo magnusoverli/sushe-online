@@ -343,7 +343,7 @@ describe('album-display-shared module', () => {
     assert.ok(queries > queryCountAfterCache);
   });
 
-  it('creates and invalidates album fingerprints and mutable fingerprints', () => {
+  it('creates fingerprints from visible mutable album fields', () => {
     const utils = createAlbumDisplayShared({
       doc: { getElementById: () => null },
       computeGridTemplate: () => '',
@@ -359,6 +359,7 @@ describe('album-display-shared module', () => {
         album: 'B',
         release_date: '2024-01-01',
         primary_track: 'Song',
+        availability: ['qobuz', 'spotify'],
       },
     ];
 
@@ -366,11 +367,16 @@ describe('album-display-shared module', () => {
     const second = utils.generateAlbumFingerprint(albums);
     assert.strictEqual(first, second);
 
-    albums[0].primary_track = 'New';
-    const stale = utils.generateAlbumFingerprint(albums);
-    assert.strictEqual(stale, first);
+    albums[0].album = 'New title';
+    const titleUpdated = utils.generateAlbumFingerprint(albums);
+    assert.notStrictEqual(titleUpdated, first);
 
-    utils.invalidateFingerprint(albums);
+    albums[0].album = 'B';
+    albums[0].availability = ['spotify', 'qobuz'];
+    const reorderedAvailability = utils.generateAlbumFingerprint(albums);
+    assert.strictEqual(reorderedAvailability, first);
+
+    albums[0].availability = ['spotify'];
     const updated = utils.generateAlbumFingerprint(albums);
     assert.notStrictEqual(updated, first);
 
