@@ -20,6 +20,9 @@
        load the app bundle. -->
   <link rel="preload" href="<%= asset('/styles/output.css') %>" as="style">
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&display=swap">
   <link href="<%= asset('/styles/output.css') %>" rel="stylesheet">
   <style>
     /* Toast notification styles */
@@ -65,7 +68,6 @@
     <%- generateAccentOverrides({ includeDark: true }) %>
     /* Input fields use neutral gray colors, not accent color */
     .spotify-input:focus { border-color: #6b7280 !important; box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.3); }
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&display=swap');
     .metal-title { font-family: 'Cinzel', serif; text-shadow: 0 0 20px var(--accent-glow); }
     .glow-red { animation: glow 2s ease-in-out infinite alternate; }
     @keyframes glow {
@@ -82,7 +84,7 @@
     ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
   </style>
 </head>
-<body class="bg-black text-gray-200 min-h-screen flex items-center justify-center relative overflow-hidden">
+<body class="bg-black text-gray-200 min-h-screen flex items-center justify-center relative overflow-x-hidden overflow-y-auto">
   <div class="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black"></div>
   <div class="absolute top-0 left-1/4 w-96 h-96 accent-glow-top rounded-full filter blur-3xl opacity-10 animate-pulse"></div>
   <div class="absolute bottom-0 right-1/4 w-96 h-96 accent-glow-top rounded-full filter blur-3xl opacity-10 animate-pulse"></div>

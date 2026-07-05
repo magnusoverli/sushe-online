@@ -355,6 +355,20 @@ describe('templates utilities', () => {
           result.includes('/styles/output.css?v=')
       );
     });
+
+    it('should load auth fonts with a link instead of invalid CSS import', () => {
+      const result = templates.htmlTemplate('<div>Content</div>');
+
+      assert.ok(result.includes('fonts.googleapis.com/css2?family=Cinzel'));
+      assert.ok(!result.includes('@import url('));
+    });
+
+    it('should allow auth pages to scroll on short mobile screens', () => {
+      const result = templates.htmlTemplate('<div>Content</div>');
+
+      assert.ok(result.includes('overflow-y-auto'));
+      assert.ok(!result.includes('relative overflow-hidden'));
+    });
   });
 
   describe('registerTemplate', () => {
@@ -767,6 +781,30 @@ describe('templates utilities', () => {
       );
     });
 
+    it('should allow mobile pinch zoom', () => {
+      const user = { username: 'test' };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(
+        result.includes(
+          'content="width=device-width, initial-scale=1.0, viewport-fit=cover"'
+        )
+      );
+      assert.ok(!result.includes('maximum-scale'));
+      assert.ok(!result.includes('user-scalable'));
+    });
+
+    it('should render valid album context menu markup', () => {
+      const user = { username: 'test' };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('id="removeAlbumOption"'));
+      assert.doesNotMatch(
+        result,
+        /id="removeAlbumOption"[\s\S]*?<\/button>\s*<\/button>/
+      );
+    });
+
     it('should render viewport height script with valid template literal syntax', () => {
       const user = { username: 'test' };
       const result = templates.spotifyTemplate(user);
@@ -777,6 +815,22 @@ describe('templates utilities', () => {
         )
       );
       assert.ok(!result.includes("setProperty('--vh', \\`\\${vh}px\\`);"));
+    });
+  });
+
+  describe('aggregateListTemplate', () => {
+    it('should account for mobile safe areas and reduced motion in reveal UI', () => {
+      const result = templates.aggregateListTemplate(
+        { username: 'test' },
+        2024
+      );
+
+      assert.ok(
+        result.includes('bottom: calc(2rem + env(safe-area-inset-bottom, 0px))')
+      );
+      assert.ok(result.includes('@media (prefers-reduced-motion: reduce)'));
+      assert.ok(result.includes('.burn-overlay.burning'));
+      assert.ok(result.includes('.golden-rays'));
     });
   });
 
