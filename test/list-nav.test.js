@@ -43,12 +43,21 @@ function createFakeListItem() {
       this._innerHTML = value;
       const listId = value.match(/data-list-id="([^"]+)"/)?.[1];
       const menuListId = value.match(/data-list-menu-btn="([^"]+)"/)?.[1];
+      const recommendationsYear = value.match(
+        /data-recommendations-year="([^"]+)"/
+      )?.[1];
 
       if (listId) {
         children.set('[data-list-id]', createFakeButton({ listId }));
       }
       if (menuListId) {
         children.set('[data-list-menu-btn]', createFakeButton({ menuListId }));
+      }
+      if (recommendationsYear) {
+        children.set(
+          '[data-recommendations-year]',
+          createFakeButton({ recommendationsYear })
+        );
       }
     },
     get innerHTML() {
@@ -82,6 +91,7 @@ async function withFakeDocument(callback) {
 function createSidebarSelectionDeps(overrides = {}) {
   const calls = {
     selectedLists: [],
+    selectedRecommendations: [],
     mobileToggles: 0,
   };
 
@@ -92,6 +102,7 @@ function createSidebarSelectionDeps(overrides = {}) {
       getCurrentList: () => 'list-1',
       getCurrentRecommendationsYear: () => null,
       selectList: (listId) => calls.selectedLists.push(listId),
+      selectRecommendations: (year) => calls.selectedRecommendations.push(year),
       toggleMobileLists: () => {
         calls.mobileToggles += 1;
       },
@@ -406,6 +417,55 @@ describe('List Navigation Module - Unit Tests', () => {
       });
 
       assert.deepStrictEqual(calls.selectedLists, ['list-1']);
+      assert.strictEqual(calls.mobileToggles, 1);
+    });
+  });
+
+  describe('Sidebar recommendations selection behavior', () => {
+    it('ignores desktop clicks on the active recommendations year', async () => {
+      const { createListNav } = await import('../src/js/modules/list-nav.js');
+      const { deps, calls } = createSidebarSelectionDeps({
+        getCurrentRecommendationsYear: () => 2024,
+      });
+      const listNav = createListNav(deps);
+
+      await withFakeDocument(() => {
+        const item = listNav.createRecommendationsButton(2024, false);
+        item.querySelector('[data-recommendations-year]').onclick();
+      });
+
+      assert.deepStrictEqual(calls.selectedRecommendations, []);
+    });
+
+    it('keeps the mobile drawer open when tapping the active recommendations year', async () => {
+      const { createListNav } = await import('../src/js/modules/list-nav.js');
+      const { deps, calls } = createSidebarSelectionDeps({
+        getCurrentRecommendationsYear: () => 2024,
+      });
+      const listNav = createListNav(deps);
+
+      await withFakeDocument(() => {
+        const item = listNav.createRecommendationsButton(2024, true);
+        item.querySelector('[data-recommendations-year]').onclick();
+      });
+
+      assert.deepStrictEqual(calls.selectedRecommendations, []);
+      assert.strictEqual(calls.mobileToggles, 0);
+    });
+
+    it('still selects and closes mobile drawer for inactive recommendations years', async () => {
+      const { createListNav } = await import('../src/js/modules/list-nav.js');
+      const { deps, calls } = createSidebarSelectionDeps({
+        getCurrentRecommendationsYear: () => 2023,
+      });
+      const listNav = createListNav(deps);
+
+      await withFakeDocument(() => {
+        const item = listNav.createRecommendationsButton(2024, true);
+        item.querySelector('[data-recommendations-year]').onclick();
+      });
+
+      assert.deepStrictEqual(calls.selectedRecommendations, [2024]);
       assert.strictEqual(calls.mobileToggles, 1);
     });
   });

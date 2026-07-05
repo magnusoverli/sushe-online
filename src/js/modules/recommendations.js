@@ -4,6 +4,16 @@ import {
   formatInUserListsTooltip as formatInUserListsTooltipBase,
   formatInUserListsAriaLabel,
 } from './recommendations-list-tooltips.js';
+import {
+  renderDesktopAlbumCell,
+  renderDesktopArtistCell,
+  renderDesktopCoverCell,
+  renderDesktopGenreCell,
+  renderMobileArtistRow,
+  renderMobileCoverSection,
+  renderMobileGenreRow,
+  renderMobileTitleRow,
+} from './album-display/render-parts.js';
 
 /**
  * Recommendations Module
@@ -101,6 +111,61 @@ export function createRecommendations(deps = {}) {
     const escapedName = escapeHtml(safeName);
 
     return `<span class="font-semibold text-gray-200">${escapedName}:</span><br>${escapedReasoning}`;
+  }
+
+  function formatRecommendationDate(value, options) {
+    if (!value) return '';
+    return new Date(value).toLocaleDateString('en-US', options);
+  }
+
+  function getRecommendationAlbumData(rec) {
+    const coverUrl = rec.album_id
+      ? `/api/albums/${encodeURIComponent(rec.album_id)}/cover`
+      : '';
+
+    return {
+      albumId: rec.album_id || '',
+      albumName: rec.album || 'Unknown Album',
+      artist: rec.artist || 'Unknown Artist',
+      releaseDate: formatRecommendationDate(rec.release_date, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }),
+      genre1: rec.genre_1 || '',
+      genre1Display: rec.genre_1 || 'No genre',
+      genre1Class: rec.genre_1 ? 'text-gray-400' : 'text-gray-600 italic',
+      genre2: rec.genre_2 || '',
+      genre2Display: rec.genre_2 || 'No genre',
+      genre2Class: rec.genre_2 ? 'text-gray-400' : 'text-gray-600 italic',
+      coverThumbUrl: coverUrl,
+      coverImageUrl: coverUrl,
+      availability: [],
+    };
+  }
+
+  function getInUserListNames(rec) {
+    return Array.isArray(rec.in_user_list_names)
+      ? rec.in_user_list_names.filter(
+          (name) => typeof name === 'string' && name.trim().length > 0
+        )
+      : [];
+  }
+
+  function renderInUserListsBadge(inUserListNames, { mobile = false } = {}) {
+    if (inUserListNames.length === 0) return '';
+
+    const className = mobile
+      ? 'in-user-lists-badge-mobile'
+      : 'in-user-lists-badge';
+    const ariaLabel = formatInUserListsAriaLabel(inUserListNames);
+
+    return `<div class="${className}"
+      aria-label="${escapeHtmlAttr(ariaLabel)}"
+      role="button"
+      tabindex="0">
+      <i class="fas fa-list"></i>
+    </div>`;
   }
 
   function clearReasoningTooltipTimeouts() {
@@ -547,72 +612,67 @@ export function createRecommendations(deps = {}) {
     card.dataset.albumId = rec.album_id;
     card.dataset.recIndex = index;
 
-    const date = new Date(rec.created_at);
-    const formattedDate = date.toLocaleDateString('en-US', {
+    const albumData = getRecommendationAlbumData(rec);
+    const formattedDate = formatRecommendationDate(rec.created_at, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
 
     const hasReasoning = rec.reasoning && rec.reasoning.trim().length > 0;
-    const inUserListNames = Array.isArray(rec.in_user_list_names)
-      ? rec.in_user_list_names.filter(
-          (name) => typeof name === 'string' && name.trim().length > 0
-        )
-      : [];
-    const inUserListsAriaLabel = formatInUserListsAriaLabel(inUserListNames);
-    const inUserListsBadgeHtml =
-      inUserListNames.length > 0
-        ? `<div class="in-user-lists-badge-mobile"
-                 aria-label="${escapeHtmlAttr(inUserListsAriaLabel)}"
-                 role="button"
-                 tabindex="0">
-             <i class="fas fa-list"></i>
-           </div>`
-        : '';
+    const inUserListsBadgeHtml = renderInUserListsBadge(
+      getInUserListNames(rec),
+      { mobile: true }
+    );
 
     card.innerHTML = `
       <div class="flex items-stretch h-full">
         
         <!-- COVER SECTION -->
-        <div class="shrink-0 w-[88px] flex flex-col items-center pt-2 pl-1">
-          <div class="mobile-album-cover relative w-20 h-20 flex items-center justify-center bg-gray-800 rounded-lg">
-            ${inUserListsBadgeHtml}
-            <img src="/api/albums/${encodeURIComponent(rec.album_id)}/cover" 
-                 alt="${escapeHtml(rec.album)}"
-                 class="album-cover-blur w-[75px] h-[75px] rounded-lg object-cover"
-                 loading="lazy" decoding="async"
-                 onerror="this.parentElement.innerHTML='<div class=\\'w-[75px] h-[75px] rounded-lg bg-gray-800 flex items-center justify-center\\'><i class=\\'fas fa-compact-disc text-xl text-gray-600\\'></i></div>'">
-          </div>
-          <div class="flex-1 flex items-center mt-1">
-            <span class="text-xs whitespace-nowrap text-gray-500">
-              ${formattedDate}
-            </span>
-          </div>
-        </div>
+        ${renderMobileCoverSection(albumData, index, {
+          coverClass:
+            'mobile-album-cover relative w-20 h-20 flex items-center justify-center bg-gray-800 rounded-lg',
+          coverExtraHtml: inUserListsBadgeHtml,
+          dateClass: 'text-xs whitespace-nowrap text-gray-500',
+          dateText: formattedDate,
+          dateWrapperClass: 'flex-1 flex items-center mt-1',
+          imageClassName:
+            'album-cover-blur w-[75px] h-[75px] rounded-lg object-cover',
+          includeAvailability: false,
+          loadMode: 'lazy',
+          placeholderHtml:
+            '<div class="w-[75px] h-[75px] rounded-lg bg-gray-800 flex items-center justify-center"><i class="fas fa-compact-disc text-xl text-gray-600"></i></div>',
+          wrapperClass:
+            'shrink-0 w-[88px] flex flex-col items-center pt-2 pl-1',
+        })}
         
         <!-- INFO SECTION -->
         <div class="flex-1 min-w-0 py-1 pl-2 pr-1 flex flex-col justify-between h-[122px]">
-          <div class="flex items-center min-w-0">
-            <h3 class="font-semibold text-gray-200 text-sm leading-tight flex items-center min-w-0 w-full">
-              <i class="fas fa-compact-disc fa-xs mr-2 shrink-0"></i>
-              <span class="truncate flex-1 min-w-0" title="${escapeHtml(rec.album)}">${escapeHtml(rec.album)}</span>
-            </h3>
-          </div>
-          <div class="flex items-center min-w-0">
-            <p class="text-[13px] text-gray-500 flex items-center min-w-0 w-full">
-              <i class="fas fa-user fa-xs mr-2 shrink-0"></i>
-              <span data-field="artist-mobile-text" class="truncate flex-1 min-w-0" title="${escapeHtml(rec.artist)}">${escapeHtml(rec.artist)}</span>
-            </p>
-          </div>
-          <div class="flex items-center min-w-0">
-            <p class="text-[13px] text-gray-400 flex items-center min-w-0 w-full">
-              <i class="fas fa-tag fa-xs mr-2 shrink-0"></i>
-              <span class="truncate flex-1 min-w-0" title="${escapeHtml(rec.genre_1 && rec.genre_2 ? `${rec.genre_1}, ${rec.genre_2}` : rec.genre_1 || rec.genre_2 || 'No genre')}">
-                ${rec.genre_1 ? escapeHtml(rec.genre_1) : ''}${rec.genre_1 && rec.genre_2 ? ', ' : ''}${rec.genre_2 ? escapeHtml(rec.genre_2) : ''}${!rec.genre_1 && !rec.genre_2 ? '<span class="text-gray-600 italic">No genre</span>' : ''}
-              </span>
-            </p>
-          </div>
+          ${renderMobileTitleRow(albumData, {
+            iconClass: 'fas fa-compact-disc fa-xs mr-2 shrink-0',
+            titleClass:
+              'font-semibold text-gray-200 text-sm leading-tight flex items-center min-w-0 w-full',
+            titleSpanClass: 'truncate flex-1 min-w-0',
+            titleStyle: '',
+            wrapperClass: 'flex items-center min-w-0',
+          })}
+          ${renderMobileArtistRow(albumData, {
+            iconClass: 'fas fa-user fa-xs mr-2 shrink-0',
+            spanClass: 'truncate flex-1 min-w-0',
+            textClass:
+              'text-[13px] text-gray-500 flex items-center min-w-0 w-full',
+            wrapperClass: 'flex items-center min-w-0',
+          })}
+          ${renderMobileGenreRow(albumData, {
+            emptyHtml: '<span class="text-gray-600 italic">No genre</span>',
+            fallback: 'No genre',
+            iconClass: 'fas fa-tag fa-xs mr-2 shrink-0',
+            separator: ', ',
+            textClass:
+              'text-[13px] text-gray-400 flex items-center min-w-0 w-full',
+            valueSpanClass: 'truncate flex-1 min-w-0',
+            wrapperClass: 'flex items-center min-w-0',
+          })}
           <div class="flex items-center min-w-0">
             <span class="text-[13px] text-blue-400 flex items-center min-w-0 w-full">
               <i class="fas fa-thumbs-up fa-xs mr-2 shrink-0"></i>
@@ -1122,87 +1182,62 @@ export function createRecommendations(deps = {}) {
         `;
         rowsContainer.appendChild(emptyDiv);
       } else {
-        recommendations.forEach((rec) => {
+        recommendations.forEach((rec, index) => {
           const row = document.createElement('div');
           row.className =
             'album-row recommendations-grid gap-4 py-2 cursor-pointer';
           row.dataset.albumId = rec.album_id;
 
-          const date = new Date(rec.created_at);
-          const formattedDate = date.toLocaleDateString('en-US', {
+          const albumData = getRecommendationAlbumData(rec);
+          const formattedDate = formatRecommendationDate(rec.created_at, {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
           });
 
-          // Split genres into separate display values
-          const genre1Display = rec.genre_1
-            ? escapeHtml(rec.genre_1)
-            : '<span class="text-gray-600 italic">No genre</span>';
-          const genre2Display = rec.genre_2
-            ? escapeHtml(rec.genre_2)
-            : '<span class="text-gray-600 italic">No genre</span>';
-          const genre1Title = rec.genre_1 || 'No genre';
-          const genre2Title = rec.genre_2 || 'No genre';
-
-          // Format release date (matches regular list formatting)
-          const releaseDate = rec.release_date
-            ? new Date(rec.release_date).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-              })
-            : '';
-          const inUserListNames = Array.isArray(rec.in_user_list_names)
-            ? rec.in_user_list_names.filter(
-                (name) => typeof name === 'string' && name.trim().length > 0
-              )
-            : [];
-          const inUserListsAriaLabel =
-            formatInUserListsAriaLabel(inUserListNames);
-          const inUserListsBadgeHtml =
-            inUserListNames.length > 0
-              ? `<div class="in-user-lists-badge"
-                   aria-label="${escapeHtmlAttr(inUserListsAriaLabel)}"
-                   role="button"
-                   tabindex="0">
-                 <i class="fas fa-list"></i>
-               </div>`
-              : '';
+          const inUserListNames = getInUserListNames(rec);
+          const inUserListsBadgeHtml = renderInUserListsBadge(inUserListNames);
 
           row.innerHTML = `
-            <div class="cover-cell flex items-center justify-center">
-              <div class="album-cover-container">
-                <img src="/api/albums/${encodeURIComponent(rec.album_id)}/cover" 
-                     alt="${escapeHtml(rec.album)}" 
-                     class="album-cover rounded-sm shadow-lg"
-                     loading="lazy"
-                     decoding="async"
-                     onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded-sm bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'">
-                ${inUserListsBadgeHtml}
-              </div>
-            </div>
-            <div class="album-cell flex flex-col justify-center min-w-0">
-              <div class="flex items-center gap-2">
-                <span class="album-name font-semibold text-gray-200 truncate" title="${escapeHtml(rec.album)}">${escapeHtml(rec.album)}</span>
-              </div>
-              ${releaseDate ? `<div class="text-xs mt-0.5 release-date-display text-gray-400">${releaseDate}</div>` : ''}
-            </div>
-            <div class="artist-cell flex items-center min-w-0">
-              <span class="album-cell-text text-gray-300 truncate" title="${escapeHtml(rec.artist)}">${escapeHtml(rec.artist)}</span>
-            </div>
-            <div class="genre-1-cell flex items-center min-w-0">
-              <span class="album-cell-text text-gray-400 truncate" title="${escapeHtml(genre1Title)}">${genre1Display}</span>
-            </div>
-            <div class="genre-2-cell flex items-center min-w-0">
-              <span class="album-cell-text text-gray-400 truncate" title="${escapeHtml(genre2Title)}">${genre2Display}</span>
-            </div>
+            ${renderDesktopCoverCell(albumData, index, {
+              badgesHtml: inUserListsBadgeHtml,
+              cellClass: 'cover-cell flex items-center justify-center',
+              loadMode: 'lazy',
+            })}
+            ${renderDesktopAlbumCell(albumData, {
+              cellClass: 'album-cell flex flex-col justify-center min-w-0',
+              includeAvailability: false,
+              includePlaycount: false,
+              includeTitle: true,
+            })}
+            ${renderDesktopArtistCell(albumData, {
+              cellClass: 'artist-cell flex items-center min-w-0',
+              includeTitle: true,
+              interactive: false,
+              textClass: 'text-gray-300',
+            })}
+            ${renderDesktopGenreCell(albumData, 1, {
+              cellClass: 'genre-1-cell flex items-center min-w-0',
+              emptyTextClass: 'text-gray-600 italic',
+              fallback: 'No genre',
+              includeTitle: true,
+              interactive: false,
+              textClass: 'text-gray-400',
+            })}
+            ${renderDesktopGenreCell(albumData, 2, {
+              cellClass: 'genre-2-cell flex items-center min-w-0',
+              emptyTextClass: 'text-gray-600 italic',
+              fallback: 'No genre',
+              includeTitle: true,
+              interactive: false,
+              textClass: 'text-gray-400',
+            })}
             <div class="recommended-by-cell flex items-center min-w-0">
               <span class="album-cell-text text-blue-400 truncate flex-1 min-w-0" title="${escapeHtml(rec.recommended_by)}">${escapeHtml(rec.recommended_by)}</span>
               <span class="ml-1 shrink-0">
                 <button class="view-reasoning-btn text-gray-500 hover:text-blue-400 p-1 transition-colors shrink-0" 
                         aria-label="View reasoning"
-                        data-rec-index="${recommendations.indexOf(rec)}">
+                        data-rec-index="${index}">
                   <i class="fas fa-comment-alt text-xs"></i>
                 </button>
               </span>

@@ -42,16 +42,24 @@ import { renderAvailabilityBadges } from './album-display/availability-badges.js
 import { getPositionBadgeColor } from './album-display/position-badge.js';
 import { createModal, destroyModalForElement } from './modal-factory.js';
 import {
-  mobilePlaycountSpan,
-  desktopPlaycountSpan,
-} from './album-display/playcount-view.js';
+  renderDesktopAlbumCell,
+  renderDesktopArtistCell,
+  renderDesktopCoverCell,
+  renderDesktopGenreCell,
+  renderMobileArtistRow,
+  renderMobileCoverSection,
+  renderMobileGenreRow,
+  renderMobilePlaycountRow,
+  renderMobilePositionBadge,
+  renderMobileTitleRow,
+  renderRecommendationBadge,
+  renderSummaryBadge,
+} from './album-display/render-parts.js';
 
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
 const PROGRESSIVE_RENDER_THRESHOLD = 120;
 const PROGRESSIVE_RENDER_BATCH_SIZE = 60;
-const INITIAL_DESKTOP_COVER_COUNT = 16;
-const INITIAL_MOBILE_COVER_COUNT = 8;
 const INITIAL_COVER_REVEAL_TIMEOUT_MS = 800;
 
 // Module-level state
@@ -82,45 +90,6 @@ const {
   invalidateFingerprint,
   extractMutableFingerprints,
 } = albumDisplayShared;
-
-function getCoverLoadMode(index, isMobile) {
-  const initialCount = isMobile
-    ? INITIAL_MOBILE_COVER_COUNT
-    : INITIAL_DESKTOP_COVER_COUNT;
-  return index < initialCount ? 'initial' : 'eager';
-}
-
-function renderCoverImage({ src, fullSrc, alt, className, loadMode }) {
-  const escapedSrc = escapeHtml(src);
-  const escapedFullSrc = escapeHtml(fullSrc || src);
-  const escapedAlt = escapeHtml(alt || '');
-
-  if (loadMode === 'initial') {
-    return `<img src="${escapedSrc}"
-      data-full-src="${escapedFullSrc}"
-      data-cover-reveal-group="initial"
-      alt="${escapedAlt}"
-      class="${className} cover-reveal-pending"
-      loading="eager"
-      decoding="async"
-      fetchpriority="high"
-    >`;
-  }
-
-  // Off-screen covers still render a placeholder + data-lazy-src so the error
-  // handler can attach before the real src is swapped in (loadCoverImages does
-  // the swap right after render). loading="eager" means they are not deferred by
-  // the browser; fetchpriority="low" keeps them behind the visible covers.
-  return `<img src="${PLACEHOLDER_GIF}"
-    data-lazy-src="${escapedSrc}"
-    data-full-src="${escapedFullSrc}"
-    alt="${escapedAlt}"
-    class="${className}"
-    loading="eager"
-    decoding="async"
-    fetchpriority="low"
-  >`;
-}
 
 /**
  * Factory function to create the album display module with injected dependencies
@@ -403,50 +372,7 @@ export function createAlbumDisplay(deps = {}) {
     const row = document.createElement('div');
     row.className = 'album-row album-grid gap-4 py-2';
     row.dataset.index = index;
-
-    // Determine cover image source:
-    // 1. Base64 cover (takes priority - may be locally edited or custom cover)
-    // 2. URL-based loading - uses coverImageUrl from API (efficient for unmodified covers)
-    // 3. Placeholder if no cover available
-    const coverImageSrc = data.coverImage
-      ? `data:image/${data.imageFormat};base64,${data.coverImage}`
-      : data.coverThumbUrl
-        ? data.coverThumbUrl
-        : null;
-    const coverLoadMode = getCoverLoadMode(index, false);
-
-    // Summary badge HTML (shown if album has a summary from any source)
-    // All summaries now use Claude badge (even if originally from Last.fm/Wikipedia)
-    let summaryBadgeHtml = '';
-    if (data.summary) {
-      const source = data.summarySource || '';
-      // Always show Claude badge for all summaries
-      const badgeClass = 'claude-badge';
-      const iconClass = 'fas fa-robot';
-      // No source URL for Claude summaries
-      const sourceUrl = null;
-
-      summaryBadgeHtml = `<div class="summary-badge ${badgeClass}" 
-        data-summary="${escapeHtml(data.summary)}" 
-        data-source-url="${escapeHtml(sourceUrl || '')}" 
-        data-source="${escapeHtml(source)}"
-        data-album-name="${escapeHtml(data.albumName)}" 
-        data-artist="${escapeHtml(data.artist)}">
-        <i class="${iconClass}"></i>
-      </div>`;
-    }
-
-    // Recommendation badge HTML (shown if album is on the year's recommendations list)
-    let recommendationBadgeHtml = '';
-    if (data.recommendedBy) {
-      recommendationBadgeHtml = `<div class="recommendation-badge"
-        data-recommended-by="${escapeHtml(data.recommendedBy)}"
-        data-recommended-at="${escapeHtml(data.recommendedAt || '')}"
-        data-album-name="${escapeHtml(data.albumName)}"
-        data-artist="${escapeHtml(data.artist)}">
-        <i class="fas fa-thumbs-up"></i>
-      </div>`;
-    }
+    const badgeHtml = `${renderSummaryBadge(data)}${renderRecommendationBadge(data)}`;
 
     // Build cell HTML map — each column produces its own cell
     const cellMap = {
@@ -454,49 +380,14 @@ export function createAlbumDisplay(deps = {}) {
         data.position !== null
           ? `<div class="position-cell flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>`
           : '<div class="position-cell"></div>',
-      cover: `<div class="cover-cell flex items-center">
-        <div class="album-cover-container${coverImageSrc && coverLoadMode === 'initial' ? ' cover-reveal-shell' : ''}">
-          ${
-            coverImageSrc
-              ? renderCoverImage({
-                  src: coverImageSrc,
-                  fullSrc: data.coverImageUrl || coverImageSrc,
-                  alt: data.albumName,
-                  className: 'album-cover rounded-sm shadow-lg',
-                  loadMode: coverLoadMode,
-                })
-              : `<div class="album-cover-placeholder rounded-sm bg-gray-800 shadow-lg">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                <polyline points="21 15 16 10 5 21"></polyline>
-              </svg>
-            </div>`
-          }
-          ${summaryBadgeHtml}
-          ${recommendationBadgeHtml}
-        </div>
-      </div>`,
-      album: `<div class="album-cell flex flex-col justify-start">
-        <div class="flex items-center gap-2">
-          <span class="album-name font-semibold text-gray-200 truncate">${escapeHtml(data.albumName)}</span>
-          ${desktopPlaycountSpan(data.itemId, data.playcountDisplay, data.playcount)}
-        </div>
-        <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
-        ${renderAvailabilityBadges(data.availability)}
-      </div>`,
-      artist: `<div class="artist-cell flex items-center">
-        <span class="album-cell-text ${data.artist ? 'text-gray-200' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${escapeHtml(data.artist)}</span>
-      </div>`,
+      cover: renderDesktopCoverCell(data, index, { badgesHtml: badgeHtml }),
+      album: renderDesktopAlbumCell(data, { alwaysShowReleaseDate: true }),
+      artist: renderDesktopArtistCell(data),
       country: `<div class="flex items-center country-cell">
         <span class="album-cell-text ${data.countryClass} truncate cursor-pointer hover:text-gray-100">${data.countryDisplay}</span>
       </div>`,
-      genre_1: `<div class="flex items-center genre-1-cell">
-        <span class="album-cell-text ${data.genre1Class} truncate cursor-pointer hover:text-gray-100">${data.genre1Display}</span>
-      </div>`,
-      genre_2: `<div class="flex items-center genre-2-cell">
-        <span class="album-cell-text ${data.genre2Class} truncate cursor-pointer hover:text-gray-100">${data.genre2Display}</span>
-      </div>`,
+      genre_1: renderDesktopGenreCell(data, 1),
+      genre_2: renderDesktopGenreCell(data, 2),
       track: `<div class="flex flex-col justify-start track-cell min-w-0 cursor-pointer overflow-hidden">
         ${
           data.primaryTrackDisplay
@@ -813,72 +704,11 @@ export function createAlbumDisplay(deps = {}) {
     const card = document.createElement('div');
     card.className = 'album-card album-row relative h-[145px] bg-gray-900';
     card.dataset.index = index;
-
-    // === COVER IMAGE SOURCE ===
-    const mobileCoverSrc = data.coverImage
-      ? `data:image/${data.imageFormat};base64,${data.coverImage}`
-      : data.coverThumbUrl || null;
-    const coverLoadMode = getCoverLoadMode(index, true);
-
-    // === SUMMARY BADGE (AI indicator, shown at the right of the title row) ===
-    // Styling (bare icon, no disc) lives in .summary-badge-mobile in input.css.
-    let summaryBadgeHtml = '';
-    if (data.summary) {
-      summaryBadgeHtml = `
-        <div class="summary-badge summary-badge-mobile claude-badge"
-             data-summary="${escapeHtml(data.summary)}"
-             data-source-url="${escapeHtml('')}"
-             data-source="${escapeHtml(data.summarySource || '')}"
-             data-album-name="${escapeHtml(data.albumName)}"
-             data-artist="${escapeHtml(data.artist)}">
-          <i class="fas fa-robot"></i>
-        </div>`;
-    }
-
-    // === RECOMMENDATION BADGE (shown if album is on the year's recommendations) ===
-    let mobileRecommendationBadgeHtml = '';
-    if (data.recommendedBy) {
-      mobileRecommendationBadgeHtml = `
-        <div class="recommendation-badge recommendation-badge-mobile"
-             data-recommended-by="${escapeHtml(data.recommendedBy)}"
-             data-recommended-at="${escapeHtml(data.recommendedAt || '')}"
-             data-album-name="${escapeHtml(data.albumName)}"
-             data-artist="${escapeHtml(data.artist)}">
-          <i class="fas fa-thumbs-up"></i>
-        </div>`;
-    }
-
-    // === POSITION BADGE ===
-    // Circular badge showing album rank, positioned in top-right of menu section
-    const getPositionBadgeHtml = (position) => {
-      if (position === null) return '';
-
-      // Color coding: gold (1st), silver (2nd), bronze (3rd), gray (rest).
-      // Shared with the drag-reorder recolor so the two never diverge.
-      const c = getPositionBadgeColor(position);
-
-      // Positioned in the card's top-right with equal top/right insets (6.5px)
-      // so the badge is centered over the menu column width (matching the
-      // three-dot button): right = (30px column - 19px badge) / 2 = 5.5px, and
-      // top mirrors that for symmetric corner spacing.
-      return `
-        <div class="mobile-position-badge"
-             style="position: absolute; top: 5.5px; right: 5.5px; z-index: 10;
-                    width: 19px; height: 19px;
-                    display: flex; align-items: center; justify-content: center;
-                    border: 1px solid ${c.border}; border-radius: 50%;
-                    background: rgba(17, 24, 39, 0.7);
-                    box-shadow: 0 0 ${c.size} ${c.shadow};
-                    color: white; font-size: 10px; font-weight: 500; line-height: 1;
-                    font-variant-numeric: tabular-nums; pointer-events: none;"
-             data-position-element="true">
-          <span style="display: block; line-height: 1">${position}</span>
-        </div>`;
-    };
+    const mobileBadgeHtml = `${renderRecommendationBadge(data, { mobile: true })}${renderSummaryBadge(data, { mobile: true })}`;
 
     // === BUILD CARD HTML ===
     card.innerHTML = `
-      ${getPositionBadgeHtml(data.position)}
+      ${renderMobilePositionBadge(data.position)}
 
       <div class="flex items-stretch h-full">
         
@@ -903,29 +733,7 @@ export function createAlbumDisplay(deps = {}) {
              four gaps visually equal. The live-update twin (mobile branch of the
              release-date className reset, ~line 1310) MUST keep these same
              classes or the asymmetry returns on the next in-place update. -->
-        <div class="h-full shrink-0 w-[88px] flex flex-col items-center justify-evenly pl-0.5">
-          <!-- Album cover with optional summary badge -->
-          <div class="mobile-album-cover relative w-20 h-20 flex items-center justify-center ${!mobileCoverSrc ? 'bg-gray-800 rounded-lg' : ''} ${mobileCoverSrc && coverLoadMode === 'initial' ? 'cover-reveal-shell' : ''}">
-            ${
-              mobileCoverSrc
-                ? renderCoverImage({
-                    src: mobileCoverSrc,
-                    fullSrc: data.coverImageUrl || mobileCoverSrc,
-                    alt: data.albumName,
-                    className: 'w-full h-full rounded-lg object-cover',
-                    loadMode: coverLoadMode,
-                  })
-                : `<i class="fas fa-compact-disc text-xl text-gray-600"></i>`
-            }
-          </div>
-          <!-- Release date -->
-          <span class="release-date-display text-xs leading-none whitespace-nowrap ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}"
-                ${data.yearMismatch ? `title="${escapeHtml(data.yearMismatchTooltip || '')}"` : ''}>
-            ${data.releaseDate}
-          </span>
-          <!-- Platform availability badges -->
-          ${renderAvailabilityBadges(data.availability, { variant: 'mobile' })}
-        </div>
+        ${renderMobileCoverSection(data, index)}
         
         <!-- INFO SECTION -->
         <div class="flex-1 min-w-0 pl-0.5 pr-1 flex flex-col justify-evenly h-[130px] leading-[18px]">
@@ -934,26 +742,11 @@ export function createAlbumDisplay(deps = {}) {
                truncated title cuts off at (info-section width - this padding).
                The summary/recommendation badges overlay that reserved zone,
                absolutely centered on the title line. -->
-          <div class="flex items-center relative" style="padding-right: 55px">
-            <h3 class="text-gray-100 leading-tight truncate min-w-0" style="font-size: 13px; font-weight: 700">
-              <i class="fas fa-compact-disc fa-xs inline-block w-4 text-center align-middle mr-1"></i><span data-field="album-mobile-title">${escapeHtml(data.albumName)}</span>
-            </h3>
-            <!-- Recommendation first (left), summary last so the summary badge
-                 is always the rightmost, fixed regardless of the recommendation. -->
-            <div class="absolute flex items-center" style="top: 50%; right: 4px; transform: translateY(-50%); gap: 4px">
-              ${mobileRecommendationBadgeHtml}${summaryBadgeHtml}
-            </div>
-          </div>
+          ${renderMobileTitleRow(data, { paddingRight: '55px', badgesHtml: mobileBadgeHtml })}
           <!-- Artist -->
-          <div class="flex items-center" style="padding-right: 55px">
-            <p class="text-[12px] text-gray-400 truncate min-w-0">
-              <i class="fas fa-user fa-xs inline-block w-4 text-center mr-1"></i><span data-field="artist-mobile-text">${escapeHtml(data.artist)}</span>
-            </p>
-          </div>
+          ${renderMobileArtistRow(data, { paddingRight: '55px' })}
           <!-- Last.fm playcount -->
-          <div class="flex items-center">
-            ${mobilePlaycountSpan(data.itemId, data.playcountDisplay)}
-          </div>
+          ${renderMobilePlaycountRow(data)}
           <!-- Country -->
           <div class="flex items-center">
             <span class="text-[12px] text-gray-400">
@@ -961,11 +754,7 @@ export function createAlbumDisplay(deps = {}) {
             </span>
           </div>
           <!-- Genres -->
-          <div class="flex items-center">
-            <span class="text-[12px] text-gray-400 truncate">
-              <i class="fas fa-music fa-xs inline-block w-4 text-center mr-1"></i><span data-field="genre-mobile-text">${escapeHtml(data.genre1 && data.genre2 ? `${data.genre1} / ${data.genre2}` : data.genre1 || data.genre2 || '')}</span>
-            </span>
-          </div>
+          ${renderMobileGenreRow(data)}
           <!-- Primary track (marker: 1) -->
           <div class="flex items-center ${data.primaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}"
                data-track-play-btn="${data.primaryTrackDisplay ? 'true' : ''}"

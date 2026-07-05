@@ -64,13 +64,20 @@ export function createListNav(deps = {}) {
   let groupsSortable = null;
   const listSortables = new Map();
 
+  function getActiveRecommendationsYear() {
+    return typeof getCurrentRecommendationsYear === 'function'
+      ? getCurrentRecommendationsYear()
+      : null;
+  }
+
   function isListActive(listId) {
-    const activeRecommendationsYear =
-      typeof getCurrentRecommendationsYear === 'function'
-        ? getCurrentRecommendationsYear()
-        : null;
+    const activeRecommendationsYear = getActiveRecommendationsYear();
 
     return getCurrentList() === listId && !activeRecommendationsYear;
+  }
+
+  function isRecommendationsActive(year) {
+    return getActiveRecommendationsYear() === year;
   }
 
   // ============ EXPAND STATE MANAGEMENT ============
@@ -614,12 +621,7 @@ export function createListNav(deps = {}) {
    * @returns {HTMLElement} List item element
    */
   function createRecommendationsButton(year, isMobile) {
-    // Check if recommendations is currently active for this year
-    const currentRecommendationsYear =
-      typeof getCurrentRecommendationsYear === 'function'
-        ? getCurrentRecommendationsYear()
-        : null;
-    const isActive = currentRecommendationsYear === year;
+    const isActive = isRecommendationsActive(year);
 
     const li = document.createElement('li');
     if (isMobile) {
@@ -631,6 +633,8 @@ export function createListNav(deps = {}) {
 
     // Click handler for selecting recommendations
     button.onclick = () => {
+      if (isRecommendationsActive(year)) return;
+
       if (typeof selectRecommendations === 'function') {
         selectRecommendations(year);
       }
