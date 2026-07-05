@@ -64,6 +64,15 @@ export function createListNav(deps = {}) {
   let groupsSortable = null;
   const listSortables = new Map();
 
+  function isListActive(listId) {
+    const activeRecommendationsYear =
+      typeof getCurrentRecommendationsYear === 'function'
+        ? getCurrentRecommendationsYear()
+        : null;
+
+    return getCurrentList() === listId && !activeRecommendationsYear;
+  }
+
   // ============ EXPAND STATE MANAGEMENT ============
   let hasInitializedExpandState = false;
 
@@ -364,8 +373,7 @@ export function createListNav(deps = {}) {
     const meta = getListMetadata(listId);
     const listName = meta?.name || 'Unknown';
     const isMain = meta?.isMain || false;
-    const currentListId = getCurrentList();
-    const isActive = currentListId === listId;
+    const isActive = isListActive(listId);
     const li = document.createElement('li');
 
     if (isMobile) {
@@ -392,6 +400,8 @@ export function createListNav(deps = {}) {
 
     // Click handler for selecting the list
     button.onclick = () => {
+      if (isListActive(listId)) return;
+
       selectList(listId);
       if (isMobile) toggleMobileLists();
     };
