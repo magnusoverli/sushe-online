@@ -21,7 +21,7 @@ register(
 describe('emoji autocomplete', () => {
   it('detects a colon query before the textarea caret', async () => {
     const { findEmojiTrigger } =
-      await import('../src/js/modules/emoji-autocomplete.js');
+      await import('../src/js/modules/emoji-autocomplete-utils.js');
     const value = 'Great record :hea';
 
     assert.deepStrictEqual(findEmojiTrigger(value, value.length), {
@@ -33,7 +33,7 @@ describe('emoji autocomplete', () => {
 
   it('does not trigger inside URLs or plain word prefixes', async () => {
     const { findEmojiTrigger } =
-      await import('../src/js/modules/emoji-autocomplete.js');
+      await import('../src/js/modules/emoji-autocomplete-utils.js');
 
     assert.strictEqual(findEmojiTrigger('https://example.com', 6), null);
     assert.strictEqual(
@@ -44,7 +44,7 @@ describe('emoji autocomplete', () => {
 
   it('replaces only the active shortcode query with the selected emoji', async () => {
     const { findEmojiTrigger, replaceEmojiTrigger } =
-      await import('../src/js/modules/emoji-autocomplete.js');
+      await import('../src/js/modules/emoji-autocomplete-utils.js');
     const value = 'Intro :fire outro';
     const caretIndex = 'Intro :fire'.length;
     const trigger = findEmojiTrigger(value, caretIndex);
@@ -57,7 +57,7 @@ describe('emoji autocomplete', () => {
 
   it('does not refresh suggestions after menu navigation keyup events', async () => {
     const { shouldRefreshAfterKeyup } =
-      await import('../src/js/modules/emoji-autocomplete.js');
+      await import('../src/js/modules/emoji-autocomplete-utils.js');
 
     assert.strictEqual(shouldRefreshAfterKeyup('ArrowDown', true), false);
     assert.strictEqual(shouldRefreshAfterKeyup('ArrowUp', true), false);

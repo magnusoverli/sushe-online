@@ -1,139 +1,19 @@
-const MAX_QUERY_LENGTH = 40;
+import { getTextareaCaretPoint } from './emoji-autocomplete-position.js';
+import {
+  renderSuggestions,
+  updateHighlight,
+} from './emoji-autocomplete-render.js';
+import {
+  findEmojiTrigger,
+  replaceEmojiTrigger,
+  shouldRefreshAfterKeyup,
+} from './emoji-autocomplete-utils.js';
+
 const PANEL_GAP = 6;
 const DEFAULT_LIMIT = 12;
 const PANEL_ID = 'emojiAutocompletePanel';
 
-const TRIGGER_PREFIX_PATTERN = /^[\s([{<'"`]$/;
-const QUERY_PATTERN = /^[a-zA-Z0-9_+-]*$/;
-const MENU_CONTROL_KEYS = new Set([
-  'ArrowDown',
-  'ArrowUp',
-  'Enter',
-  'Tab',
-  'Escape',
-]);
-
 let panelUid = 0;
-
-export function findEmojiTrigger(value, caretIndex) {
-  if (!Number.isInteger(caretIndex) || caretIndex < 1) return null;
-
-  const textBeforeCaret = String(value || '').slice(0, caretIndex);
-  const colonIndex = textBeforeCaret.lastIndexOf(':');
-  if (colonIndex === -1) return null;
-
-  const query = textBeforeCaret.slice(colonIndex + 1);
-  if (query.length > MAX_QUERY_LENGTH) return null;
-  if (!QUERY_PATTERN.test(query)) return null;
-
-  const charBeforeTrigger =
-    colonIndex > 0 ? textBeforeCaret[colonIndex - 1] : '';
-  if (charBeforeTrigger && !TRIGGER_PREFIX_PATTERN.test(charBeforeTrigger)) {
-    return null;
-  }
-
-  return {
-    start: colonIndex,
-    end: caretIndex,
-    query,
-  };
-}
-
-export function replaceEmojiTrigger(value, trigger, emoji) {
-  const before = String(value || '').slice(0, trigger.start);
-  const after = String(value || '').slice(trigger.end);
-  const nextValue = `${before}${emoji}${after}`;
-
-  return {
-    value: nextValue,
-    caretIndex: before.length + emoji.length,
-  };
-}
-
-export function shouldRefreshAfterKeyup(key, menuOpen) {
-  return !(menuOpen && MENU_CONTROL_KEYS.has(key));
-}
-
-function getLineHeight(style) {
-  const parsed = Number.parseFloat(style.lineHeight);
-  if (Number.isFinite(parsed)) return parsed;
-
-  const fontSize = Number.parseFloat(style.fontSize);
-  return Number.isFinite(fontSize) ? fontSize * 1.2 : 18;
-}
-
-function copyMirrorStyles(mirror, textarea, style) {
-  const properties = [
-    'boxSizing',
-    'width',
-    'height',
-    'borderTopWidth',
-    'borderRightWidth',
-    'borderBottomWidth',
-    'borderLeftWidth',
-    'paddingTop',
-    'paddingRight',
-    'paddingBottom',
-    'paddingLeft',
-    'fontFamily',
-    'fontSize',
-    'fontStyle',
-    'fontWeight',
-    'letterSpacing',
-    'lineHeight',
-    'textTransform',
-    'textAlign',
-    'textIndent',
-    'wordSpacing',
-    'tabSize',
-  ];
-
-  properties.forEach((property) => {
-    mirror.style[property] = style[property];
-  });
-
-  mirror.style.position = 'fixed';
-  mirror.style.visibility = 'hidden';
-  mirror.style.overflow = 'hidden';
-  mirror.style.whiteSpace = 'pre-wrap';
-  mirror.style.overflowWrap = 'break-word';
-  mirror.style.top = '0';
-  mirror.style.left = '-9999px';
-  mirror.style.minHeight = `${textarea.clientHeight}px`;
-}
-
-function getTextareaCaretPoint(textarea, caretIndex, doc, win) {
-  const style = win.getComputedStyle(textarea);
-  const mirror = doc.createElement('div');
-  copyMirrorStyles(mirror, textarea, style);
-
-  const before = textarea.value.slice(0, caretIndex);
-  const marker = doc.createElement('span');
-  mirror.textContent = before || '';
-  marker.textContent = textarea.value.slice(caretIndex, caretIndex + 1) || '.';
-  mirror.appendChild(marker);
-  doc.body.appendChild(mirror);
-
-  const textareaRect = textarea.getBoundingClientRect();
-  const mirrorRect = mirror.getBoundingClientRect();
-  const markerRect = marker.getBoundingClientRect();
-  const point = {
-    left:
-      textareaRect.left +
-      markerRect.left -
-      mirrorRect.left -
-      textarea.scrollLeft,
-    top:
-      textareaRect.top +
-      markerRect.top -
-      mirrorRect.top -
-      textarea.scrollTop +
-      getLineHeight(style),
-  };
-
-  mirror.remove();
-  return point;
-}
 
 export function createEmojiAutocomplete(deps = {}) {
   const doc = deps.doc || document;
@@ -212,63 +92,6 @@ export function createEmojiAutocomplete(deps = {}) {
     panel.style.top = `${Math.round(Math.max(viewportPadding, top))}px`;
   }
 
-  function renderEmpty(query) {
-    const el = ensurePanel();
-    el.textContent = '';
-    const empty = doc.createElement('div');
-    empty.className = 'emoji-autocomplete-empty';
-    empty.textContent = query ? 'No emoji found' : 'Type to search emoji';
-    el.appendChild(empty);
-  }
-
-  function renderSuggestions(query, suggestions) {
-    const el = ensurePanel();
-    el.textContent = '';
-
-    if (suggestions.length === 0) {
-      renderEmpty(query);
-      return;
-    }
-
-    suggestions.forEach((suggestion, index) => {
-      const option = doc.createElement('div');
-      option.id = `${el.id}-option-${index}`;
-      option.className = 'emoji-autocomplete-option';
-      option.setAttribute('role', 'option');
-      option.setAttribute(
-        'aria-selected',
-        index === activeIndex ? 'true' : 'false'
-      );
-      option.dataset.index = String(index);
-
-      const glyph = doc.createElement('span');
-      glyph.className = 'emoji-autocomplete-glyph';
-      glyph.textContent = suggestion.emoji;
-
-      const label = doc.createElement('span');
-      label.className = 'emoji-autocomplete-label';
-      label.textContent = `:${suggestion.shortName}:`;
-
-      option.append(glyph, label);
-      el.appendChild(option);
-    });
-  }
-
-  function updateHighlight() {
-    if (!panel) return;
-
-    panel.querySelectorAll('.emoji-autocomplete-option').forEach((option) => {
-      const index = Number.parseInt(option.dataset.index, 10);
-      const isActive = index === activeIndex;
-      option.classList.toggle('is-active', isActive);
-      option.setAttribute('aria-selected', isActive ? 'true' : 'false');
-      if (isActive) {
-        activeTextarea?.setAttribute('aria-activedescendant', option.id);
-        option.scrollIntoView({ block: 'nearest' });
-      }
-    });
-  }
-
   async function updateFromTextarea(textarea) {
     if (isComposing) return;
 
@@ -293,12 +116,18 @@ export function createEmojiAutocomplete(deps = {}) {
 
     activeSuggestions = Array.isArray(suggestions) ? suggestions : [];
     activeIndex = activeSuggestions.length > 0 ? 0 : -1;
-    renderSuggestions(trigger.query, activeSuggestions);
+    renderSuggestions(
+      doc,
+      ensurePanel(),
+      trigger.query,
+      activeSuggestions,
+      activeIndex
+    );
     ensurePanel().classList.remove('hidden');
     textarea.setAttribute('aria-controls', ensurePanel().id);
     textarea.setAttribute('aria-autocomplete', 'list');
     setTextareaExpanded(true);
-    updateHighlight();
+    updateHighlight(panel, activeTextarea, activeIndex);
     positionPanel();
   }
 
@@ -340,14 +169,14 @@ export function createEmojiAutocomplete(deps = {}) {
       event.stopImmediatePropagation();
       if (activeSuggestions.length > 0) {
         activeIndex = Math.min(activeIndex + 1, activeSuggestions.length - 1);
-        updateHighlight();
+        updateHighlight(panel, activeTextarea, activeIndex);
       }
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       event.stopImmediatePropagation();
       if (activeSuggestions.length > 0) {
         activeIndex = Math.max(activeIndex - 1, 0);
-        updateHighlight();
+        updateHighlight(panel, activeTextarea, activeIndex);
       }
     } else if (event.key === 'Enter' || event.key === 'Tab') {
       event.preventDefault();
