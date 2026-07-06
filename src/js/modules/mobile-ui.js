@@ -94,6 +94,7 @@ export function createMobileUI(deps = {}) {
     recommendAlbum,
     openRenameCategoryModal,
     getCurrentUser = () => window.currentUser || {},
+    attachEmojiAutocomplete = () => () => {},
   } = deps;
   const trackPickService = createTrackPickService({ apiCall });
   const findAlbumByIdentity = createAlbumIdentityFinder({
@@ -658,6 +659,13 @@ export function createMobileUI(deps = {}) {
     `;
 
     document.body.appendChild(editModal);
+    const emojiAutocompleteTeardowns = [];
+    const teardownEmojiAutocompletes = () => {
+      while (emojiAutocompleteTeardowns.length > 0) {
+        const teardown = emojiAutocompleteTeardowns.pop();
+        teardown();
+      }
+    };
 
     // Backdrop (desktop-only [data-backdrop]), close button, Escape and scroll
     // lock via the shared controller. On close, remove the modal and reset
@@ -669,6 +677,7 @@ export function createMobileUI(deps = {}) {
       closeButton: editModal.querySelector('[data-close-editor]'),
       label: 'Edit album',
       onClose: () => {
+        teardownEmojiAutocompletes();
         editModal.remove();
         window.scrollTo(0, 0);
         document.body.scrollTop = 0;
@@ -676,6 +685,13 @@ export function createMobileUI(deps = {}) {
     });
     const closeEditor = () => editController.close();
     editController.open();
+
+    ['editComments', 'editComments2'].forEach((id) => {
+      const textarea = document.getElementById(id);
+      if (textarea) {
+        emojiAutocompleteTeardowns.push(attachEmojiAutocomplete(textarea));
+      }
+    });
 
     // Cover art editing state
     let pendingCoverData = null; // { base64: string, format: string }

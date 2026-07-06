@@ -69,6 +69,7 @@ import { apiCall } from './modules/api-client.js';
 import { registerListActions } from './modules/list-actions.js';
 import { createAlbumSearch } from './modules/album-search.js';
 import { createMobileAlbumSearch } from './modules/mobile-album-search.js';
+import { createEmojiAutocomplete } from './modules/emoji-autocomplete.js';
 
 // Centralized state store
 import {
@@ -203,6 +204,10 @@ const appListOperations = createAppListOperations({
  */
 const getLinkPreviewModule = createLazyModule(() =>
   createLinkPreview({ apiCall })
+);
+
+const getEmojiAutocompleteModule = createLazyModule(() =>
+  createEmojiAutocomplete()
 );
 
 /**
@@ -541,6 +546,8 @@ const getMobileUIModule = createLazyModule(() =>
     getDeviceIcon,
     getAvailableCountries,
     getAvailableGenres,
+    attachEmojiAutocomplete: (textarea) =>
+      getEmojiAutocompleteModule().attach(textarea),
     setCurrentContextAlbum: (idx) => {
       setContextAlbumState(idx, getContextAlbumState().albumId);
     },
@@ -670,6 +677,8 @@ const getEditableFieldsModule = createLazyModule(() =>
     getListMetadata,
     isListLockedSync,
     refreshLockedYearStatus: () => refreshLockedYearStatus(),
+    attachEmojiAutocomplete: (textarea) =>
+      getEmojiAutocompleteModule().attach(textarea),
   })
 );
 

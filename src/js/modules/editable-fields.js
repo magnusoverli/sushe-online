@@ -34,6 +34,7 @@ export function createEditableFields(deps = {}) {
     getListMetadata = () => null,
     isListLockedSync = () => false,
     refreshLockedYearStatus = () => {},
+    attachEmojiAutocomplete = () => () => {},
   } = deps;
 
   /**
@@ -829,10 +830,16 @@ export function createEditableFields(deps = {}) {
     textarea.className = 'inline-edit-textarea';
     textarea.value = currentComment;
     textarea.rows = 2;
+    let detachEmojiAutocomplete = () => {};
+    const teardownCommentEditor = () => {
+      detachEmojiAutocomplete();
+      detachEmojiAutocomplete = () => {};
+    };
 
     // Replace div content with textarea
     commentDiv.innerHTML = '';
     commentDiv.appendChild(textarea);
+    detachEmojiAutocomplete = attachEmojiAutocomplete(textarea);
     textarea.focus();
     textarea.select();
 
@@ -862,6 +869,8 @@ export function createEditableFields(deps = {}) {
           }
         );
 
+        teardownCommentEditor();
+
         // Update local state
         albumsToUpdate[albumIndex].comments = newComment;
 
@@ -890,6 +899,7 @@ export function createEditableFields(deps = {}) {
           }, 0);
         }
       } catch (error) {
+        teardownCommentEditor();
         const handled = handleLockedError(error);
         if (!handled) {
           showToast('Error saving comment', 'error');
@@ -923,6 +933,7 @@ export function createEditableFields(deps = {}) {
         textarea.blur();
       }
       if (e.key === 'Escape') {
+        teardownCommentEditor();
         // Cancel editing
         let displayComment = currentComment;
         let displayClass = 'text-gray-300';
@@ -971,10 +982,16 @@ export function createEditableFields(deps = {}) {
     textarea.className = 'inline-edit-textarea';
     textarea.value = currentComment;
     textarea.rows = 2;
+    let detachEmojiAutocomplete = () => {};
+    const teardownCommentEditor = () => {
+      detachEmojiAutocomplete();
+      detachEmojiAutocomplete = () => {};
+    };
 
     // Replace div content with textarea
     commentDiv.innerHTML = '';
     commentDiv.appendChild(textarea);
+    detachEmojiAutocomplete = attachEmojiAutocomplete(textarea);
     textarea.focus();
     textarea.select();
 
@@ -1004,6 +1021,8 @@ export function createEditableFields(deps = {}) {
           }
         );
 
+        teardownCommentEditor();
+
         // Update local state
         albumsToUpdate[albumIndex].comments_2 = newComment;
 
@@ -1032,6 +1051,7 @@ export function createEditableFields(deps = {}) {
           }, 0);
         }
       } catch (error) {
+        teardownCommentEditor();
         const handled = handleLockedError(error);
         if (!handled) {
           showToast('Error saving comment', 'error');
@@ -1065,6 +1085,7 @@ export function createEditableFields(deps = {}) {
         textarea.blur();
       }
       if (e.key === 'Escape') {
+        teardownCommentEditor();
         // Cancel editing
         let displayComment = currentComment;
         let displayClass = 'text-gray-300';
