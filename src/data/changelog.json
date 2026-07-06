@@ -2,6 +2,20 @@
   {
     "date": "2026-07-06",
     "category": "feature",
+    "description": "Now-playing album is highlighted in your desktop list.",
+    "hash": "f4f580e27c7576d8ef7a5e84300556286f6eda79",
+    "commitMessage": "Add desktop now-playing row highlight"
+  },
+  {
+    "date": "2026-07-06",
+    "category": "fix",
+    "description": "Fixed emoji autocomplete suggestions appearing incorrectly.",
+    "hash": "848382261f6cd44cc404ba05be4d2985a3e7e6d9",
+    "commitMessage": "Fix emoji autocomplete structure baseline"
+  },
+  {
+    "date": "2026-07-06",
+    "category": "feature",
     "description": "Added emoji autocomplete when typing comments on albums.",
     "hash": "ecec2b9ca6189c7bc78937400976d5f0ce0f81a2",
     "commitMessage": "Add emoji autocomplete for album comments"
