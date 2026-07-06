@@ -1,5 +1,26 @@
 [
   {
+    "date": "2026-07-06",
+    "category": "feature",
+    "description": "Added emoji autocomplete when typing comments on albums.",
+    "hash": "ecec2b9ca6189c7bc78937400976d5f0ce0f81a2",
+    "commitMessage": "Add emoji autocomplete for album comments"
+  },
+  {
+    "date": "2026-07-05",
+    "category": "perf",
+    "description": "Sidebar no longer reloads when switching to the active list.",
+    "hash": "a335296c3055f6ff47796feb4bb81e343729153a",
+    "commitMessage": "Skip active list sidebar reload"
+  },
+  {
+    "date": "2026-07-05",
+    "category": "perf",
+    "description": "Sidebar no longer reloads when revisiting the recommendations view.",
+    "hash": "f57e3fa7259dc11d36ce4045df2046610c775da2",
+    "commitMessage": "Skip active recommendations sidebar reload"
+  },
+  {
     "date": "2026-07-05",
     "category": "fix",
     "description": "Fixed several visual display issues across the app.",
