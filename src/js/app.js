@@ -70,6 +70,7 @@ import { registerListActions } from './modules/list-actions.js';
 import { createAlbumSearch } from './modules/album-search.js';
 import { createMobileAlbumSearch } from './modules/mobile-album-search.js';
 import { createEmojiAutocomplete } from './modules/emoji-autocomplete.js';
+import { createNowPlayingRowHighlight } from './modules/now-playing-row-highlight.js';
 
 // Centralized state store
 import {
@@ -358,6 +359,12 @@ function showPlayAlbumSubmenu() {
   return getPlaybackModule().showPlayAlbumSubmenu();
 }
 
+const nowPlayingRowHighlight = createNowPlayingRowHighlight({
+  getCurrentList: () => getCurrentListId(),
+  getListData,
+});
+nowPlayingRowHighlight.initialize();
+
 /**
  * Get or initialize the album context menu module
  * Uses lazy initialization to avoid dependency ordering issues
@@ -428,6 +435,7 @@ const getAlbumDisplayModule = createLazyModule(() =>
       getPlaybackModule().playAlbumByMetadata(artist, album, options),
     playTrackSafe: (albumId) => getPlaybackModule().playTrackSafe(albumId),
     playSpecificTrack,
+    reapplyNowPlayingHighlight: () => nowPlayingRowHighlight.apply(),
     isViewingRecommendations,
     getTrackName,
     getTrackLength,

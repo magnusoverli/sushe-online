@@ -852,6 +852,34 @@ body {
   border-radius: 4px;
 }
 
+@media (min-width: 1024px) {
+  .album-row--now-playing {
+    isolation: isolate;
+    z-index: 1;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.045),
+      0 0 0 1px var(--accent-subtle-strong, rgba(220, 38, 38, 0.3)),
+      0 0 22px -10px var(--accent-shadow, rgba(220, 38, 38, 0.4));
+  }
+
+  .album-row--now-playing::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 1px
+      var(--accent-subtle-strong, rgba(220, 38, 38, 0.3));
+    opacity: 0.9;
+    pointer-events: none;
+  }
+
+  .album-row--now-playing > * {
+    position: relative;
+    z-index: 1;
+  }
+}
+
 /* Reduced vertical padding for desktop */
 @media (min-width: 1024px) {
   .album-row {

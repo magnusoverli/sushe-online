@@ -151,6 +151,7 @@ export function createAlbumDisplay(deps = {}) {
     getTrackName,
     getTrackLength,
     formatTrackTime,
+    reapplyNowPlayingHighlight = () => {},
   } = deps;
 
   const playcountSync = createPlaycountSync({
@@ -1029,6 +1030,7 @@ export function createAlbumDisplay(deps = {}) {
 
     // Load cover images for the new row
     loadCoverImages(container);
+    reapplyNowPlayingHighlight();
 
     // Initialize tooltips for desktop
     if (!isMobile) {
@@ -1073,6 +1075,7 @@ export function createAlbumDisplay(deps = {}) {
 
     // Update position numbers
     updatePositionNumbers(rowsContainer, isMobile);
+    reapplyNowPlayingHighlight();
 
     return true;
   }
@@ -2096,6 +2099,8 @@ export function createAlbumDisplay(deps = {}) {
             prePopulatePositionCache(albumContainer, isMobile);
           }
 
+          reapplyNowPlayingHighlight();
+
           return;
         }
         console.warn(
@@ -2122,6 +2127,7 @@ export function createAlbumDisplay(deps = {}) {
       }
       parent.appendChild(fragment);
       loadCoverImages(parent);
+      reapplyNowPlayingHighlight();
     };
 
     const scheduleRenderBatch = (callback) => {
@@ -2366,6 +2372,7 @@ export function createAlbumDisplay(deps = {}) {
     }
 
     container.replaceChildren(albumContainer);
+    reapplyNowPlayingHighlight();
 
     // Kick off cover-image loading for every album (not just the visible ones)
     loadCoverImages(container);

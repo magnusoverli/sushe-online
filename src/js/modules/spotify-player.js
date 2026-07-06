@@ -90,6 +90,7 @@ function emitPlaybackChange(state) {
     window.dispatchEvent(
       new CustomEvent('spotify-playback-change', {
         detail: {
+          spotifyAlbumId: newAlbumId,
           albumName: state?.item?.album?.name || null,
           artistName: state?.item?.artists?.[0]?.name || null,
           isPlaying: state?.is_playing || false,
