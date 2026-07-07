@@ -24,14 +24,16 @@ const {
 
 const { createSpotifyTemplate } = require('./templates/spotify-template');
 const { createSpotifyComponents } = require('./templates/spotify-components');
-const { createStyleAssetManifest } = require('./utils/static-assets');
+const { createStyleAssetResolver } = require('./utils/static-assets');
 const fs = require('fs');
 const path = require('path');
 const ejs = require('ejs');
 // Use a timestamp-based asset version to avoid browser caching issues
 const assetVersion = process.env.ASSET_VERSION || Date.now().toString();
 const asset = createAssetHelper(assetVersion, {
-  hashedAssets: createStyleAssetManifest(),
+  hashedAssets: createStyleAssetResolver({
+    cache: process.env.NODE_ENV === 'production',
+  }),
 });
 
 function createViteManifestHelpers(deps = {}) {

@@ -3,12 +3,13 @@ const fs = require('fs');
 const path = require('path');
 
 const HASHED_STYLE_RE = /^\/styles\/(app|output)-([a-f0-9]{12})\.css$/;
+const STYLE_ASSET_PATHS = ['/styles/app.css', '/styles/output.css'];
 
 function createStyleAssetManifest({ publicDir, fsModule = fs } = {}) {
   const root = publicDir || path.join(__dirname, '..', 'public');
   const manifest = {};
 
-  ['/styles/app.css', '/styles/output.css'].forEach((assetPath) => {
+  STYLE_ASSET_PATHS.forEach((assetPath) => {
     const filePath = path.join(root, assetPath.slice(1));
 
     try {
@@ -24,6 +25,24 @@ function createStyleAssetManifest({ publicDir, fsModule = fs } = {}) {
   });
 
   return manifest;
+}
+
+function createStyleAssetResolver({
+  publicDir,
+  fsModule = fs,
+  cache = true,
+} = {}) {
+  let manifest = null;
+
+  return (assetPath) => {
+    if (!STYLE_ASSET_PATHS.includes(assetPath)) return undefined;
+
+    if (!cache || manifest === null) {
+      manifest = createStyleAssetManifest({ publicDir, fsModule });
+    }
+
+    return manifest[assetPath];
+  };
 }
 
 function createHashedStyleMiddleware({ publicDir } = {}) {
@@ -45,4 +64,5 @@ function createHashedStyleMiddleware({ publicDir } = {}) {
 module.exports = {
   createHashedStyleMiddleware,
   createStyleAssetManifest,
+  createStyleAssetResolver,
 };

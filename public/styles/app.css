@@ -852,31 +852,95 @@ body {
   border-radius: 4px;
 }
 
+@keyframes nowPlayingBorderPulse {
+  0%,
+  100% {
+    opacity: 0.28;
+    box-shadow:
+      inset 0 0 0 1px var(--accent-subtle-strong, rgba(220, 38, 38, 0.3)),
+      0 0 0 1px var(--accent-subtle-strong, rgba(220, 38, 38, 0.3)),
+      0 0 18px -13px var(--accent-shadow, rgba(220, 38, 38, 0.4));
+  }
+  50% {
+    opacity: 0.54;
+    box-shadow:
+      inset 0 0 0 1px
+        var(--now-playing-pulse-color, var(--accent-color, #dc2626)),
+      0 0 0 1px var(--now-playing-pulse-color, var(--accent-color, #dc2626)),
+      0 0 24px -8px var(--accent-shadow, rgba(220, 38, 38, 0.4)),
+      0 0 42px -20px var(--accent-shadow, rgba(220, 38, 38, 0.4));
+  }
+}
+
+@keyframes nowPlayingBorderPulseMobile {
+  0%,
+  100% {
+    opacity: 0.34;
+    box-shadow:
+      inset 0 0 0 1px var(--accent-subtle-strong, rgba(220, 38, 38, 0.3)),
+      0 0 0 1px var(--accent-subtle-strong, rgba(220, 38, 38, 0.3)),
+      0 0 18px -12px var(--accent-shadow, rgba(220, 38, 38, 0.4));
+  }
+  50% {
+    opacity: 0.66;
+    box-shadow:
+      inset 0 0 0 1px
+        var(--now-playing-pulse-color, var(--accent-color, #dc2626)),
+      0 0 0 1px var(--now-playing-pulse-color, var(--accent-color, #dc2626)),
+      0 0 26px -7px var(--accent-shadow, rgba(220, 38, 38, 0.4)),
+      0 0 48px -19px var(--accent-shadow, rgba(220, 38, 38, 0.4));
+  }
+}
+
+.album-row--now-playing {
+  --now-playing-pulse-color: color-mix(
+    in srgb,
+    var(--accent-color, #dc2626) 78%,
+    white 22%
+  );
+  isolation: isolate;
+  z-index: 1;
+}
+
+.album-row--now-playing::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: nowPlayingBorderPulse 4.8s ease-in-out infinite;
+}
+
+.album-row--now-playing::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px
+    var(--accent-subtle-strong, rgba(220, 38, 38, 0.3));
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.album-row--now-playing > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 1023px) {
+  .album-row--now-playing::after {
+    animation-name: nowPlayingBorderPulseMobile;
+  }
+}
+
 @media (min-width: 1024px) {
   .album-row--now-playing {
-    isolation: isolate;
-    z-index: 1;
     box-shadow:
       inset 0 0 0 1px rgba(255, 255, 255, 0.045),
       0 0 0 1px var(--accent-subtle-strong, rgba(220, 38, 38, 0.3)),
       0 0 22px -10px var(--accent-shadow, rgba(220, 38, 38, 0.4));
-  }
-
-  .album-row--now-playing::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    border-radius: inherit;
-    box-shadow: inset 0 0 0 1px
-      var(--accent-subtle-strong, rgba(220, 38, 38, 0.3));
-    opacity: 0.9;
-    pointer-events: none;
-  }
-
-  .album-row--now-playing > * {
-    position: relative;
-    z-index: 1;
   }
 }
 

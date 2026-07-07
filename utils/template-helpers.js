@@ -2,8 +2,14 @@ const { escapeHtml } = require('./escape-html');
 
 function createAssetHelper(assetVersion, options = {}) {
   const hashedAssets = options.hashedAssets || {};
-  return (assetPath) =>
-    hashedAssets[assetPath] || `${assetPath}?v=${assetVersion}`;
+  return (assetPath) => {
+    const hashedAsset =
+      typeof hashedAssets === 'function'
+        ? hashedAssets(assetPath)
+        : hashedAssets[assetPath];
+
+    return hashedAsset || `${assetPath}?v=${assetVersion}`;
+  };
 }
 
 function safeJsonStringify(obj) {

@@ -1,6 +1,10 @@
 import { isAlbumMatchingPlayback } from './playback-utils.js';
 
 export const NOW_PLAYING_ROW_CLASS = 'album-row--now-playing';
+const NOW_PLAYING_ROW_SELECTOR = [
+  '.album-rows-container > .album-row',
+  '.mobile-album-list .album-card.album-row',
+].join(', ');
 
 function asString(value) {
   return value === null || value === undefined ? '' : String(value).trim();
@@ -59,13 +63,11 @@ export function createNowPlayingRowHighlight(deps = {}) {
   let currentPlayback = null;
   let initialized = false;
 
-  function getDesktopRows() {
+  function getRows() {
     const container = doc?.getElementById?.('albumContainer');
     if (!container?.querySelectorAll) return [];
 
-    return Array.from(
-      container.querySelectorAll('.album-rows-container > .album-row')
-    );
+    return Array.from(container.querySelectorAll(NOW_PLAYING_ROW_SELECTOR));
   }
 
   function setRowState(row, isNowPlaying) {
@@ -80,7 +82,7 @@ export function createNowPlayingRowHighlight(deps = {}) {
   }
 
   function apply(playback = currentPlayback) {
-    const rows = getDesktopRows();
+    const rows = getRows();
     if (rows.length === 0) return;
 
     const albums = getListData(getCurrentList()) || [];
@@ -93,7 +95,7 @@ export function createNowPlayingRowHighlight(deps = {}) {
   }
 
   function clear() {
-    getDesktopRows().forEach((row) => setRowState(row, false));
+    getRows().forEach((row) => setRowState(row, false));
   }
 
   function handlePlaybackChange(event) {

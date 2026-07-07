@@ -27,6 +27,19 @@ describe('template-helpers', () => {
     );
   });
 
+  it('supports dynamically resolved hashed asset paths', () => {
+    const asset = createAssetHelper('abc123', {
+      hashedAssets: (assetPath) =>
+        assetPath === '/styles/app.css' ? '/styles/app-abcdef123456.css' : null,
+    });
+
+    assert.strictEqual(
+      asset('/styles/app.css'),
+      '/styles/app-abcdef123456.css'
+    );
+    assert.strictEqual(asset('/images/logo.svg'), '/images/logo.svg?v=abc123');
+  });
+
   it('escapes html and serializes safe json', () => {
     assert.strictEqual(
       escapeHtml(`<script>alert('x')</script>`),

@@ -88,7 +88,9 @@ describe('now-playing-row-highlight module', () => {
     const rows = [createRow(0), createRow(1)];
     const container = {
       querySelectorAll(selector) {
-        return selector === '.album-rows-container > .album-row' ? rows : [];
+        return selector.includes('.album-rows-container > .album-row')
+          ? rows
+          : [];
       },
     };
     const doc = { getElementById: () => container };
@@ -123,11 +125,53 @@ describe('now-playing-row-highlight module', () => {
     );
   });
 
+  it('highlights matching mobile album cards', () => {
+    const rows = [createRow(0), createRow(1)];
+    const container = {
+      querySelectorAll(selector) {
+        return selector.includes('.mobile-album-list .album-card.album-row')
+          ? rows
+          : [];
+      },
+    };
+    const doc = { getElementById: () => container };
+    const win = createWindow();
+    const highlighter = module.createNowPlayingRowHighlight({
+      doc,
+      win,
+      getCurrentList: () => 'list-1',
+      getListData: () => [
+        { album_id: 'spotify-abc123', album: 'Album A', artist: 'Artist A' },
+        { album_id: 'spotify-def456', album: 'Album B', artist: 'Artist B' },
+      ],
+    });
+
+    highlighter.initialize();
+    win.dispatchPlayback({
+      hasPlayback: true,
+      spotifyAlbumId: 'def456',
+      albumName: 'Album B',
+      artistName: 'Artist B',
+    });
+
+    assert.strictEqual(
+      rows[0].classList.contains(module.NOW_PLAYING_ROW_CLASS),
+      false
+    );
+    assert.strictEqual(
+      rows[1].classList.contains(module.NOW_PLAYING_ROW_CLASS),
+      true
+    );
+    assert.strictEqual(rows[1].dataset.nowPlaying, 'true');
+  });
+
   it('clears the highlighted row when playback stops', () => {
     const rows = [createRow(0)];
     const container = {
       querySelectorAll(selector) {
-        return selector === '.album-rows-container > .album-row' ? rows : [];
+        return selector.includes('.album-rows-container > .album-row')
+          ? rows
+          : [];
       },
     };
     const doc = { getElementById: () => container };
