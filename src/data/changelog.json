@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-07-07",
+    "category": "ui",
+    "description": "Added a pulse highlight on the currently playing album row on mobile.",
+    "hash": "e845aad8d5a928e31567f9c4cd762101457af626",
+    "commitMessage": "Add mobile now-playing pulse highlight"
+  },
+  {
     "date": "2026-07-06",
     "category": "feature",
     "description": "Now-playing album is highlighted in your desktop list.",
