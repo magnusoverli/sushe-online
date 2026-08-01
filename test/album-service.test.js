@@ -5,8 +5,9 @@ const { createAlbumService } = require('../services/album-service');
 const { TransactionAbort } = require('../db/transaction');
 const { createMockLogger, createMockPool } = require('./helpers');
 
+// Valid 1x1 RGBA PNG. Every chunk CRC verifies.
 const PNG_1X1_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=';
 
 describe('album-service', () => {
   it('updateSummary should throw 404 when album does not exist', async () => {

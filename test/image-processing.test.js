@@ -10,7 +10,15 @@ const {
   processUploadedCoverImage,
 } = require('../utils/image-processing');
 
+// Valid 1x1 RGBA PNG. Every chunk CRC verifies.
 const PNG_1X1_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=';
+
+// Same image, but its IDAT chunk declares CRC 0xefbfa7db while the data hashes
+// to 0xefa2a75b. sharp <0.35 decoded this via libspng, which ignored the bad
+// checksum. sharp >=0.35 decodes PNG with libpng, which reports it as a read
+// error, so malformed uploads are now rejected instead of silently accepted.
+const PNG_1X1_BAD_CRC_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
 
 describe('image-processing', () => {
@@ -81,6 +89,13 @@ describe('image-processing', () => {
       assert.ok(Buffer.isBuffer(result.buffer));
       assert.ok(
         result.buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))
+      );
+    });
+
+    it('should reject a PNG whose IDAT checksum does not match', async () => {
+      await assert.rejects(
+        () => processUploadedCoverImage(PNG_1X1_BAD_CRC_BASE64),
+        /libpng|png/i
       );
     });
   });

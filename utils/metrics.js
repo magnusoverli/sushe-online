@@ -713,12 +713,12 @@ function recordClaudeUsage(
   claudeRequestsTotal.labels(model, status).inc();
 
   // Calculate and record estimated cost based on model pricing
-  // Prices per million tokens (as of January 2025)
+  // Prices per million tokens, per Anthropic's published rates (verified 2026-08-01)
   const costs = {
     'claude-sonnet-4-5': { input: 3.0 / 1_000_000, output: 15.0 / 1_000_000 },
     'claude-sonnet-4': { input: 3.0 / 1_000_000, output: 15.0 / 1_000_000 },
-    'claude-haiku-4-5': { input: 0.25 / 1_000_000, output: 1.25 / 1_000_000 },
-    'claude-haiku-4': { input: 0.25 / 1_000_000, output: 1.25 / 1_000_000 },
+    'claude-haiku-4-5': { input: 1.0 / 1_000_000, output: 5.0 / 1_000_000 },
+    'claude-haiku-4': { input: 1.0 / 1_000_000, output: 5.0 / 1_000_000 },
     'claude-opus-4': { input: 15.0 / 1_000_000, output: 75.0 / 1_000_000 },
   };
 
