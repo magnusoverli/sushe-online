@@ -54,7 +54,7 @@ class TransactionAbort {
  * so pg discards it rather than returning a poisoned connection to the pool.
  *
  * @param {import('pg').Pool} pool - PostgreSQL connection pool
- * @param {function(import('pg').PoolClient): Promise<*>} callback - Async function receiving the transaction client
+ * @param {(client: import('pg').PoolClient) => Promise<*>} callback - Async function receiving the transaction client
  * @returns {Promise<*>} - The return value of the callback
  * @throws {TransactionAbort} - For expected validation failures
  * @throws {Error} - For unexpected database or application errors

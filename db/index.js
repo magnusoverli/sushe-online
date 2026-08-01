@@ -19,7 +19,15 @@ if (!fs.existsSync(dataDir)) {
 }
 logger.info('Initializing database layer');
 
-let db, pool;
+// These are assigned inside the DATABASE_URL branch below (the else branch
+// throws), but TypeScript 7 does not infer a type for an uninitialized `let`
+// unless noImplicitAny is on, so each one needs an explicit annotation or it
+// silently becomes an unchecked `any`.
+/** @type {InstanceType<typeof import('./postgres').PgDatastore>} */
+let db;
+/** @type {import('pg').Pool} */
+let pool;
+/** @type {Promise<void>} */
 let ready;
 
 if (process.env.DATABASE_URL) {
