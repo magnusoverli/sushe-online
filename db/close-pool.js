@@ -16,11 +16,11 @@ const { markPoolDraining } = require('./postgres');
  * Returns { drained: true } on clean shutdown, { drained: false } on timeout
  * or pool.end() rejection. Always resolves — never throws.
  *
- * @param {Object} pool - pg Pool instance.
+ * @param {import('pg').Pool} pool - pg Pool instance.
  * @param {Object} [opts]
  * @param {number} [opts.timeoutMs=8000]
- * @param {Object} [opts.logger]
- * @param {(pool: Object) => void} [opts.markDraining] - injected for tests
+ * @param {typeof import('../utils/logger')} [opts.logger]
+ * @param {(pool: import('pg').Pool) => void} [opts.markDraining] - injected for tests
  * @returns {Promise<{ drained: boolean }>}
  */
 async function drainPool(pool, opts = {}) {

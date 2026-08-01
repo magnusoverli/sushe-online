@@ -12,9 +12,20 @@ const { classify, KINDS } = require('./errors');
 const logger = require('../utils/logger');
 const metrics = require('../utils/metrics');
 
+/**
+ * Invoke an optional metrics recorder by name, tolerating builds of
+ * utils/metrics.js that do not export it.
+ *
+ * @param {'recordDbRetry' | 'recordDbRetryExhausted'} name - Recorder to call.
+ * @param {...(string | undefined)} args - Positional arguments forwarded to the
+ *   recorder: the retry label, then (for the exhausted counter) the error code.
+ * @returns {void}
+ */
 function callMetric(name, ...args) {
   if (!(name in metrics)) return;
-  const fn = metrics[name];
+  const fn = /** @type {(...a: (string | undefined)[]) => void} */ (
+    metrics[name]
+  );
   if (typeof fn === 'function') {
     fn(...args);
   }
@@ -45,6 +56,11 @@ function computeBackoffDelay(attempt, opts = {}) {
   return Math.floor(random() * ceiling);
 }
 
+/**
+ * Resolve after `ms` milliseconds.
+ * @param {number} ms - Delay in milliseconds.
+ * @returns {Promise<void>}
+ */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -139,7 +155,7 @@ async function withRetry(fn, opts = {}) {
 
 /**
  * Health check function that verifies database connectivity.
- * @param {Object} pool - Database connection pool
+ * @param {import('pg').Pool} pool - Database connection pool
  * @returns {Promise<Object>} - Health status object
  */
 async function healthCheck(pool) {

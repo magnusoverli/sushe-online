@@ -52,7 +52,9 @@ function shouldUsePrettyPrint() {
  * @param {boolean} options.enableFile - Whether to enable file logging (ignored, pino uses streams)
  * @param {string} options.logDir - Log directory (ignored, pino uses streams)
  * @param {Object} options.pinoOptions - Additional pino options for testing
- * @returns {Object} Logger instance with info, warn, error, debug methods
+ * @returns Logger instance with info, warn, error, debug methods. The shape is
+ * inferred from the returned object — annotating it as `Object` here would erase
+ * every method from the type at each of this module's call sites.
  */
 function createLogger(options = {}) {
   const level = options.level ?? LogLevels.INFO;

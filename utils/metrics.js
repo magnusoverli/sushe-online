@@ -181,6 +181,7 @@ const dbSlowQueriesTotal = new client.Counter({
  * Database connection pool reference for pull-based metrics collection.
  * Set via setPoolReference() after pool initialization.
  */
+/** @type {import('pg').Pool | null} */
 let _pool = null;
 
 /**
@@ -459,8 +460,25 @@ function normalizeRoute(route) {
 }
 
 /**
+ * The Express request surface this middleware reads. Declared structurally
+ * because @types/express is not a dependency of this project.
+ * @typedef {import('http').IncomingMessage & {
+ *   method: string,
+ *   route?: { path: string },
+ * }} MetricsRequest
+ */
+
+/**
+ * The Express response surface this middleware reads: a Node ServerResponse
+ * plus Express's res.get() header accessor.
+ * @typedef {import('http').ServerResponse & {
+ *   get(field: string): string | undefined,
+ * }} MetricsResponse
+ */
+
+/**
  * Create metrics middleware for Express
- * @returns {Function} Express middleware
+ * @returns {(req: MetricsRequest, res: MetricsResponse, next: () => void) => void} Express middleware
  */
 function metricsMiddleware() {
   return (req, res, next) => {
@@ -527,22 +545,46 @@ function observeDbQuery(operation, durationMs) {
   dbQueryDuration.labels(operation).observe(durationSeconds);
 }
 
+/**
+ * Record a classified database error.
+ * @param {string} operation - The operation type (e.g. 'select', 'insert')
+ * @param {string} kind - Classification kind from db/errors.js classify()
+ * @param {string} [code] - SQLSTATE / Node system error code, if known
+ */
 function recordDbError(operation, kind, code = 'unknown') {
   dbErrorsTotal.labels(operation, kind || 'unknown', code || 'unknown').inc();
 }
 
+/**
+ * Record a retried database operation.
+ * @param {string} label - Retry label passed to withRetry() (e.g. 'tx:db')
+ */
 function recordDbRetry(label) {
   dbRetriesTotal.labels(label || 'unknown').inc();
 }
 
+/**
+ * Record a database operation that exhausted its retry budget.
+ * @param {string} label - Retry label passed to withRetry()
+ * @param {string} [code] - SQLSTATE / Node system error code, if known
+ */
 function recordDbRetryExhausted(label, code = 'unknown') {
   dbRetriesExhaustedTotal.labels(label || 'unknown', code || 'unknown').inc();
 }
 
+/**
+ * Observe a completed database transaction.
+ * @param {number} durationMs - Transaction duration in milliseconds
+ * @param {'success'|'error'} outcome - How the transaction finished
+ */
 function observeDbTransaction(durationMs, outcome) {
   dbTransactionDuration.labels(outcome || 'unknown').observe(durationMs / 1000);
 }
 
+/**
+ * Record a query that exceeded the slow-query threshold.
+ * @param {string} operation - The operation type (e.g. 'select', 'insert')
+ */
 function recordDbSlowQuery(operation) {
   dbSlowQueriesTotal.labels(operation || 'other').inc();
 }
@@ -594,6 +636,11 @@ function incCacheMiss() {
   cacheMissesTotal.inc();
 }
 
+/**
+ * Publish the current size of the in-process response cache.
+ * @param {number} bytes - Total bytes held in the cache
+ * @param {number} items - Total entries held in the cache
+ */
 function updateResponseCacheMetrics(bytes, items) {
   responseCacheBytes.set(bytes || 0);
   responseCacheItems.set(items || 0);
@@ -611,6 +658,11 @@ function incCoverCacheMiss() {
   coverCacheMissesTotal.inc();
 }
 
+/**
+ * Publish the current size of the in-process album cover cache.
+ * @param {number} bytes - Total bytes held in the cache
+ * @param {number} items - Total entries held in the cache
+ */
 function updateCoverCacheMetrics(bytes, items) {
   coverCacheBytes.set(bytes || 0);
   coverCacheItems.set(items || 0);
@@ -620,6 +672,12 @@ function incCoverCacheEvictions(count = 1) {
   if (count > 0) coverCacheEvictionsTotal.inc(count);
 }
 
+/**
+ * Observe the duration of a startup prewarm phase.
+ * @param {string} phase - Prewarm phase name (e.g. 'db_prewarm', 'ram_prewarm_total')
+ * @param {number} durationMs - Phase duration in milliseconds
+ * @param {'success'|'error'} [result] - Whether the phase completed
+ */
 function observeStartupPrewarm(phase, durationMs, result = 'success') {
   startupPrewarmDuration
     .labels(phase || 'unknown', result || 'unknown')
@@ -671,7 +729,7 @@ function decWebsocketConnections() {
 /**
  * Store a reference to the database pool for pull-based metrics collection.
  * Call this once after pool initialization instead of using a setInterval.
- * @param {Object} pool - pg Pool instance
+ * @param {import('pg').Pool} pool - pg Pool instance
  */
 function setPoolReference(pool) {
   _pool = pool;
@@ -714,6 +772,7 @@ function recordClaudeUsage(
 
   // Calculate and record estimated cost based on model pricing
   // Prices per million tokens, per Anthropic's published rates (verified 2026-08-01)
+  /** @type {Record<string, { input: number, output: number }>} */
   const costs = {
     'claude-sonnet-4-5': { input: 3.0 / 1_000_000, output: 15.0 / 1_000_000 },
     'claude-sonnet-4': { input: 3.0 / 1_000_000, output: 15.0 / 1_000_000 },

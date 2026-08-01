@@ -9,7 +9,19 @@ const logger = require('../../utils/logger');
 // being app-specific and reproducible.
 const MIGRATION_LOCK_KEY = 0x53755368; // 1400072552
 
+/**
+ * A migration module discovered on disk by {@link MigrationManager#getMigrationFiles}.
+ * @typedef {Object} MigrationFile
+ * @property {string} version - Migration filename without the `.js` extension;
+ *   matches `schema_migrations.version`.
+ * @property {string} filePath - Absolute path to the migration module.
+ */
+
 class MigrationManager {
+  /**
+   * @param {import('pg').Pool} pool - pg Pool used for migration queries and
+   *   for checking out dedicated clients for transactional migrations.
+   */
   constructor(pool) {
     this.pool = pool;
     this.migrationsDir = path.join(__dirname, 'migrations');
@@ -28,13 +40,20 @@ class MigrationManager {
     `);
   }
 
+  /**
+   * @returns {Promise<string[]>} Versions already recorded in `schema_migrations`.
+   */
   async getExecutedMigrations() {
+    /** @type {import('pg').QueryResult<{ version: string }>} */
     const result = await this.pool.query(
       `SELECT version FROM ${this.migrationTableName} ORDER BY version`
     );
     return result.rows.map((row) => row.version);
   }
 
+  /**
+   * @returns {Promise<MigrationFile[]>} Migration modules on disk, sorted by version.
+   */
   async getMigrationFiles() {
     if (!fs.existsSync(this.migrationsDir)) {
       fs.mkdirSync(this.migrationsDir, { recursive: true });
@@ -53,12 +72,20 @@ class MigrationManager {
     });
   }
 
+  /**
+   * @param {string} filePath - Absolute path to a migration module.
+   * @returns {Promise<string>} Hex-encoded SHA-256 of the file contents.
+   */
   async calculateChecksum(filePath) {
     const crypto = require('crypto');
     const content = fs.readFileSync(filePath, 'utf8');
     return crypto.createHash('sha256').update(content).digest('hex');
   }
 
+  /**
+   * @param {MigrationFile} migration - Migration to apply.
+   * @returns {Promise<void>}
+   */
   async executeMigration(migration) {
     const { version, filePath } = migration;
 
@@ -136,6 +163,10 @@ class MigrationManager {
     }
   }
 
+  /**
+   * @param {MigrationFile} migration - Migration to revert.
+   * @returns {Promise<void>}
+   */
   async rollbackMigration(migration) {
     const { version, filePath } = migration;
 

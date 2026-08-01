@@ -36,6 +36,11 @@ const logger = require('../utils/logger');
  * control flow exit, not an unexpected failure.
  */
 class TransactionAbort {
+  /**
+   * @param {number} statusCode - HTTP status code to send to the client (e.g. 400, 404, 409, 503)
+   * @param {Record<string, unknown>} body - JSON response body, typically `{ error: string }`
+   *   plus optional flags such as `code`, `yearLocked` or `requiresConfirmation`
+   */
   constructor(statusCode, body) {
     this.statusCode = statusCode;
     this.body = body;

@@ -1,5 +1,15 @@
 const crypto = require('crypto');
 
+/**
+ * Build the startup hook that guarantees an `admin`-role user exists.
+ *
+ * @param {Object} deps
+ * @param {InstanceType<typeof import('./postgres').PgDatastore>} deps.db -
+ *   Tableless datastore; only `.raw()` is used here.
+ * @param {typeof import('../utils/logger')} deps.logger
+ * @param {typeof import('bcryptjs')} deps.bcrypt
+ * @returns {() => Promise<void>} Idempotent bootstrap routine; never throws.
+ */
 function createEnsureAdminUser({ db, logger, bcrypt }) {
   return async function ensureAdminUser() {
     try {

@@ -1,5 +1,68 @@
 const { ensureDb } = require('../postgres');
 
+/**
+ * Raw row shape produced by the `list_items LEFT JOIN albums` query in
+ * findWithAlbumData(). Album-side columns are nullable because the join is a
+ * LEFT JOIN (and because those columns are nullable in the schema).
+ *
+ * @typedef {Object} ListItemAlbumRow
+ * @property {string} _id
+ * @property {string} list_id
+ * @property {number} position
+ * @property {string|null} comments
+ * @property {string|null} comments_2
+ * @property {string|null} album_id
+ * @property {string|null} primary_track
+ * @property {string|null} secondary_track
+ * @property {string|null} artist
+ * @property {string|null} album
+ * @property {string|null} release_date
+ * @property {string|null} country
+ * @property {string|null} genre_1
+ * @property {string|null} genre_2
+ * @property {Object[]|null} tracks
+ * @property {string|null} cover_image_format
+ * @property {string|null} summary
+ * @property {string|null} summary_source
+ */
+
+/**
+ * Camel-cased view of a list item joined with its album, as consumed by
+ * services/list-service.js and the playlist builders.
+ *
+ * @typedef {Object} ListItemAlbumData
+ * @property {string} _id
+ * @property {string} listId
+ * @property {number} position
+ * @property {string} artist
+ * @property {string} album
+ * @property {string} albumId
+ * @property {string} releaseDate
+ * @property {string} country
+ * @property {string} genre1
+ * @property {string} genre2
+ * @property {string|null} primaryTrack
+ * @property {string|null} secondaryTrack
+ * @property {string} comments
+ * @property {string} comments2
+ * @property {Object[]|null} tracks
+ * @property {string} coverImageFormat
+ * @property {string} summary
+ * @property {string} summarySource
+ */
+
+/**
+ * The two track picks stored on a list item.
+ *
+ * @typedef {Object} TrackPicks
+ * @property {string|null} primary
+ * @property {string|null} secondary
+ */
+
+/**
+ * @param {ListItemAlbumRow} row
+ * @returns {ListItemAlbumData}
+ */
 function mapAlbumDataRow(row) {
   return {
     _id: row._id,
@@ -23,6 +86,17 @@ function mapAlbumDataRow(row) {
   };
 }
 
+/**
+ * Pure helper: work out the new primary/secondary track picks when
+ * `trackIdentifier` is assigned to `targetPriority` on a list item that
+ * currently holds `current`.
+ *
+ * @param {{ primary_track: string|null, secondary_track: string|null }} current
+ *   Current picks, straight from the `list_items` row (snake_case columns).
+ * @param {string} trackIdentifier
+ * @param {number} targetPriority - 1 = primary, anything else = secondary.
+ * @returns {TrackPicks}
+ */
 function calculateUpdatedTrackPicks(current, trackIdentifier, targetPriority) {
   const { primary_track: primaryTrack, secondary_track: secondaryTrack } =
     current;
@@ -51,9 +125,18 @@ function calculateUpdatedTrackPicks(current, trackIdentifier, targetPriority) {
   return { primary: newPrimary, secondary: newSecondary };
 }
 
+/** @param {{ db?: * }} [deps] - `db` is validated by ensureDb, which types the result. */
 function createListItemsRepository(deps = {}) {
-  const db = ensureDb(deps.db, 'list-items-repository');
+  // ensureDb only guarantees `.raw` is callable; the cast pins the canonical
+  // facade shape so `.raw`/`.withTransaction` callbacks are contextually typed.
+  const db = /** @type {import('../types').DbFacade} */ (
+    ensureDb(deps.db, 'list-items-repository')
+  );
 
+  /**
+   * @param {string} listId - `lists._id` (TEXT primary key).
+   * @returns {Promise<ListItemAlbumData[]>}
+   */
   async function findWithAlbumData(listId) {
     const result = await db.raw(
       `SELECT
@@ -86,6 +169,10 @@ function createListItemsRepository(deps = {}) {
     return result.rows.map(mapAlbumDataRow);
   }
 
+  /**
+   * @param {string} listItemId - `list_items._id` (TEXT).
+   * @returns {Promise<{ list_item_id: string, list_id: string, user_id: string }|null>}
+   */
   async function findItemWithOwner(listItemId) {
     const result = await db.raw(
       `SELECT li._id AS list_item_id, li.list_id, l.user_id
@@ -99,6 +186,12 @@ function createListItemsRepository(deps = {}) {
     return result.rows[0] || null;
   }
 
+  /**
+   * @param {string} listItemId - `list_items._id` (TEXT).
+   * @param {string} trackIdentifier
+   * @param {number} targetPriority - 1 = primary, anything else = secondary.
+   * @returns {Promise<TrackPicks|null>} null when the list item does not exist.
+   */
   async function setTrackPick(listItemId, trackIdentifier, targetPriority) {
     return db.withTransaction(async (client) => {
       const current = await client.query(
@@ -127,6 +220,14 @@ function createListItemsRepository(deps = {}) {
     });
   }
 
+  /**
+   * Clear one or both track picks on a list item.
+   *
+   * @param {string} listItemId - `list_items._id` (TEXT).
+   * @param {string|null} [trackIdentifier] - When null/omitted, both picks are
+   *   cleared; otherwise only the pick(s) matching it are cleared.
+   * @returns {Promise<TrackPicks|null>} null when the list item does not exist.
+   */
   async function removeTrackPick(listItemId, trackIdentifier = null) {
     return db.withTransaction(async (client) => {
       const current = await client.query(

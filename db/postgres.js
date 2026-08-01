@@ -8,11 +8,20 @@ const { classify } = require('./errors');
 
 const observeDbQuery = metrics.observeDbQuery;
 
+/**
+ * Best-effort invocation of a metrics helper by export name. Metrics are
+ * optional instrumentation: when the named export is absent (or is not a
+ * function) the call is silently skipped.
+ *
+ * @param {string} name - Export name on utils/metrics, e.g. 'recordDbError'.
+ * @param {...unknown} args - Arguments forwarded verbatim to that helper.
+ * @returns {void}
+ */
 function callMetric(name, ...args) {
   if (!(name in metrics)) return;
-  const fn = metrics[name];
+  const fn = /** @type {Record<string, unknown>} */ (metrics)[name];
   if (typeof fn === 'function') {
-    fn(...args);
+    /** @type {(...callArgs: unknown[]) => void} */ (fn)(...args);
   }
 }
 
@@ -54,10 +63,20 @@ function ensureDb(db, serviceName) {
 // the full acquire timeout during shutdown.
 const _drainingPools = new WeakSet();
 
+/**
+ * Mark a pool as draining so in-flight datastore calls fast-fail.
+ *
+ * @param {import('pg').Pool} pool
+ * @returns {void}
+ */
 function markPoolDraining(pool) {
   _drainingPools.add(pool);
 }
 
+/**
+ * @param {import('pg').Pool} pool
+ * @returns {boolean} True once markPoolDraining() has been called for `pool`.
+ */
 function isPoolDraining(pool) {
   return _drainingPools.has(pool);
 }
@@ -70,6 +89,14 @@ class ShuttingDownError extends Error {
   }
 }
 
+/**
+ * Block until the database answers `SELECT 1`, retrying with a fixed delay.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {number} [retries=10] - Maximum connection attempts.
+ * @param {number} [interval=3000] - Delay between attempts, in milliseconds.
+ * @returns {Promise<void>}
+ */
 async function waitForPostgres(pool, retries = 10, interval = 3000) {
   logger.info('Checking PostgreSQL connection...');
   for (let i = 0; i < retries; i++) {
@@ -85,8 +112,16 @@ async function waitForPostgres(pool, retries = 10, interval = 3000) {
   throw new Error('PostgreSQL not reachable');
 }
 
+/**
+ * Pre-open the pool's minimum connections by issuing trivial queries so the
+ * first real request does not pay TCP + auth latency.
+ *
+ * @param {import('pg').Pool} pool
+ * @returns {Promise<void>}
+ */
 async function warmConnections(pool) {
   logger.info('Warming database connections...');
+  /** @type {Promise<unknown>[]} */
   const warmupPromises = [];
 
   // Create minimum number of connections by running simple queries
@@ -114,6 +149,13 @@ class PgDatastore {
     this.logQueries = process.env.LOG_SQL === 'true';
   }
 
+  /**
+   * Redact bound parameters for logging: binary blobs, long base64 strings and
+   * data URIs are replaced with a size summary. Other values pass through.
+   *
+   * @param {unknown[]} [params] - Bound parameter values, as passed to pg.
+   * @returns {unknown[]|undefined} Log-safe copy, or `params` when not an array.
+   */
   _sanitizeParams(params) {
     if (!params || !Array.isArray(params)) return params;
     return params.map((param) => {
@@ -135,6 +177,13 @@ class PgDatastore {
     });
   }
 
+  /**
+   * Run an ad-hoc statement on the pool with logging, timing and metrics.
+   *
+   * @param {string} text - SQL text with $1, $2 placeholders.
+   * @param {unknown[]} [params] - Bound parameter values.
+   * @returns {Promise<import('pg').QueryResult>}
+   */
   async _query(text, params) {
     if (isPoolDraining(this.pool)) {
       throw new ShuttingDownError();
@@ -169,6 +218,15 @@ class PgDatastore {
     }
   }
 
+  /**
+   * Run a named (server-side prepared) statement on the pool with logging,
+   * timing and metrics.
+   *
+   * @param {string} name - Prepared-statement name; must map to constant SQL.
+   * @param {string} text - SQL text with $1, $2 placeholders.
+   * @param {unknown[]} [params] - Bound parameter values.
+   * @returns {Promise<import('pg').QueryResult>}
+   */
   async _preparedQuery(name, text, params) {
     if (isPoolDraining(this.pool)) {
       throw new ShuttingDownError();
@@ -225,6 +283,18 @@ class PgDatastore {
     return 'other';
   }
 
+  /**
+   * Emit a warning log + metric when a query exceeded the slow-query threshold.
+   * Below the threshold this is a no-op.
+   *
+   * @param {Object} entry
+   * @param {string} entry.operation - select/insert/update/delete/other.
+   * @param {number} entry.durationMs - Measured wall-clock query duration.
+   * @param {string} entry.queryText - SQL text, logged verbatim.
+   * @param {string|null} [entry.name] - Prepared-statement name, when named.
+   * @param {Error|null} [entry.error] - Failure the query ended with, if any.
+   * @returns {void}
+   */
   _logSlowQuery({
     operation,
     durationMs,
@@ -265,7 +335,7 @@ class PgDatastore {
    * working at the SQL level and usually alias columns explicitly.
    *
    * @param {string} sql - SQL text with $1, $2 placeholders.
-   * @param {Array} [params] - Bound parameter values.
+   * @param {unknown[]} [params] - Bound parameter values.
    * @param {Object} [opts]
    * @param {string} [opts.name] - Prepared-statement name (enables pg's plan cache).
    * @param {boolean} [opts.retryable=false] - If true, retry on transient errors
