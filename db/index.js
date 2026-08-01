@@ -54,7 +54,9 @@ if (process.env.DATABASE_URL) {
   // (server restart, network blip). Without a listener this is an unhandled
   // 'error' event that takes down the whole process; the client is already
   // removed from the pool, so logging is the complete response.
-  pool.on('error', (err) => {
+  // pg types this handler's argument as a plain Error, but the errors it
+  // actually emits carry pg's SQLSTATE in `code`.
+  pool.on('error', (/** @type {Error & { code?: string }} */ err) => {
     logger.error('Idle database client error', {
       error: err.message,
       code: err.code,

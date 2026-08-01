@@ -225,7 +225,13 @@ class PgDatastore {
     return 'other';
   }
 
-  _logSlowQuery({ operation, durationMs, queryText, name, error = null }) {
+  _logSlowQuery({
+    operation,
+    durationMs,
+    queryText,
+    name = null,
+    error = null,
+  }) {
     if (durationMs < SLOW_QUERY_THRESHOLD_MS) {
       return;
     }
