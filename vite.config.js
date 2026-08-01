@@ -28,7 +28,11 @@ export default defineConfig({
     outDir: path.resolve(__dirname, 'public/js'),
     emptyOutDir: true,
     manifest: true,
-    chunkSizeWarningLimit: 600,
+    // The emoji-data chunk is a lazily imported data blob (~619 kB raw,
+    // ~103 kB gzipped) that grows with each Emoji release, so it does not
+    // affect initial page load. Headroom above it keeps the warning
+    // meaningful for chunks that do.
+    chunkSizeWarningLimit: 700,
     sourcemap: false,
     target: 'es2020', // Modern browsers, smaller output
     cssCodeSplit: true,
