@@ -363,16 +363,20 @@ function createMessenger(apiRequest, configManager, log) {
 
 /**
  * Create Telegram notifier with injected dependencies
- * @param {Object} deps - Dependencies
- * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
- * @param {Object} deps.logger - Logger instance
- * @param {Function} deps.fetch - Fetch function
- * @param {string} deps.encryptionKey - Key for encrypting bot token
- * @param {string} deps.baseUrl - Base URL for webhook
+ * @param {Object} [deps] - Dependencies
+ * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore
+ *   (required at runtime; enforced by ensureDb)
+ * @param {Object} [deps.logger] - Logger instance (defaults to the shared logger)
+ * @param {Function} [deps.fetch] - Fetch function (defaults to global fetch)
+ * @param {string} [deps.encryptionKey] - Key for encrypting bot token
+ *   (defaults to SESSION_SECRET)
+ * @param {string} [deps.baseUrl] - Base URL for webhook (defaults to BASE_URL)
  */
 function createTelegramNotifier(deps = {}) {
   const log = deps.logger || logger;
-  const db = ensureDb(deps.db, 'telegram-notifier');
+  const db = /** @type {import("../db/types").DbFacade} */ (
+    ensureDb(deps.db, 'telegram-notifier')
+  );
   const fetchFn = deps.fetch || global.fetch;
   const encryptionKey = deps.encryptionKey || process.env.SESSION_SECRET;
   const baseUrl = deps.baseUrl || process.env.BASE_URL;

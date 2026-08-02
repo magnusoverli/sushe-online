@@ -158,8 +158,9 @@ async function syncUserPlaycounts(db, log, user) {
 
 /**
  * Create the Tier-1 playcount sync scheduler.
- * @param {Object} deps
- * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
+ * @param {Object} [deps]
+ * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore
+ *   (required at runtime; ensureDb throws when absent)
  * @param {Object} [deps.logger]
  * @param {number} [deps.syncIntervalMs]
  * @param {number} [deps.staleThresholdMs]

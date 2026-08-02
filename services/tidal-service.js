@@ -18,9 +18,10 @@ const {
 const { generateQueryForms } = require('../utils/entity-matching');
 
 /**
- * @param {Object} deps
- * @param {Object} deps.fetch - Fetch implementation
- * @param {Object} deps.userService - User service for persistence
+ * @param {Object} [deps]
+ * @param {Function} [deps.fetch] - Fetch implementation (defaults to globalThis.fetch)
+ * @param {Object} [deps.userService] - User service for persistence
+ *   (required in practice; the factory throws when it is missing)
  * @param {Object} [deps.logger] - Logger instance
  * @returns {Object} Tidal service methods
  */

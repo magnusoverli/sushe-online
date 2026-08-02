@@ -9,12 +9,16 @@ module.exports = (app, deps) => {
   const { ensureAuth, ensureAdmin, db, coverCache, responseCache } = deps;
   const logger = require('../../utils/logger');
 
-  const imageRefetchService = createImageRefetchService({
-    db,
-    logger,
-    coverCache,
-    responseCache,
-  });
+  // createImageRefetchService reads deps.coverCache / deps.responseCache but
+  // omits both from its own JSDoc, so spell the real dependency shape out here.
+  const imageRefetchService = createImageRefetchService(
+    /** @type {{ db: import("../../db/types").DbFacade, logger: Object, coverCache: InstanceType<typeof import("../../services/album-cover-cache").AlbumCoverCache>, responseCache: InstanceType<typeof import("../../middleware/response-cache").ResponseCache> }} */ ({
+      db,
+      logger,
+      coverCache,
+      responseCache,
+    })
+  );
 
   app.locals.imageRefetchService = imageRefetchService;
 

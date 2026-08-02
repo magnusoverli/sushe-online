@@ -309,12 +309,15 @@ async function dropPublicTablesForRestore({ db, logger, restoreId }) {
       error: error.message,
       dataDropped,
     });
-    const restoreError = createRestoreError(
-      RESTORE_ERROR_CODES.PROCESS_FAILED,
-      `Pre-restore table drop failed: ${error.message}`,
-      500,
-      { dataDropped }
-    );
+    const restoreError =
+      /** @type {import('./restore-errors').RestoreError & {dataDropped: boolean}} */ (
+        createRestoreError(
+          RESTORE_ERROR_CODES.PROCESS_FAILED,
+          `Pre-restore table drop failed: ${error.message}`,
+          500,
+          { dataDropped }
+        )
+      );
     // Lets the caller distinguish "data intact, safe to retry" from
     // "schema is gone, the app must restart into a consistent state".
     restoreError.dataDropped = dataDropped;

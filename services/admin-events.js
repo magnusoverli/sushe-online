@@ -149,8 +149,9 @@ function executeQueryable(queryable, sql, params, opts = undefined) {
 /**
  * Create admin event service with injected dependencies.
  *
- * @param {Object} deps
- * @param {Object} deps.db - Canonical DbFacade used for admin_events SQL.
+ * @param {Object} [deps]
+ * @param {Object} [deps.db] - Canonical DbFacade used for admin_events SQL.
+ *   Required at runtime: ensureDb() throws when it is absent.
  * @param {Object} [deps.logger]
  * @param {Function} [deps.telegramNotifier]
  */

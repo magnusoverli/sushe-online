@@ -107,9 +107,11 @@ function createAlbumSearchService(deps = {}) {
   const db = ensureDb(deps.db, 'album-search-service');
 
   /**
-   * @param {Object} args
-   * @param {string} args.userId   Owner whose lists are searched.
-   * @param {string} args.query    Raw search text.
+   * @param {Object} [args]
+   * @param {string} [args.userId]  Owner whose lists are searched. Missing or
+   *   empty short-circuits to an empty result set.
+   * @param {string} [args.query]   Raw search text. Missing or blank
+   *   short-circuits to an empty result set.
    * @param {string[]} [args.fields] Optional field groups (meta|notes|tracks).
    * @param {number|string} [args.limit] Max results (clamped to MAX_LIMIT).
    * @returns {Promise<{results: Array, total: number, truncated: boolean}>}
@@ -125,6 +127,7 @@ function createAlbumSearchService(deps = {}) {
     }
 
     const columns = resolveColumns(fields);
+    /** @type {Array<string|number>} */
     const params = [userId];
 
     // One parameter per token (its escaped %pattern%); within a token, OR the

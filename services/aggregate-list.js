@@ -126,11 +126,34 @@ function buildAlbumMap(items, userMap) {
 }
 
 /**
+ * One entry of the aggregate list. Built by sortAndRankAlbums from the
+ * buildAlbumMap accumulator; `rank` is filled in by the ranking pass below.
+ *
+ * @typedef {Object} RankedAggregateAlbum
+ * @property {string|null} albumId
+ * @property {string} artist
+ * @property {string} album
+ * @property {string|null} coverImage
+ * @property {string} releaseDate
+ * @property {string} country
+ * @property {string} genre1
+ * @property {string} genre2
+ * @property {number} totalPoints
+ * @property {number} voterCount
+ * @property {number} averagePosition
+ * @property {number} highestPosition
+ * @property {number} lowestPosition
+ * @property {Array<{username: string, position: number, points: number}>} voters
+ * @property {number} [rank]
+ */
+
+/**
  * Convert album map to sorted array with ranks
  * @param {Map} albumMap - Album data map
- * @returns {Array} - Sorted array of albums with ranks
+ * @returns {RankedAggregateAlbum[]} - Sorted array of albums with ranks
  */
 function sortAndRankAlbums(albumMap) {
+  /** @type {RankedAggregateAlbum[]} */
   const albums = Array.from(albumMap.values())
     .filter((album) => album.positions && album.positions.length > 0) // Guard against empty positions
     .filter((album) => album.totalPoints > 0) // Only include albums with points (must appear in top 40)
@@ -577,9 +600,12 @@ async function getYearsWithMainListsOp(db) {
 
 /**
  * Create aggregate list utilities with injected dependencies
- * @param {Object} deps - Dependencies
- * @param {import('../db/types').DbFacade} deps.db - Canonical datastore
+ * @param {Object} [deps] - Dependencies
+ * @param {import('../db/types').DbFacade} [deps.db] - Canonical datastore
+ *   (required in practice; ensureDb throws when it is missing)
  * @param {Object} [deps.logger] - Logger instance
+ * @param {(year: number) => void} [deps.onRecomputeComplete] - Hook invoked
+ *   after a successful recompute (used to invalidate response caches)
  */
 function createAggregateList(deps = {}) {
   const log = deps.logger || logger;

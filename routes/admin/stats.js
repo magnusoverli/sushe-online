@@ -25,7 +25,7 @@ module.exports = (app, deps) => {
       isAdmin: req.user.role === 'admin',
       codeValid: new Date() < adminCodeExpiry,
       codeExpiresIn:
-        Math.max(0, Math.floor((adminCodeExpiry - new Date()) / 1000)) +
+        Math.max(0, Math.floor((adminCodeExpiry - Date.now()) / 1000)) +
         ' seconds',
     });
   });

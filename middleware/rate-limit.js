@@ -12,7 +12,9 @@
  * - Can be disabled entirely by setting DISABLE_RATE_LIMITING=true
  */
 
-const rateLimit = require('express-rate-limit');
+// express-rate-limit v7+ ships the factory as a named export (the CJS build
+// also assigns it onto module.exports, but only the named export is typed).
+const { rateLimit } = require('express-rate-limit');
 const logger = require('../utils/logger');
 const { incRateLimitHit } = require('../utils/metrics');
 

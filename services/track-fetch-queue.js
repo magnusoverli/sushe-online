@@ -54,10 +54,11 @@ function sanitizeQuery(str = '') {
 /**
  * Factory function to create a TrackFetchQueue with dependency injection
  *
- * @param {Object} deps - Dependencies
- * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
- * @param {Function} deps.fetch - Fetch function (for testing)
- * @param {number} deps.maxConcurrent - Max concurrent fetches (default: 2)
+ * @param {Object} [deps] - Dependencies
+ * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore
+ * @param {Function} [deps.fetch] - Fetch function (for testing)
+ * @param {number} [deps.maxConcurrent] - Max concurrent fetches (default: 2)
+ * @param {Object} [deps.logger] - Logger instance (defaults to utils/logger)
  * @returns {Object} - TrackFetchQueue instance
  */
 function createTrackFetchQueue(deps = {}) {

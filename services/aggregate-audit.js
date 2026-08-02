@@ -22,9 +22,22 @@ const {
 } = require('./aggregate-audit/manual-reconciliation');
 const { createDuplicateService } = require('./duplicate-service');
 
+/**
+ * Create the aggregate-list audit utilities.
+ *
+ * @param {Object} [deps]
+ * @param {import('../db/types').DbFacade} [deps.db] - Canonical datastore
+ *   (required at runtime; ensureDb throws when absent)
+ * @param {Object} [deps.logger] - Logger instance
+ * @param {Object} [deps.duplicateService] - Injectable duplicate service
+ */
 function createAggregateAudit(deps = {}) {
   const log = deps.logger || logger;
-  const db = ensureDb(deps.db, 'aggregate-audit');
+  // ensureDb validates and returns the same facade it was given; its declared
+  // return type is the looser structural guard shape.
+  const db = /** @type {import('../db/types').DbFacade} */ (
+    ensureDb(deps.db, 'aggregate-audit')
+  );
 
   const duplicateAudit = createDuplicateAuditService({
     db,

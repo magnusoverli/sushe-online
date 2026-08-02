@@ -463,7 +463,11 @@ async function searchTrackWithDeps(
     return { error: { status: 404, message: 'Album has no tracks' } };
   }
 
-  const numberMatch = matchTrackByNumber(tracks, track);
+  // Spotify's album-tracks endpoint returns simplified track objects (id + name);
+  // matchTrackByNumber just indexes into that same array.
+  const numberMatch = /** @type {{id: string, name: string}|null} */ (
+    matchTrackByNumber(tracks, track)
+  );
   if (numberMatch) {
     logger.info('Spotify track matched by number:', {
       trackId: numberMatch.id,
@@ -612,9 +616,11 @@ function scheduleSpotifyPlaycountRefresh(logger, params) {
 }
 
 /**
- * @param {Object} deps
- * @param {Object} deps.fetch - Fetch implementation
+ * @param {Object} [deps]
+ * @param {Function} [deps.fetch] - Fetch implementation (defaults to globalThis.fetch)
  * @param {Object} [deps.logger] - Logger instance
+ * @param {ReturnType<typeof import('./external-identity-service').createExternalIdentityService>} [deps.externalIdentityService]
+ *   Cached album/artist identity mappings; omitted in contexts without a datastore
  * @returns {Object} Spotify service methods
  */
 function createSpotifyService(deps = {}) {

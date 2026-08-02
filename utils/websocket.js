@@ -155,9 +155,12 @@ function createBroadcast(getIO, logger) {
 
 /**
  * Create the WebSocket service with dependency injection
- * @param {Object} deps - Dependencies
- * @param {Object} deps.logger - Logger instance
- * @returns {Object} WebSocket service with setup and broadcast methods
+ * @param {Object} [deps] - Dependencies
+ * @param {Object} [deps.logger] - Logger instance (defaults to utils/logger)
+ * @returns The WebSocket service: setup, broadcast, getIO and shutdown. The
+ * shape is inferred from the returned object, because module.exports spreads
+ * this instance — annotating it as `Object` hides every one of those members
+ * from anything that imports them.
  */
 function createWebSocketService(deps = {}) {
   const logger = deps.logger || require('./logger');

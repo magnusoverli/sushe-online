@@ -222,7 +222,7 @@ async function fetchArtistCountries(updates, musicBrainz, log, userId) {
 
 /**
  * Sync internal, Spotify, and Last.fm data sources for a user
- * @returns {Object} - { updates, errors }
+ * @returns {Promise<{ updates: Object, errors: Array<{source: string, error: string}> }>}
  */
 async function syncAllDataSources(user, syncHelpers, log) {
   const { syncInternalFn, syncSpotifyFn, syncLastfmFn } = syncHelpers;
@@ -343,18 +343,25 @@ async function calculateAndSaveAffinity(
 
 /**
  * Create preference sync service with injected dependencies
- * @param {Object} deps - Dependencies
- * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
- * @param {Object} deps.logger - Logger instance
- * @param {Object} deps.spotifyAuth - Spotify auth utilities (optional)
- * @param {Object} deps.lastfmAuth - Last.fm auth utilities (optional)
- * @param {Object} deps.userPrefs - User preferences utilities (optional)
- * @param {number} deps.syncIntervalMs - Sync interval in ms (optional)
- * @param {number} deps.staleThresholdMs - Stale data threshold in ms (optional)
+ * @param {Object} [deps] - Dependencies
+ * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore
+ *   (required at runtime; ensureDb throws when absent)
+ * @param {Object} [deps.logger] - Logger instance
+ * @param {Object} [deps.spotifyAuth] - Spotify auth utilities
+ * @param {Object} [deps.lastfmAuth] - Last.fm auth utilities
+ * @param {Object} [deps.userService] - User service (token store for Spotify refresh)
+ * @param {Object} [deps.userPrefs] - User preferences utilities
+ * @param {Object} [deps.musicBrainz] - MusicBrainz utilities
+ * @param {number} [deps.syncIntervalMs] - Sync interval in ms
+ * @param {number} [deps.staleThresholdMs] - Stale data threshold in ms
  */
 function createPreferenceSyncService(deps = {}) {
   const log = deps.logger || logger;
-  const db = ensureDb(deps.db, 'preference-sync');
+  // ensureDb validates and returns the same facade it was given; its declared
+  // return type is the looser structural guard shape.
+  const db = /** @type {import('../db/types').DbFacade} */ (
+    ensureDb(deps.db, 'preference-sync')
+  );
 
   const spotifyAuth = deps.spotifyAuth || createSpotifyAuth({ logger: log });
   const lastfmAuth = deps.lastfmAuth || createLastfmAuth({ logger: log });

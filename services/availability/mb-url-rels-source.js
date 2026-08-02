@@ -23,6 +23,7 @@ function createMbUrlRelsSource(deps = {}) {
   async function mbJson(url) {
     const resp = await mbFetch(url, { headers: HEADERS }, 'low');
     if (!resp.ok) {
+      /** @type {Error & { status?: number }} */
       const err = new Error(`MusicBrainz responded ${resp.status}`);
       err.status = resp.status;
       throw err;

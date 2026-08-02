@@ -5,6 +5,14 @@ const path = require('path');
 const HASHED_STYLE_RE = /^\/styles\/(app|output)-([a-f0-9]{12})\.css$/;
 const STYLE_ASSET_PATHS = ['/styles/app.css', '/styles/output.css'];
 
+/**
+ * Build a map of canonical style asset path -> content-hashed path.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.publicDir] - Root of the served public directory
+ * @param {typeof fs} [options.fsModule] - Injectable fs module (tests)
+ * @returns {Record<string, string>}
+ */
 function createStyleAssetManifest({ publicDir, fsModule = fs } = {}) {
   const root = publicDir || path.join(__dirname, '..', 'public');
   const manifest = {};
@@ -27,11 +35,21 @@ function createStyleAssetManifest({ publicDir, fsModule = fs } = {}) {
   return manifest;
 }
 
+/**
+ * Resolve a canonical style asset path to its content-hashed variant.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.publicDir] - Root of the served public directory
+ * @param {typeof fs} [options.fsModule] - Injectable fs module (tests)
+ * @param {boolean} [options.cache=true] - Reuse the manifest across calls
+ * @returns {(assetPath: string) => string|undefined}
+ */
 function createStyleAssetResolver({
   publicDir,
   fsModule = fs,
   cache = true,
 } = {}) {
+  /** @type {Record<string, string>|null} */
   let manifest = null;
 
   return (assetPath) => {
@@ -45,6 +63,13 @@ function createStyleAssetResolver({
   };
 }
 
+/**
+ * Express middleware that serves hashed style URLs from the unhashed files.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.publicDir] - Root of the served public directory
+ * @returns {import('express').RequestHandler}
+ */
 function createHashedStyleMiddleware({ publicDir } = {}) {
   const root = publicDir || path.join(__dirname, '..', 'public');
 

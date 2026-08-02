@@ -268,10 +268,10 @@ function parseSpotifyError(errorText, statusCode) {
 
 /**
  * Create Spotify auth utilities with injected dependencies
- * @param {Object} deps - Dependencies
- * @param {Object} deps.logger - Logger instance
- * @param {Function} deps.fetch - Fetch function (defaults to global fetch)
- * @param {Object} deps.env - Environment variables (defaults to process.env)
+ * @param {Object} [deps] - Dependencies
+ * @param {Object} [deps.logger] - Logger instance (defaults to utils/logger)
+ * @param {Function} [deps.fetch] - Fetch function (defaults to global fetch)
+ * @param {Object} [deps.env] - Environment variables (defaults to process.env)
  */
 function createSpotifyAuth(deps = {}) {
   const log = deps.logger || logger;

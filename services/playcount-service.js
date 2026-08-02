@@ -158,9 +158,10 @@ function createPlaycountService(deps = {}) {
     db,
     logger
   ) {
-    const datastore = ensureDb(
-      db,
-      'playcount-service.refreshPlaycountsInBackground'
+    // ensureDb validates and returns the same facade it was given; its declared
+    // return type is the looser structural guard shape.
+    const datastore = /** @type {import('../db/types').DbFacade} */ (
+      ensureDb(db, 'playcount-service.refreshPlaycountsInBackground')
     );
     return refreshAlbumsBatched(
       datastore,
@@ -232,7 +233,10 @@ function createPlaycountService(deps = {}) {
     );
 
     let statsRows = [];
+    /** @type {string[]} */
     const statsPredicates = [];
+    // Mixed scalars and array params (bound to `= ANY($n::text[])`).
+    /** @type {Array<string|string[]>} */
     const statsParams = [userId];
 
     if (albumIds.length > 0) {
@@ -270,10 +274,10 @@ function createPlaycountService(deps = {}) {
 
     // Skip albums already being refreshed (by any tier) so concurrent list
     // views / poll cycles don't pile up duplicate Last.fm fetches.
-    const { toLaunch, release } = claimAlbumsForRefresh(
-      userId,
-      albumsToRefresh
-    );
+    const { toLaunch, release } =
+      /** @type {{ toLaunch: Array<Object>, release: () => void }} */ (
+        claimAlbumsForRefresh(userId, albumsToRefresh)
+      );
 
     if (toLaunch.length > 0) {
       logger.debug('Triggering background playcount refresh for stale albums', {

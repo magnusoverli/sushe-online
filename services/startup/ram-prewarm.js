@@ -180,6 +180,27 @@ async function warmAggregateResponses({
   return { years: warmed };
 }
 
+/**
+ * Service instances the prewarm phases call into. Every entry is optional —
+ * a missing service just makes the corresponding phase a no-op.
+ *
+ * @typedef {Object} PrewarmServices
+ * @property {Object} [listService]
+ * @property {Object} [groupService]
+ * @property {Object} [recommendationService]
+ * @property {Object} [aggregateList]
+ * @property {Object} [albumService]
+ */
+
+/**
+ * @param {Object} opts
+ * @param {import('../../db/types').DbFacade} opts.db - Canonical datastore
+ * @param {ReturnType<typeof import('../../config/ram-acceleration').resolveRamAccelerationConfig>} opts.config - RAM acceleration config
+ * @param {Object} [opts.logger] - Logger instance
+ * @param {PrewarmServices} [opts.services] - App services
+ * @param {Object} [opts.responseCache] - Response cache to populate
+ * @returns {Promise<{db: Object, users: number, aggregates: number, covers: number, durationMs: number}>}
+ */
 async function runRamPrewarm({
   db,
   config,

@@ -55,7 +55,7 @@ function wrapFetchWithMetrics(fetchFn) {
  * @param {Response} response - Fetch response object
  * @param {Object} log - Logger instance
  * @param {Function} retryFn - Function to call for retry (should return response)
- * @returns {Object} - Parsed JSON data
+ * @returns {Promise<Object>} - Parsed JSON data
  */
 async function parseJsonWithRateLimitRetry(response, log, retryFn) {
   const data = await response.json();
@@ -232,7 +232,7 @@ async function fetchAlbumInfoExact(
 
 /**
  * Try to fetch album info and return it if playcount > 0
- * @returns {Object|null} - Album data if found with plays, null otherwise
+ * @returns {Promise<Object|null>} - Album data if found with plays, null otherwise
  */
 async function tryFetchWithPlaycount(fetchExact, artist, albumName) {
   const data = await fetchExact(artist, albumName);
@@ -786,11 +786,12 @@ function createWriteMethods(
 
 /**
  * Create Last.fm auth utilities with injected dependencies
- * @param {Object} deps - Dependencies
- * @param {Object} deps.logger - Logger instance
- * @param {Function} deps.fetch - Fetch function (defaults to global fetch)
- * @param {Object} deps.crypto - Crypto module (defaults to Node crypto)
- * @param {Object} deps.env - Environment variables (defaults to process.env)
+ * @param {Object} [deps] - Dependencies
+ * @param {Object} [deps.logger] - Logger instance
+ * @param {Function} [deps.fetch] - Fetch function (defaults to global fetch)
+ * @param {boolean} [deps.skipMetrics] - Skip the metrics wrapper around fetch (tests)
+ * @param {Object} [deps.crypto] - Crypto module (defaults to Node crypto)
+ * @param {Object} [deps.env] - Environment variables (defaults to process.env)
  */
 function createLastfmAuth(deps = {}) {
   const log = deps.logger || logger;

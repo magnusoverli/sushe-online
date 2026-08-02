@@ -238,9 +238,12 @@ function compareCanonicalAlbums(a, b) {
 
 /**
  * Create duplicate service with injected dependencies
- * @param {Object} deps
- * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
- * @param {Object} deps.logger - Logger instance
+ * @param {Object} [deps]
+ * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore.
+ *   Required at runtime: ensureDb() throws when it is absent.
+ * @param {Object} [deps.logger] - Logger instance
+ * @param {{invalidateAlbum?: Function}} [deps.coverCache] - Album cover cache to invalidate on merge
+ * @param {Object} [deps.responseCache] - Per-user response cache to invalidate on merge
  */
 // eslint-disable-next-line max-lines-per-function -- Cohesive service module with related duplicate operations
 function createDuplicateService(deps = {}) {
@@ -1127,14 +1130,15 @@ function createDuplicateService(deps = {}) {
   /**
    * Scan all albums for potential fuzzy-match duplicates.
    *
-   * @param {number} threshold - Similarity threshold (0.03–0.5, default 0.15)
-   * @param {Object} options - Pagination options for clusters
+   * @param {string|number} [threshold] - Similarity threshold (0.03–0.5, default 0.15).
+   *   Arrives as a raw query-string value from the admin route.
+   * @param {Object} [options] - Pagination options for clusters
    * @returns {Promise<Object>} scan result with pairs and clusters
    */
   async function scanDuplicates(threshold, options = {}) {
     const clampedThreshold = Math.max(
       0.03,
-      Math.min(0.5, parseFloat(threshold) || 0.15)
+      Math.min(0.5, parseFloat(String(threshold)) || 0.15)
     );
 
     const page = clampNumber(

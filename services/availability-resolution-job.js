@@ -23,7 +23,9 @@ const {
 } = require('./availability/build-resolution');
 
 function createAvailabilityResolutionJob(deps = {}) {
-  const db = ensureDb(deps.db, 'availability-resolution-job');
+  const db = /** @type {import('../db/types').DbFacade} */ (
+    ensureDb(deps.db, 'availability-resolution-job')
+  );
   const log = deps.logger || logger;
   const paceMs =
     deps.rateLimitMs === undefined ? ODESLI_RATE_LIMIT_MS : deps.rateLimitMs;
@@ -199,7 +201,9 @@ function createAvailabilityResolutionJob(deps = {}) {
 
       summary.completedAt = new Date().toISOString();
       summary.durationSeconds = Math.round(
-        (new Date(summary.completedAt) - new Date(summary.startedAt)) / 1000
+        (new Date(summary.completedAt).getTime() -
+          new Date(summary.startedAt).getTime()) /
+          1000
       );
 
       log.info('Availability resolution job completed', summary);

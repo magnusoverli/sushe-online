@@ -20,10 +20,11 @@ const { updateAlbumIdentity } = require('./reidentify/update-album-id');
 
 /**
  * Create reidentify service with injected dependencies
- * @param {Object} deps
- * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
- * @param {Object} deps.logger - Logger instance
- * @param {Function} deps.fetchFn - Fetch function (for testability)
+ * @param {Object} [deps]
+ * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore.
+ *   Required at runtime: ensureDb() throws when it is absent.
+ * @param {Object} [deps.logger] - Logger instance
+ * @param {Function} [deps.fetchFn] - Fetch function (for testability)
  */
 function createReidentifyService(deps = {}) {
   const db = ensureDb(deps.db, 'reidentify-service');

@@ -31,7 +31,11 @@ function createOdesliClient(deps = {}) {
 
     const resp = await fetchFn(`${baseUrl}?${params.toString()}`);
     if (!resp.ok) {
-      const err = new Error(`Odesli responded ${resp.status}`);
+      // `status` is the transient/permanent signal the orchestrator reads
+      // (see availability-resolution-service isTransientStatus).
+      const err = /** @type {Error & {status:number}} */ (
+        new Error(`Odesli responded ${resp.status}`)
+      );
       err.status = resp.status;
       throw err;
     }

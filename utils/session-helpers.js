@@ -12,8 +12,8 @@
 /**
  * Factory that creates session helper functions with injectable dependencies.
  *
- * @param {Object} deps - Dependencies
- * @param {Object} deps.logger - Logger with error() method
+ * @param {Object} [deps] - Dependencies
+ * @param {Object} [deps.logger] - Logger with error() method (defaults to utils/logger)
  * @returns {{ saveSessionAsync: Function, saveSessionSafe: Function }}
  */
 function createSessionHelpers(deps = {}) {

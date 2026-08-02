@@ -22,5 +22,10 @@ function requestIdMiddleware() {
   };
 }
 
+// Dual export: the module itself is the factory, and the same factory is also
+// reachable as a named property for `{ requestIdMiddleware }` destructuring.
+// Attaching the property to the function before the export assignment keeps a
+// single `module.exports = ...` statement (identical shape at runtime).
+requestIdMiddleware.requestIdMiddleware = requestIdMiddleware;
+
 module.exports = requestIdMiddleware;
-module.exports.requestIdMiddleware = requestIdMiddleware;

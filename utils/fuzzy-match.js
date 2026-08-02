@@ -117,9 +117,9 @@ const ARTICLES = [
  * - Optionally remove leading articles
  *
  * @param {string} str - String to normalize
- * @param {Object} options - Normalization options
- * @param {boolean} options.removeArticles - Remove leading articles (default: true)
- * @param {boolean} options.stripEditions - Strip edition suffixes (default: true)
+ * @param {Object} [options] - Normalization options
+ * @param {boolean} [options.removeArticles] - Remove leading articles (default: true)
+ * @param {boolean} [options.stripEditions] - Strip edition suffixes (default: true)
  * @returns {string} - Normalized string
  */
 function normalizeForComparison(str, options = {}) {
@@ -256,20 +256,25 @@ function calculateSimilarity(a, b) {
 }
 
 /**
+ * @typedef {Object} DuplicateMatchOptions
+ * @property {number} [threshold] - Minimum combined score to consider a match (default: MODAL_THRESHOLD)
+ * @property {number} [autoMergeThreshold] - Confidence above which to auto-merge (default: AUTO_MERGE_THRESHOLD)
+ * @property {number} [artistMinScore] - Minimum artist similarity score (default: derived from threshold)
+ * @property {number} [albumMinScore] - Minimum album similarity score (default: derived from threshold)
+ */
+
+/**
  * Check if two albums are potentially the same
  * Considers both artist and album name
  *
  * @param {Object} album1 - First album { artist, album }
  * @param {Object} album2 - Second album { artist, album }
- * @param {Object} options - Matching options
- * @param {number} options.threshold - Minimum combined score to consider a match (default: MODAL_THRESHOLD)
- * @param {number} options.autoMergeThreshold - Confidence above which to auto-merge (default: AUTO_MERGE_THRESHOLD)
- * @param {number} options.artistMinScore - Minimum artist similarity score (default: derived from threshold)
- * @param {number} options.albumMinScore - Minimum album similarity score (default: derived from threshold)
+ * @param {DuplicateMatchOptions|number} [options] - Matching options (a bare number is the older threshold-only signature)
  * @returns {Object} - { isPotentialMatch, shouldAutoMerge, confidence, artistScore, albumScore }
  */
 function isPotentialDuplicate(album1, album2, options = {}) {
   // Support legacy call signature: isPotentialDuplicate(a, b, 0.2)
+  /** @type {DuplicateMatchOptions & { threshold: number }} */
   const opts =
     typeof options === 'number'
       ? { threshold: options }
@@ -341,13 +346,13 @@ function deriveMinScoreFromThreshold(threshold) {
  *
  * @param {Object} newAlbum - Album to check { artist, album }
  * @param {Array<Object>} candidates - List of existing albums to check against
- * @param {Object} options - Options
- * @param {number} options.threshold - Minimum confidence to include (default: MODAL_THRESHOLD)
- * @param {number} options.autoMergeThreshold - Confidence above which to auto-merge (default: AUTO_MERGE_THRESHOLD)
- * @param {number} options.artistMinScore - Minimum artist similarity score (default: derived from threshold)
- * @param {number} options.albumMinScore - Minimum album similarity score (default: derived from threshold)
- * @param {number} options.maxResults - Maximum results to return (default: 5)
- * @param {Set<string>} options.excludePairs - Set of "id1::id2" pairs to exclude (already confirmed different)
+ * @param {Object} [options] - Options
+ * @param {number} [options.threshold] - Minimum confidence to include (default: MODAL_THRESHOLD)
+ * @param {number} [options.autoMergeThreshold] - Confidence above which to auto-merge (default: AUTO_MERGE_THRESHOLD)
+ * @param {number} [options.artistMinScore] - Minimum artist similarity score (default: derived from threshold)
+ * @param {number} [options.albumMinScore] - Minimum album similarity score (default: derived from threshold)
+ * @param {number} [options.maxResults] - Maximum results to return (default: 5)
+ * @param {Set<string>} [options.excludePairs] - Set of "id1::id2" pairs to exclude (already confirmed different)
  * @returns {Array<Object>} - Sorted array of potential matches with confidence scores and shouldAutoMerge flags
  */
 function findPotentialDuplicates(newAlbum, candidates, options = {}) {

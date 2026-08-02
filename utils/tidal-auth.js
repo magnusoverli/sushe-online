@@ -6,10 +6,10 @@ const { createOAuthTokenManager } = require('./oauth-token-manager');
 
 /**
  * Create Tidal auth utilities with injected dependencies
- * @param {Object} deps - Dependencies
- * @param {Object} deps.logger - Logger instance
- * @param {Function} deps.fetch - Fetch function (defaults to global fetch)
- * @param {Object} deps.env - Environment variables (defaults to process.env)
+ * @param {Object} [deps] - Dependencies
+ * @param {Object} [deps.logger] - Logger instance (defaults to utils/logger)
+ * @param {Function} [deps.fetch] - Fetch function (defaults to global fetch)
+ * @param {Object} [deps.env] - Environment variables (defaults to process.env)
  */
 function createTidalAuth(deps = {}) {
   const log = deps.logger || logger;

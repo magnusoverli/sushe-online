@@ -47,6 +47,13 @@ function mapSingleListRowToItem(row) {
   };
 }
 
+/**
+ * @param {Object[]} rows - Flat list+item join rows for a single list
+ * @param {Object} [options]
+ * @param {boolean} [options.isExport] - Emit export-shaped items (adds points)
+ * @param {(position: number) => number} [options.getPointsForPosition]
+ *   1-based position → points, used only when `isExport` is set
+ */
 function mapSingleListRowsToResponse(
   rows,
   { isExport = false, getPointsForPosition } = {}

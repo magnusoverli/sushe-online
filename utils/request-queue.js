@@ -8,6 +8,22 @@
  */
 
 /**
+ * Fetch/network error as produced by undici and Node's DNS/TCP layers, plus the
+ * transport metadata this queue attaches before rejecting a queued request.
+ * @typedef {Error & {
+ *   code?: string,
+ *   type?: string,
+ *   status?: number,
+ *   retries?: number
+ * }} RequestError
+ */
+
+/**
+ * Fetch Response with the retry counter this queue attaches for downstream logging.
+ * @typedef {Response & { _retries?: number }} QueuedResponse
+ */
+
+/**
  * Simple promise-based wait utility
  * @param {number} ms - Milliseconds to wait
  * @returns {Promise<void>}
@@ -21,11 +37,11 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 class MusicBrainzQueue {
   /**
-   * @param {Object} deps - Dependencies for testing
-   * @param {Function} deps.fetch - Fetch implementation
-   * @param {number} deps.minInterval - Minimum interval between requests (ms)
-   * @param {number} deps.timeout - Request timeout in milliseconds (default: 30000)
-   * @param {number} deps.maxRetries - Maximum number of retries (default: 2)
+   * @param {Object} [deps] - Dependencies for testing
+   * @param {Function} [deps.fetch] - Fetch implementation
+   * @param {number} [deps.minInterval] - Minimum interval between requests (ms, default: 1000)
+   * @param {number} [deps.timeout] - Request timeout in milliseconds (default: 30000)
+   * @param {number} [deps.maxRetries] - Maximum number of retries (default: 2)
    */
   constructor(deps = {}) {
     this.fetch = deps.fetch || globalThis.fetch;
@@ -39,7 +55,7 @@ class MusicBrainzQueue {
 
   /**
    * Determine if an error is retryable (transient network error)
-   * @param {Error} error - The error to check
+   * @param {RequestError} error - The error to check
    * @param {Response|null} response - The response if available
    * @returns {boolean} - True if error is retryable
    */
@@ -105,7 +121,7 @@ class MusicBrainzQueue {
    * Execute a single fetch with timeout handling
    * @param {string} url - URL to fetch
    * @param {Object} options - Fetch options
-   * @returns {Promise<{response?: Response, error?: Error}>}
+   * @returns {Promise<{response?: QueuedResponse, error?: RequestError}>}
    * @private
    */
   async _executeFetch(url, options) {
@@ -127,6 +143,7 @@ class MusicBrainzQueue {
       clearTimeout(timeoutId);
       // Handle timeout specifically
       if (fetchError.name === 'AbortError' && abortController.signal.aborted) {
+        /** @type {RequestError} */
         const timeoutError = new Error(
           `Request timeout after ${this.timeout}ms: ${url}`
         );
@@ -176,6 +193,7 @@ class MusicBrainzQueue {
         }
 
         // Not retryable or max retries reached
+        /** @type {RequestError} */
         const finalError = new Error(
           `MusicBrainz API responded with status ${response.status}`
         );

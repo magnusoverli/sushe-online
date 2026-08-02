@@ -29,7 +29,10 @@
  * @property {string} [tidalCountry]
  * @property {string} [musicService]
  * @property {string} [resetToken]
- * @property {number} [resetExpires]
+ * @property {string} [resetExpires] - Epoch ms. The column is BIGINT (migration
+ *   066) and no int8 type parser is installed, so node-postgres hands this back
+ *   as a string. Expiry is compared in SQL; do not do JS arithmetic on it
+ *   without converting first.
  * @property {Date} [createdAt]
  * @property {Date} [updatedAt]
  * @property {Date} [lastActivity]

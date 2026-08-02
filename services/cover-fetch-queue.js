@@ -285,10 +285,12 @@ function createCoverProviders(fetchFn) {
 /**
  * Factory function to create a CoverFetchQueue with dependency injection
  *
- * @param {Object} deps - Dependencies
- * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
- * @param {Function} deps.fetch - Fetch function (for testing)
- * @param {number} deps.maxConcurrent - Max concurrent fetches (default: 3)
+ * @param {Object} [deps] - Dependencies
+ * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore
+ * @param {Function} [deps.fetch] - Fetch function (for testing)
+ * @param {number} [deps.maxConcurrent] - Max concurrent fetches (default: 3)
+ * @param {InstanceType<typeof import("./album-cover-cache").AlbumCoverCache>} [deps.coverCache] - RAM cover cache to invalidate after a fetch
+ * @param {InstanceType<typeof import("../middleware/response-cache").ResponseCache>} [deps.responseCache] - Response cache to invalidate for affected users
  * @returns {Object} - CoverFetchQueue instance
  */
 function createCoverFetchQueue(deps = {}) {
@@ -448,6 +450,9 @@ let coverFetchQueue = null;
 /**
  * Initialize the singleton cover fetch queue
  * @param {import('../db/types').DbFacade} db - Canonical datastore
+ * @param {Object} [options] - Extra queue dependencies
+ * @param {InstanceType<typeof import("./album-cover-cache").AlbumCoverCache>} [options.coverCache] - RAM cover cache
+ * @param {InstanceType<typeof import("../middleware/response-cache").ResponseCache>} [options.responseCache] - Response cache
  */
 function initializeCoverFetchQueue(db, options = {}) {
   if (!coverFetchQueue) {

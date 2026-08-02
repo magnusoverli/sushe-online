@@ -128,9 +128,10 @@ function chooseBetterTracks(existing, newTracks) {
 /**
  * Factory function to create album canonical utilities with injectable dependencies
  *
- * @param {Object} deps - Dependencies
- * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
- * @param {Object} deps.logger - Logger instance (optional)
+ * @param {Object} [deps] - Dependencies
+ * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore
+ *   (required at runtime; enforced by ensureDb)
+ * @param {Object} [deps.logger] - Logger instance (optional)
  * @returns {Object} - Album canonical utility functions
  */
 // eslint-disable-next-line max-lines-per-function -- Cohesive utility module with multiple related functions

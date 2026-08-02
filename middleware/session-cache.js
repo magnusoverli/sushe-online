@@ -26,9 +26,9 @@ function cloneSessionData(data) {
  */
 class SessionCache {
   /**
-   * @param {Object} options - Cache options
-   * @param {number} options.ttl - Time-to-live in milliseconds (default: 30000)
-   * @param {number} options.maxSize - Maximum cache entries (default: 1000)
+   * @param {Object} [options] - Cache options
+   * @param {number} [options.ttl] - Time-to-live in milliseconds (default: 30000)
+   * @param {number} [options.maxSize] - Maximum cache entries (default: 1000)
    */
   constructor(options = {}) {
     this.cache = new Map();
@@ -115,8 +115,8 @@ class SessionCache {
  *
  * @param {Object} store - Original session store (e.g., connect-pg-simple instance)
  * @param {SessionCache} cache - SessionCache instance
- * @param {Object} options - Options
- * @param {boolean} options.logStats - Log cache stats periodically (default: false)
+ * @param {Object} [options] - Options
+ * @param {boolean} [options.logStats] - Log cache stats periodically (default: false)
  * @returns {Object} - Wrapped store
  */
 function wrapSessionStore(store, cache, options = {}) {

@@ -83,6 +83,7 @@ function formatDate(date, format = 'MM/DD/YYYY') {
 function formatDateTime(date, hour12, format = 'MM/DD/YYYY') {
   if (!date) return '';
   const locale = format === 'DD/MM/YYYY' ? 'en-GB' : 'en-US';
+  /** @type {Intl.DateTimeFormatOptions} */
   const options = {
     year: 'numeric',
     month: '2-digit',

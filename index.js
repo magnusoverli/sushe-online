@@ -362,6 +362,9 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 const httpServer = http.createServer(app);
 
+// startSyncServices() is declared as returning a bare `Function`, so the
+// handle is typed that loosely here rather than as the async cleanup it is.
+/** @type {Function} */
 let stopSyncServices = async () => {};
 
 // Register process-level error and signal handlers
@@ -371,15 +374,17 @@ registerProcessHandlers({
       return;
     }
 
-    await new Promise((resolve, reject) => {
-      httpServer.close((err) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve();
-      });
-    });
+    await /** @type {Promise<void>} */ (
+      new Promise((resolve, reject) => {
+        httpServer.close((err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      })
+    );
   },
   runCleanup: async () => {
     await stopSyncServices();

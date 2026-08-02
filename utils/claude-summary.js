@@ -1,7 +1,14 @@
 // utils/claude-summary.js
 // Album summary fetching from Claude API with web search
 
-const Anthropic = require('@anthropic-ai/sdk');
+// The CJS entry point of @anthropic-ai/sdk is constructable
+// (`new Anthropic({ apiKey })`), but its type declarations only describe the
+// ESM namespace object, which structurally has no construct signature — hence
+// restating the constructor type here (via `unknown`, as the two shapes do not
+// overlap structurally).
+const Anthropic = /** @type {typeof import('@anthropic-ai/sdk').Anthropic} */ (
+  /** @type {unknown} */ (require('@anthropic-ai/sdk'))
+);
 const logger = require('./logger');
 const {
   observeExternalApiCall,
@@ -60,9 +67,10 @@ async function withTimeout(operation, timeoutMs) {
 
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => {
-      const timeoutError = new Error(
-        `Claude request timed out after ${timeoutMs}ms`
-      );
+      const timeoutError =
+        /** @type {Error & {code: string, status: number}} */ (
+          new Error(`Claude request timed out after ${timeoutMs}ms`)
+        );
       timeoutError.code = 'CLAUDE_TIMEOUT';
       timeoutError.status = 408;
       reject(timeoutError);
@@ -353,9 +361,11 @@ async function retryWithBackoff(fn, maxRetries = 3, log) {
 
 /**
  * Create Claude summary service with injected dependencies
- * @param {Object} deps - Dependencies
- * @param {Object} deps.logger - Logger instance
- * @param {Object} deps.anthropicClient - Anthropic client instance (for testing)
+ * @param {Object} [deps] - Dependencies (all optional; defaults are resolved
+ *   from the module logger and the ANTHROPIC_API_KEY environment variable)
+ * @param {Object} [deps.logger] - Logger instance
+ * @param {InstanceType<typeof Anthropic>} [deps.anthropicClient] - Anthropic
+ *   client instance (for testing)
  */
 function createClaudeSummaryService(deps = {}) {
   const log = deps.logger || logger;

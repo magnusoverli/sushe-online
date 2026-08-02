@@ -53,7 +53,7 @@ function createOAuthTokenManager(config, deps = {}) {
   /**
    * Refresh access token using the refresh token
    * @param {Object} auth - Current auth object with refresh_token
-   * @returns {Object|null} New token object or null if refresh failed
+   * @returns {Promise<Object|null>} New token object or null if refresh failed
    */
   async function refreshToken(auth) {
     if (!auth?.refresh_token) {
@@ -142,7 +142,7 @@ function createOAuthTokenManager(config, deps = {}) {
    * @param {Object} user - User object with auth field
    * @param {Object} userStore - User persistence interface
    *   Expected shape: { saveOAuthToken(userId, authField, token) }
-   * @returns {Object} { success, [authField], error, message }
+   * @returns {Promise<Object>} { success, [authField], error, message }
    */
   async function ensureValidToken(user, userStore) {
     const auth = user[authField];

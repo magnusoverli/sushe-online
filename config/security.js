@@ -4,7 +4,13 @@
  * Configures Helmet security headers and CORS middleware.
  */
 
-const helmet = require('helmet');
+// helmet's .d.cts declares the callable as an ESM default export, so the type
+// of `require('helmet')` is the namespace rather than the function. At runtime
+// the package sets `module.exports = exports.default`, i.e. the callable — the
+// cast just restores that.
+const helmet =
+  /** @type {typeof import('helmet').default} */
+  (/** @type {unknown} */ (require('helmet')));
 const cors = require('cors');
 const {
   isAllowedOrigin,
@@ -16,6 +22,7 @@ const {
  * @returns {Function} Express middleware
  */
 function createHelmetMiddleware() {
+  /** @type {import('helmet').HelmetOptions} */
   const helmetConfig = {
     // Disable CSP for hobby project - makes debugging easier
     contentSecurityPolicy: false,
@@ -37,10 +44,9 @@ function createHelmetMiddleware() {
       policy: 'strict-origin-when-cross-origin',
     },
 
-    // Disable Permissions Policy entirely to avoid experimental features
-    // Helmet 8.x includes browsing-topics, run-ad-auction, join-ad-interest-group by default
-    // These cause console warnings in browsers that don't support them
-    permissionsPolicy: false,
+    // No Permissions-Policy header: Helmet has no `permissionsPolicy` option
+    // (it never sets that header), so nothing is emitted and no browser
+    // warnings about experimental features can occur.
 
     // Cross-Origin policies
     crossOriginEmbedderPolicy: false, // Keep disabled for external resources

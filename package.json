@@ -11,7 +11,7 @@
     "watch:css": "postcss src/styles/input.css -o public/styles/output.css --watch",
     "watch:js": "vite build --watch",
     "test": "npm run lint:strict && bash scripts/run-tests.sh",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.app.json --noEmit",
     "test:watch": "node --test --watch",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

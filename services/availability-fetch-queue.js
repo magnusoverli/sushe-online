@@ -26,9 +26,13 @@ function createAvailabilityFetchQueue(deps = {}) {
   const log = deps.logger || logger;
   const rateLimitMs =
     deps.rateLimitMs === undefined ? ODESLI_RATE_LIMIT_MS : deps.rateLimitMs;
+  // ensureDb() only guarantees the structural `.raw` check; deps.db is the
+  // canonical datastore facade, which is what buildAvailabilityResolution wants.
   const db =
     deps.db !== undefined && deps.db !== null
-      ? ensureDb(deps.db, 'availability-fetch-queue')
+      ? /** @type {import('../db/types').DbFacade} */ (
+          ensureDb(deps.db, 'availability-fetch-queue')
+        )
       : null;
 
   // Tests may inject a ready-made repository + resolution service; otherwise the

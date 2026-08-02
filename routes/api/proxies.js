@@ -140,8 +140,8 @@ module.exports = (app, deps) => {
       );
 
       if (!response.ok) {
-        const error = new Error(
-          `MusicBrainz API responded with status ${response.status}`
+        const error = /** @type {Error & { status?: number }} */ (
+          new Error(`MusicBrainz API responded with status ${response.status}`)
         );
         error.status = response.status;
         throw error;
@@ -150,9 +150,12 @@ module.exports = (app, deps) => {
       // Validate Content-Type before parsing
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
-        const error = new Error(
-          `Unexpected Content-Type: ${contentType}. Expected application/json`
-        );
+        const error =
+          /** @type {Error & { status?: number, contentType?: string }} */ (
+            new Error(
+              `Unexpected Content-Type: ${contentType}. Expected application/json`
+            )
+          );
         error.status = response.status;
         error.contentType = contentType;
         throw error;
@@ -172,9 +175,10 @@ module.exports = (app, deps) => {
           // Ignore if we can't read body
         }
 
-        const jsonError = new Error(
-          `Failed to parse JSON response: ${parseError.message}`
-        );
+        const jsonError =
+          /** @type {Error & { status?: number, contentType?: string, bodyPreview?: string }} */ (
+            new Error(`Failed to parse JSON response: ${parseError.message}`)
+          );
         jsonError.name = parseError.name || 'SyntaxError';
         jsonError.status = response.status;
         jsonError.contentType = contentType;
@@ -244,8 +248,8 @@ module.exports = (app, deps) => {
       });
 
       if (!response.ok) {
-        const err = new Error(
-          `iTunes API responded with status ${response.status}`
+        const err = /** @type {Error & { status?: number }} */ (
+          new Error(`iTunes API responded with status ${response.status}`)
         );
         err.status = response.status;
         throw err;

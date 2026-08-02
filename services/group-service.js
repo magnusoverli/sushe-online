@@ -22,8 +22,8 @@ const { buildPartialUpdate } = require('../utils/query-builder');
 
 /**
  * Create group service with injected dependencies
- * @param {Object} deps
- * @param {import('../db/types').DbFacade} deps.db - Canonical datastore
+ * @param {Object} [deps]
+ * @param {import('../db/types').DbFacade} [deps.db] - Canonical datastore (mandatory in practice; ensureDb throws when absent)
  * @param {Object} [deps.logger] - Logger instance
  * @param {Object} [deps.crypto] - Node.js crypto module
  * @param {Function} [deps.findOrCreateYearGroup] - Helper from _helpers.js

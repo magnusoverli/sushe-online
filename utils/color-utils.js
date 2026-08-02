@@ -46,7 +46,7 @@ const DEFAULT_ACCENT = '#dc2626';
  * Generate CSS custom property declarations for accent theming.
  * Returns a string of CSS variable declarations (without :root wrapper).
  *
- * @param {object} [user] - User object with optional accentColor
+ * @param {Partial<import('../db/types').User>} [user] - User object with optional accentColor
  * @param {object} [options]
  * @param {boolean} [options.includeSubtle=true] - Include --accent-subtle vars
  * @returns {string} CSS variable declarations

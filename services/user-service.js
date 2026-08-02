@@ -36,8 +36,13 @@ const HEX_COLOR_REGEX = /^#[0-9A-F]{6}$/i;
 /**
  * Create a user service instance with injected dependencies.
  *
- * @param {Object} deps
- * @param {import('../db/types').DbFacade} deps.db - Canonical datastore (required)
+ * @param {Object} [deps]
+ * @param {import('../db/types').DbFacade} [deps.db] - Canonical datastore.
+ *   Required at runtime: ensureDb() throws when it is absent.
+ * @param {ReturnType<typeof createUsersRepository>} [deps.usersRepository]
+ *   - Users repository (built from db when omitted)
+ * @param {(userId: string) => void} [deps.invalidateUserCache]
+ *   - Evicts the cached user record after a mutation (no-op when omitted)
  * @param {Object} [deps.logger]    - Logger instance
  * @returns {Object} User service methods
  */

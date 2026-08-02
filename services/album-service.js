@@ -27,11 +27,13 @@ const { createAlbumCoverService } = require('./album-cover-service');
 
 /**
  * Create album service with injected dependencies
- * @param {Object} deps
- * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
- * @param {Object} deps.logger - Logger instance
- * @param {Function} deps.upsertAlbumRecord - Helper from _helpers.js
+ * @param {Object} [deps]
+ * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore.
+ *   Required at runtime: ensureDb() throws when it is absent.
+ * @param {Object} [deps.logger] - Logger instance (defaults to utils/logger)
+ * @param {Function} [deps.upsertAlbumRecord] - Helper from _helpers.js
  * @param {Object} [deps.responseCache] - Response cache for list invalidation
+ * @param {Object} [deps.coverCache] - Cover cache passed through to the cover service
  */
 // eslint-disable-next-line max-lines-per-function -- Cohesive service module with related album operations
 function createAlbumService(deps = {}) {
@@ -72,6 +74,16 @@ function createAlbumService(deps = {}) {
     return resolveCountryCode(normalized) || normalized;
   }
 
+  /**
+   * Build the column/value pairs for a partial album metadata update.
+   * Each key is optional: an omitted key leaves that column untouched.
+   *
+   * @param {Object} input
+   * @param {string|null} [input.country]
+   * @param {string|null} [input.genre_1]
+   * @param {string|null} [input.genre_2]
+   * @returns {Array<{ column: string, value: string|null }>}
+   */
   function buildAlbumMetadataFields({ country, genre_1, genre_2 }) {
     const fields = [];
 

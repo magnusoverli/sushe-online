@@ -43,9 +43,12 @@ const USER_DEFAULTS = {
 /**
  * Create an auth service instance with injected dependencies.
  *
- * @param {Object} deps
- * @param {import('../db/types').DbFacade} deps.db - Canonical datastore (required)
+ * @param {Object} [deps]
+ * @param {import('../db/types').DbFacade} [deps.db] - Canonical datastore.
+ *   Required at runtime: ensureDb() throws when it is absent.
+ * @param {Object} [deps.usersRepository] - Users repository (built from db when omitted)
  * @param {Object} [deps.bcrypt]     - bcrypt/bcryptjs library
+ * @param {Object} [deps.crypto]     - Node crypto module
  * @param {Object} [deps.logger]     - Logger instance
  * @returns {Object} Auth service methods
  */
@@ -343,7 +346,7 @@ function createAuthService(deps = {}) {
   /**
    * Generate and store a new extension token for a user.
    *
-   * @param {Object|null} [_unused]
+   * @param {Object|null} _unused - Ignored positional slot kept for call-site arity
    * @param {string} userId
    * @param {string} userAgent - Request User-Agent string
    * @param {Function} generateToken - Token generation function
@@ -379,7 +382,7 @@ function createAuthService(deps = {}) {
   /**
    * Revoke an extension token owned by a specific user.
    *
-   * @param {Object} [_unusedPoolArg]
+   * @param {Object|null} _unusedPoolArg - Ignored positional slot kept for call-site arity
    * @param {string} token
    * @param {string} userId
    * @returns {Promise<{ revoked: boolean }>}
@@ -416,7 +419,7 @@ function createAuthService(deps = {}) {
   /**
    * List all extension tokens for a user.
    *
-   * @param {Object} [_unusedPoolArg]
+   * @param {Object|null} _unusedPoolArg - Ignored positional slot kept for call-site arity
    * @param {string} userId
    * @returns {Promise<Array>}
    */

@@ -17,11 +17,12 @@ const { normalizeImageBuffer } = require('../utils/image-processing');
 
 /**
  * Create recommendation service with injected dependencies
- * @param {Object} deps
- * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
- * @param {Object} deps.logger - Logger instance
- * @param {Object} deps.crypto - Node.js crypto module
- * @param {Function} deps.upsertAlbumRecord - Helper from _helpers.js
+ * @param {Object} [deps]
+ * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore
+ *   (required at runtime; ensureDb throws when absent)
+ * @param {Object} [deps.logger] - Logger instance (defaults to utils/logger)
+ * @param {Object} [deps.crypto] - Node.js crypto module (defaults to `crypto`)
+ * @param {Function} [deps.upsertAlbumRecord] - Helper from _helpers.js
  */
 // eslint-disable-next-line max-lines-per-function -- Cohesive service module with related recommendation operations
 function createRecommendationService(deps = {}) {
@@ -236,9 +237,9 @@ function createRecommendationService(deps = {}) {
    * Retries a few times with a delay to allow the background cover fetch
    * queue to finish (new albums don't have covers immediately).
    * @param {string} albumId
-   * @param {Object} options
-   * @param {number} options.maxRetries - Max retries (default 5)
-   * @param {number} options.delayMs - Delay between retries in ms (default 2000)
+   * @param {Object} [options]
+   * @param {number} [options.maxRetries] - Max retries (default 5)
+   * @param {number} [options.delayMs] - Delay between retries in ms (default 2000)
    * @returns {Promise<Object|null>} { buffer, format } or null
    */
   async function getCoverForNotification(albumId, options = {}) {

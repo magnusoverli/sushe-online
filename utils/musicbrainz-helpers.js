@@ -71,7 +71,7 @@ function scoreRelease(rel) {
   if ((rel.media || []).some((m) => (m.format || '').includes('Digital')))
     s += 15;
   const date = new Date(rel.date || '1900-01-01');
-  if (!isNaN(date)) s += date.getTime() / 1e10; // minor weight
+  if (!isNaN(date.getTime())) s += date.getTime() / 1e10; // minor weight
   return s;
 }
 

@@ -16,7 +16,7 @@ let queuedFetch = null;
 
 /**
  * Lazily construct the shared queue (one instance per process).
- * @returns {MusicBrainzQueue}
+ * @returns {InstanceType<typeof MusicBrainzQueue>}
  */
 function getMbQueue() {
   if (!queue) {

@@ -20,11 +20,12 @@ const { TransactionAbort } = require('../../db/transaction');
 /**
  * Create helper functions with injected dependencies
  * @param {Object} deps - Dependencies
- * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
+ * @param {import("../../db/types").DbFacade} deps.db - Canonical datastore
  * @param {Object} deps.logger - Logger instance
- * @param {Object} deps.responseCache - Response cache instance
+ * @param {InstanceType<typeof import("../../middleware/response-cache").ResponseCache>} deps.responseCache - Response cache instance
  * @param {Object} deps.app - Express app instance
  * @param {Object} deps.crypto - Node.js crypto module
+ * @param {InstanceType<typeof import("../../services/album-cover-cache").AlbumCoverCache>} [deps.coverCache] - RAM cover cache
  * @returns {Object} - Helper functions
  */
 function createHelpers(deps) {
@@ -40,12 +41,17 @@ function createHelpers(deps) {
     }
   }
 
-  // Create aggregate list instance for recomputation triggers
-  const aggregateList = createAggregateList({
-    db,
-    logger,
-    onRecomputeComplete: invalidateAggregateCache,
-  });
+  // Create aggregate list instance for recomputation triggers.
+  // createAggregateList reads deps.onRecomputeComplete (see its
+  // notifyRecomputeComplete call) but omits it from its own JSDoc, so spell the
+  // real dependency shape out here.
+  const aggregateList = createAggregateList(
+    /** @type {{ db: import("../../db/types").DbFacade, logger: Object, onRecomputeComplete: (year: number) => void }} */ ({
+      db,
+      logger,
+      onRecomputeComplete: invalidateAggregateCache,
+    })
+  );
 
   // Create album canonical instance for deduplication
   const albumCanonical = createAlbumCanonical({ db, logger });

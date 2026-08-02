@@ -12,8 +12,24 @@ const RESTORE_ERROR_CODES = Object.freeze({
   INTERNAL_ERROR: 'RESTORE_INTERNAL_ERROR',
 });
 
+/**
+ * An Error carrying the restore-specific fields the admin routes map to HTTP.
+ * @typedef {Error & {
+ *   code: string,
+ *   statusCode: number,
+ *   details?: unknown
+ * }} RestoreError
+ */
+
+/**
+ * @param {string} code - One of RESTORE_ERROR_CODES
+ * @param {string} message - Human readable message
+ * @param {number} [statusCode] - HTTP status to map to
+ * @param {unknown} [details] - Optional structured detail payload
+ * @returns {RestoreError}
+ */
 function createRestoreError(code, message, statusCode = 500, details) {
-  const error = new Error(message);
+  const error = /** @type {RestoreError} */ (new Error(message));
   error.name = 'RestoreError';
   error.code = code;
   error.statusCode = statusCode;

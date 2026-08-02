@@ -249,7 +249,9 @@ async function discoverArtistByAlbumSearch(log, album, lastfmUsername) {
  */
 async function refreshAlbumPlaycount(db, log, userId, lastfmUsername, album) {
   try {
-    const datastore = ensureDb(db, 'playcount-engine.refreshAlbumPlaycount');
+    const datastore = /** @type {import('../db/types').DbFacade} */ (
+      ensureDb(db, 'playcount-engine.refreshAlbumPlaycount')
+    );
     const albumId = album.album_id || album.albumId || null;
     const artistCandidates = await getLastfmArtistCandidates(
       datastore,
@@ -360,7 +362,9 @@ async function refreshAlbumPlaycount(db, log, userId, lastfmUsername, album) {
     // Mark as errored so we retry later — but preserve any existing cached
     // value rather than overwriting it with null.
     try {
-      const datastore = ensureDb(db, 'playcount-engine.refreshAlbumPlaycount');
+      const datastore = /** @type {import('../db/types').DbFacade} */ (
+        ensureDb(db, 'playcount-engine.refreshAlbumPlaycount')
+      );
       await upsertPlaycountError(datastore, userId, album);
     } catch (dbErr) {
       log.error('Failed to store error status', {

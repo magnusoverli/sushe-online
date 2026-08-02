@@ -41,9 +41,10 @@ function sanitizeForSearch(str = '') {
 }
 
 /**
- * @param {Object} deps
- * @param {Function} deps.fetch - Fetch implementation
- * @param {Function} deps.mbFetch - MusicBrainz rate-limited fetch
+ * @param {Object} [deps]
+ * @param {Function} [deps.fetch] - Fetch implementation (defaults to globalThis.fetch)
+ * @param {Function} [deps.mbFetch] - MusicBrainz rate-limited fetch.
+ *   Required at runtime for every MusicBrainz-backed lookup.
  * @param {Object} [deps.logger] - Logger instance
  * @returns {Object} Track resolution service methods
  */

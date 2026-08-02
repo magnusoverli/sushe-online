@@ -326,11 +326,12 @@ async function processBatchAlbumsPaged(
 
 /**
  * Create album summary service with injected dependencies
- * @param {Object} deps - Dependencies
- * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
- * @param {Object} deps.logger - Logger instance
- * @param {Object} deps.responseCache - Response cache instance (optional, for cache invalidation)
- * @param {Object} deps.broadcast - WebSocket broadcast service (optional, for real-time updates)
+ * @param {Object} [deps] - Dependencies
+ * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore
+ *   (required at runtime; enforced by ensureDb)
+ * @param {Object} [deps.logger] - Logger instance (defaults to the shared logger)
+ * @param {Object} [deps.responseCache] - Response cache instance (optional, for cache invalidation)
+ * @param {Object} [deps.broadcast] - WebSocket broadcast service (optional, for real-time updates)
  */
 function createAlbumSummaryService(deps = {}) {
   const log = deps.logger || logger;
@@ -344,9 +345,9 @@ function createAlbumSummaryService(deps = {}) {
   /**
    * Fetch and store summary for a single album by album_id
    * @param {string} albumId - The album ID
-   * @param {Object} options - Options
-   * @param {boolean} options.skipCacheInvalidation - Skip immediate cache invalidation (for batch processing)
-   * @param {boolean} options.skipBroadcast - Skip WebSocket broadcast (for batch processing)
+   * @param {Object} [options] - Options
+   * @param {boolean} [options.skipCacheInvalidation] - Skip immediate cache invalidation (for batch processing)
+   * @param {boolean} [options.skipBroadcast] - Skip WebSocket broadcast (for batch processing)
    */
   async function fetchAndStoreSummary(albumId, options = {}) {
     const startTime = Date.now();
@@ -597,6 +598,7 @@ function createAlbumSummaryService(deps = {}) {
 
     let lastAlbumRowId = null;
     const fetchNextPage = async () => {
+      /** @type {Array<Date|number>} */
       const params = [snapshotStartedAt];
       let pageWhere = `WHERE ${whereClause} AND ${snapshotBoundaryClause}`;
 

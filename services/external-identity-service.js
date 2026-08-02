@@ -69,7 +69,11 @@ async function fetchAlbumAvailabilityBulk(db, albumIds) {
 }
 
 function createExternalIdentityService(deps = {}) {
-  const db = ensureDb(deps.db, 'external-identity-service');
+  // ensureDb validates the canonical datastore shape at construction time but
+  // is documented with a looser return type than DbFacade.
+  const db = /** @type {import('../db/types').DbFacade} */ (
+    ensureDb(deps.db, 'external-identity-service')
+  );
   const logger = deps.logger || defaultLogger;
 
   async function getAlbumServiceMapping(service, albumId) {

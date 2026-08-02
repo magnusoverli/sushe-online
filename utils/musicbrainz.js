@@ -293,9 +293,10 @@ const COUNTRY_CODE_MAP = {
 
 /**
  * Create MusicBrainz utilities with injected dependencies
- * @param {Object} deps - Dependencies
- * @param {Object} deps.logger - Logger instance
- * @param {Function} deps.fetch - Fetch function (defaults to global fetch)
+ * @param {Object} [deps] - Dependencies
+ * @param {Object} [deps.logger] - Logger instance (defaults to the shared logger)
+ * @param {Function} [deps.fetch] - Fetch function (defaults to the shared
+ *   MusicBrainz queue)
  */
 function createMusicBrainz(deps = {}) {
   const log = deps.logger || logger;
@@ -309,7 +310,7 @@ function createMusicBrainz(deps = {}) {
   /**
    * Fetch JSON from the MusicBrainz API
    * @param {string} endpoint - API endpoint (e.g., 'artist/mbid')
-   * @returns {Object} - JSON response
+   * @returns {Promise<Object|null>} - Parsed JSON response, or null on 404
    */
   async function mbFetch(endpoint) {
     const url = `${MUSICBRAINZ_API}/${endpoint}`;
@@ -358,7 +359,8 @@ function createMusicBrainz(deps = {}) {
   /**
    * Search for an artist by name and get their MBID
    * @param {string} artistName - Artist name to search
-   * @returns {Object|null} - { mbid, name, country, countryCode } or null
+   * @returns {Promise<{mbid:string, name:string, countryCode:string|null,
+   *   country:string|null, disambiguation:string|null}|null>}
    */
   async function searchArtist(artistName) {
     if (!artistName) return null;
@@ -411,7 +413,8 @@ function createMusicBrainz(deps = {}) {
   /**
    * Get artist details by MBID
    * @param {string} mbid - MusicBrainz artist ID
-   * @returns {Object|null} - { mbid, name, country, countryCode } or null
+   * @returns {Promise<{mbid:string, name:string, countryCode:string|null,
+   *   country:string|null, disambiguation:string|null}|null>}
    */
   async function getArtistById(mbid) {
     if (!mbid) return null;
@@ -441,8 +444,9 @@ function createMusicBrainz(deps = {}) {
 
   /**
    * Get countries for a batch of artists (with rate limiting)
-   * @param {Array} artists - Array of { name, mbid? } objects
-   * @returns {Map} - Map of normalized artist name -> { country, countryCode }
+   * @param {Array<string|{name:string, mbid?:string}>} artists - Artists to look up
+   * @returns {Promise<Map<string, {country:string, countryCode:string|null,
+   *   mbid:string}|null>>} - Map of artist name -> country info (null when unknown)
    */
   async function getArtistCountriesBatch(artists) {
     const results = new Map();

@@ -71,7 +71,11 @@ function createCsrfProtection() {
         userAgent: req.get('User-Agent'),
         sessionId: req.sessionID,
       });
-      const err = new Error('Invalid CSRF token');
+      // error-handler.js branches on err.code; err.status mirrors the HTTP
+      // status for any handler that reads it directly.
+      const err = /** @type {Error & {code?: string, status?: number}} */ (
+        new Error('Invalid CSRF token')
+      );
       err.code = 'EBADCSRFTOKEN';
       err.status = 403;
       return next(err);

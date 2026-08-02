@@ -215,9 +215,14 @@ async function fetchCoverArt(artist, album) {
 
 /**
  * Create image refetch service
- * @param {Object} deps - Dependencies
- * @param {import("../db/types").DbFacade} deps.db - Canonical datastore
- * @param {Object} deps.logger - Logger instance (optional)
+ * @param {Object} [deps] - Dependencies
+ * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore
+ *   (required at runtime; enforced by ensureDb)
+ * @param {Object} [deps.logger] - Logger instance (defaults to the shared logger)
+ * @param {{invalidateAlbum?: (albumId: string) => void}} [deps.coverCache] -
+ *   Cover cache invalidated when an album image is replaced
+ * @param {Object} [deps.responseCache] - Response cache invalidated for the
+ *   users owning the album
  * @returns {Object} - Image refetch service
  */
 // eslint-disable-next-line max-lines-per-function -- Factory function with multiple internal methods
@@ -403,7 +408,9 @@ function createImageRefetchService(deps = {}) {
       if (candidateAlbums === 0) {
         summary.completedAt = new Date().toISOString();
         summary.durationSeconds = Math.round(
-          (new Date(summary.completedAt) - new Date(summary.startedAt)) / 1000
+          (new Date(summary.completedAt).getTime() -
+            new Date(summary.startedAt).getTime()) /
+            1000
         );
         log.info('Image refetch job completed', summary);
         return summary;
@@ -538,7 +545,9 @@ function createImageRefetchService(deps = {}) {
 
       summary.completedAt = new Date().toISOString();
       summary.durationSeconds = Math.round(
-        (new Date(summary.completedAt) - new Date(summary.startedAt)) / 1000
+        (new Date(summary.completedAt).getTime() -
+          new Date(summary.startedAt).getTime()) /
+          1000
       );
 
       log.info('Image refetch job completed', summary);

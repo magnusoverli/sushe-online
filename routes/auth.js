@@ -177,12 +177,14 @@ module.exports = (app, deps) => {
         return res.redirect('/login');
       }
 
-      await new Promise((resolve, reject) => {
-        req.logIn(user, (err) => {
-          if (err) return reject(err);
-          resolve();
-        });
-      });
+      await /** @type {Promise<void>} */ (
+        new Promise((resolve, reject) => {
+          req.logIn(user, (err) => {
+            if (err) return reject(err);
+            resolve();
+          });
+        })
+      );
 
       logger.info('User logged in successfully', { email: user.email });
       recordAuthAttempt('login', 'success');

@@ -5,7 +5,11 @@
  */
 
 const defaultLogger = require('../utils/logger');
-const { shutdown: defaultShutdownWebSocket } = require('../utils/websocket');
+// utils/websocket re-exports its default instance via object spread; its
+// factory is documented as `@returns {Object}`, so the spread members are
+// invisible to the checker. Narrow to the member actually used here.
+const { shutdown: defaultShutdownWebSocket } =
+  /** @type {{ shutdown: () => void }} */ (require('../utils/websocket'));
 
 function createProcessHandlers(deps = {}) {
   const logger = deps.logger || defaultLogger;

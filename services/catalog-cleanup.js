@@ -204,6 +204,13 @@ function createCatalogCleanupService(deps = {}) {
       const targetCount = toRowCount(targetCountResult.rows[0]?.count);
 
       if (expectedDeleteCount !== null && expectedDeleteCount !== targetCount) {
+        /**
+         * @type {Error & {
+         *   statusCode?: number,
+         *   code?: string,
+         *   details?: { expectedDeleteCount: number, currentDeleteCount: number }
+         * }}
+         */
         const mismatchError = new Error(
           'Cleanup preview is stale. Please refresh preview and try again.'
         );

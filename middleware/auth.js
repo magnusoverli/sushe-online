@@ -171,7 +171,6 @@ function ensureAdmin(req, res, next) {
  * @param {Object} deps - Dependencies
  * @param {Map} deps.adminCodeAttempts - Map to track attempts
  * @param {Object} deps.logger - Logger instance
- * @param {Object} deps.flash - Flash message function (optional)
  * @returns {Function} - Express middleware
  */
 function createRateLimitAdminRequest(deps) {
