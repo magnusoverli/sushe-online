@@ -14,6 +14,9 @@ npm run build
 echo "=== Local CI: lint ==="
 npm run lint
 
+echo "=== Local CI: typecheck ==="
+npm run typecheck
+
 echo "=== Local CI: structure baseline ==="
 npm run lint:structure:baseline
 

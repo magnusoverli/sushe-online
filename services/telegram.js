@@ -141,9 +141,14 @@ function createSetupHelpers(apiRequest, log) {
         `detectTopicsFromUpdates: scanning ${updates.length} updates for chatId ${chatId}`
       );
 
+      // Telegram sends chat.id as a number; chatId arrives from the admin UI as
+      // a string (HTML option values always are), so compare canonical strings.
+      // A strict !== between the two is always true and skips every message.
+      const wantedChatId = String(chatId);
+
       for (const update of updates) {
         const message = update.message || update.edited_message;
-        if (!message || message.chat?.id !== chatId) continue;
+        if (!message || String(message.chat?.id) !== wantedChatId) continue;
 
         log.info(
           `detectTopicsFromUpdates: message keys: ${Object.keys(message).join(', ')}`

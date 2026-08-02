@@ -71,7 +71,7 @@ if (process.env.DATABASE_URL) {
 
   ready = waitForPostgres(pool)
     .then(async () => {
-      logger.info('Warming database connections...');
+      // warmConnections logs its own start line, for every caller.
       await warmConnections(pool);
       logger.info('Running database migrations...');
       const migrationManager = new MigrationManager(pool);

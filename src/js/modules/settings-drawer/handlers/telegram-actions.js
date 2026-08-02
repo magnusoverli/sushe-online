@@ -370,8 +370,10 @@ export function createSettingsTelegramActions(deps = {}) {
         }),
       });
 
+      // g.id is a number from the Telegram API, chatId a string from the
+      // <option> value — compare canonical strings so the lookup can match.
       const selectedGroup = telegramModalState.detectedGroups.find(
-        (g) => g.id === chatId
+        (g) => String(g.id) === String(chatId)
       );
       telegramModalState.selectedGroup = selectedGroup || {
         id: chatId,

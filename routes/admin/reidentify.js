@@ -40,7 +40,7 @@ module.exports = (app, deps) => {
         res.json({ success: true, ...result });
       } catch (error) {
         if (error instanceof TransactionAbort) {
-          return res.status(error.status).json(error.body);
+          return res.status(error.statusCode).json(error.body);
         }
         logger.error('Admin album search failed', {
           adminUsername: req.user.username,
@@ -83,7 +83,7 @@ module.exports = (app, deps) => {
         res.json({ success: true, ...result });
       } catch (error) {
         if (error instanceof TransactionAbort) {
-          return res.status(error.status).json(error.body);
+          return res.status(error.statusCode).json(error.body);
         }
         logger.error('Admin album re-identification failed', {
           adminUsername: req.user.username,

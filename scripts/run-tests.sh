@@ -5,7 +5,6 @@ set -e
 # the parallel unit tests to avoid exhausting PostgreSQL max_connections.
 # Add new integration test files here if they create a Pool() connection.
 INTEGRATION_TESTS=(
-  "test/list-fetch-optimization.test.js"
   "test/recommendations.test.js"
   "test/year-locking.test.js"
 )
@@ -45,6 +44,11 @@ if [ -n "$DATABASE_URL" ] && node -e "
     if [ -f "$f" ]; then
       echo "--- Running $f ---"
       node --test "$f" || INTEGRATION_EXIT=1
+    else
+      # Fail loudly rather than skipping. A silent skip let a stale entry sit
+      # here unnoticed for months after the test it named was deleted.
+      echo "ERROR: integration test not found: $f"
+      INTEGRATION_EXIT=1
     fi
   done
 else

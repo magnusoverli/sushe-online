@@ -725,3 +725,47 @@ test('getRecommendationThreads should return year-sorted threads', async () => {
   assert.strictEqual(threads[0].year, 2025);
   assert.strictEqual(threads[1].year, 2024);
 });
+
+test('getChatInfo detects forum topics when chatId arrives as a string', async () => {
+  // Regression: the admin UI sends chatId as a string (an <option> value is
+  // always a string) while Telegram reports chat.id as a number. A strict
+  // comparison between the two is always unequal, which silently skipped every
+  // update and made forum topics undiscoverable.
+  const numericChatId = -1001234567890;
+  const logger = createMockLogger();
+  const fetch = createMockFetch({
+    getChat: {
+      ok: true,
+      result: {
+        id: numericChatId,
+        title: 'Forum Group',
+        type: 'supergroup',
+        is_forum: true,
+      },
+    },
+    getUpdates: {
+      ok: true,
+      result: [
+        {
+          message: {
+            chat: { id: numericChatId },
+            message_thread_id: 42,
+            forum_topic_created: { name: 'Releases' },
+          },
+        },
+      ],
+    },
+  });
+  const notifier = createTelegramNotifier({
+    logger,
+    fetch,
+    db: { raw: async () => ({ rows: [] }) },
+  });
+
+  const info = await notifier.getChatInfo('123:ABC', String(numericChatId));
+
+  assert.strictEqual(info.isForum, true);
+  const releases = info.topics.find((t) => t.id === 42);
+  assert.ok(releases, 'expected the thread from getUpdates to be detected');
+  assert.strictEqual(releases.name, 'Releases');
+});
