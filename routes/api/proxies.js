@@ -38,6 +38,61 @@ module.exports = (app, deps) => {
   const asyncHandler = createAsyncHandler(logger);
   const trackService = createTrackResolutionService({ fetch, mbFetch, logger });
 
+  /**
+   * Report a failure that came from the upstream service with that service's
+   * own status, instead of the flat 500 every thrown error would otherwise
+   * produce. A 503 from MusicBrainz is not the same event as a defect in this
+   * server, and the client cannot tell them apart once both are 500.
+   *
+   * Only 4xx/5xx are passed through; anything else — including an error with no
+   * usable status — is re-thrown so asyncHandler logs it and answers 500. This
+   * deliberately stays local to the proxy routes: asyncHandler is shared by
+   * every route in the app, and several unrelated modules put a `status` on
+   * their errors, so honouring it globally would silently change status codes
+   * far outside this file.
+   *
+   * @param {(req: any, res: any) => Promise<void>} fn - The proxy handler.
+   * @param {string} serviceName - Upstream service name, for the log line.
+   * @returns {(req: any, res: any) => Promise<void>}
+   */
+  function withUpstreamStatus(fn, serviceName) {
+    return async (req, res) => {
+      try {
+        await fn(req, res);
+      } catch (err) {
+        const status = Number(err?.status);
+        const isUpstreamStatus =
+          Number.isInteger(status) && status >= 400 && status <= 599;
+
+        // These are collected at the throw site and are the only record of why
+        // a response was unusable, so log them whether or not the status is one
+        // we can hand back. asyncHandler logs neither.
+        if (isUpstreamStatus || err?.contentType || err?.bodyPreview) {
+          logger.warn(`Upstream ${serviceName} request failed`, {
+            status: Number.isInteger(status) ? status : undefined,
+            error: err.message,
+            contentType: err.contentType,
+            bodyPreview: err.bodyPreview,
+            userId: req.user?._id,
+          });
+        }
+
+        // A malformed body arrives with the upstream's own 200, which says
+        // nothing useful to a client — let those fall through to a 500.
+        if (!isUpstreamStatus) {
+          throw err;
+        }
+
+        if (!res.headersSent) {
+          res.status(status).json({
+            error: `${serviceName} request failed`,
+            upstreamStatus: status,
+          });
+        }
+      }
+    };
+  }
+
   // Proxy for Deezer API to avoid CORS issues
   app.get(
     '/api/proxy/deezer',
@@ -112,82 +167,87 @@ module.exports = (app, deps) => {
     '/api/proxy/musicbrainz',
     ensureAuthAPI,
     cacheConfigs.public,
-    asyncHandler(async (req, res) => {
-      const { endpoint, priority } = req.query;
-      if (!endpoint) {
-        return res
-          .status(400)
-          .json({ error: 'Query parameter endpoint is required' });
-      }
-
-      // Determine request priority
-      // high: user-initiated searches, album lists
-      // normal: artist metadata for display
-      // low: background image fetching
-      const requestPriority = priority || 'normal';
-
-      // Use the MusicBrainz rate-limited fetch function with priority
-      const url = `https://musicbrainz.org/ws/2/${endpoint}`;
-      const response = await mbFetch(
-        url,
-        {
-          headers: {
-            'User-Agent': `SuSheOnline/1.0 ( ${process.env.BASE_URL || 'https://github.com/yourusername/sushe-online'} )`,
-            Accept: 'application/json',
-          },
-        },
-        requestPriority
-      );
-
-      if (!response.ok) {
-        const error = /** @type {Error & { status?: number }} */ (
-          new Error(`MusicBrainz API responded with status ${response.status}`)
-        );
-        error.status = response.status;
-        throw error;
-      }
-
-      // Validate Content-Type before parsing
-      const contentType = response.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) {
-        const error =
-          /** @type {Error & { status?: number, contentType?: string }} */ (
-            new Error(
-              `Unexpected Content-Type: ${contentType}. Expected application/json`
-            )
-          );
-        error.status = response.status;
-        error.contentType = contentType;
-        throw error;
-      }
-
-      // Parse JSON with error handling
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        // Try to get response body for debugging
-        let bodyPreview = '';
-        try {
-          const text = await response.text();
-          bodyPreview = text.substring(0, 200);
-        } catch (_textError) {
-          // Ignore if we can't read body
+    asyncHandler(
+      withUpstreamStatus(async (req, res) => {
+        const { endpoint, priority } = req.query;
+        if (!endpoint) {
+          return res
+            .status(400)
+            .json({ error: 'Query parameter endpoint is required' });
         }
 
-        const jsonError =
-          /** @type {Error & { status?: number, contentType?: string, bodyPreview?: string }} */ (
-            new Error(`Failed to parse JSON response: ${parseError.message}`)
-          );
-        jsonError.name = parseError.name || 'SyntaxError';
-        jsonError.status = response.status;
-        jsonError.contentType = contentType;
-        jsonError.bodyPreview = bodyPreview;
-        throw jsonError;
-      }
+        // Determine request priority
+        // high: user-initiated searches, album lists
+        // normal: artist metadata for display
+        // low: background image fetching
+        const requestPriority = priority || 'normal';
 
-      res.json(data);
-    }, 'fetching from MusicBrainz')
+        // Use the MusicBrainz rate-limited fetch function with priority
+        const url = `https://musicbrainz.org/ws/2/${endpoint}`;
+        const response = await mbFetch(
+          url,
+          {
+            headers: {
+              'User-Agent': `SuSheOnline/1.0 ( ${process.env.BASE_URL || 'https://github.com/yourusername/sushe-online'} )`,
+              Accept: 'application/json',
+            },
+          },
+          requestPriority
+        );
+
+        if (!response.ok) {
+          const error = /** @type {Error & { status?: number }} */ (
+            new Error(
+              `MusicBrainz API responded with status ${response.status}`
+            )
+          );
+          error.status = response.status;
+          throw error;
+        }
+
+        // Validate Content-Type before parsing
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          const error =
+            /** @type {Error & { status?: number, contentType?: string }} */ (
+              new Error(
+                `Unexpected Content-Type: ${contentType}. Expected application/json`
+              )
+            );
+          error.status = response.status;
+          error.contentType = contentType;
+          throw error;
+        }
+
+        // Parse JSON with error handling
+        let data;
+        try {
+          data = await response.json();
+        } catch (parseError) {
+          // Try to get response body for debugging
+          let bodyPreview = '';
+          try {
+            const text = await response.text();
+            bodyPreview = text.substring(0, 200);
+          } catch (_textError) {
+            // Ignore if we can't read body
+          }
+
+          const jsonError =
+            /** @type {Error & { status?: number, contentType?: string, bodyPreview?: string }} */ (
+              new Error(`Failed to parse JSON response: ${parseError.message}`)
+            );
+          jsonError.name = parseError.name || 'SyntaxError';
+          jsonError.status = response.status;
+          jsonError.contentType = contentType;
+          jsonError.bodyPreview = bodyPreview;
+          throw jsonError;
+        }
+
+        res.json(data);
+      }, 'MusicBrainz'),
+      'fetching from MusicBrainz'
+    )
   );
 
   // Proxy for Wikidata API to avoid CORS issues
@@ -229,35 +289,38 @@ module.exports = (app, deps) => {
     '/api/proxy/itunes',
     ensureAuthAPI,
     cacheConfigs.public,
-    asyncHandler(async (req, res) => {
-      const { term, limit = 10 } = req.query;
-      if (!term) {
-        return res.status(400).json({
-          error: 'Query parameter term is required',
+    asyncHandler(
+      withUpstreamStatus(async (req, res) => {
+        const { term, limit = 10 } = req.query;
+        if (!term) {
+          return res.status(400).json({
+            error: 'Query parameter term is required',
+          });
+        }
+
+        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&country=us&limit=${limit}`;
+        const response = await itunesProxyQueue.add(async () => {
+          return fetch(url, {
+            headers: {
+              'User-Agent': 'SuSheOnline/1.0',
+              Accept: 'application/json',
+            },
+          });
         });
-      }
 
-      const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&country=us&limit=${limit}`;
-      const response = await itunesProxyQueue.add(async () => {
-        return fetch(url, {
-          headers: {
-            'User-Agent': 'SuSheOnline/1.0',
-            Accept: 'application/json',
-          },
-        });
-      });
+        if (!response.ok) {
+          const err = /** @type {Error & { status?: number }} */ (
+            new Error(`iTunes API responded with status ${response.status}`)
+          );
+          err.status = response.status;
+          throw err;
+        }
 
-      if (!response.ok) {
-        const err = /** @type {Error & { status?: number }} */ (
-          new Error(`iTunes API responded with status ${response.status}`)
-        );
-        err.status = response.status;
-        throw err;
-      }
-
-      const data = await response.json();
-      res.json(data);
-    }, 'fetching from iTunes')
+        const data = await response.json();
+        res.json(data);
+      }, 'iTunes'),
+      'fetching from iTunes'
+    )
   );
 
   // Image proxy endpoint for fetching external cover art

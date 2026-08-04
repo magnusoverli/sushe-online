@@ -64,14 +64,22 @@ const EU_COUNTRIES = new Set([
  * @returns {number} - Score (-1 if unsuitable)
  */
 function scoreRelease(rel) {
-  if (rel.status !== 'Official' || rel.status === 'Pseudo-Release') return -1;
+  // Only Official scores. This already excludes Pseudo-Release, along with
+  // Promotion, Bootleg, Withdrawn and the rest, so no separate check for it.
+  if (rel.status !== 'Official') return -1;
   let s = 0;
   if (EU_COUNTRIES.has(rel.country)) s += 20;
   if (rel.country === 'XW') s += 10;
   if ((rel.media || []).some((m) => (m.format || '').includes('Digital')))
     s += 15;
+  // Recency nudge, floored at zero. getTime() is negative for anything before
+  // 1970 and about -2.2e12 for the missing-date default, which divided by 1e10
+  // outweighs every bonus above. Without the floor those releases scored below
+  // the -1 "unsuitable" sentinel and selectBestRelease dropped them, so an
+  // Official release with no date, or any pressing older than 1970, could not
+  // be selected at all.
   const date = new Date(rel.date || '1900-01-01');
-  if (!isNaN(date.getTime())) s += date.getTime() / 1e10; // minor weight
+  if (!isNaN(date.getTime())) s += Math.max(0, date.getTime()) / 1e10;
   return s;
 }
 

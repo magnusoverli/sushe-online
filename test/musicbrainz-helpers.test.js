@@ -94,4 +94,52 @@ describe('musicbrainz-helpers', () => {
       assert.strictEqual(tracks.length, 2);
     });
   });
+  describe('release suitability', () => {
+    it('rejects every status other than Official', () => {
+      for (const status of [
+        'Promotion',
+        'Bootleg',
+        'Pseudo-Release',
+        'Withdrawn',
+        'Cancelled',
+        undefined,
+      ]) {
+        assert.strictEqual(
+          selectBestRelease([{ status, country: 'XW', media: [] }]),
+          null,
+          `status ${status} should not be selected`
+        );
+      }
+    });
+
+    it('selects Official releases regardless of age or a missing date', () => {
+      // Regression: the recency term is derived from getTime(), which is
+      // negative before 1970 and about -2.2e12 for the missing-date default.
+      // It used to push these below the -1 "unsuitable" sentinel, so old and
+      // undated pressings were silently dropped and nothing could resolve them.
+      for (const date of [
+        undefined,
+        '1959-01-01',
+        '1967-06-01',
+        '1969-12-01',
+        '1970-02-01',
+        '2024-01-01',
+      ]) {
+        const release = { status: 'Official', country: 'US', media: [] };
+        if (date) release.date = date;
+        assert.ok(
+          selectBestRelease([release]),
+          `Official release dated ${date} should be selected`
+        );
+      }
+    });
+
+    it('still prefers the newer of two Official releases', () => {
+      const best = selectBestRelease([
+        { status: 'Official', country: 'US', date: '1990-01-01', media: [] },
+        { status: 'Official', country: 'US', date: '2010-01-01', media: [] },
+      ]);
+      assert.strictEqual(best.date, '2010-01-01');
+    });
+  });
 });
