@@ -126,8 +126,8 @@ test('fetchClaudeSummary should return summary for successful API call', async (
 
   // Verify API call parameters
   const callArgs = mockAnthropic.messages.create.mock.calls[0].arguments[0];
-  // Model comes from CLAUDE_MODEL env var, defaults to claude-sonnet-4-5
-  const expectedModel = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5';
+  // Model comes from CLAUDE_MODEL env var, defaults to claude-haiku-4-5
+  const expectedModel = process.env.CLAUDE_MODEL || 'claude-haiku-4-5';
   assert.strictEqual(callArgs.model, expectedModel);
   assert.ok(callArgs.tools);
   assert.strictEqual(callArgs.tools[0].type, 'web_search_20250305');

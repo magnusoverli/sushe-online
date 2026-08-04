@@ -41,7 +41,7 @@
     "lint:structure:baseline": "node scripts/maintainability-report.js --max-js-files-over-300=100 --max-js-files-over-700=20 --max-legacy-markers=98"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.98.0",
+    "@anthropic-ai/sdk": "^0.115.0",
     "bcryptjs": "^3.0.2",
     "compression": "^1.7.4",
     "connect-pg-simple": "^10.0.0",

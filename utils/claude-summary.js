@@ -233,7 +233,10 @@ function handleApiError(
   album,
   duration,
   log,
-  model = 'claude-sonnet-4-5'
+  // Only reached if a caller omits it; the live call site passes the model it
+  // actually used. Kept in step with the default in fetchClaudeSummary so a
+  // failed request cannot be costed against the wrong model.
+  model = 'claude-haiku-4-5'
 ) {
   recordExternalApiError('claude', 'api_error');
 
@@ -404,7 +407,7 @@ function createClaudeSummaryService(deps = {}) {
     }
 
     // Read config at call time, not module load time
-    const model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5';
+    const model = process.env.CLAUDE_MODEL || 'claude-haiku-4-5';
     const maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '400', 10);
     const requestTimeoutMs = parseInt(
       process.env.CLAUDE_REQUEST_TIMEOUT_MS || '30000',

@@ -771,14 +771,30 @@ function recordClaudeUsage(
   claudeRequestsTotal.labels(model, status).inc();
 
   // Calculate and record estimated cost based on model pricing
-  // Prices per million tokens, per Anthropic's published rates (verified 2026-08-01)
+  // Prices per million tokens, per Anthropic's published rates (verified
+  // 2026-08-04). CLAUDE_MODEL accepts any model id, so a model missing from
+  // this table is priced at the entry below, which under-reports every tier
+  // above Haiku — keep this list current when the configured model changes.
+  //
+  // Claude Sonnet 5 is on introductory pricing of $2/$10 through 2026-08-31
+  // and reverts to $3/$15 on 2026-09-01. It is listed at the standard rate:
+  // over-reporting for a few weeks is preferable to a table that silently
+  // starts under-reporting.
   /** @type {Record<string, { input: number, output: number }>} */
   const costs = {
+    'claude-fable-5': { input: 10.0 / 1_000_000, output: 50.0 / 1_000_000 },
+    'claude-opus-5': { input: 5.0 / 1_000_000, output: 25.0 / 1_000_000 },
+    'claude-opus-4-8': { input: 5.0 / 1_000_000, output: 25.0 / 1_000_000 },
+    'claude-opus-4-7': { input: 5.0 / 1_000_000, output: 25.0 / 1_000_000 },
+    'claude-opus-4-6': { input: 5.0 / 1_000_000, output: 25.0 / 1_000_000 },
+    'claude-opus-4-5': { input: 5.0 / 1_000_000, output: 25.0 / 1_000_000 },
+    'claude-opus-4-1': { input: 15.0 / 1_000_000, output: 75.0 / 1_000_000 },
+    'claude-opus-4': { input: 15.0 / 1_000_000, output: 75.0 / 1_000_000 },
+    'claude-sonnet-5': { input: 3.0 / 1_000_000, output: 15.0 / 1_000_000 },
+    'claude-sonnet-4-6': { input: 3.0 / 1_000_000, output: 15.0 / 1_000_000 },
     'claude-sonnet-4-5': { input: 3.0 / 1_000_000, output: 15.0 / 1_000_000 },
     'claude-sonnet-4': { input: 3.0 / 1_000_000, output: 15.0 / 1_000_000 },
     'claude-haiku-4-5': { input: 1.0 / 1_000_000, output: 5.0 / 1_000_000 },
-    'claude-haiku-4': { input: 1.0 / 1_000_000, output: 5.0 / 1_000_000 },
-    'claude-opus-4': { input: 15.0 / 1_000_000, output: 75.0 / 1_000_000 },
   };
 
   // Default to Haiku pricing if model not recognized
