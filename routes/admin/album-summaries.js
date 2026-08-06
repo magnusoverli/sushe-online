@@ -13,6 +13,19 @@ const logger = require('../../utils/logger');
 const { createAlbumSummaryService } = require('../../services/album-summary');
 const { responseCache } = require('../../middleware/response-cache');
 
+/**
+ * Reasons that mean the summary service failed, not that the album is obscure.
+ *
+ * Anything absent from this map is a genuine "nothing was found" and is
+ * reported as such.
+ */
+const SERVICE_FAULTS = {
+  not_configured: 'Claude is not configured — ANTHROPIC_API_KEY is missing',
+  api_error: 'The Claude API call failed. Check the server logs for details.',
+  unfinished: 'Claude did not finish the summary. Try again.',
+  empty_response: 'Claude returned no usable content. Try again.',
+};
+
 module.exports = (app, deps) => {
   const { ensureAuth, ensureAdmin, db } = deps;
 
@@ -176,11 +189,28 @@ module.exports = (app, deps) => {
         // distinct outcome from both success and failure, and the one the
         // admin most needs named rather than guessed at.
         if (!result.hasSummary) {
+          if (result.skipped) {
+            return res.json({
+              status: 'skipped',
+              message: 'Album is missing artist or title, so it was skipped',
+            });
+          }
+
+          // The service swallows its own errors and returns "no summary" for a
+          // missing API key, a rejected request and a timeout alike. Reporting
+          // those as "no summary found" blames the album for a fault that has
+          // nothing to do with it, so they are named and surfaced as failures.
+          const serviceFault = SERVICE_FAULTS[result.reason];
+          if (serviceFault) {
+            return res.status(502).json({
+              status: 'failed',
+              error: serviceFault,
+            });
+          }
+
           return res.json({
-            status: result.skipped ? 'skipped' : 'no_summary',
-            message: result.skipped
-              ? 'Album is missing artist or title, so it was skipped'
-              : 'No summary could be found for this album',
+            status: 'no_summary',
+            message: 'No summary could be found for this album',
           });
         }
 

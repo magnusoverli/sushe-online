@@ -1183,3 +1183,72 @@ test('album titles beginning with "I" are not mistaken for narration', async () 
     assert.strictEqual(result.found, true);
   }
 });
+
+// =============================================================================
+// A broken service must never look like an album nobody has written about
+// =============================================================================
+
+test('a missing API key reports not_configured, not an absent summary', async () => {
+  const saved = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const service = createClaudeSummaryService({
+      logger: { info() {}, warn() {}, error() {}, debug() {} },
+    });
+    const result = await service.fetchClaudeSummary('Slayer', 'Reign in Blood');
+    assert.strictEqual(result.found, false);
+    assert.strictEqual(result.reason, 'not_configured');
+  } finally {
+    if (saved !== undefined) process.env.ANTHROPIC_API_KEY = saved;
+  }
+});
+
+test('a request timeout reports api_error rather than no result', async () => {
+  const mockAnthropic = {
+    messages: {
+      create: mock.fn(
+        () => new Promise(() => {}) // never settles; the timeout must fire
+      ),
+    },
+  };
+  const saved = process.env.CLAUDE_REQUEST_TIMEOUT_MS;
+  process.env.CLAUDE_REQUEST_TIMEOUT_MS = '30';
+  try {
+    const service = createClaudeSummaryService({
+      logger: { info() {}, warn() {}, error() {}, debug() {} },
+      anthropicClient: mockAnthropic,
+    });
+    const result = await service.fetchClaudeSummary('Artist', 'Album');
+    assert.strictEqual(result.found, false);
+    assert.strictEqual(
+      result.reason,
+      'api_error',
+      'a timeout is a service fault, not an album without coverage'
+    );
+  } finally {
+    if (saved === undefined) delete process.env.CLAUDE_REQUEST_TIMEOUT_MS;
+    else process.env.CLAUDE_REQUEST_TIMEOUT_MS = saved;
+  }
+});
+
+test('the default request timeout leaves room for a slow Sonnet 5 turn', () => {
+  // Measured summaries run 17-51s; the old 30s default failed about half.
+  const saved = process.env.CLAUDE_REQUEST_TIMEOUT_MS;
+  delete process.env.CLAUDE_REQUEST_TIMEOUT_MS;
+  try {
+    const withTimeoutSrc = require('fs').readFileSync(
+      require.resolve('../utils/claude-summary.js'),
+      'utf8'
+    );
+    const match = withTimeoutSrc.match(
+      /CLAUDE_REQUEST_TIMEOUT_MS \|\| '(\d+)'/
+    );
+    assert.ok(match, 'expected a default request timeout');
+    assert.ok(
+      parseInt(match[1], 10) >= 60000,
+      `default timeout ${match[1]}ms is too tight for Sonnet 5`
+    );
+  } finally {
+    if (saved !== undefined) process.env.CLAUDE_REQUEST_TIMEOUT_MS = saved;
+  }
+});

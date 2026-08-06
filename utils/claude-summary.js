@@ -377,8 +377,13 @@ function readSummaryConfig(log) {
     // summary is only trustworthy if web_search actually ran. `medium` buys
     // that reliability well below the `high` default.
     effort: resolveEffort(process.env.CLAUDE_SUMMARY_EFFORT, log),
+    // 30s was tuned for Haiku 4.5, which neither thought nor searched much.
+    // Sonnet 5 does both: measured summaries land between 17s and 33s, and a
+    // hard album can run past a minute. At 30s roughly half of them died on
+    // the timeout — and a timeout is a 408, which retryWithBackoff rethrows
+    // without retrying, so a single slow call failed the album outright.
     requestTimeoutMs: parseInt(
-      process.env.CLAUDE_REQUEST_TIMEOUT_MS || '30000',
+      process.env.CLAUDE_REQUEST_TIMEOUT_MS || '120000',
       10
     ),
     targetSentences: parseInt(process.env.CLAUDE_SUMMARY_SENTENCES || '5', 10),
@@ -624,17 +629,32 @@ function createClaudeSummaryService(deps = {}) {
    * Fetch album summary from Claude API with web search
    * @param {string} artist - Artist name
    * @param {string} album - Album name
-   * @returns {Promise<{summary: string|null, source: string, found: boolean}>}
+   * @returns {Promise<{summary: string|null, source: string, found: boolean,
+   *   reason?: string}>} `reason` names why there is no summary, so callers can
+   *   tell a broken service from an album nobody has written about.
    */
   async function fetchClaudeSummary(artist, album) {
     if (!artist || !album) {
-      return { summary: null, source: SUMMARY_SOURCE, found: false };
+      return {
+        summary: null,
+        source: SUMMARY_SOURCE,
+        found: false,
+        reason: 'invalid_input',
+      };
     }
 
     const anthropic = getClient();
     if (!anthropic) {
       log.error('Claude API client not available (missing API key)');
-      return { summary: null, source: SUMMARY_SOURCE, found: false };
+      // Distinct from "searched and found nothing": nothing was searched. A
+      // caller that conflates the two tells the user an album has no coverage
+      // when the truth is the service was never reachable.
+      return {
+        summary: null,
+        source: SUMMARY_SOURCE,
+        found: false,
+        reason: 'not_configured',
+      };
     }
 
     // Read config at call time, not module load time
@@ -734,7 +754,12 @@ function createClaudeSummaryService(deps = {}) {
         });
         recordUsage(message, model, 'error');
         observeExternalApiCall('claude', 'messages.create', duration, 200);
-        return { summary: null, source: SUMMARY_SOURCE, found: false };
+        return {
+          summary: null,
+          source: SUMMARY_SOURCE,
+          found: false,
+          reason: 'unfinished',
+        };
       }
 
       // Only assert this when usage is present to tell us. Its absence means
@@ -776,7 +801,12 @@ function createClaudeSummaryService(deps = {}) {
           // Record usage but return no summary
           recordUsage(message, model, 'no_info');
           observeExternalApiCall('claude', 'messages.create', duration, 404);
-          return { summary: null, source: SUMMARY_SOURCE, found: false };
+          return {
+            summary: null,
+            source: SUMMARY_SOURCE,
+            found: false,
+            reason: 'rejected',
+          };
         }
 
         validateSummary(summary, artist, album, log);
@@ -812,12 +842,22 @@ function createClaudeSummaryService(deps = {}) {
           usage: message.usage,
         });
         observeExternalApiCall('claude', 'messages.create', duration, 200);
-        return { summary: null, source: SUMMARY_SOURCE, found: false };
+        return {
+          summary: null,
+          source: SUMMARY_SOURCE,
+          found: false,
+          reason: 'empty_response',
+        };
       }
     } catch (err) {
       const duration = Date.now() - startTime;
       handleApiError(err, artist, album, duration, log, model);
-      return { summary: null, source: SUMMARY_SOURCE, found: false };
+      return {
+        summary: null,
+        source: SUMMARY_SOURCE,
+        found: false,
+        reason: 'api_error',
+      };
     }
   }
 

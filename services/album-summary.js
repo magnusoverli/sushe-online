@@ -82,7 +82,8 @@ function generateNameVariations(name) {
  *
  * @param {string} artist - Artist name
  * @param {string} album - Album name
- * @returns {Promise<{summary: string|null, source: string|null, found: boolean}>}
+ * @returns {Promise<{summary: string|null, source: string|null, found: boolean,
+ *   reason?: string}>}
  */
 async function fetchAlbumSummary(artist, album) {
   if (!artist || !album) {
@@ -104,11 +105,13 @@ async function fetchAlbumSummary(artist, album) {
     };
   }
 
-  // No summary found
+  // No summary found. The reason matters: a service that was never reachable
+  // must not be reported to a user as an album nobody has written about.
   return {
     summary: null,
     source: null,
     found: false,
+    reason: claudeResult.reason || 'no_results',
   };
 }
 
@@ -408,7 +411,7 @@ function createAlbumSummaryService(deps = {}) {
         };
       }
 
-      const { summary, source } = await fetchAlbumSummary(
+      const { summary, source, reason } = await fetchAlbumSummary(
         albumRecord.artist.trim(),
         albumRecord.album.trim()
       );
@@ -465,7 +468,7 @@ function createAlbumSummaryService(deps = {}) {
         duration,
         summary ? 200 : 404
       );
-      return { success: true, hasSummary: !!summary, source };
+      return { success: true, hasSummary: !!summary, source, reason };
     } catch (err) {
       recordExternalApiError('album_summary', 'summary_fetch_error');
       log.error('Error fetching album summary', {
