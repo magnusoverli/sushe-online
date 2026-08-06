@@ -323,6 +323,79 @@ describe('album-display module', () => {
       }
     });
 
+    it('adds a regenerated mobile summary badge to the title row', async () => {
+      const previousGetElementById = globalThis.document.getElementById;
+      const previousCreateElement = globalThis.document.createElement;
+      const previousMatchMedia = globalThis.window.matchMedia;
+      const album = {
+        album: 'Summary Album',
+        artist: 'Summary Artist',
+        album_id: 'album-1',
+      };
+      const badgeContainer = {
+        appended: null,
+        querySelector: () => null,
+        appendChild(child) {
+          this.appended = child;
+        },
+      };
+      const coverContainer = {
+        appendChild() {
+          throw new Error(
+            'Mobile summary badges must not be appended to covers'
+          );
+        },
+      };
+      const row = {
+        dataset: { index: '0' },
+        querySelector(selector) {
+          if (selector === '[data-mobile-album-badges]') return badgeContainer;
+          if (selector === '.album-cover-container') return coverContainer;
+          return null;
+        },
+      };
+      const container = {
+        querySelectorAll: () => [row],
+      };
+
+      globalThis.window.matchMedia = () => ({ matches: true });
+      globalThis.document.getElementById = (id) =>
+        id === 'albumContainer' ? container : null;
+      globalThis.document.createElement = () => {
+        const tempDiv = {};
+        Object.defineProperty(tempDiv, 'innerHTML', {
+          set() {
+            tempDiv.firstElementChild = {
+              dataset: {},
+              addEventListener: () => {},
+            };
+          },
+        });
+        return tempDiv;
+      };
+
+      try {
+        const module = createAlbumDisplay({
+          getCurrentList: () => 'list-1',
+          getListData: () => [album],
+          getListMetadata: () => ({}),
+          showMobileSummarySheet: () => {},
+        });
+
+        await module.updateAlbumSummaryInPlace('album-1', {
+          summary: 'A newly generated summary.',
+          summarySource: 'Claude',
+        });
+
+        assert.ok(badgeContainer.appended);
+        assert.strictEqual(album.summary, 'A newly generated summary.');
+      } finally {
+        globalThis.document.getElementById = previousGetElementById;
+        globalThis.document.createElement = previousCreateElement;
+        globalThis.window.matchMedia = previousMatchMedia;
+      }
+    });
+
     it('should handle empty dependencies gracefully', () => {
       // Should not throw when called with empty deps
       const module = createAlbumDisplay({});

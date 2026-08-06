@@ -103,6 +103,7 @@ describe('album render parts', () => {
     assert.match(html, /loading="lazy"/);
     assert.match(html, /Jul 5, 2026/);
     assert.match(html, /data-field="album-mobile-title"/);
+    assert.match(html, /data-mobile-album-badges/);
     assert.doesNotMatch(html, /font-size: 13px; font-weight: 700/);
     assert.match(html, /Mobile Artist/);
     assert.match(html, /No genre/);

@@ -141,7 +141,7 @@ export function renderMobileTitleRow(data, options = {}) {
     <h3 class="${titleClass}"${titleStyleAttr}>
       <i class="${iconClass}"></i><span data-field="album-mobile-title"${titleSpanClass} title="${escapeHtml(data.albumName)}">${escapeHtml(data.albumName)}</span>
     </h3>
-    ${badgesHtml ? `<div class="absolute flex items-center" style="top: 50%; right: 4px; transform: translateY(-50%); gap: 4px">${badgesHtml}</div>` : ''}
+    <div data-mobile-album-badges class="absolute flex items-center" style="top: 50%; right: 4px; transform: translateY(-50%); gap: 4px">${badgesHtml}</div>
   </div>`;
 }
 

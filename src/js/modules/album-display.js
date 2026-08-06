@@ -2432,12 +2432,12 @@ export function createAlbumDisplay(deps = {}) {
 
       if (album && album.album_id === albumId) {
         // Found the album - update summary badge
-        const coverContainer = row.querySelector(
-          '.album-cover-container, .mobile-album-cover'
-        );
-        if (!coverContainer) continue;
+        const badgeContainer = isMobile
+          ? row.querySelector('[data-mobile-album-badges]')
+          : row.querySelector('.album-cover-container');
+        if (!badgeContainer) continue;
 
-        const badge = coverContainer.querySelector(
+        const badge = badgeContainer.querySelector(
           '.summary-badge, .summary-badge-mobile'
         );
 
@@ -2460,11 +2460,11 @@ export function createAlbumDisplay(deps = {}) {
               <i class="${iconClass}"></i>
             </div>`;
 
-            // Insert badge into cover container
+            // Mobile badges belong in the title-row overlay, not beside the cover.
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = badgeHtml;
             const newBadge = tempDiv.firstElementChild;
-            coverContainer.appendChild(newBadge);
+            badgeContainer.appendChild(newBadge);
 
             // Attach event handlers for the new badge
             if (isMobile && showMobileSummarySheet) {
