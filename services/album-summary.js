@@ -9,6 +9,7 @@ const {
 } = require('../utils/metrics');
 const { fetchClaudeSummary } = require('../utils/claude-summary');
 const { storeSummaryResult } = require('./album-summary-store');
+const { createAlbumSummaryConfig } = require('./album-summary-config');
 
 // Summary sources
 const SUMMARY_SOURCES = {
@@ -85,7 +86,7 @@ function generateNameVariations(name) {
  * @returns {Promise<{summary: string|null, source: string|null, found: boolean,
  *   reason?: string, reasonDetail?: string}>}
  */
-async function fetchAlbumSummary(artist, album) {
+async function fetchAlbumSummary(artist, album, overrides) {
   if (!artist || !album) {
     return {
       summary: null,
@@ -95,7 +96,7 @@ async function fetchAlbumSummary(artist, album) {
   }
 
   // Use Claude API as the sole source
-  const claudeResult = await fetchClaudeSummary(artist, album);
+  const claudeResult = await fetchClaudeSummary(artist, album, overrides);
 
   if (claudeResult.summary) {
     return {
@@ -337,12 +338,15 @@ async function processBatchAlbumsPaged(
  * @param {Object} [deps.logger] - Logger instance (defaults to the shared logger)
  * @param {Object} [deps.responseCache] - Response cache instance (optional, for cache invalidation)
  * @param {Object} [deps.broadcast] - WebSocket broadcast service (optional, for real-time updates)
+ * @param {Object} [deps.summaryConfig] - Stored model configuration store
  */
 function createAlbumSummaryService(deps = {}) {
   const log = deps.logger || logger;
   const db = ensureDb(deps.db, 'album-summary');
   const responseCache = deps.responseCache;
   const broadcast = deps.broadcast;
+  const summaryConfigStore =
+    deps.summaryConfig || createAlbumSummaryConfig({ db, logger: log });
 
   // Batch job state
   let batchJob = null;
@@ -412,9 +416,15 @@ function createAlbumSummaryService(deps = {}) {
         };
       }
 
+      // The stored admin configuration decides the model and its parameters.
+      // The service layer resolves it because it owns the database; the Claude
+      // wrapper stays free of one.
+      const summaryConfig = await summaryConfigStore.getConfig();
+
       const { summary, source, reason, reasonDetail } = await fetchAlbumSummary(
         albumRecord.artist.trim(),
-        albumRecord.album.trim()
+        albumRecord.album.trim(),
+        summaryConfig
       );
 
       await storeSummaryResult(

@@ -11,6 +11,12 @@ const Anthropic = /** @type {typeof import('@anthropic-ai/sdk').Anthropic} */ (
 );
 const logger = require('./logger');
 const {
+  getModelCapabilities,
+  buildWebSearchTool,
+  listModels,
+  describeModel,
+} = require('./claude-model-capabilities');
+const {
   observeExternalApiCall,
   recordExternalApiError,
   recordClaudeUsage,
@@ -429,6 +435,49 @@ function isUnfinishedTurn(stopReason) {
   );
 }
 
+/** Drop keys whose value is undefined, so they cannot mask a real default. */
+function stripUndefined(source) {
+  const out = {};
+  for (const [key, value] of Object.entries(source || {})) {
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * The model-specific half of the request.
+ *
+ * `effort` is sent only when the chosen model accepts it. Sending it to a model
+ * that does not is a hard 400 on every request — which is precisely how a stale
+ * production override took every summary down — whereas omitting it merely
+ * leaves the model on its own default.
+ *
+ * `temperature` is never sent at all: 4.7-and-later models reject a non-default
+ * value outright, and older ones reject it while thinking is on, so there is no
+ * value that is safe everywhere. Tone comes from the system prompt.
+ *
+ * @param {string} model
+ * @param {string} effort
+ * @param {{supportsEffort?: boolean, effortLevels?: string[]}|null} capabilities
+ */
+function buildRequestOptions(model, effort, capabilities) {
+  const options = { model };
+
+  // Unknown capabilities mean no effort: the safe direction, since the cost of
+  // omitting a supported one is a default, and of sending an unsupported one a
+  // total failure.
+  if (!capabilities?.supportsEffort) return options;
+
+  const levels = capabilities.effortLevels || [];
+  if (levels.length > 0 && !levels.includes(effort)) {
+    // Configured level not offered by this model (xhigh is absent on some).
+    return options;
+  }
+
+  options.output_config = { effort };
+  return options;
+}
+
 /**
  * Which kind of API failure this was.
  *
@@ -673,7 +722,7 @@ function createClaudeSummaryService(deps = {}) {
    *   reason?: string, reasonDetail?: string}>} `reason` names why there is no summary, so callers can
    *   tell a broken service from an album nobody has written about.
    */
-  async function fetchClaudeSummary(artist, album) {
+  async function fetchClaudeSummary(artist, album, overrides = {}) {
     if (!artist || !album) {
       return {
         summary: null,
@@ -697,7 +746,8 @@ function createClaudeSummaryService(deps = {}) {
       };
     }
 
-    // Read config at call time, not module load time
+    // Read config at call time, not module load time. `overrides` carries the
+    // admin-stored settings; the environment is only a starting point now.
     const {
       model,
       maxTokens,
@@ -705,7 +755,11 @@ function createClaudeSummaryService(deps = {}) {
       requestTimeoutMs,
       targetSentences,
       targetMaxChars,
-    } = readSummaryConfig(log);
+    } = { ...readSummaryConfig(log), ...stripUndefined(overrides) };
+
+    // What this model will actually accept. Null when it cannot be determined,
+    // which is treated as the conservative shape rather than as a failure.
+    const capabilities = await getModelCapabilities(anthropic, model, log);
 
     const startTime = Date.now();
 
@@ -729,31 +783,22 @@ function createClaudeSummaryService(deps = {}) {
 
           return await withTimeout(
             anthropic.messages.create({
-              model,
+              ...buildRequestOptions(model, effort, capabilities),
               max_tokens: maxTokens,
-              // No `temperature`. Sonnet 5 and the other 4.7+ models reject a
-              // non-default value with a 400 on every request, so tone is
-              // steered from the system prompt instead.
-              output_config: { effort },
               system:
                 'You are a music encyclopedia providing accurate, concise album information from web search results. ' +
                 'Always search before answering; never answer an album question from memory alone. ' +
                 'Be factual and consistent, and do not embellish. ' +
                 'Your final message must contain the summary and nothing else — no narration of what you ' +
                 'are about to do, are doing, or have done.',
+              // Dynamic filtering (4.6+): the model writes code that filters
+              // results before they reach the context window. The API
+              // provisions that code execution itself, so it must not be
+              // declared here as a second tool.
               tools: [
-                {
-                  // Dynamic filtering: the model writes code that filters
-                  // results before they reach the context window. The API
-                  // provisions that code execution itself, so it must not be
-                  // declared here as a second tool.
-                  type: 'web_search_20260318',
-                  name: 'web_search',
-                  max_uses: 3,
-                  // Nothing is echoed back on a later turn, so search blocks
-                  // already consumed by a completed filter run are dead weight.
-                  response_inclusion: 'excluded',
-                },
+                /** @type {import('@anthropic-ai/sdk').Anthropic.ToolUnion} */ (
+                  buildWebSearchTool(model, capabilities)
+                ),
               ],
               messages: [
                 {
@@ -905,8 +950,23 @@ function createClaudeSummaryService(deps = {}) {
     }
   }
 
+  /**
+   * Every model this API key can use, described in the terms the admin UI
+   * needs. Throws when the client is unavailable so the caller can say why.
+   */
+  async function listAvailableModels() {
+    const anthropic = getClient();
+    if (!anthropic) {
+      throw new Error(
+        'Claude is not configured — ANTHROPIC_API_KEY is missing'
+      );
+    }
+    return (await listModels(anthropic)).map(describeModel);
+  }
+
   return {
     fetchClaudeSummary,
+    listAvailableModels,
     SUMMARY_SOURCE,
   };
 }
@@ -917,5 +977,6 @@ const defaultInstance = createClaudeSummaryService();
 module.exports = {
   createClaudeSummaryService,
   fetchClaudeSummary: defaultInstance.fetchClaudeSummary,
+  listAvailableModels: defaultInstance.listAvailableModels,
   SUMMARY_SOURCE,
 };

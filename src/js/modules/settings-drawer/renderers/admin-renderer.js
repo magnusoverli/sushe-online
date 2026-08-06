@@ -1,3 +1,4 @@
+import { renderSummaryConfig } from './summary-config-renderer.js';
 import { escapeHtml } from '../../html-utils.js';
 import { renderAvailabilityPanel } from './availability-panel.js';
 
@@ -347,6 +348,7 @@ export function createSettingsAdminRenderer() {
                 <button id="stopAlbumSummariesBtn" class="settings-button settings-button-danger hidden">Stop</button>
               </div>
             </div>
+            ${renderSummaryConfig()}
             <div id="albumSummaryProgress" class="hidden mt-4">
               <div class="w-full bg-gray-700 rounded-full h-2.5 mb-2">
                 <div id="albumSummaryProgressBar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>

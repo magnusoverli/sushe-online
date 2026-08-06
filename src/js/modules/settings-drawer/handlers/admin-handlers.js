@@ -4,6 +4,8 @@
  * Keeps admin event listener attachment separate from drawer orchestration.
  */
 
+import { createSummaryConfigActions } from './album-summary-config.js';
+
 export function createSettingsAdminHandlers(deps = {}) {
   const doc =
     deps.doc || (typeof document !== 'undefined' ? document : undefined);
@@ -367,6 +369,29 @@ export function createSettingsAdminHandlers(deps = {}) {
     if (stopAlbumSummariesBtn) {
       stopAlbumSummariesBtn.addEventListener('click', handleStopAlbumSummaries);
     }
+
+    const summaryConfigActions = createSummaryConfigActions({
+      doc,
+      apiCall,
+      showToast,
+      categoryData,
+    });
+    const summaryModelSelect = doc.getElementById('summaryModelSelect');
+    const saveSummaryConfigBtn = doc.getElementById('saveSummaryConfigBtn');
+    if (summaryModelSelect) {
+      // The effort control follows the model: some models reject the parameter
+      // outright, so the options have to change with the selection.
+      summaryModelSelect.addEventListener('change', () =>
+        summaryConfigActions.syncEffortControl()
+      );
+    }
+    if (saveSummaryConfigBtn) {
+      saveSummaryConfigBtn.addEventListener(
+        'click',
+        summaryConfigActions.handleSaveSummaryConfig
+      );
+    }
+    summaryConfigActions.loadSummaryConfig();
 
     const initialSummaryPayload = categoryData?.admin?.summaryStats;
     if (initialSummaryPayload?.stats && applySummaryStatsPayload) {

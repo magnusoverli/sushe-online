@@ -169,7 +169,12 @@ test('fetchClaudeSummary should handle API response with no text content', async
   assert.strictEqual(result.summary, null);
   assert.strictEqual(result.source, SUMMARY_SOURCE);
   assert.strictEqual(result.found, false);
-  assert.strictEqual(mockLogger.warn.mock.calls.length, 1);
+  assert.ok(
+    mockLogger.warn.mock.calls
+      .map((c) => c.arguments[0])
+      .includes('Claude API returned no text content'),
+    'expected the no-content warning'
+  );
 });
 
 test('fetchClaudeSummary should handle rate limit error (429)', async () => {
@@ -201,7 +206,12 @@ test('fetchClaudeSummary should handle rate limit error (429)', async () => {
   assert.strictEqual(result.summary, null);
   assert.strictEqual(result.source, SUMMARY_SOURCE);
   assert.strictEqual(result.found, false);
-  assert.strictEqual(mockLogger.warn.mock.calls.length, 1);
+  assert.ok(
+    mockLogger.warn.mock.calls
+      .map((c) => c.arguments[0])
+      .includes('Claude API rate limit exceeded'),
+    'expected the rate-limit warning'
+  );
 });
 
 test('fetchClaudeSummary should handle server error (500)', async () => {

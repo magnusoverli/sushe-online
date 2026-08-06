@@ -12,6 +12,11 @@
 const logger = require('../../utils/logger');
 const { createAlbumSummaryService } = require('../../services/album-summary');
 const { responseCache } = require('../../middleware/response-cache');
+const {
+  createAlbumSummaryConfig,
+  EFFORT_LEVELS,
+} = require('../../services/album-summary-config');
+const { listAvailableModels } = require('../../utils/claude-summary');
 
 /**
  * Reasons that mean the summary service failed, not that the album is obscure.
@@ -84,12 +89,17 @@ function describeOutcome(result) {
 module.exports = (app, deps) => {
   const { ensureAuth, ensureAdmin, db } = deps;
 
+  // One config store, shared with the service, so a saved change is visible to
+  // the next summary immediately rather than after its cache expires.
+  const summaryConfig = createAlbumSummaryConfig({ db, logger });
+
   // Create album summary service instance
   const albumSummaryService = createAlbumSummaryService({
     db,
     logger,
     responseCache,
     broadcast: app.locals.broadcast,
+    summaryConfig,
   });
 
   // Expose service for use by other modules (e.g., api.js for new album triggers)
@@ -306,5 +316,65 @@ module.exports = (app, deps) => {
     }
   );
 
-  return { albumSummaryService };
+  // Models this API key can use, plus the configuration in force.
+  app.get(
+    '/api/admin/album-summaries/models',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      const config = await summaryConfig.getConfig();
+      try {
+        res.json({ models: await listAvailableModels(), config });
+      } catch (error) {
+        // Still return the configuration: the admin needs to see what is in
+        // force even when the model list cannot be fetched.
+        logger.warn('Could not list Claude models', { error: error.message });
+        res.json({ models: [], config, error: error.message });
+      }
+    }
+  );
+
+  // Save the summary model configuration.
+  app.post(
+    '/api/admin/album-summaries/config',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      const { model, effort, maxTokens } = req.body || {};
+
+      try {
+        const saved = await summaryConfig.saveConfig(
+          { model, effort, maxTokens },
+          req.user._id
+        );
+
+        logger.info('Admin changed the album summary configuration', {
+          adminUsername: req.user.username,
+          adminId: req.user._id,
+          model: saved.model,
+          effort: saved.effort,
+          maxTokens: saved.maxTokens,
+        });
+
+        res.json({ config: saved });
+      } catch (error) {
+        // Validation faults are the caller's; anything else is ours.
+        const invalid =
+          error.message.includes('required') ||
+          error.message.includes('must be');
+        if (!invalid) {
+          logger.error('Failed to save album summary configuration', {
+            error: error.message,
+            adminId: req.user._id,
+          });
+        }
+        res.status(invalid ? 400 : 500).json({
+          error: invalid ? error.message : 'Failed to save configuration',
+          effortLevels: invalid ? EFFORT_LEVELS : undefined,
+        });
+      }
+    }
+  );
+
+  return { albumSummaryService, summaryConfig };
 };
