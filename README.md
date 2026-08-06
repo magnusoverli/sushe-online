@@ -200,7 +200,7 @@ TIDAL_REDIRECT_URI=https://your-domain.com/auth/tidal/callback
 ANTHROPIC_API_KEY=your-anthropic-api-key
 
 # Optional Claude API settings
-CLAUDE_MODEL=claude-haiku-4-5    # Model to use (default: claude-haiku-4-5)
+CLAUDE_MODEL=claude-sonnet-5     # Model to use (default: claude-sonnet-5)
 CLAUDE_MAX_TOKENS=1024            # Max tokens in response (default: 1024)
 CLAUDE_RATE_LIMIT_MS=1000         # Rate limit in ms between requests (default: 1000)
 
@@ -271,7 +271,7 @@ Rate limiting is **enabled by default** with production-ready settings:
 | Variable               | Default            | Description                                      |
 | ---------------------- | ------------------ | ------------------------------------------------ |
 | `ANTHROPIC_API_KEY`    | **Required**       | Anthropic API key for Claude API                 |
-| `CLAUDE_MODEL`         | `claude-haiku-4-5` | Claude model to use                              |
+| `CLAUDE_MODEL`         | `claude-sonnet-5` | Claude model to use                              |
 | `CLAUDE_MAX_TOKENS`    | `1024`             | Maximum tokens in API response                   |
 | `CLAUDE_RATE_LIMIT_MS` | `1000`             | Rate limit delay between requests (milliseconds) |
 

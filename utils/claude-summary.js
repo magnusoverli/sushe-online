@@ -224,6 +224,95 @@ function validateSummary(summary, artist, album, log) {
   }
 }
 
+/** Effort levels the API accepts. Anything else is a 400. */
+const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+/**
+ * Resolve the configured effort level, rejecting values the API would refuse.
+ *
+ * @param {string|undefined} raw - CLAUDE_SUMMARY_EFFORT, if set.
+ * @param {{ warn: Function }} log
+ * @returns {'low'|'medium'|'high'|'xhigh'|'max'}
+ */
+function resolveEffort(raw, log) {
+  if (!raw) return 'medium';
+  if (EFFORT_LEVELS.includes(raw)) {
+    return /** @type {'low'|'medium'|'high'|'xhigh'|'max'} */ (raw);
+  }
+  log.warn('Ignoring unrecognised CLAUDE_SUMMARY_EFFORT', {
+    value: raw,
+    accepted: EFFORT_LEVELS,
+  });
+  return 'medium';
+}
+
+/**
+ * Read the per-call configuration from the environment.
+ *
+ * Deliberately read per call rather than at module load, so a container can be
+ * reconfigured without a rebuild.
+ *
+ * @param {{ warn: Function }} log
+ */
+function readSummaryConfig(log) {
+  return {
+    model: process.env.CLAUDE_MODEL || 'claude-sonnet-5',
+    // Thinking is on by default on Sonnet 5 and its tokens count against
+    // max_tokens alongside the visible text, so this has to leave room for
+    // both or the summary truncates. It is a ceiling, not a reservation —
+    // unused budget costs nothing.
+    maxTokens: parseInt(process.env.CLAUDE_MAX_TOKENS || '4096', 10),
+    // Lower effort makes the model reach for tools less readily, and this
+    // summary is only trustworthy if web_search actually ran. `medium` buys
+    // that reliability well below the `high` default.
+    effort: resolveEffort(process.env.CLAUDE_SUMMARY_EFFORT, log),
+    requestTimeoutMs: parseInt(
+      process.env.CLAUDE_REQUEST_TIMEOUT_MS || '30000',
+      10
+    ),
+    targetSentences: parseInt(process.env.CLAUDE_SUMMARY_SENTENCES || '5', 10),
+    // 0 = no limit
+    targetMaxChars: parseInt(process.env.CLAUDE_SUMMARY_MAX_CHARS || '0', 10),
+  };
+}
+
+/**
+ * Record token usage for a response, when the response reports any.
+ *
+ * @param {{ usage?: { input_tokens?: number, output_tokens?: number } }} message
+ * @param {string} model - The model that produced it, for cost attribution.
+ * @param {string} status - 'success' | 'no_info' | 'error'
+ */
+function recordUsage(message, model, status) {
+  if (!message.usage) return;
+  recordClaudeUsage(
+    model,
+    message.usage.input_tokens || 0,
+    message.usage.output_tokens || 0,
+    status
+  );
+}
+
+/**
+ * Did the turn end without a usable answer?
+ *
+ * `end_turn` is the only reason that yields a complete summary. Everything
+ * else — truncation, a paused server-tool loop, a refusal — can still return
+ * text, which would otherwise be stored as though it were finished.
+ *
+ * @param {string|null|undefined} stopReason
+ * @returns {boolean}
+ */
+function isUnfinishedTurn(stopReason) {
+  if (!stopReason || stopReason === 'end_turn') return false;
+  return (
+    stopReason === 'max_tokens' ||
+    stopReason === 'pause_turn' ||
+    stopReason === 'model_context_window_exceeded' ||
+    stopReason === 'refusal'
+  );
+}
+
 /**
  * Read Retry-After off an SDK error.
  *
@@ -266,7 +355,7 @@ function handleApiError(
   // Only reached if a caller omits it; the live call site passes the model it
   // actually used. Kept in step with the default in fetchClaudeSummary so a
   // failed request cannot be costed against the wrong model.
-  model = 'claude-haiku-4-5'
+  model = 'claude-sonnet-5'
 ) {
   recordExternalApiError('claude', 'api_error');
 
@@ -438,22 +527,14 @@ function createClaudeSummaryService(deps = {}) {
     }
 
     // Read config at call time, not module load time
-    const model = process.env.CLAUDE_MODEL || 'claude-haiku-4-5';
-    const maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '400', 10);
-    const requestTimeoutMs = parseInt(
-      process.env.CLAUDE_REQUEST_TIMEOUT_MS || '30000',
-      10
-    );
-
-    // Configurable summary length preferences
-    const targetSentences = parseInt(
-      process.env.CLAUDE_SUMMARY_SENTENCES || '5',
-      10
-    );
-    const targetMaxChars = parseInt(
-      process.env.CLAUDE_SUMMARY_MAX_CHARS || '0',
-      10
-    ); // 0 = no limit
+    const {
+      model,
+      maxTokens,
+      effort,
+      requestTimeoutMs,
+      targetSentences,
+      targetMaxChars,
+    } = readSummaryConfig(log);
 
     const startTime = Date.now();
 
@@ -479,14 +560,26 @@ function createClaudeSummaryService(deps = {}) {
             anthropic.messages.create({
               model,
               max_tokens: maxTokens,
-              temperature: 0.43,
+              // No `temperature`. Sonnet 5 and the other 4.7+ models reject a
+              // non-default value with a 400 on every request, so tone is
+              // steered from the system prompt instead.
+              output_config: { effort },
               system:
-                'You are a music encyclopedia providing accurate, concise album information from web search results.',
+                'You are a music encyclopedia providing accurate, concise album information from web search results. ' +
+                'Always search before answering; never answer an album question from memory alone. ' +
+                'Be factual and consistent, and do not embellish.',
               tools: [
                 {
-                  type: 'web_search_20250305',
+                  // Dynamic filtering: the model writes code that filters
+                  // results before they reach the context window. The API
+                  // provisions that code execution itself, so it must not be
+                  // declared here as a second tool.
+                  type: 'web_search_20260318',
                   name: 'web_search',
                   max_uses: 3,
+                  // Nothing is echoed back on a later turn, so search blocks
+                  // already consumed by a completed filter run are dead weight.
+                  response_inclusion: 'excluded',
                 },
               ],
               messages: [
@@ -504,6 +597,43 @@ function createClaudeSummaryService(deps = {}) {
       );
 
       const duration = Date.now() - startTime;
+
+      // Searches actually performed. This is the signal that matters: the
+      // prompt forbids answering without search results, so a zero here means
+      // the summary came from model memory and cannot be trusted, however
+      // fluent it reads. Nothing else in the response reveals that.
+      const searchRequests =
+        message.usage?.server_tool_use?.web_search_requests ?? 0;
+
+      // A turn can end without a usable answer while still returning text.
+      // Persisting those would store a truncated or partial summary as if it
+      // were complete.
+      if (isUnfinishedTurn(message.stop_reason)) {
+        log.warn('Claude did not finish the summary', {
+          artist,
+          album,
+          stopReason: message.stop_reason,
+          // Only populated on a refusal, and its fields can each be null.
+          refusalCategory: message.stop_details?.category ?? null,
+          maxTokens,
+          effort,
+          searchRequests,
+        });
+        recordUsage(message, model, 'error');
+        observeExternalApiCall('claude', 'messages.create', duration, 200);
+        return { summary: null, source: SUMMARY_SOURCE, found: false };
+      }
+
+      // Only assert this when usage is present to tell us. Its absence means
+      // we have no signal, not that no search ran.
+      if (message.usage && searchRequests === 0) {
+        log.warn('Claude answered without searching', {
+          artist,
+          album,
+          effort,
+          model,
+        });
+      }
 
       // Extract text content from Claude's response
       const summary = extractSummaryFromContent(
@@ -528,14 +658,7 @@ function createClaudeSummaryService(deps = {}) {
             isNoInfo,
           });
           // Record usage but return no summary
-          if (message.usage) {
-            recordClaudeUsage(
-              model,
-              message.usage.input_tokens || 0,
-              message.usage.output_tokens || 0,
-              'no_info'
-            );
-          }
+          recordUsage(message, model, 'no_info');
           observeExternalApiCall('claude', 'messages.create', duration, 404);
           return { summary: null, source: SUMMARY_SOURCE, found: false };
         }
@@ -543,14 +666,7 @@ function createClaudeSummaryService(deps = {}) {
         validateSummary(summary, artist, album, log);
 
         // Record token usage and estimated cost
-        if (message.usage) {
-          recordClaudeUsage(
-            model,
-            message.usage.input_tokens || 0,
-            message.usage.output_tokens || 0,
-            'success'
-          );
-        }
+        recordUsage(message, model, 'success');
 
         log.info('Claude API returned album summary', {
           artist,
@@ -559,6 +675,7 @@ function createClaudeSummaryService(deps = {}) {
           duration_ms: duration,
           inputTokens: message.usage?.input_tokens,
           outputTokens: message.usage?.output_tokens,
+          searchRequests,
         });
 
         observeExternalApiCall('claude', 'messages.create', duration, 200);
@@ -569,14 +686,7 @@ function createClaudeSummaryService(deps = {}) {
         };
       } else {
         // Record token usage even for failed responses
-        if (message.usage) {
-          recordClaudeUsage(
-            model,
-            message.usage.input_tokens || 0,
-            message.usage.output_tokens || 0,
-            'success'
-          );
-        }
+        recordUsage(message, model, 'success');
 
         log.warn('Claude API returned no text content', {
           artist,

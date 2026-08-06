@@ -126,11 +126,11 @@ test('fetchClaudeSummary should return summary for successful API call', async (
 
   // Verify API call parameters
   const callArgs = mockAnthropic.messages.create.mock.calls[0].arguments[0];
-  // Model comes from CLAUDE_MODEL env var, defaults to claude-haiku-4-5
-  const expectedModel = process.env.CLAUDE_MODEL || 'claude-haiku-4-5';
+  // Model comes from CLAUDE_MODEL env var, defaults to claude-sonnet-5
+  const expectedModel = process.env.CLAUDE_MODEL || 'claude-sonnet-5';
   assert.strictEqual(callArgs.model, expectedModel);
   assert.ok(callArgs.tools);
-  assert.strictEqual(callArgs.tools[0].type, 'web_search_20250305');
+  assert.strictEqual(callArgs.tools[0].type, 'web_search_20260318');
   assert.strictEqual(callArgs.tools[0].name, 'web_search');
   assert.strictEqual(callArgs.tools[0].max_uses, 3);
   assert.ok(callArgs.messages[0].content.includes('OK Computer'));
@@ -414,14 +414,14 @@ test('fetchClaudeSummary should respect rate limiting', async () => {
   assert.strictEqual(mockAnthropic.messages.create.mock.calls.length, 2);
 });
 
-test('fetchClaudeSummary should include temperature parameter', async () => {
+test('fetchClaudeSummary must not send temperature (Sonnet 5 rejects it)', async () => {
   const mockLogger = {
     info: mock.fn(),
     warn: mock.fn(),
     error: mock.fn(),
     debug: mock.fn(),
   };
-  const mockSummary = 'Test summary with temperature';
+  const mockSummary = 'Test summary without temperature';
 
   const mockAnthropic = {
     messages: {
@@ -444,7 +444,11 @@ test('fetchClaudeSummary should include temperature parameter', async () => {
   await service.fetchClaudeSummary('Artist', 'Album');
 
   const callArgs = mockAnthropic.messages.create.mock.calls[0].arguments[0];
-  assert.strictEqual(callArgs.temperature, 0.43);
+  // Sonnet 5 and every 4.7+ model return a 400 for a non-default temperature,
+  // top_p or top_k, so the parameter must be omitted entirely.
+  assert.strictEqual(callArgs.temperature, undefined);
+  assert.strictEqual(callArgs.top_p, undefined);
+  assert.strictEqual(callArgs.top_k, undefined);
 });
 
 test('fetchClaudeSummary should include system message', async () => {
@@ -481,7 +485,7 @@ test('fetchClaudeSummary should include system message', async () => {
   assert.ok(callArgs.system.includes('music encyclopedia'));
 });
 
-test('fetchClaudeSummary should use max_tokens default of 400', async () => {
+test('fetchClaudeSummary should use max_tokens default of 4096', async () => {
   const mockLogger = {
     info: mock.fn(),
     warn: mock.fn(),
@@ -515,7 +519,9 @@ test('fetchClaudeSummary should use max_tokens default of 400', async () => {
   await service.fetchClaudeSummary('Artist', 'Album');
 
   const callArgs = mockAnthropic.messages.create.mock.calls[0].arguments[0];
-  assert.strictEqual(callArgs.max_tokens, 400);
+  // Thinking is on by default on Sonnet 5 and shares this budget with the
+  // visible text, so it has to leave room for both.
+  assert.strictEqual(callArgs.max_tokens, 4096);
 
   // Restore env var
   if (originalMaxTokens !== undefined) {
@@ -557,9 +563,11 @@ test('fetchClaudeSummary should reject "no information available" responses', as
 
   assert.strictEqual(result.summary, null);
   assert.strictEqual(result.found, false);
-  assert.strictEqual(mockLogger.warn.mock.calls.length, 1);
   assert.ok(
-    mockLogger.warn.mock.calls[0].arguments[0].includes('invalid or no-info')
+    mockLogger.warn.mock.calls.some((c) =>
+      /invalid or no-info response/.test(c.arguments[0])
+    ),
+    'expected the no-info rejection to be logged'
   );
 });
 
@@ -597,7 +605,12 @@ test('fetchClaudeSummary should reject responses that are too short', async () =
 
   assert.strictEqual(result.summary, null);
   assert.strictEqual(result.found, false);
-  assert.strictEqual(mockLogger.warn.mock.calls.length, 1);
+  assert.ok(
+    mockLogger.warn.mock.calls.some((c) =>
+      /invalid or no-info response/.test(c.arguments[0])
+    ),
+    'expected the no-info rejection to be logged'
+  );
 });
 
 test('fetchClaudeSummary should retry on 429 with exponential backoff', async () => {
