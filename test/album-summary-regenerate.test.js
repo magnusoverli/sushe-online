@@ -39,6 +39,16 @@ function makeDoc() {
       contains(c) {
         return nodes.get(id)._classes.has(c);
       },
+      toggle(c, force) {
+        const set = nodes.get(id)._classes;
+        if (force === undefined) {
+          if (set.has(c)) set.delete(c);
+          else set.add(c);
+          return;
+        }
+        if (force) set.add(c);
+        else set.delete(c);
+      },
     },
     addEventListener() {},
     removeEventListener() {},
@@ -264,6 +274,49 @@ describe('createAlbumSummaryRegenerate', () => {
       doc.nodes.get('regenerateSummaryHeading').textContent,
       'Summary regenerated',
       'the stale first response must not repaint the second run'
+    );
+  });
+
+  it('reports what the model is doing, not just that it is busy', async () => {
+    // A spinner tells you nothing. The phase comes from the blocks the turn
+    // opens, so "Searching the web" means it really is searching.
+    const phases = [
+      { status: 'running', phase: 'thinking', searches: 0 },
+      { status: 'running', phase: 'searching', searches: 2 },
+      { status: 'ok' },
+    ];
+    let i = 0;
+    const { doc, api } = build(async (url) => {
+      if (url === START_URL) return { status: 'running' };
+      return phases[i++];
+    });
+
+    const seen = [];
+    const heading = doc.nodes.get('regenerateSummaryHeading');
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      heading,
+      'textContent'
+    );
+    let value = originalDescriptor ? originalDescriptor.value : '';
+    Object.defineProperty(heading, 'textContent', {
+      get: () => value,
+      set: (v) => {
+        value = v;
+        seen.push(v);
+      },
+    });
+
+    const status = await api.regenerateSummary(ALBUM);
+
+    assert.strictEqual(status, 'ok');
+    assert.ok(seen.includes('Thinking'), `expected a thinking phase: ${seen}`);
+    assert.ok(
+      seen.includes('Searching the web'),
+      `expected a searching phase: ${seen}`
+    );
+    assert.strictEqual(
+      doc.nodes.get('regenerateSummaryDetail').textContent,
+      '2 searches so far'
     );
   });
 

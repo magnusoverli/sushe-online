@@ -62,7 +62,7 @@ function createAlbumSummaryConfig(deps = {}) {
       return cache;
     }
 
-    const fallback = { ...envDefaults(), source: 'environment' };
+    const fromEnv = { ...envDefaults(), source: 'environment' };
 
     try {
       const result = await db.raw(
@@ -72,18 +72,18 @@ function createAlbumSummaryConfig(deps = {}) {
       cache = row
         ? {
             model: row.model,
-            effort: row.effort || fallback.effort,
-            maxTokens: row.max_tokens || fallback.maxTokens,
+            effort: row.effort || fromEnv.effort,
+            maxTokens: row.max_tokens || fromEnv.maxTokens,
             source: 'stored',
           }
-        : fallback;
+        : fromEnv;
     } catch (err) {
       // A missing table or an unreachable database must not stop summaries
       // being generated — fall back rather than fail.
       log.warn?.('Could not read album summary config; using environment', {
         error: err.message,
       });
-      cache = fallback;
+      cache = fromEnv;
     }
 
     cachedAt = Date.now();

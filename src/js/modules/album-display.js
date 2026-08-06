@@ -2482,9 +2482,12 @@ export function createAlbumDisplay(deps = {}) {
               newBadge.addEventListener('mouseleave', handleBadgeMouseLeave);
             }
           } else {
-            // Update existing badge
-            badge.dataset.summary = escapeHtml(summaryData.summary);
-            badge.dataset.source = escapeHtml(summaryData.summarySource || '');
+            // Update existing badge. No escapeHtml here: setting a dataset
+            // property writes the attribute verbatim, where the HTML-string
+            // path at render time is decoded by the parser. Escaping both
+            // would show a literal &quot; in the tooltip.
+            badge.dataset.summary = summaryData.summary;
+            badge.dataset.source = summaryData.summarySource || '';
           }
         } else if (badge) {
           // Remove badge if summary was removed

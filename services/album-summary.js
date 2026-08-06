@@ -7,9 +7,9 @@ const {
   observeExternalApiCall,
   recordExternalApiError,
 } = require('../utils/metrics');
-const { fetchClaudeSummary } = require('../utils/claude-summary');
 const { storeSummaryResult } = require('./album-summary-store');
 const { createAlbumSummaryConfig } = require('./album-summary-config');
+const { fetchAlbumSummary } = require('./album-summary-fetch');
 
 // Summary sources
 const SUMMARY_SOURCES = {
@@ -76,45 +76,6 @@ function generateNameVariations(name) {
 
   // Deduplicate while preserving order
   return [...new Set(variations)];
-}
-
-/**
- * Fetch album summary from Claude API
- *
- * @param {string} artist - Artist name
- * @param {string} album - Album name
- * @returns {Promise<{summary: string|null, source: string|null, found: boolean,
- *   reason?: string, reasonDetail?: string}>}
- */
-async function fetchAlbumSummary(artist, album, overrides) {
-  if (!artist || !album) {
-    return {
-      summary: null,
-      source: null,
-      found: false,
-    };
-  }
-
-  // Use Claude API as the sole source
-  const claudeResult = await fetchClaudeSummary(artist, album, overrides);
-
-  if (claudeResult.summary) {
-    return {
-      summary: claudeResult.summary,
-      source: SUMMARY_SOURCES.CLAUDE,
-      found: true,
-    };
-  }
-
-  // No summary found. The reason matters: a service that was never reachable
-  // must not be reported to a user as an album nobody has written about.
-  return {
-    summary: null,
-    source: null,
-    found: false,
-    reason: claudeResult.reason || 'no_results',
-    reasonDetail: claudeResult.reasonDetail,
-  };
 }
 
 /**
@@ -357,6 +318,7 @@ function createAlbumSummaryService(deps = {}) {
    * @param {Object} [options] - Options
    * @param {boolean} [options.skipCacheInvalidation] - Skip immediate cache invalidation (for batch processing)
    * @param {boolean} [options.skipBroadcast] - Skip WebSocket broadcast (for batch processing)
+   * @param {Function} [options.onProgress] - Called as the turn progresses
    * @param {boolean} [options.keepExistingOnEmpty] - Leave a stored summary in
    *   place when the fetch comes back empty, instead of overwriting it with
    *   null. For deliberate single-album regeneration, where losing a good
@@ -416,15 +378,13 @@ function createAlbumSummaryService(deps = {}) {
         };
       }
 
-      // The stored admin configuration decides the model and its parameters.
-      // The service layer resolves it because it owns the database; the Claude
-      // wrapper stays free of one.
+      // Resolved here rather than in the Claude wrapper, which owns no db.
       const summaryConfig = await summaryConfigStore.getConfig();
-
       const { summary, source, reason, reasonDetail } = await fetchAlbumSummary(
         albumRecord.artist.trim(),
         albumRecord.album.trim(),
-        summaryConfig
+        summaryConfig,
+        options.onProgress
       );
 
       await storeSummaryResult(

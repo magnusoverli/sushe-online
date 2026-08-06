@@ -11,6 +11,14 @@
 /** How long a success stays on screen before it dismisses itself. */
 const SUCCESS_DISMISS_MS = 1800;
 
+/** How each reported phase reads to the admin watching it. */
+const PHASES = {
+  starting: 'Starting',
+  thinking: 'Thinking',
+  searching: 'Searching the web',
+  writing: 'Writing the summary',
+};
+
 /** Matches the batch panel's cadence. */
 const POLL_INTERVAL_MS = 2000;
 
@@ -146,6 +154,21 @@ export function createAlbumSummaryRegenerate(deps = {}) {
     return true;
   }
 
+  /** What the model is doing right now, from the job's reported phase. */
+  function showProgress(job) {
+    const el = elements();
+    if (!el || !job) return;
+
+    const searches = job.searches || 0;
+    const phase = PHASES[job.phase] || PHASES.starting;
+    el.heading.textContent = phase;
+    el.detail.textContent =
+      searches > 0
+        ? `${searches} search${searches === 1 ? '' : 'es'} so far`
+        : '';
+    el.detail.classList.toggle('hidden', searches === 0);
+  }
+
   function showOutcome(status, detail) {
     const spec = OUTCOMES[status] || OUTCOMES.failed;
     const el = elements();
@@ -216,6 +239,7 @@ export function createAlbumSummaryRegenerate(deps = {}) {
         if (job?.status && job.status !== 'running') {
           return { status: job.status, detail: job.message || '' };
         }
+        showProgress(job);
       } catch (error) {
         // A 404 means the job is gone — the app restarted mid-run, so the
         // outcome is unknowable rather than merely late.

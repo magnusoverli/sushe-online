@@ -17,6 +17,11 @@ const {
   EFFORT_LEVELS,
 } = require('../../services/album-summary-config');
 const { listAvailableModels } = require('../../utils/claude-summary');
+// Imported directly rather than read off app.locals: these routes are
+// registered before the WebSocket setup assigns app.locals.broadcast, so
+// reading it here captured undefined and no summary update ever reached a
+// browser. The module resolves its io lazily and no-ops until then.
+const { broadcast } = require('../../utils/websocket');
 
 /**
  * Reasons that mean the summary service failed, not that the album is obscure.
@@ -98,7 +103,7 @@ module.exports = (app, deps) => {
     db,
     logger,
     responseCache,
-    broadcast: app.locals.broadcast,
+    broadcast,
     summaryConfig,
   });
 
@@ -216,6 +221,14 @@ module.exports = (app, deps) => {
       const result = await albumSummaryService.fetchAndStoreSummary(albumId, {
         // Do not trade a good stored summary for a failed retry.
         keepExistingOnEmpty: true,
+        // Phases come from the blocks the turn opens, so the modal can report
+        // what the model is doing rather than only that it is still going.
+        onProgress: ({ phase, searches }) => {
+          const job = regenerations.get(albumId);
+          if (job?.status === 'running') {
+            regenerations.set(albumId, { ...job, phase, searches });
+          }
+        },
       });
 
       logger.info('Single album summary regeneration finished', {
@@ -276,7 +289,11 @@ module.exports = (app, deps) => {
         return res.status(202).json({ status: 'running' });
       }
 
-      regenerations.set(albumId, { status: 'running' });
+      regenerations.set(albumId, {
+        status: 'running',
+        phase: 'starting',
+        searches: 0,
+      });
 
       logger.info('Admin started a single album summary regeneration', {
         adminUsername: req.user.username,

@@ -6,6 +6,36 @@ const {
   SUMMARY_SOURCE,
 } = require('../utils/claude-summary.js');
 
+/** The Message shape both the plain and streamed calls resolve to. */
+function finalMessageWith(content) {
+  return {
+    content,
+    stop_reason: 'end_turn',
+    usage: {
+      input_tokens: 10,
+      output_tokens: 20,
+      server_tool_use: { web_search_requests: 1 },
+    },
+  };
+}
+
+/** Minimal stand-in for the SDK's MessageStream. */
+function makeStream(content, events = []) {
+  const listeners = {};
+  return {
+    on(name, fn) {
+      (listeners[name] ||= []).push(fn);
+      return this;
+    },
+    async finalMessage() {
+      for (const event of events) {
+        for (const fn of listeners.streamEvent || []) fn(event);
+      }
+      return finalMessageWith(content);
+    },
+  };
+}
+
 // =============================================================================
 // createClaudeSummaryService tests
 // =============================================================================
@@ -1347,4 +1377,127 @@ test('a timeout names the budget it exceeded', async () => {
     if (saved === undefined) delete process.env.CLAUDE_REQUEST_TIMEOUT_MS;
     else process.env.CLAUDE_REQUEST_TIMEOUT_MS = saved;
   }
+});
+
+// =============================================================================
+// Summary reads as an encyclopedia entry, not as a reply to a request
+// =============================================================================
+
+test('drops sentences reporting what the sources did not contain', async () => {
+  // The exact shapes that reached a user: absence reporting and source
+  // narration, which read as research notes rather than a reference entry.
+  const withAbsence =
+    '"Cryptic Monolith" is the debut full-length album by Null Existence, a ' +
+    'two-piece deathcore band from Washington, United States, formed in 2021. ' +
+    'As of the search results, the album had not yet accumulated professional ' +
+    'reviews. No notable political, religious, or social ideological ' +
+    'associations for the band were found in available sources.';
+
+  const service = createClaudeSummaryService({
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    anthropicClient: {
+      messages: {
+        create: async () =>
+          finalMessageWith([{ type: 'text', text: withAbsence }]),
+      },
+    },
+  });
+
+  const result = await service.fetchClaudeSummary(
+    'Null Existence',
+    'Cryptic Monolith'
+  );
+
+  assert.ok(result.summary.startsWith('"Cryptic Monolith" is the debut'));
+  assert.ok(
+    !/as of the search results/i.test(result.summary),
+    'source narration must not survive'
+  );
+  assert.ok(
+    !/were found in available sources/i.test(result.summary),
+    'absence reporting must not survive'
+  );
+  assert.ok(
+    !/not yet accumulated professional reviews/i.test(result.summary),
+    'no-reviews-yet reporting must not survive'
+  );
+});
+
+test('closes the gap citation markers leave before punctuation', async () => {
+  const spaced =
+    'Reign in Blood is a 1986 album by Slayer . It was produced by Rick Rubin , and remains influential across thrash metal to this day.';
+
+  const service = createClaudeSummaryService({
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    anthropicClient: {
+      messages: {
+        create: async () => finalMessageWith([{ type: 'text', text: spaced }]),
+      },
+    },
+  });
+
+  const result = await service.fetchClaudeSummary('Slayer', 'Reign in Blood');
+
+  assert.ok(!/ \./.test(result.summary), 'no space before a full stop');
+  assert.ok(!/ ,/.test(result.summary), 'no space before a comma');
+  assert.match(result.summary, /by Slayer\. It was/);
+});
+
+// =============================================================================
+// Streamed progress
+// =============================================================================
+
+test('reports the phases of the turn as they happen', async () => {
+  const events = [
+    { type: 'content_block_start', content_block: { type: 'thinking' } },
+    { type: 'content_block_start', content_block: { type: 'server_tool_use' } },
+    { type: 'content_block_start', content_block: { type: 'server_tool_use' } },
+    { type: 'content_block_start', content_block: { type: 'text' } },
+  ];
+
+  const service = createClaudeSummaryService({
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    anthropicClient: {
+      messages: {
+        stream: () =>
+          makeStream([{ type: 'text', text: 'A'.repeat(300) }], events),
+      },
+    },
+  });
+
+  const seen = [];
+  await service.fetchClaudeSummary('Artist', 'Album', {}, (update) =>
+    seen.push(update)
+  );
+
+  const phases = seen.map((s) => s.phase);
+  assert.ok(phases.includes('searching'), 'search phase must be reported');
+  assert.ok(phases.includes('writing'), 'writing phase must be reported');
+  assert.strictEqual(
+    seen[seen.length - 1].searches,
+    2,
+    'each server tool use counts as a search'
+  );
+});
+
+test('a throwing progress listener cannot break the summary', async () => {
+  // Progress is decoration; it must never take down the request it describes.
+  const service = createClaudeSummaryService({
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    anthropicClient: {
+      messages: {
+        stream: () =>
+          makeStream(
+            [{ type: 'text', text: 'B'.repeat(300) }],
+            [{ type: 'content_block_start', content_block: { type: 'text' } }]
+          ),
+      },
+    },
+  });
+
+  const result = await service.fetchClaudeSummary('Artist', 'Album', {}, () => {
+    throw new Error('listener exploded');
+  });
+
+  assert.strictEqual(result.found, true);
 });

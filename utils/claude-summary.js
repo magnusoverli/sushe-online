@@ -54,11 +54,17 @@ function buildPrompt(artist, album, targetSentences, targetMaxChars) {
     lengthGuidance = ` Write exactly ${targetSentences} sentences.`;
   }
 
-  return `Search for information about the album "${album}" by ${artist} and write a concise, factual summary.${lengthGuidance}
+  return `Search for information about the album "${album}" by ${artist}, then write an encyclopedia entry for it.${lengthGuidance}
 
-Cover these elements when information is available: release date (year), primary genre(s), significance or critical reception, and any notable ideological associations of the artist (political, religious, or social views). Mention ideology naturally when relevant or controversial.
+Write it as a reference entry about the album — the way a music encyclopedia describes a record — not as a reply to this request.
 
-CRITICAL: Write ONLY the final summary. Use only verified search results. If insufficient reliable information is found, respond "No information available." Write factually in neutral tone. DO NOT include ANY meta-commentary, preambles, explanations about your search process, or statements about needing more information. Start directly with factual album information.`;
+Where the sources support it, cover: release year, the artist's origin, genre and musical character, how it sits in the artist's discography, and its reception or significance. Note ideological associations (political, religious, or social) only where they are documented and genuinely notable.
+
+Omit anything the sources do not support. Never write that something was not found, was unavailable, has no reviews yet, or was absent from the search results — simply leave it out and write about what is known. Do not mention sources, searching, or what the results contained.
+
+If the sources establish almost nothing about this album, reply with exactly: No information available.
+
+Begin with the album title. Write plain factual prose in a neutral register, with no preamble and no closing remarks.`;
 }
 
 /**
@@ -127,7 +133,26 @@ function stripPreambles(text) {
     /[^.]*to meet the requirements\.\s*/i,
   ];
 
+  // Sentences reporting what the sources did not contain. The prompt forbids
+  // these, but they are the model's strongest habit when asked to cover a set
+  // of topics, and one of them reaching the UI reads as a research note rather
+  // than an encyclopedia entry.
+  const absencePatterns = [
+    /[^.!?]*\b(?:no|not any|none)\b[^.!?]*\b(?:were|was|are|is)\s+(?:found|available|listed|documented)\b[^.!?]*[.!?]+\s*/gi,
+    /[^.!?]*\bas of (?:the )?(?:search results|writing|this writing)\b[^.!?]*[.!?]+\s*/gi,
+    /[^.!?]*\b(?:had|have|has) not yet (?:accumulated|received|garnered)\b[^.!?]*[.!?]+\s*/gi,
+    /[^.!?]*\b(?:available|the) sources?\b[^.!?]*\b(?:do|does|did) not\b[^.!?]*[.!?]+\s*/gi,
+    /[^.!?]*\bno (?:professional )?reviews?\b[^.!?]*[.!?]+\s*/gi,
+  ];
+
   let cleaned = text;
+  for (const pattern of absencePatterns) {
+    cleaned = cleaned.replace(pattern, '');
+  }
+
+  // Citation markers leave a space before the punctuation they preceded.
+  cleaned = cleaned.replace(/\s+([.,;:!?])/g, '$1').replace(/[ \t]{2,}/g, ' ');
+
   let changed = true;
 
   // Keep stripping preambles until no more matches (handles multiple preambles)
@@ -435,6 +460,56 @@ function isUnfinishedTurn(stopReason) {
   );
 }
 
+/**
+ * Report what the model is doing, as it does it.
+ *
+ * The phases come from the blocks the turn opens: a server tool use means it is
+ * searching, a text block means it is writing the summary. That is genuine
+ * progress rather than a spinner with an elapsed counter beside it.
+ *
+ * Listener failures are swallowed on purpose: progress is decoration, and an
+ * exception raised inside an event handler must not take down the request it is
+ * describing.
+ *
+ * @param {{on: Function}} stream
+ * @param {(update: {phase: string, searches: number}) => void} onProgress
+ */
+function attachProgress(stream, onProgress) {
+  let searches = 0;
+  let phase = 'thinking';
+
+  const report = () => {
+    try {
+      onProgress({ phase, searches });
+    } catch {
+      // Reporting is best-effort.
+    }
+  };
+
+  stream.on('streamEvent', (event) => {
+    if (event?.type !== 'content_block_start') return;
+
+    const type = event.content_block?.type;
+    if (type === 'server_tool_use') {
+      searches += 1;
+      phase = 'searching';
+    } else if (type === 'text') {
+      phase = 'writing';
+    } else if (type === 'thinking') {
+      phase = 'thinking';
+    } else {
+      return;
+    }
+    report();
+  });
+
+  // Errors are handled by the awaited finalMessage(); this listener only stops
+  // the emitter treating an 'error' event as unhandled.
+  stream.on('error', () => {});
+
+  report();
+}
+
 /** Drop keys whose value is undefined, so they cannot mask a real default. */
 function stripUndefined(source) {
   const out = {};
@@ -722,7 +797,7 @@ function createClaudeSummaryService(deps = {}) {
    *   reason?: string, reasonDetail?: string}>} `reason` names why there is no summary, so callers can
    *   tell a broken service from an album nobody has written about.
    */
-  async function fetchClaudeSummary(artist, album, overrides = {}) {
+  async function fetchClaudeSummary(artist, album, overrides = {}, onProgress) {
     if (!artist || !album) {
       return {
         summary: null,
@@ -781,8 +856,10 @@ function createClaudeSummaryService(deps = {}) {
             model,
           });
 
-          return await withTimeout(
-            anthropic.messages.create({
+          // Annotated because extracting this to a variable widens
+          // `role: 'user'` to `string`, which the SDK's union rejects.
+          const params =
+            /** @type {import('@anthropic-ai/sdk').Anthropic.MessageCreateParamsNonStreaming} */ ({
               ...buildRequestOptions(model, effort, capabilities),
               max_tokens: maxTokens,
               system:
@@ -806,9 +883,22 @@ function createClaudeSummaryService(deps = {}) {
                   content: prompt,
                 },
               ],
-            }),
-            requestTimeoutMs
-          );
+            });
+
+          // Only stream when someone is watching. finalMessage() resolves to
+          // the same Message a plain call returns, so nothing downstream
+          // changes — but streaming is a different transport, and the batch
+          // path has no use for progress and no reason to take on the risk.
+          if (!onProgress) {
+            return await withTimeout(
+              anthropic.messages.create(params),
+              requestTimeoutMs
+            );
+          }
+
+          const stream = anthropic.messages.stream(params);
+          attachProgress(stream, onProgress);
+          return await withTimeout(stream.finalMessage(), requestTimeoutMs);
         },
         3,
         log
