@@ -489,10 +489,20 @@ function attachProgress(stream, onProgress) {
   stream.on('streamEvent', (event) => {
     if (event?.type !== 'content_block_start') return;
 
-    const type = event.content_block?.type;
+    const block = event.content_block;
+    const type = block?.type;
+
     if (type === 'server_tool_use') {
-      searches += 1;
-      phase = 'searching';
+      // A server tool use is not necessarily a search. Dynamic filtering makes
+      // the model run code over the results, and that arrives as a
+      // server_tool_use too — counting those inflated the search tally well
+      // past the max_uses ceiling and mislabelled filtering as searching.
+      if (block.name === 'web_search') {
+        searches += 1;
+        phase = 'searching';
+      } else {
+        phase = 'filtering';
+      }
     } else if (type === 'text') {
       phase = 'writing';
     } else if (type === 'thinking') {

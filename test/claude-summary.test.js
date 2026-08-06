@@ -1450,8 +1450,14 @@ test('closes the gap citation markers leave before punctuation', async () => {
 test('reports the phases of the turn as they happen', async () => {
   const events = [
     { type: 'content_block_start', content_block: { type: 'thinking' } },
-    { type: 'content_block_start', content_block: { type: 'server_tool_use' } },
-    { type: 'content_block_start', content_block: { type: 'server_tool_use' } },
+    {
+      type: 'content_block_start',
+      content_block: { type: 'server_tool_use', name: 'web_search' },
+    },
+    {
+      type: 'content_block_start',
+      content_block: { type: 'server_tool_use', name: 'web_search' },
+    },
     { type: 'content_block_start', content_block: { type: 'text' } },
   ];
 
@@ -1500,4 +1506,78 @@ test('a throwing progress listener cannot break the summary', async () => {
   });
 
   assert.strictEqual(result.found, true);
+});
+
+test('counts web searches only, not the code that filters them', async () => {
+  // Dynamic filtering makes the model run code over the results, and that
+  // arrives as a server_tool_use too. Counting those reported six searches
+  // against a max_uses ceiling of three.
+  const events = [
+    {
+      type: 'content_block_start',
+      content_block: { type: 'server_tool_use', name: 'web_search' },
+    },
+    {
+      type: 'content_block_start',
+      content_block: { type: 'server_tool_use', name: 'code_execution' },
+    },
+    {
+      type: 'content_block_start',
+      content_block: { type: 'server_tool_use', name: 'web_search' },
+    },
+    {
+      type: 'content_block_start',
+      content_block: { type: 'server_tool_use', name: 'code_execution' },
+    },
+    { type: 'content_block_start', content_block: { type: 'text' } },
+  ];
+
+  const service = createClaudeSummaryService({
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    anthropicClient: {
+      messages: {
+        stream: () =>
+          makeStream([{ type: 'text', text: 'C'.repeat(300) }], events),
+      },
+    },
+  });
+
+  const seen = [];
+  await service.fetchClaudeSummary('Artist', 'Album', {}, (u) => seen.push(u));
+
+  const finalSearches = seen[seen.length - 1].searches;
+  assert.strictEqual(
+    finalSearches,
+    2,
+    'only web_search blocks count as searches'
+  );
+  assert.ok(
+    seen.some((u) => u.phase === 'filtering'),
+    'code execution should read as filtering, not searching'
+  );
+});
+
+test('never reports more searches than max_uses allows', async () => {
+  const events = Array.from({ length: 3 }, () => ({
+    type: 'content_block_start',
+    content_block: { type: 'server_tool_use', name: 'web_search' },
+  }));
+
+  const service = createClaudeSummaryService({
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    anthropicClient: {
+      messages: {
+        stream: () =>
+          makeStream([{ type: 'text', text: 'D'.repeat(300) }], events),
+      },
+    },
+  });
+
+  const seen = [];
+  await service.fetchClaudeSummary('Artist', 'Album', {}, (u) => seen.push(u));
+
+  assert.ok(
+    seen[seen.length - 1].searches <= 3,
+    'the reported count must respect the max_uses ceiling of 3'
+  );
 });

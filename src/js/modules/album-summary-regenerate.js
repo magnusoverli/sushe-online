@@ -16,6 +16,7 @@ const PHASES = {
   starting: 'Starting',
   thinking: 'Thinking',
   searching: 'Searching the web',
+  filtering: 'Filtering results',
   writing: 'Writing the summary',
 };
 
