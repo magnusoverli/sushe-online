@@ -430,6 +430,46 @@ function isUnfinishedTurn(stopReason) {
 }
 
 /**
+ * Which kind of API failure this was.
+ *
+ * @param {{status?: number, code?: string}} err
+ * @returns {string}
+ */
+function classifyApiFailure(err) {
+  if (err?.code === 'CLAUDE_TIMEOUT' || err?.status === 408) return 'timeout';
+  if (err?.status === 401 || err?.status === 403) return 'auth_error';
+  if (err?.status === 429) return 'rate_limited';
+  if (err?.status === 529) return 'overloaded';
+  if (err?.status >= 500) return 'upstream_error';
+  return 'api_error';
+}
+
+/**
+ * A one-line description of the failure, safe to show an admin.
+ *
+ * Carries the status and the API's own message where there is one, because the
+ * difference between "the key is wrong" and "the model was busy" decides what
+ * the reader should do next.
+ *
+ * @param {{status?: number, code?: string, message?: string}} err
+ * @param {number} timeoutMs
+ * @returns {string}
+ */
+function describeApiFailure(err, timeoutMs) {
+  if (err?.code === 'CLAUDE_TIMEOUT' || err?.status === 408) {
+    return `No response within ${Math.round(timeoutMs / 1000)}s`;
+  }
+  const status = err?.status ? `HTTP ${err.status}` : 'Request failed';
+  // The SDK puts the whole JSON error body in .message, prefixed with the
+  // status it already reports separately. Prefer the API's own message text
+  // over the envelope, and fall back to the first line when it cannot be read.
+  const raw = (err?.message || '').split('\n')[0];
+  const apiMessage = raw.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)"/)?.[1];
+  const detail = (apiMessage || raw.replace(/^\d{3}\s+/, '')).slice(0, 160);
+  return detail ? `${status}: ${detail}` : status;
+}
+
+/**
  * Read Retry-After off an SDK error.
  *
  * `APIError.headers` is a WHATWG Headers instance, where indexing by name
@@ -630,7 +670,7 @@ function createClaudeSummaryService(deps = {}) {
    * @param {string} artist - Artist name
    * @param {string} album - Album name
    * @returns {Promise<{summary: string|null, source: string, found: boolean,
-   *   reason?: string}>} `reason` names why there is no summary, so callers can
+   *   reason?: string, reasonDetail?: string}>} `reason` names why there is no summary, so callers can
    *   tell a broken service from an album nobody has written about.
    */
   async function fetchClaudeSummary(artist, album) {
@@ -856,7 +896,11 @@ function createClaudeSummaryService(deps = {}) {
         summary: null,
         source: SUMMARY_SOURCE,
         found: false,
-        reason: 'api_error',
+        // Name the fault rather than lumping every failure under one label.
+        // "Check the server logs" is useless to whoever is looking at the
+        // screen, and these four fail for entirely different reasons.
+        reason: classifyApiFailure(err),
+        reasonDetail: describeApiFailure(err, requestTimeoutMs),
       };
     }
   }

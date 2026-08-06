@@ -21,7 +21,12 @@ const { responseCache } = require('../../middleware/response-cache');
  */
 const SERVICE_FAULTS = {
   not_configured: 'Claude is not configured — ANTHROPIC_API_KEY is missing',
-  api_error: 'The Claude API call failed. Check the server logs for details.',
+  auth_error: 'Claude rejected the API key',
+  rate_limited: 'Claude rate-limited the request. Try again shortly.',
+  overloaded: 'Claude is overloaded. Try again shortly.',
+  upstream_error: 'Claude returned a server error. Try again.',
+  timeout: 'Claude did not respond in time',
+  api_error: 'The Claude API call failed',
   unfinished: 'Claude did not finish the summary. Try again.',
   empty_response: 'Claude returned no usable content. Try again.',
 };
@@ -34,7 +39,8 @@ const SERVICE_FAULTS = {
  * about call for three different reactions.
  *
  * @param {{success: boolean, hasSummary: boolean, skipped?: boolean,
- *   reason?: string, error?: string, source?: string|null}} result
+ *   reason?: string, reasonDetail?: string, error?: string,
+ *   source?: string|null}} result
  * @returns {{status: string, message?: string, source?: string|null}}
  */
 function describeOutcome(result) {
@@ -58,7 +64,15 @@ function describeOutcome(result) {
 
   const serviceFault = SERVICE_FAULTS[result.reason];
   if (serviceFault) {
-    return { status: 'failed', message: serviceFault };
+    // The detail carries the status and the API's own words, which is the
+    // difference between an admin knowing what to do next and being told to go
+    // read a log they may not have access to.
+    return {
+      status: 'failed',
+      message: result.reasonDetail
+        ? `${serviceFault} (${result.reasonDetail})`
+        : serviceFault,
+    };
   }
 
   return {

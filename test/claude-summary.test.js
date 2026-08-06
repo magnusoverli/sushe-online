@@ -1203,7 +1203,7 @@ test('a missing API key reports not_configured, not an absent summary', async ()
   }
 });
 
-test('a request timeout reports api_error rather than no result', async () => {
+test('a request timeout is a service fault, not an absent summary', async () => {
   const mockAnthropic = {
     messages: {
       create: mock.fn(
@@ -1222,7 +1222,7 @@ test('a request timeout reports api_error rather than no result', async () => {
     assert.strictEqual(result.found, false);
     assert.strictEqual(
       result.reason,
-      'api_error',
+      'timeout',
       'a timeout is a service fault, not an album without coverage'
     );
   } finally {
@@ -1250,5 +1250,91 @@ test('the default request timeout leaves room for a slow Sonnet 5 turn', () => {
     );
   } finally {
     if (saved !== undefined) process.env.CLAUDE_REQUEST_TIMEOUT_MS = saved;
+  }
+});
+
+// =============================================================================
+// API failures are classified, not lumped together
+// =============================================================================
+
+// "The Claude API call failed, check the server logs" is useless to whoever is
+// looking at the screen. A rejected key, a busy model and a slow response call
+// for three different reactions.
+
+function serviceWithError(err) {
+  return createClaudeSummaryService({
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    anthropicClient: {
+      messages: {
+        create: mock.fn(async () => {
+          throw err;
+        }),
+      },
+    },
+  });
+}
+
+test('a rejected API key is reported as an auth error, with the API message', async () => {
+  const err = new Error(
+    '401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}'
+  );
+  err.status = 401;
+
+  const result = await serviceWithError(err).fetchClaudeSummary('A', 'B');
+
+  assert.strictEqual(result.reason, 'auth_error');
+  assert.match(result.reasonDetail, /401/);
+  assert.match(
+    result.reasonDetail,
+    /invalid x-api-key/,
+    "the API's own words are what identify the fault"
+  );
+  assert.ok(
+    !/^HTTP 401: 401/.test(result.reasonDetail),
+    'the status must not be repeated'
+  );
+});
+
+test('an overloaded model is distinguished from a rate limit', async () => {
+  const overloaded = new Error('529 overloaded');
+  overloaded.status = 529;
+  const busy = new Error('429 rate limit');
+  busy.status = 429;
+
+  assert.strictEqual(
+    (await serviceWithError(overloaded).fetchClaudeSummary('A', 'B')).reason,
+    'overloaded'
+  );
+  assert.strictEqual(
+    (await serviceWithError(busy).fetchClaudeSummary('A', 'B')).reason,
+    'rate_limited'
+  );
+});
+
+test('a server error is reported as upstream, not as a generic failure', async () => {
+  const err = new Error('500 internal');
+  err.status = 500;
+
+  const result = await serviceWithError(err).fetchClaudeSummary('A', 'B');
+
+  assert.strictEqual(result.reason, 'upstream_error');
+});
+
+test('a timeout names the budget it exceeded', async () => {
+  const saved = process.env.CLAUDE_REQUEST_TIMEOUT_MS;
+  process.env.CLAUDE_REQUEST_TIMEOUT_MS = '5000';
+  try {
+    const service = createClaudeSummaryService({
+      logger: { info() {}, warn() {}, error() {}, debug() {} },
+      anthropicClient: {
+        messages: { create: mock.fn(() => new Promise(() => {})) },
+      },
+    });
+    const result = await service.fetchClaudeSummary('A', 'B');
+    assert.strictEqual(result.reason, 'timeout');
+    assert.match(result.reasonDetail, /5s/);
+  } finally {
+    if (saved === undefined) delete process.env.CLAUDE_REQUEST_TIMEOUT_MS;
+    else process.env.CLAUDE_REQUEST_TIMEOUT_MS = saved;
   }
 });
