@@ -961,3 +961,40 @@ test('fetchClaudeSummary should strip "Unable to find" meta-commentary', async (
   assert.ok(!result.summary.includes('Unable to find'));
   assert.ok(result.summary.startsWith('The album was released'));
 });
+
+test('honors the Retry-After header on a 429 from the SDK', async () => {
+  // Regression: APIError.headers is a WHATWG Headers instance, so indexing it
+  // by name always yields undefined. The old code did exactly that, which
+  // silently disabled Retry-After handling — a 429 fell through to plain
+  // exponential backoff instead of waiting as long as the API asked.
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
+  const rateLimited = Object.assign(new Error('rate limited'), {
+    status: 429,
+    headers: new Headers({ 'retry-after': '0' }),
+  });
+  const mockAnthropic = {
+    messages: { create: mock.fn(async () => Promise.reject(rateLimited)) },
+  };
+
+  const service = createClaudeSummaryService({
+    logger: mockLogger,
+    anthropicClient: mockAnthropic,
+  });
+  await service.fetchClaudeSummary('Artist', 'Album');
+
+  const rateLimitLog = mockLogger.warn.mock.calls
+    .map((c) => c.arguments)
+    .find(([msg]) => msg === 'Claude API rate limit exceeded');
+
+  assert.ok(rateLimitLog, 'expected a rate-limit warning to be logged');
+  assert.strictEqual(
+    rateLimitLog[1].retryAfter,
+    '0',
+    'Retry-After must be read via Headers.get(), not by indexing'
+  );
+});

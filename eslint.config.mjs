@@ -99,6 +99,7 @@ export default [
         document: 'readonly',
         localStorage: 'readonly',
         fetch: 'readonly',
+        Headers: 'readonly',
         setTimeout: 'readonly',
         clearInterval: 'readonly',
         setInterval: 'readonly',

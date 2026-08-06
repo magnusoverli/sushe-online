@@ -225,6 +225,36 @@ function validateSummary(summary, artist, album, log) {
 }
 
 /**
+ * Read Retry-After off an SDK error.
+ *
+ * `APIError.headers` is a WHATWG Headers instance, where indexing by name
+ * always yields undefined — only get() reads a value. Indexing it silently
+ * disabled Retry-After handling entirely, so a 429 fell through to plain
+ * exponential backoff instead of waiting as long as the API asked.
+ *
+ * Always returns a string so callers can parseInt it without re-checking; the
+ * SDK's own `retryAfter` convenience field is a number.
+ *
+ * @param {{ headers?: unknown, retryAfter?: string|number }} err
+ * @returns {string|undefined} Seconds to wait, or undefined.
+ */
+function readRetryAfter(err) {
+  const headers = err?.headers;
+  if (headers && typeof (/** @type {Headers} */ (headers).get) === 'function') {
+    const value = /** @type {Headers} */ (headers).get('retry-after');
+    if (value) return value;
+  }
+  // Plain-object headers, and the SDK's own convenience field.
+  if (headers && typeof headers === 'object') {
+    const value = /** @type {Record<string, string>} */ (headers)[
+      'retry-after'
+    ];
+    if (value) return value;
+  }
+  return err?.retryAfter == null ? undefined : String(err.retryAfter);
+}
+
+/**
  * Handle Claude API errors with appropriate logging and metrics
  */
 function handleApiError(
@@ -250,7 +280,7 @@ function handleApiError(
       album,
       error: err.message,
       status: err.status,
-      retryAfter: err.headers?.['retry-after'] || err.retryAfter,
+      retryAfter: readRetryAfter(err),
     });
     observeExternalApiCall('claude', 'messages.create', duration, 429);
   } else if (err.code === 'CLAUDE_TIMEOUT' || err.status === 408) {
@@ -339,9 +369,10 @@ async function retryWithBackoff(fn, maxRetries = 3, log) {
 
       // Calculate backoff
       let backoffMs;
-      if (err.status === 429 && err.headers?.['retry-after']) {
+      const retryAfter = readRetryAfter(err);
+      if (err.status === 429 && retryAfter) {
         // Respect Retry-After header (seconds)
-        backoffMs = parseInt(err.headers['retry-after'], 10) * 1000;
+        backoffMs = parseInt(retryAfter, 10) * 1000;
       } else {
         // Exponential backoff: 1s, 2s, 4s
         backoffMs = Math.pow(2, attempt - 1) * 1000;
