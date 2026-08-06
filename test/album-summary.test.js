@@ -357,6 +357,43 @@ test('fetchAndStoreSummary should return error for missing album', async () => {
   assert.strictEqual(result.error, 'Album not found');
 });
 
+test('fetchAndStoreSummary invalidates cached lists for album owners', async () => {
+  const invalidatedKeys = [];
+  const responseCache = {
+    invalidate(key) {
+      invalidatedKeys.push(key);
+    },
+  };
+
+  const mockPool = asMockDb({
+    query: async (query) => {
+      if (query.includes('SELECT album_id, artist, album')) {
+        return {
+          rows: [{ album_id: 'cache-album', artist: 'Artist', album: 'Album' }],
+        };
+      }
+      if (query.includes('WHERE li.album_id = ANY($1)')) {
+        return { rows: [{ user_id: 'user-1' }] };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+  });
+  const service = createAlbumSummaryService({
+    db: mockPool,
+    logger: createMockLogger(),
+    responseCache,
+    summaryConfig: { getConfig: async () => ({}) },
+    fetchAlbumSummary: async () => ({
+      summary: 'Fresh summary',
+      source: 'claude',
+    }),
+  });
+
+  await service.fetchAndStoreSummary('cache-album');
+
+  assert.deepStrictEqual(invalidatedKeys, [':user-1']);
+});
+
 test('fetchAndStoreSummary should skip fetch for empty artist', async () => {
   const mockPool = asMockDb({
     query: async (query, _params) => {

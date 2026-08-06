@@ -10,6 +10,9 @@ const {
 const { storeSummaryResult } = require('./album-summary-store');
 const { createAlbumSummaryConfig } = require('./album-summary-config');
 const { fetchAlbumSummary } = require('./album-summary-fetch');
+const {
+  invalidateResponseCacheForAlbumUsers,
+} = require('./album-cache-invalidation');
 
 // Summary sources
 const SUMMARY_SOURCES = {
@@ -94,44 +97,6 @@ function parseStatsRow(row) {
       parseInt(row.attempted_no_summary, 10),
     fromClaude: parseInt(row.from_claude, 10),
   };
-}
-
-/**
- * Invalidate caches for all users who have a specific album in their lists
- * @param {Object} db - Datastore with .raw() (any PgDatastore)
- * @param {Object} responseCache - Response cache instance
- * @param {Object} logger - Logger instance
- * @param {string} albumId - Album ID to invalidate caches for
- */
-async function invalidateCachesForAlbum(db, responseCache, logger, albumId) {
-  if (!responseCache) return;
-
-  try {
-    const result = await db.raw(
-      `SELECT DISTINCT l.user_id 
-       FROM lists l 
-       JOIN list_items li ON li.list_id = l._id 
-       WHERE li.album_id = $1`,
-      [albumId]
-    );
-
-    for (const row of result.rows) {
-      responseCache.invalidate(`GET:/api/lists:${row.user_id}`);
-    }
-
-    if (result.rows.length > 0) {
-      logger.debug('Invalidated caches for users with album', {
-        albumId,
-        userCount: result.rows.length,
-      });
-    }
-  } catch (err) {
-    // Don't fail summary storage if cache invalidation fails
-    logger.warn('Failed to invalidate caches after summary update', {
-      albumId,
-      error: err.message,
-    });
-  }
 }
 
 /**
@@ -262,31 +227,20 @@ async function processBatchAlbumsPaged(
       duration: `${durationSeconds}s`,
     });
 
-    // Batch cache invalidation: invalidate caches once at the end
-    if (responseCache && db && processedAlbumIds.length > 0) {
-      try {
-        // Use explicit album IDs instead of timestamps to avoid race conditions
-        const affectedUsers = await db.raw(
-          `SELECT DISTINCT l.user_id 
-           FROM lists l 
-           JOIN list_items li ON li.list_id = l._id 
-           WHERE li.album_id = ANY($1::text[])`,
-          [processedAlbumIds]
-        );
+    // Batch cache invalidation: invalidate caches once at the end.
+    if (responseCache && processedAlbumIds.length > 0) {
+      const userCount = await invalidateResponseCacheForAlbumUsers({
+        db,
+        responseCache,
+        logger: log,
+        albumIds: processedAlbumIds,
+        operation: 'album-summary-batch',
+      });
 
-        for (const row of affectedUsers.rows) {
-          responseCache.invalidate(`GET:/api/lists:${row.user_id}`);
-        }
-
-        log.info('Batch cache invalidation completed', {
-          userCount: affectedUsers.rows.length,
-          albumsProcessed: processedAlbumIds.length,
-        });
-      } catch (err) {
-        log.warn('Failed to invalidate caches after batch', {
-          error: err.message,
-        });
-      }
+      log.info('Batch cache invalidation completed', {
+        userCount,
+        albumsProcessed: processedAlbumIds.length,
+      });
     }
   });
 }
@@ -300,12 +254,14 @@ async function processBatchAlbumsPaged(
  * @param {Object} [deps.responseCache] - Response cache instance (optional, for cache invalidation)
  * @param {Object} [deps.broadcast] - WebSocket broadcast service (optional, for real-time updates)
  * @param {Object} [deps.summaryConfig] - Stored model configuration store
+ * @param {Function} [deps.fetchAlbumSummary] - Fetch a summary for an album
  */
 function createAlbumSummaryService(deps = {}) {
   const log = deps.logger || logger;
   const db = ensureDb(deps.db, 'album-summary');
   const responseCache = deps.responseCache;
   const broadcast = deps.broadcast;
+  const fetchSummary = deps.fetchAlbumSummary || fetchAlbumSummary;
   const summaryConfigStore =
     deps.summaryConfig || createAlbumSummaryConfig({ db, logger: log });
 
@@ -380,7 +336,7 @@ function createAlbumSummaryService(deps = {}) {
 
       // Resolved here rather than in the Claude wrapper, which owns no db.
       const summaryConfig = await summaryConfigStore.getConfig();
-      const { summary, source, reason, reasonDetail } = await fetchAlbumSummary(
+      const { summary, source, reason, reasonDetail } = await fetchSummary(
         albumRecord.artist.trim(),
         albumRecord.album.trim(),
         summaryConfig,
@@ -398,7 +354,13 @@ function createAlbumSummaryService(deps = {}) {
       // Invalidate caches for all users who have this album in their lists
       // Skip during batch processing (will be done at the end for efficiency)
       if (!skipCacheInvalidation) {
-        await invalidateCachesForAlbum(db, responseCache, log, albumId);
+        await invalidateResponseCacheForAlbumUsers({
+          db,
+          responseCache,
+          logger: log,
+          albumIds: albumId,
+          operation: 'album-summary',
+        });
       }
 
       // Broadcast summary update to all users who have this album in their lists
