@@ -51,14 +51,21 @@ function buildPrompt(artist, album, targetSentences, targetMaxChars) {
   if (targetMaxChars > 0) {
     lengthGuidance = ` Keep your response under ${targetMaxChars} characters.`;
   } else if (targetSentences > 0) {
-    lengthGuidance = ` Write exactly ${targetSentences} sentences.`;
+    // A word budget rather than an exact sentence count. Asked for exactly N
+    // sentences the model keeps the count and grows the sentences instead,
+    // producing comma-spliced paragraphs that say more than was wanted.
+    lengthGuidance =
+      ` Aim for roughly ${targetSentences * 30} words, across about ` +
+      `${targetSentences} short sentences.`;
   }
 
   return `Search for information about the album "${album}" by ${artist}, then write an encyclopedia entry for it.${lengthGuidance}
 
 Write it as a reference entry about the album — the way a music encyclopedia describes a record — not as a reply to this request.
 
-Where the sources support it, cover: release year, the artist's origin, genre and musical character, how it sits in the artist's discography, and its reception or significance. Note ideological associations (political, religious, or social) only where they are documented and genuinely notable.
+Cover the essentials: release year, the artist and where they are from, the album's musical character, and how it was received or why it matters. Add anything beyond that only when it is genuinely notable.
+
+Keep it economical. Write short, self-contained sentences rather than stacking clauses. Do not quote reviewers, and name at most one or two comparable artists — a list of them tells the reader little. Note ideological associations (political, religious, or social) only where they are documented and genuinely notable.
 
 Omit anything the sources do not support. Never write that something was not found, was unavailable, has no reviews yet, or was absent from the search results — simply leave it out and write about what is known. Do not mention sources, searching, or what the results contained.
 

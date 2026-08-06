@@ -1664,3 +1664,69 @@ test('does not mistake a bulleted list for prose', async () => {
   assert.ok(!/^\s*[-*+]\s/m.test(summary), 'bullet markers must be removed');
   assert.match(summary, /Wilt Thou Weep/);
 });
+
+// =============================================================================
+// Length is steered by a word budget, not an exact sentence count
+// =============================================================================
+
+/** The prompt actually sent for a request. */
+async function sentPrompt(env = {}) {
+  const saved = {};
+  for (const [k, v] of Object.entries(env)) {
+    saved[k] = process.env[k];
+    process.env[k] = v;
+  }
+  const calls = [];
+  const service = createClaudeSummaryService({
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    anthropicClient: {
+      messages: {
+        create: async (params) => {
+          calls.push(params);
+          return finalMessageWith([{ type: 'text', text: 'x'.repeat(300) }]);
+        },
+      },
+    },
+  });
+  try {
+    await service.fetchClaudeSummary('Marianas Rest', 'The Bereaved');
+    return calls[0].messages[0].content;
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
+test('asks for a word budget rather than an exact sentence count', async () => {
+  // "Write exactly 5 sentences" kept the count and grew the sentences,
+  // producing comma-spliced paragraphs rather than a shorter entry.
+  const prompt = await sentPrompt({ CLAUDE_SUMMARY_SENTENCES: '5' });
+
+  assert.ok(
+    !/exactly \d+ sentences/i.test(prompt),
+    'an exact sentence count invites cramming'
+  );
+  assert.match(prompt, /roughly 150 words/);
+  assert.match(prompt, /about 5 short sentences/);
+});
+
+test('scales the word budget with the configured sentence target', async () => {
+  const prompt = await sentPrompt({ CLAUDE_SUMMARY_SENTENCES: '4' });
+  assert.match(prompt, /roughly 120 words/);
+});
+
+test('a character cap still takes precedence when one is set', async () => {
+  const prompt = await sentPrompt({ CLAUDE_SUMMARY_MAX_CHARS: '600' });
+  assert.match(prompt, /under 600 characters/);
+  assert.ok(!/roughly \d+ words/.test(prompt));
+});
+
+test('tells the model to be economical rather than exhaustive', async () => {
+  const prompt = await sentPrompt();
+
+  assert.match(prompt, /short, self-contained sentences/);
+  assert.match(prompt, /Do not quote reviewers/);
+  assert.match(prompt, /at most one or two comparable artists/);
+});
