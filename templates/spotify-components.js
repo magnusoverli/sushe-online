@@ -98,6 +98,7 @@ function createSpotifyComponents(deps) {
     <!-- Admin-only option to re-identify album from MusicBrainz -->
     <div id="adminMenuDivider" class="hidden context-menu-divider"></div>
     ${menuItem({ id: 'reidentifyAlbumOption', icon: 'fa-sync-alt', label: 'Re-identify Album', hoverColor: 'hover:text-yellow-400', hidden: true, iconColor: 'text-yellow-400' })}
+    ${menuItem({ id: 'regenerateSummaryOption', icon: 'fa-wand-magic-sparkles', label: 'Regenerate Summary', hoverColor: 'hover:text-yellow-400', hidden: true, iconColor: 'text-yellow-400' })}
     <div class="context-menu-divider"></div>
     ${menuItem({ id: 'removeAlbumOption', icon: 'fa-times', label: 'Remove from List', hoverColor: 'hover:text-red-400' })}
   </div>
@@ -848,6 +849,29 @@ function createSpotifyComponents(deps) {
   </div>
 `;
 
+  // Component: single-album summary regeneration status.
+  //
+  // Deliberately has no buttons while it runs: the request is one API call the
+  // admin is waiting on, so there is nothing to cancel and nothing to confirm.
+  // The dismiss button is revealed only once an outcome needs acknowledging.
+  const regenerateSummaryModalComponent = () => `
+  <div id="regenerateSummaryModal" class="hidden fixed inset-0 modal-overlay modal-layer flex items-center justify-center p-4 safe-area-modal">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-sm">
+      <div class="p-6 text-center">
+        <div id="regenerateSummaryIcon" class="text-3xl text-gray-500">
+          <i class="fas fa-spinner fa-spin"></i>
+        </div>
+        <h3 id="regenerateSummaryHeading" class="text-lg font-semibold text-white mt-3">Regenerating summary</h3>
+        <p id="regenerateSummarySubtitle" class="text-sm text-gray-400 mt-1"></p>
+        <p id="regenerateSummaryDetail" class="hidden text-sm text-gray-300 mt-3"></p>
+      </div>
+      <div id="regenerateSummaryFooter" class="hidden p-4 border-t border-gray-800 flex justify-end">
+        <button id="regenerateSummaryCloseBtn" class="btn-modal-cancel">Close</button>
+      </div>
+    </div>
+  </div>
+`;
+
   // Component: Modal Portal - contains all modals for proper z-index stacking above settings drawer
   const modalPortalComponent = () => `
   <div id="modalPortal">
@@ -862,6 +886,7 @@ function createSpotifyComponents(deps) {
     ${viewReasoningModalComponent()}
     ${listSetupWizardComponent()}
     ${releaseSelectionModalComponent()}
+    ${regenerateSummaryModalComponent()}
   </div>
 `;
 

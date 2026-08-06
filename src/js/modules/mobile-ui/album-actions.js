@@ -1,8 +1,10 @@
 import { buildAlbumActionMenuHtml } from './album-actions-menu-template.js';
 import { createMobileListSelectionActions } from './album-actions-list-selection.js';
+import { createAlbumSummaryRegenerate } from '../album-summary-regenerate.js';
 export function createMobileAlbumActions(deps = {}) {
   const {
     createActionSheet,
+    apiCall,
     fetchSpotifyDevices,
     getCurrentList,
     getListData,
@@ -20,6 +22,12 @@ export function createMobileAlbumActions(deps = {}) {
     onPlayAlbum,
     onRemoveAlbum,
   } = deps;
+
+  // Shared with the desktop context menu, so the flow and its modal exist once.
+  const { regenerateSummary } = createAlbumSummaryRegenerate({
+    apiCall,
+    showToast,
+  });
 
   function showMobileAlbumMenu(indexOrElement) {
     const currentList = getCurrentList();
@@ -95,6 +103,7 @@ export function createMobileAlbumActions(deps = {}) {
         primaryServiceName,
         showRecommend,
         hasLastfm,
+        isAdmin: window.currentUser?.role === 'admin',
       }),
     });
 
@@ -267,6 +276,20 @@ export function createMobileAlbumActions(deps = {}) {
         } else if (!album.artist) {
           showToast('Could not find album artist', 'error');
         }
+      });
+    }
+
+    // Admin-only: regenerate this album's summary
+    const regenerateSummaryBtn = actionSheet.querySelector(
+      '[data-action="regenerate-summary"]'
+    );
+
+    if (regenerateSummaryBtn) {
+      regenerateSummaryBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+        await regenerateSummary(album);
       });
     }
 

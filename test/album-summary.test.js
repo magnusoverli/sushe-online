@@ -515,3 +515,81 @@ test('getStats should return source breakdown', async () => {
   assert.strictEqual(stats.withSummary, 50);
   assert.strictEqual(stats.fromClaude, 50);
 });
+
+// =============================================================================
+// keepExistingOnEmpty — single-album regeneration must not destroy a summary
+// =============================================================================
+
+// With no ANTHROPIC_API_KEY in the test environment the Claude call yields no
+// summary, which is exactly the "regeneration produced nothing" case.
+
+test('keepExistingOnEmpty leaves a stored summary alone when the fetch is empty', async () => {
+  const statements = [];
+  const mockPool = asMockDb({
+    query: async (query) => {
+      statements.push(query);
+      if (query.includes('SELECT album_id, artist, album')) {
+        return {
+          rows: [{ album_id: 'keep1', artist: 'Slayer', album: 'Reign' }],
+        };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+  });
+
+  const service = createAlbumSummaryService({
+    db: mockPool,
+    logger: createMockLogger(),
+  });
+
+  const result = await service.fetchAndStoreSummary('keep1', {
+    keepExistingOnEmpty: true,
+    skipCacheInvalidation: true,
+  });
+
+  assert.strictEqual(result.success, true);
+  assert.strictEqual(result.hasSummary, false);
+
+  const wrote = statements.filter((s) => s.includes('UPDATE albums SET'));
+  assert.strictEqual(wrote.length, 1, 'expected exactly one write');
+  assert.ok(
+    !wrote[0].includes('summary = $1'),
+    'an empty regeneration must not overwrite the stored summary with null'
+  );
+  assert.ok(
+    wrote[0].includes('summary_fetched_at = NOW()'),
+    'the attempt must still be recorded'
+  );
+});
+
+test('without keepExistingOnEmpty an empty fetch still clears the summary', async () => {
+  // The batch path depends on this: there, null is the accurate result.
+  const statements = [];
+  const mockPool = asMockDb({
+    query: async (query) => {
+      statements.push(query);
+      if (query.includes('SELECT album_id, artist, album')) {
+        return {
+          rows: [{ album_id: 'clear1', artist: 'Slayer', album: 'Reign' }],
+        };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+  });
+
+  const service = createAlbumSummaryService({
+    db: mockPool,
+    logger: createMockLogger(),
+  });
+
+  await service.fetchAndStoreSummary('clear1', {
+    skipCacheInvalidation: true,
+  });
+
+  const wrote = statements.filter((s) => s.includes('UPDATE albums SET'));
+  assert.strictEqual(wrote.length, 1);
+  assert.ok(
+    wrote[0].includes('summary = $1'),
+    'batch behaviour must be unchanged'
+  );
+});

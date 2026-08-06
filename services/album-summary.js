@@ -8,6 +8,7 @@ const {
   recordExternalApiError,
 } = require('../utils/metrics');
 const { fetchClaudeSummary } = require('../utils/claude-summary');
+const { storeSummaryResult } = require('./album-summary-store');
 
 // Summary sources
 const SUMMARY_SOURCES = {
@@ -348,11 +349,19 @@ function createAlbumSummaryService(deps = {}) {
    * @param {Object} [options] - Options
    * @param {boolean} [options.skipCacheInvalidation] - Skip immediate cache invalidation (for batch processing)
    * @param {boolean} [options.skipBroadcast] - Skip WebSocket broadcast (for batch processing)
+   * @param {boolean} [options.keepExistingOnEmpty] - Leave a stored summary in
+   *   place when the fetch comes back empty, instead of overwriting it with
+   *   null. For deliberate single-album regeneration, where losing a good
+   *   summary to a failed retry is worse than keeping a stale one. The batch
+   *   path leaves this off: there, null is the accurate result of a sweep.
    */
   async function fetchAndStoreSummary(albumId, options = {}) {
     const startTime = Date.now();
     let albumRecord = null;
     const { skipCacheInvalidation = false, skipBroadcast = false } = options;
+    // Read without a destructuring default: each default is a branch, and this
+    // function sits on the complexity limit.
+    const keepExistingOnEmpty = options.keepExistingOnEmpty === true;
 
     try {
       const albumResult = await db.raw(
@@ -404,9 +413,12 @@ function createAlbumSummaryService(deps = {}) {
         albumRecord.album.trim()
       );
 
-      await db.raw(
-        `UPDATE albums SET summary = $1, summary_source = $2, summary_fetched_at = NOW() WHERE album_id = $3`,
-        [summary, source, albumId]
+      await storeSummaryResult(
+        db,
+        albumId,
+        summary,
+        source,
+        keepExistingOnEmpty
       );
 
       // Invalidate caches for all users who have this album in their lists

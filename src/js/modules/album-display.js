@@ -616,10 +616,15 @@ export function createAlbumDisplay(deps = {}) {
       const isAdmin = window.currentUser?.role === 'admin';
       const adminDivider = document.getElementById('adminMenuDivider');
       const reidentifyOption = document.getElementById('reidentifyAlbumOption');
+      const regenerateSummaryOption = document.getElementById(
+        'regenerateSummaryOption'
+      );
 
       if (adminDivider) adminDivider.classList.toggle('hidden', !isAdmin);
       if (reidentifyOption)
         reidentifyOption.classList.toggle('hidden', !isAdmin);
+      if (regenerateSummaryOption)
+        regenerateSummaryOption.classList.toggle('hidden', !isAdmin);
 
       // Show/hide recommend option based on whether current list is year-based
       // and not currently viewing recommendations

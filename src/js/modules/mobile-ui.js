@@ -146,6 +146,7 @@ export function createMobileUI(deps = {}) {
     showMobileCopyToListSheet,
   } = createMobileAlbumActions({
     createActionSheet,
+    apiCall,
     fetchSpotifyDevices,
     getCurrentList,
     getListData,

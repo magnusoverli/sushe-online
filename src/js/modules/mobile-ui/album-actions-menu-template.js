@@ -7,6 +7,7 @@ export function buildAlbumActionMenuHtml({
   primaryServiceName,
   showRecommend,
   hasLastfm,
+  isAdmin = false,
 }) {
   return `
 
@@ -86,6 +87,20 @@ export function buildAlbumActionMenuHtml({
           <button data-action="similar-artists"
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
             <i class="fas fa-users mr-3 text-purple-400"></i>Show Similar Artists
+          </button>
+          <div class="border-t border-gray-700 my-2"></div>
+          `
+              : ''
+          }
+
+          ${
+            isAdmin
+              ? `
+          <!-- Admin-only -->
+          <div class="border-t border-gray-700 my-2"></div>
+          <button data-action="regenerate-summary"
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
+            <i class="fas fa-wand-magic-sparkles mr-3 text-yellow-400"></i>Regenerate Summary
           </button>
           <div class="border-t border-gray-700 my-2"></div>
           `

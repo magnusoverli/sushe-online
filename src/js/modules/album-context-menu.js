@@ -17,6 +17,7 @@ import { verifyAlbumAtIndex } from '../utils/album-identity.js';
 import { groupListsByYear } from '../utils/list-grouping.js';
 import { createContextSubmenuController } from '../utils/context-submenu-controller.js';
 import { hideAllContextMenus as hideAllMenusBase } from './context-menu.js';
+import { createAlbumSummaryRegenerate } from './album-summary-regenerate.js';
 
 /**
  * Create the album context menu module
@@ -50,6 +51,11 @@ export function createAlbumContextMenu(deps = {}) {
     createContextSubmenuController:
       makeContextSubmenuController = createContextSubmenuController,
   } = deps;
+
+  const { regenerateSummary } = createAlbumSummaryRegenerate({
+    apiCall,
+    showToast,
+  });
 
   let currentMoveHighlightedYear = null;
   let moveListsHideTimeout = null;
@@ -411,6 +417,40 @@ export function createAlbumContextMenu(deps = {}) {
         showReleaseSelectionModal(album);
 
         clearContextAlbumSelection();
+      };
+    }
+
+    // Handle regenerate summary option (admin only)
+    const regenerateOption = document.getElementById('regenerateSummaryOption');
+
+    if (regenerateOption) {
+      regenerateOption.onclick = async () => {
+        contextMenu.classList.add('hidden');
+
+        const albumsData = getListData(getCurrentListId());
+        const context = getContextAlbumSelection();
+        const verified = verifyAlbumAtIndex(
+          albumsData,
+          context.index,
+          context.albumId,
+          findAlbumByIdentity
+        );
+        const album = verified?.album;
+
+        // Cleared before awaiting: the menu is already closed, and holding the
+        // selection across a request that can run for tens of seconds would
+        // pin it to an album the admin may have navigated away from.
+        clearContextAlbumSelection();
+
+        if (!album || !album.artist || !album.album) {
+          showToast('Could not find album data', 'error');
+          return;
+        }
+
+        // The summary rendered on the row updates itself: storing one
+        // broadcasts album:summary-updated, which the realtime sync applies
+        // in place. No list reload needed here.
+        await regenerateSummary(album);
       };
     }
   }
