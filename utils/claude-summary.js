@@ -64,7 +64,9 @@ Omit anything the sources do not support. Never write that something was not fou
 
 If the sources establish almost nothing about this album, reply with exactly: No information available.
 
-Begin with the album title. Write plain factual prose in a neutral register, with no preamble and no closing remarks.`;
+Output plain text only. No Markdown, no asterisks, no underscores, no backticks, no headings, no bullet lists, no bold or italics of any kind. Blank lines between paragraphs are the only formatting allowed.
+
+Do not put the album title on a line of its own or repeat it as a heading. The first sentence simply begins with the title, in the ordinary way an encyclopedia entry does. Write plain factual prose in a neutral register, with no preamble and no closing remarks.`;
 }
 
 /**
@@ -96,6 +98,50 @@ async function withTimeout(operation, timeoutMs) {
       clearTimeout(timeoutId);
     }
   }
+}
+
+/**
+ * Reduce Markdown to the plain text it decorates.
+ *
+ * The summary is rendered as text — in a tooltip, a mobile sheet, a database
+ * column — so any markup the model adds is shown literally. Asked to begin with
+ * the album title, it reached for a heading and produced
+ * "**The Bereaved**\n\n*The Bereaved* is the fifth studio album…".
+ *
+ * Paragraph breaks survive; nothing else does.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function stripMarkdown(text) {
+  let out = text
+    // Headings, blockquotes and list bullets, at the start of any line.
+    .replace(/^[ \t]*#{1,6}[ \t]+/gm, '')
+    .replace(/^[ \t]*>[ \t]?/gm, '')
+    .replace(/^[ \t]*[-*+][ \t]+/gm, '')
+    // Emphasis, innermost first so ***both*** unwraps cleanly.
+    .replace(/\*\*\*([^*\n]+)\*\*\*/g, '$1')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+    .replace(/\*([^*\n]+)\*/g, '$1')
+    // Underscores only when they wrap a whole word or phrase, so that an
+    // album or track title containing one is left alone.
+    .replace(/(^|\s)__([^_\n]+)__(?=$|[\s.,;:!?])/g, '$1$2')
+    .replace(/(^|\s)_([^_\n]+)_(?=$|[\s.,;:!?])/g, '$1$2')
+    .replace(/`([^`\n]+)`/g, '$1')
+    // [text](url) -> text
+    .replace(/\[([^\]\n]+)\]\((?:[^)\n]*)\)/g, '$1');
+
+  // A title left on its own line, immediately restated by the prose beneath it.
+  const lines = out.split('\n');
+  const first = lines[0]?.trim();
+  if (first && !/[.!?]$/.test(first) && first.length < 120) {
+    const rest = lines.slice(1).join('\n').trimStart();
+    if (rest.startsWith(first)) {
+      out = rest;
+    }
+  }
+
+  return out;
 }
 
 /**
@@ -145,7 +191,7 @@ function stripPreambles(text) {
     /[^.!?]*\bno (?:professional )?reviews?\b[^.!?]*[.!?]+\s*/gi,
   ];
 
-  let cleaned = text;
+  let cleaned = stripMarkdown(text);
   for (const pattern of absencePatterns) {
     cleaned = cleaned.replace(pattern, '');
   }

@@ -1581,3 +1581,86 @@ test('never reports more searches than max_uses allows', async () => {
     'the reported count must respect the max_uses ceiling of 3'
   );
 });
+
+// =============================================================================
+// Plain text only — the summary is rendered as text, never as Markdown
+// =============================================================================
+
+/** Run text through the full cleanup by way of a fetch. */
+async function cleanedSummary(text) {
+  const service = createClaudeSummaryService({
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    anthropicClient: {
+      messages: {
+        create: async () => finalMessageWith([{ type: 'text', text }]),
+      },
+    },
+  });
+  const result = await service.fetchClaudeSummary('Artist', 'Album');
+  return result.summary;
+}
+
+test('strips the heading-plus-restated-title opening', async () => {
+  // The exact shape that reached a user.
+  const summary = await cleanedSummary(
+    '**The Bereaved**\n\n*The Bereaved* is the fifth studio album by Finnish ' +
+      'band Marianas Rest, released on January 16, 2026 by Noble Demon, ' +
+      'serving as the successor to Auer (2023).'
+  );
+
+  assert.ok(!summary.includes('*'), 'no asterisks may survive');
+  assert.ok(
+    summary.startsWith('The Bereaved is the fifth studio album'),
+    `unexpected opening: ${summary.slice(0, 60)}`
+  );
+  assert.strictEqual(
+    (summary.match(/The Bereaved/g) || []).length,
+    1,
+    'the title must not be repeated by a stripped heading'
+  );
+});
+
+test('removes every flavour of Markdown emphasis', async () => {
+  const summary = await cleanedSummary(
+    '# Heading\n\nThe album is **bold**, *italic*, ***both***, `code`, ' +
+      'and __strong__ and _quiet_, plus a [link](https://example.com) — all ' +
+      'of which must arrive as ordinary words in a plain text field.'
+  );
+
+  for (const ch of ['*', '`', '#']) {
+    assert.ok(!summary.includes(ch), `${ch} must not survive`);
+  }
+  assert.match(summary, /bold, italic, both, code, and strong and quiet/);
+  assert.match(summary, /a link —/);
+});
+
+test('keeps paragraph breaks, which are the one allowed formatting', async () => {
+  const summary = await cleanedSummary(
+    'The album opens the trilogy and runs to forty minutes across nine tracks.\n\n' +
+      'A second paragraph covers its reception, which was broadly positive.'
+  );
+
+  assert.ok(summary.includes('\n\n'), 'paragraph breaks must survive');
+});
+
+test('leaves an underscore inside a title alone', async () => {
+  // Stripping too eagerly would corrupt a real track or album name.
+  const summary = await cleanedSummary(
+    'The album closes with the track snake_eyes, a nine minute instrumental ' +
+      'piece that has been described as the record’s emotional centre.'
+  );
+
+  assert.match(summary, /snake_eyes/);
+});
+
+test('does not mistake a bulleted list for prose', async () => {
+  const summary = await cleanedSummary(
+    'The album has three notable tracks that critics singled out on release:\n' +
+      '- Wilt Thou Weep\n' +
+      '- Crystalline Blight\n' +
+      '- Throne of Molten Maw'
+  );
+
+  assert.ok(!/^\s*[-*+]\s/m.test(summary), 'bullet markers must be removed');
+  assert.match(summary, /Wilt Thou Weep/);
+});
