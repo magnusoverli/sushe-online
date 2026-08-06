@@ -11,6 +11,16 @@
 /** How long a success stays on screen before it dismisses itself. */
 const SUCCESS_DISMISS_MS = 1800;
 
+/** Matches the batch panel's cadence. */
+const POLL_INTERVAL_MS = 2000;
+
+/**
+ * Give up waiting after this. Comfortably past the 120s request timeout plus
+ * the service's own retries, so this only fires when something is genuinely
+ * stuck rather than merely slow.
+ */
+const POLL_TIMEOUT_MS = 240000;
+
 /**
  * How each outcome is presented. `settled` outcomes need acknowledging and keep
  * the modal open; the success case dismisses itself, since there is nothing to
@@ -48,6 +58,8 @@ export function createAlbumSummaryRegenerate(deps = {}) {
     deps.doc || (typeof document !== 'undefined' ? document : undefined);
   const setTimeoutFn = deps.setTimeoutFn || setTimeout;
   const clearTimeoutFn = deps.clearTimeoutFn || clearTimeout;
+  const nowFn = deps.nowFn || (() => Date.now());
+  const sleep = deps.sleep || ((ms) => new Promise((r) => setTimeoutFn(r, ms)));
   const { apiCall, showToast } = deps;
 
   // Distinguishes runs so a slow response cannot land on a later one's modal.
@@ -158,28 +170,69 @@ export function createAlbumSummaryRegenerate(deps = {}) {
   }
 
   /**
-   * Call the endpoint and normalise every reply into one outcome shape.
+   * Read a thrown apiCall error.
+   *
+   * apiCall builds the Error's message from the response body's `error` field
+   * and Object.assigns the rest of the body onto the error — there is no
+   * `.data`. When the body is not JSON at all (a gateway's HTML 502, say) the
+   * message is the generic "HTTP error! status: N", so the status is appended
+   * to keep an infrastructure failure distinguishable from an application one.
+   */
+  function describeError(error) {
+    const message = error?.message || 'Request failed';
+    return error?.status && !message.includes(String(error.status))
+      ? `${message} (HTTP ${error.status})`
+      : message;
+  }
+
+  /**
+   * Start a regeneration and poll until it settles.
+   *
+   * The request is not held open while the summary is fetched: that takes up
+   * to two minutes, long enough for a proxy in front of the app to abandon the
+   * connection and hand back a 502 while the work is still running fine.
    *
    * @param {string} albumId
    * @returns {Promise<{status: string, detail: string}>}
    */
   async function requestRegeneration(albumId) {
     try {
-      const response = await apiCall('/api/admin/album-summaries/regenerate', {
+      await apiCall('/api/admin/album-summaries/regenerate', {
         method: 'POST',
         body: JSON.stringify({ albumId }),
       });
-      return {
-        status: response?.status || 'failed',
-        detail: response?.message || '',
-      };
     } catch (error) {
-      // apiCall surfaces the server's JSON body on .data for non-2xx replies.
-      return {
-        status: 'failed',
-        detail: error?.data?.error || error?.message || 'Request failed',
-      };
+      return { status: 'failed', detail: describeError(error) };
     }
+
+    const deadline = nowFn() + POLL_TIMEOUT_MS;
+    while (nowFn() < deadline) {
+      await sleep(POLL_INTERVAL_MS);
+
+      try {
+        const job = await apiCall(
+          `/api/admin/album-summaries/regenerate/status?albumId=${encodeURIComponent(albumId)}`
+        );
+        if (job?.status && job.status !== 'running') {
+          return { status: job.status, detail: job.message || '' };
+        }
+      } catch (error) {
+        // A 404 means the job is gone — the app restarted mid-run, so the
+        // outcome is unknowable rather than merely late.
+        if (error?.status === 404) {
+          return {
+            status: 'failed',
+            detail: 'The regeneration was lost, most likely a server restart.',
+          };
+        }
+        return { status: 'failed', detail: describeError(error) };
+      }
+    }
+
+    return {
+      status: 'failed',
+      detail: 'Timed out waiting for the summary. It may still be running.',
+    };
   }
 
   /**

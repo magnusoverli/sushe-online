@@ -26,6 +26,47 @@ const SERVICE_FAULTS = {
   empty_response: 'Claude returned no usable content. Try again.',
 };
 
+/**
+ * Turn a fetchAndStoreSummary result into the outcome an admin polls for.
+ *
+ * The three not-found cases are kept apart on purpose: an album that was
+ * skipped, a service that broke, and an album genuinely nobody has written
+ * about call for three different reactions.
+ *
+ * @param {{success: boolean, hasSummary: boolean, skipped?: boolean,
+ *   reason?: string, error?: string, source?: string|null}} result
+ * @returns {{status: string, message?: string, source?: string|null}}
+ */
+function describeOutcome(result) {
+  if (!result.success) {
+    return {
+      status: 'failed',
+      message: result.error || 'Summary regeneration failed',
+    };
+  }
+
+  if (result.hasSummary) {
+    return { status: 'ok', source: result.source ?? null };
+  }
+
+  if (result.skipped) {
+    return {
+      status: 'skipped',
+      message: 'Album is missing artist or title, so it was skipped',
+    };
+  }
+
+  const serviceFault = SERVICE_FAULTS[result.reason];
+  if (serviceFault) {
+    return { status: 'failed', message: serviceFault };
+  }
+
+  return {
+    status: 'no_summary',
+    message: 'No summary could be found for this album',
+  };
+}
+
 module.exports = (app, deps) => {
   const { ensureAuth, ensureAdmin, db } = deps;
 
@@ -137,17 +178,62 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Regenerate the summary for a single album, synchronously.
+  /** Outcome of the most recent regeneration per album, awaiting collection. */
+  const regenerations = new Map();
+
+  /**
+   * Resolve one album's regeneration and record the outcome for polling.
+   *
+   * Never rejects: the outcome is the product, and an unhandled rejection in a
+   * detached job would take the process down.
+   */
+  async function runRegeneration(albumId, adminId) {
+    try {
+      const result = await albumSummaryService.fetchAndStoreSummary(albumId, {
+        // Do not trade a good stored summary for a failed retry.
+        keepExistingOnEmpty: true,
+      });
+
+      logger.info('Single album summary regeneration finished', {
+        albumId,
+        adminId,
+        success: result.success,
+        hasSummary: result.hasSummary,
+        reason: result.reason,
+      });
+
+      regenerations.set(albumId, describeOutcome(result));
+    } catch (error) {
+      logger.error('Error regenerating album summary', {
+        error: error.message,
+        stack: error.stack,
+        albumId,
+        adminId,
+      });
+      regenerations.set(albumId, {
+        status: 'failed',
+        message: 'Summary regeneration failed',
+      });
+    }
+  }
+
+  // Regenerate the summary for a single album.
   //
-  // Deliberately not routed through the batch machinery: this is one album the
-  // admin is watching, so the caller waits for the real outcome instead of
-  // polling a job. Its cost is a single API call, which is why it needs no
-  // confirmation step the way "Regenerate All" does.
+  // Start-and-poll rather than a blocking request, for one reason: a Sonnet 5
+  // summary takes 17-120s, and holding an HTTP connection open that long puts
+  // the result at the mercy of whatever gateway sits in front of the app.
+  // Behind a proxy with a 30-60s timeout the caller gets a 502 with an HTML
+  // body while the work is still running perfectly well, which is exactly what
+  // happened. The batch endpoints already work this way.
+  //
+  // Job state is in-memory and keyed by album, matching the batch job's own
+  // assumption of a single app process. A restart loses a running job; the
+  // client stops polling on a 404 and says so.
   app.post(
     '/api/admin/album-summaries/regenerate',
     ensureAuth,
     ensureAdmin,
-    async (req, res) => {
+    (req, res) => {
       const { albumId } = req.body || {};
 
       if (!albumId || typeof albumId !== 'string') {
@@ -162,80 +248,47 @@ module.exports = (app, deps) => {
         });
       }
 
-      try {
-        const result = await albumSummaryService.fetchAndStoreSummary(albumId, {
-          // Do not trade a good stored summary for a failed retry.
-          keepExistingOnEmpty: true,
-        });
-
-        logger.info('Admin regenerated a single album summary', {
-          adminUsername: req.user.username,
-          adminId: req.user._id,
-          albumId,
-          success: result.success,
-          hasSummary: result.hasSummary,
-        });
-
-        if (!result.success) {
-          // 'Album not found' is the caller's mistake; anything else is ours.
-          const notFound = result.error === 'Album not found';
-          return res.status(notFound ? 404 : 502).json({
-            status: 'failed',
-            error: result.error || 'Summary regeneration failed',
-          });
-        }
-
-        // Succeeded as an operation, but produced no usable summary — a
-        // distinct outcome from both success and failure, and the one the
-        // admin most needs named rather than guessed at.
-        if (!result.hasSummary) {
-          if (result.skipped) {
-            return res.json({
-              status: 'skipped',
-              message: 'Album is missing artist or title, so it was skipped',
-            });
-          }
-
-          // The service swallows its own errors and returns "no summary" for a
-          // missing API key, a rejected request and a timeout alike. Reporting
-          // those as "no summary found" blames the album for a fault that has
-          // nothing to do with it, so they are named and surfaced as failures.
-          const serviceFault = SERVICE_FAULTS[result.reason];
-          if (serviceFault) {
-            return res.status(502).json({
-              status: 'failed',
-              error: serviceFault,
-            });
-          }
-
-          return res.json({
-            status: 'no_summary',
-            message: 'No summary could be found for this album',
-          });
-        }
-
-        const summaryRow = await db.raw(
-          'SELECT summary FROM albums WHERE album_id = $1',
-          [albumId]
-        );
-
-        res.json({
-          status: 'ok',
-          source: result.source,
-          summary: summaryRow.rows[0]?.summary || null,
-        });
-      } catch (error) {
-        logger.error('Error regenerating album summary', {
-          error: error.message,
-          stack: error.stack,
-          albumId,
-          adminId: req.user._id,
-        });
-        res.status(500).json({
-          status: 'failed',
-          error: 'Summary regeneration failed',
-        });
+      if (regenerations.get(albumId)?.status === 'running') {
+        return res.status(202).json({ status: 'running' });
       }
+
+      regenerations.set(albumId, { status: 'running' });
+
+      logger.info('Admin started a single album summary regeneration', {
+        adminUsername: req.user.username,
+        adminId: req.user._id,
+        albumId,
+      });
+
+      runRegeneration(albumId, req.user._id);
+
+      // 202: accepted and started, outcome to follow on the status endpoint.
+      res.status(202).json({ status: 'running' });
+    }
+  );
+
+  // Poll the outcome of a regeneration.
+  app.get(
+    '/api/admin/album-summaries/regenerate/status',
+    ensureAuth,
+    ensureAdmin,
+    (req, res) => {
+      const albumId = String(req.query.albumId || '');
+      const job = regenerations.get(albumId);
+
+      if (!job) {
+        return res
+          .status(404)
+          .json({ error: 'No regeneration for this album' });
+      }
+
+      // Settled jobs are read once and dropped, so the map cannot grow without
+      // bound and a later run never reads a stale outcome.
+      if (job.status !== 'running') {
+        regenerations.delete(albumId);
+      }
+
+      res.json(job);
     }
   );
 

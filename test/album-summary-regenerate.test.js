@@ -1,8 +1,10 @@
 const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert');
 
-// Single-album summary regeneration: the modal must always land on a definite
-// OK/failed state, and must never let a stale response overwrite a newer run.
+// Single-album summary regeneration. The flow is start-and-poll, because the
+// fetch can outlast any gateway sitting in front of the app. The modal must
+// always land on a definite OK/failed state, and a stale response must never
+// overwrite a newer run.
 
 const IDS = [
   'regenerateSummaryModal',
@@ -14,9 +16,11 @@ const IDS = [
   'regenerateSummaryCloseBtn',
 ];
 
+const START_URL = '/api/admin/album-summaries/regenerate';
+const STATUS_URL = '/api/admin/album-summaries/regenerate/status';
+
 /** Minimal stand-in for the pieces of the DOM this module touches. */
 function makeDoc() {
-  const listeners = new Map();
   const nodes = new Map();
 
   const makeNode = (id) => ({
@@ -45,12 +49,8 @@ function makeDoc() {
   return {
     nodes,
     getElementById: (id) => nodes.get(id) || null,
-    addEventListener(type, fn) {
-      listeners.set(type, fn);
-    },
-    removeEventListener(type) {
-      listeners.delete(type);
-    },
+    addEventListener() {},
+    removeEventListener() {},
   };
 }
 
@@ -68,10 +68,16 @@ describe('createAlbumSummaryRegenerate', () => {
 
   const ALBUM = { artist: 'Slayer', album: 'Reign in Blood', album_id: 'a-1' };
 
-  function build(apiCall, overrides = {}) {
+  /**
+   * @param {Function} apiCall - receives (url, opts)
+   */
+  function build(apiCall) {
     const doc = makeDoc();
     const toasts = [];
     const timers = [];
+    // Virtual clock: sleeping advances it, so poll timeouts are testable
+    // without waiting on anything real.
+    let clock = 0;
     const api = createAlbumSummaryRegenerate({
       doc,
       apiCall,
@@ -81,16 +87,30 @@ describe('createAlbumSummaryRegenerate', () => {
         return timers.length;
       },
       clearTimeoutFn: () => {},
-      ...overrides,
+      nowFn: () => clock,
+      sleep: async (ms) => {
+        clock += ms;
+      },
     });
     return { doc, toasts, timers, api };
   }
 
+  /** An apiCall that accepts the start, then settles after `pollsUntilDone`. */
+  function settleAfter(outcome, pollsUntilDone = 1) {
+    let polls = 0;
+    const seen = [];
+    const fn = async (url) => {
+      seen.push(url);
+      if (url === START_URL) return { status: 'running' };
+      polls++;
+      return polls < pollsUntilDone ? { status: 'running' } : outcome;
+    };
+    fn.seen = seen;
+    return fn;
+  }
+
   it('reports a successful regeneration and self-dismisses', async () => {
-    const { doc, timers, api } = build(async () => ({
-      status: 'ok',
-      source: 'claude',
-    }));
+    const { doc, timers, api } = build(settleAfter({ status: 'ok' }));
 
     const status = await api.regenerateSummary(ALBUM);
 
@@ -99,18 +119,30 @@ describe('createAlbumSummaryRegenerate', () => {
       doc.nodes.get('regenerateSummaryHeading').textContent,
       'Summary regenerated'
     );
-    // Success needs no acknowledgement, so no dismiss button is offered...
     assert.ok(isHidden(doc, 'regenerateSummaryFooter'));
-    // ...but a timer must exist, or the modal would never close.
     assert.strictEqual(timers.length, 1);
     timers[0]();
     assert.ok(isHidden(doc, 'regenerateSummaryModal'));
   });
 
+  it('keeps polling while the job is still running', async () => {
+    const apiCall = settleAfter({ status: 'ok' }, 4);
+    const { api } = build(apiCall);
+
+    const status = await api.regenerateSummary(ALBUM);
+
+    assert.strictEqual(status, 'ok');
+    const polls = apiCall.seen.filter((u) => u.startsWith(STATUS_URL)).length;
+    assert.strictEqual(polls, 4, 'must poll until the job settles');
+  });
+
   it('shows the album being worked on while it runs', async () => {
     let seenSubtitle = null;
-    const { doc, api } = build(async () => {
-      seenSubtitle = doc.nodes.get('regenerateSummarySubtitle').textContent;
+    const { doc, api } = build(async (url) => {
+      if (url === START_URL) {
+        seenSubtitle = doc.nodes.get('regenerateSummarySubtitle').textContent;
+        return { status: 'running' };
+      }
       return { status: 'ok' };
     });
 
@@ -120,11 +152,9 @@ describe('createAlbumSummaryRegenerate', () => {
   });
 
   it('keeps a failure on screen until it is acknowledged', async () => {
-    const err = new Error('boom');
-    err.data = { error: 'Summary regeneration failed' };
-    const { doc, timers, api } = build(async () => {
-      throw err;
-    });
+    const { doc, timers, api } = build(
+      settleAfter({ status: 'failed', message: 'Claude is not configured' })
+    );
 
     const status = await api.regenerateSummary(ALBUM);
 
@@ -135,7 +165,7 @@ describe('createAlbumSummaryRegenerate', () => {
     );
     assert.strictEqual(
       doc.nodes.get('regenerateSummaryDetail').textContent,
-      'Summary regeneration failed'
+      'Claude is not configured'
     );
     // A failure must not vanish on a timer before it has been read.
     assert.strictEqual(timers.length, 0);
@@ -144,10 +174,12 @@ describe('createAlbumSummaryRegenerate', () => {
   });
 
   it('distinguishes "no summary found" from an outright failure', async () => {
-    const { doc, api } = build(async () => ({
-      status: 'no_summary',
-      message: 'No summary could be found for this album',
-    }));
+    const { doc, api } = build(
+      settleAfter({
+        status: 'no_summary',
+        message: 'No summary could be found for this album',
+      })
+    );
 
     const status = await api.regenerateSummary(ALBUM);
 
@@ -158,17 +190,64 @@ describe('createAlbumSummaryRegenerate', () => {
     );
   });
 
+  it('surfaces the HTTP status when the body is not JSON', async () => {
+    // A gateway 502 arrives as an HTML body, so apiCall can only produce its
+    // generic message. Without the status appended, the admin cannot tell an
+    // infrastructure failure from an application one.
+    const gatewayError = new Error('HTTP error! status: 502');
+    gatewayError.status = 502;
+    const { doc, api } = build(async () => {
+      throw gatewayError;
+    });
+
+    const status = await api.regenerateSummary(ALBUM);
+
+    assert.strictEqual(status, 'failed');
+    assert.match(
+      doc.nodes.get('regenerateSummaryDetail').textContent,
+      /502/,
+      'the status must survive into the message'
+    );
+  });
+
+  it('reports a lost job rather than polling forever', async () => {
+    const missing = new Error('No regeneration for this album');
+    missing.status = 404;
+    const { doc, api } = build(async (url) => {
+      if (url === START_URL) return { status: 'running' };
+      throw missing;
+    });
+
+    const status = await api.regenerateSummary(ALBUM);
+
+    assert.strictEqual(status, 'failed');
+    assert.match(
+      doc.nodes.get('regenerateSummaryDetail').textContent,
+      /restart/i
+    );
+  });
+
+  it('gives up if the job never settles', async () => {
+    // Guards against an unbounded poll loop when the job stays 'running'.
+    const { api } = build(async () => ({ status: 'running' }));
+
+    const status = await api.regenerateSummary(ALBUM);
+
+    assert.strictEqual(status, 'failed');
+  });
+
   it('does not let a slow first run overwrite a newer one', async () => {
-    // The admin fires a second regeneration before the first replies. The
-    // stale reply must not repaint the modal the second run now owns.
     let release;
     const gate = new Promise((r) => {
       release = r;
     });
-    let call = 0;
-    const { doc, api } = build(async () => {
-      call++;
-      if (call === 1) {
+    let starts = 0;
+    const { doc, api } = build(async (url) => {
+      if (url === START_URL) {
+        starts++;
+        return { status: 'running' };
+      }
+      if (starts === 1) {
         await gate;
         return { status: 'failed', message: 'stale' };
       }
@@ -195,26 +274,28 @@ describe('createAlbumSummaryRegenerate', () => {
       return { status: 'ok' };
     });
 
-    const status = await api.regenerateSummary({
-      artist: 'A',
-      album: 'B',
-    });
+    const status = await api.regenerateSummary({ artist: 'A', album: 'B' });
 
     assert.strictEqual(status, 'failed');
     assert.strictEqual(called, false);
     assert.strictEqual(toasts.length, 1);
   });
 
-  it('posts the album id to the admin endpoint', async () => {
-    let seen = null;
+  it('starts with the album id and polls for that same album', async () => {
+    let startBody = null;
+    const seen = [];
     const { api } = build(async (url, opts) => {
-      seen = { url, body: JSON.parse(opts.body) };
+      seen.push(url);
+      if (url === START_URL) {
+        startBody = JSON.parse(opts.body);
+        return { status: 'running' };
+      }
       return { status: 'ok' };
     });
 
     await api.regenerateSummary(ALBUM);
 
-    assert.strictEqual(seen.url, '/api/admin/album-summaries/regenerate');
-    assert.deepStrictEqual(seen.body, { albumId: 'a-1' });
+    assert.deepStrictEqual(startBody, { albumId: 'a-1' });
+    assert.ok(seen.some((u) => u === `${STATUS_URL}?albumId=a-1`));
   });
 });
