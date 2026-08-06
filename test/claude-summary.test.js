@@ -1011,3 +1011,175 @@ test('honors the Retry-After header on a 429 from the SDK', async () => {
     'Retry-After must be read via Headers.get(), not by indexing'
   );
 });
+
+// =============================================================================
+// Pre-search narration must never reach the stored summary
+// =============================================================================
+
+const FACTUAL =
+  'Reign in Blood is the third studio album by American thrash metal band Slayer, ' +
+  'released on October 7, 1986 through Def Jam Recordings. Produced by Rick Rubin, ' +
+  'it is widely regarded as one of the most influential thrash metal records ever made. ' +
+  'The album drew controversy for the track Angel of Death, which describes the ' +
+  'experiments of Josef Mengele at Auschwitz without editorial comment.';
+
+function makeService(content, extra = {}) {
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
+  const mockAnthropic = {
+    messages: {
+      create: mock.fn(async () => ({
+        content,
+        stop_reason: 'end_turn',
+        usage: {
+          input_tokens: 10,
+          output_tokens: 20,
+          server_tool_use: { web_search_requests: 1 },
+        },
+        ...extra,
+      })),
+    },
+  };
+  return {
+    mockLogger,
+    service: createClaudeSummaryService({
+      logger: mockLogger,
+      anthropicClient: mockAnthropic,
+    }),
+  };
+}
+
+test('narration emitted before the search is dropped from the summary', async () => {
+  // The exact shape a server-tool turn returns: the model narrates, searches,
+  // then answers. Only the post-search text is the answer.
+  const { service } = makeService([
+    {
+      type: 'text',
+      text: 'I will do the search and find out what you want about this album, then produce a summary.',
+    },
+    { type: 'server_tool_use', name: 'web_search', input: { query: 'Slayer' } },
+    { type: 'web_search_tool_result', content: [] },
+    { type: 'text', text: FACTUAL },
+  ]);
+
+  const result = await service.fetchClaudeSummary('Slayer', 'Reign in Blood');
+
+  assert.strictEqual(result.found, true);
+  assert.strictEqual(result.summary, FACTUAL);
+  assert.ok(
+    !/I will do the search/i.test(result.summary),
+    'pre-search narration must not survive into the summary'
+  );
+});
+
+test('narration is dropped regardless of its phrasing', async () => {
+  // The point of extracting by position: wording the regex list has never seen
+  // is still removed, because it is removed for being in the wrong place.
+  const { service } = makeService([
+    {
+      type: 'text',
+      text: 'Right then — hunting down the details on this one before I write anything up!',
+    },
+    { type: 'server_tool_use', name: 'web_search', input: { query: 'Slayer' } },
+    { type: 'web_search_tool_result', content: [] },
+    { type: 'text', text: FACTUAL },
+  ]);
+
+  const result = await service.fetchClaudeSummary('Slayer', 'Reign in Blood');
+
+  assert.strictEqual(result.summary, FACTUAL);
+});
+
+test('narration is dropped across multiple search rounds', async () => {
+  const { service } = makeService([
+    { type: 'text', text: "I'll start by searching." },
+    { type: 'server_tool_use', name: 'web_search', input: { query: 'a' } },
+    { type: 'web_search_tool_result', content: [] },
+    { type: 'text', text: 'That was not enough, let me search again.' },
+    { type: 'server_tool_use', name: 'web_search', input: { query: 'b' } },
+    { type: 'web_search_tool_result', content: [] },
+    { type: 'text', text: FACTUAL },
+  ]);
+
+  const result = await service.fetchClaudeSummary('Slayer', 'Reign in Blood');
+
+  assert.strictEqual(result.summary, FACTUAL);
+});
+
+test('thinking blocks are not treated as a search boundary', async () => {
+  // Thinking is on by default on Sonnet 5. It must not shift the boundary, or
+  // a no-search turn would lose its only text block.
+  const { service } = makeService([
+    { type: 'thinking', thinking: 'internal reasoning' },
+    { type: 'text', text: FACTUAL },
+  ]);
+
+  const result = await service.fetchClaudeSummary('Slayer', 'Reign in Blood');
+
+  assert.strictEqual(result.summary, FACTUAL);
+});
+
+test('a turn that searches and then says nothing yields no summary', async () => {
+  // Falling back to the pre-search text here is precisely the original bug.
+  const { mockLogger, service } = makeService([
+    { type: 'text', text: 'I will look this up and report back shortly.' },
+    { type: 'server_tool_use', name: 'web_search', input: { query: 'a' } },
+    { type: 'web_search_tool_result', content: [] },
+  ]);
+
+  const result = await service.fetchClaudeSummary('Slayer', 'Reign in Blood');
+
+  assert.strictEqual(result.summary, null);
+  assert.strictEqual(result.found, false);
+  assert.ok(
+    mockLogger.warn.mock.calls
+      .map((c) => c.arguments[0])
+      .includes('Claude produced no text after its final search')
+  );
+});
+
+test('narration surviving into the answer block is rejected, not stored', async () => {
+  const { mockLogger, service } = makeService([
+    { type: 'server_tool_use', name: 'web_search', input: { query: 'a' } },
+    { type: 'web_search_tool_result', content: [] },
+    {
+      type: 'text',
+      text: "I'm afraid the sources here conflict with one another, so treat the following with caution before relying on any of it for anything at all.",
+    },
+  ]);
+
+  const result = await service.fetchClaudeSummary('Slayer', 'Reign in Blood');
+
+  assert.strictEqual(result.summary, null);
+  assert.strictEqual(result.found, false);
+  const rejected = mockLogger.warn.mock.calls
+    .map((c) => c.arguments)
+    .find(([msg]) => msg === 'Claude returned invalid or no-info response');
+  assert.ok(rejected, 'expected the meta-commentary rejection to be logged');
+  assert.strictEqual(rejected[1].reason, 'meta_commentary');
+});
+
+test('album titles beginning with "I" are not mistaken for narration', async () => {
+  // "I Am" (Nas), "I Against I" (Bad Brains). A summary opening on the title
+  // must survive — a false positive here silently loses a valid summary.
+  for (const opening of [
+    'I Am is the third studio album by American rapper Nas',
+    'I Against I is the third studio album by American hardcore punk band Bad Brains',
+  ]) {
+    const text = `${opening}, and it is regarded as a landmark of its genre, widely praised on release and since.`;
+    const { service } = makeService([
+      { type: 'server_tool_use', name: 'web_search', input: { query: 'a' } },
+      { type: 'web_search_tool_result', content: [] },
+      { type: 'text', text },
+    ]);
+
+    const result = await service.fetchClaudeSummary('Artist', 'Album');
+
+    assert.strictEqual(result.summary, text, `must not reject: ${opening}`);
+    assert.strictEqual(result.found, true);
+  }
+});

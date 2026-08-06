@@ -108,6 +108,11 @@ function stripPreambles(text) {
     /^I should search for[^.]*\.\s*/i,
     /^I'll search for[^.]*\.\s*/i,
     /^I will search for[^.]*\.\s*/i,
+    // Narration where the verb is not "search" itself — "I will do the search
+    // and find out ..., then produce a summary." The clause runs to the first
+    // sentence end, which is where the factual text starts.
+    /^I(?:'ll|'m| will| am| need to| should| can| would)\b[^.!?]*\b(?:search|look(?:ing)? up|find out|check|research|gather|gathering)\b[^.!?]*[.!?]+\s*/i,
+    /^(?:Let me|Let's|First,? I(?:'ll)?)\b[^.!?]*[.!?]+\s*/i,
     /^I couldn't find[^.]*\.\s*/i,
     /^I was unable to[^.]*\.\s*/i,
     /^Unable to find[^.]*\.\s*/i,
@@ -135,16 +140,80 @@ function stripPreambles(text) {
 }
 
 /**
- * Extract summary text from Claude's response content
+ * Index of the last block produced by tool activity, or -1 if there was none.
+ *
+ * Any block that is neither text nor thinking counts as tool activity, so this
+ * keeps working if the search tool gains new result block types.
+ *
+ * Thinking blocks are deliberately not a boundary: they are the model's own
+ * reasoning rather than a step in the turn, and the text filter drops them
+ * anyway.
+ *
+ * @param {Array<{type?: string}>} content
+ * @returns {number}
+ */
+function lastToolBlockIndex(content) {
+  for (let i = content.length - 1; i >= 0; i--) {
+    const type = content[i]?.type;
+    if (
+      type &&
+      type !== 'text' &&
+      type !== 'thinking' &&
+      type !== 'redacted_thinking'
+    ) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Extract summary text from Claude's response content.
+ *
+ * Only the text after the final tool result is the answer. Given a server-side
+ * search tool the model routinely narrates before it searches — "I'll look this
+ * album up, then write the summary" — and that narration arrives as its own
+ * text block, ahead of the search. Joining every text block glued that opening
+ * onto the front of the real summary, which is how it reached users. Position
+ * decides this, not phrasing, so no wording can slip past it.
  */
 function extractSummaryFromContent(content, artist, album, log) {
   if (!content || !Array.isArray(content)) {
     return null;
   }
 
-  const textBlocks = content.filter((block) => block.type === 'text');
+  const boundary = lastToolBlockIndex(content);
+  const textBlocks = content
+    .slice(boundary + 1)
+    .filter((block) => block.type === 'text');
+
   if (textBlocks.length === 0) {
+    // There may well be text earlier in the turn, but everything before the
+    // last tool result is pre-search narration by definition. Falling back to
+    // it is exactly the bug this function exists to prevent, so a turn that
+    // searched and then said nothing counts as no answer at all.
+    const narrationBlocks = content.filter(
+      (block) => block.type === 'text'
+    ).length;
+    if (narrationBlocks > 0) {
+      log.warn('Claude produced no text after its final search', {
+        artist,
+        album,
+        narrationBlocks,
+      });
+    }
     return null;
+  }
+
+  const droppedBlocks = content
+    .slice(0, boundary + 1)
+    .filter((block) => block.type === 'text').length;
+  if (droppedBlocks > 0) {
+    log.debug('Discarded pre-search narration blocks', {
+      artist,
+      album,
+      droppedBlocks,
+    });
   }
 
   // Join all text blocks with spaces
@@ -222,6 +291,48 @@ function validateSummary(summary, artist, album, log) {
       }
     );
   }
+}
+
+/**
+ * Openings that mean the model is describing its task rather than the album.
+ *
+ * Matched only at the very start, and only against wording a factual summary
+ * would never open with. The first-person entries are all contractions or are
+ * followed by an explicit narration verb, because bare "I am"/"I was"/"I do"
+ * are album titles — "I Am" (Nas), "I Against I" (Bad Brains) — and must pass
+ * through untouched. A missed preamble is recoverable; discarding a real
+ * summary for a real album is not.
+ */
+const META_OPENINGS = [
+  /^I\s*['’]\s*(?:ll|ve|m|d)\b/i,
+  /^I\s+(?:will|need|should|must|cannot|can't|couldn't|don't|didn't|apologize|apologise|could not|was unable|am unable|am going to)\b/i,
+  /^(?:Let me|Let's|Okay|OK|Sure|Certainly|Of course|As requested)\b/i,
+  /^Here(?:'s|’s| is| are)\s+(?:a|an|the|what|your)\b/i,
+  /^(?:Based on|According to)\s+(?:my|the)\s+(?:search|research|result)/i,
+];
+
+/**
+ * Why this response is unusable, or null if it is fine.
+ *
+ * Rejecting rather than trimming is deliberate for meta-commentary: it is only
+ * reached once stripPreambles has already failed, and at that point there is no
+ * reliable seam between the narration and the summary to cut on. A summary is
+ * regenerable, so returning nothing beats storing something wrong.
+ *
+ * @param {string} summary
+ * @returns {'no_info'|'too_short'|'meta_commentary'|null}
+ */
+function rejectionReason(summary) {
+  if (summary.toLowerCase().includes('no information available')) {
+    return 'no_info';
+  }
+  if (summary.length < 50) {
+    return 'too_short';
+  }
+  if (META_OPENINGS.some((pattern) => pattern.test(summary))) {
+    return 'meta_commentary';
+  }
+  return null;
 }
 
 /** Effort levels the API accepts. Anything else is a 400. */
@@ -567,7 +678,9 @@ function createClaudeSummaryService(deps = {}) {
               system:
                 'You are a music encyclopedia providing accurate, concise album information from web search results. ' +
                 'Always search before answering; never answer an album question from memory alone. ' +
-                'Be factual and consistent, and do not embellish.',
+                'Be factual and consistent, and do not embellish. ' +
+                'Your final message must contain the summary and nothing else — no narration of what you ' +
+                'are about to do, are doing, or have done.',
               tools: [
                 {
                   // Dynamic filtering: the model writes code that filters
@@ -645,17 +758,20 @@ function createClaudeSummaryService(deps = {}) {
 
       if (summary) {
         // Validate response quality
-        const isNoInfo = summary
-          .toLowerCase()
-          .includes('no information available');
-        const isTooShort = summary.length < 50;
+        const rejection = rejectionReason(summary);
 
-        if (isNoInfo || isTooShort) {
+        if (rejection) {
           log.warn('Claude returned invalid or no-info response', {
             artist,
             album,
             summaryLength: summary.length,
-            isNoInfo,
+            reason: rejection,
+            // The opening is what the check keyed on, and it is what a false
+            // positive would have to be diagnosed from.
+            opening:
+              rejection === 'meta_commentary'
+                ? summary.slice(0, 120)
+                : undefined,
           });
           // Record usage but return no summary
           recordUsage(message, model, 'no_info');
