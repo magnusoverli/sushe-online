@@ -1,5 +1,19 @@
 [
   {
+    "date": "2026-08-11",
+    "category": "fix",
+    "description": "Search options now close when focusing the search input.",
+    "hash": "3fb4ab429a358ce93bc025ba1cb5f26bdba9bac8",
+    "commitMessage": "Close search options when focusing search input"
+  },
+  {
+    "date": "2026-08-06",
+    "category": "fix",
+    "description": "Album lists now update correctly after summary regeneration.",
+    "hash": "46cd7d753e40e74e4b731f6a1184d5a982b2b71c",
+    "commitMessage": "Invalidate cached lists after summary regeneration"
+  },
+  {
     "date": "2026-08-06",
     "category": "ui",
     "description": "Fixed summary badge placement on mobile devices.",
