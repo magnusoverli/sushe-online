@@ -209,6 +209,7 @@ export function createAlbumSearch(deps = {}) {
     }
 
     if (target.closest('#albumSearchInput')) {
+      options.close();
       showCurrentQueryResults();
       return;
     }
