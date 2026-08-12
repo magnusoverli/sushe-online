@@ -1,17 +1,20 @@
 import { defineConfig } from 'vite';
+import { fileURLToPath } from 'node:url';
 import path from 'path';
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   publicDir: false,
   base: '/js/',
   resolve: {
     alias: {
-      '@utils': path.resolve(__dirname, 'utils'),
+      '@utils': path.resolve(rootDir, 'utils'),
     },
   },
   build: {
     rolldownOptions: {
-      input: path.resolve(__dirname, 'src/js/main.js'),
+      input: path.resolve(rootDir, 'src/js/main.js'),
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'chunks/[name]-[hash].js',
@@ -25,7 +28,7 @@ export default defineConfig({
         },
       },
     },
-    outDir: path.resolve(__dirname, 'public/js'),
+    outDir: path.resolve(rootDir, 'public/js'),
     emptyOutDir: true,
     manifest: true,
     // The emoji-data chunk is a lazily imported data blob (~619 kB raw,

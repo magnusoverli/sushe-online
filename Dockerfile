@@ -1,10 +1,15 @@
 # ----- Common base stage -----
 # Shared setup for both builder and runtime stages
 # This layer is cached and reused, saving ~8-9 seconds per build
-FROM node:24-slim AS base
+ARG NODE_VERSION=26.7.0
+ARG NPM_VERSION=12.0.2
+FROM node:${NODE_VERSION}-trixie-slim@sha256:4ebb5ace66f15a24c14c492e01a8beeed4fddf970a856109f5126e703e5fe503 AS base
 
 # Update npm to specific version (done once, inherited by both stages)
-RUN npm install -g npm@11.15.0 --no-fund
+ARG NPM_VERSION
+RUN npm install -g npm@${NPM_VERSION} --no-audit --no-fund \
+    && node --version \
+    && npm --version
 
 WORKDIR /app
 
@@ -15,7 +20,7 @@ FROM base AS builder
 ARG CACHE_BUST=1
 
 # Copy package files, then install all dependencies (dev included)
-COPY package*.json ./
+COPY package*.json .npmrc ./
 RUN npm ci --prefer-offline --no-audit --no-fund
 
 # Copy the rest of the source and build assets
@@ -31,11 +36,21 @@ RUN rm -rf node_modules
 # ----- Runtime stage -----
 FROM base AS runtime
 
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION=2.0.0
+LABEL org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.description="SuShe Online application" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.source="https://github.com/magnusoverli/sushe-online" \
+      org.opencontainers.image.title="SuShe Online" \
+      org.opencontainers.image.version="${VERSION}"
+
 # Build arg to control whether to install dev dependencies (default: production only)
 ARG INSTALL_DEV_DEPS=false
 
 # Install only production dependencies  
-COPY --chown=node:node package*.json ./
+COPY --chown=node:node package*.json .npmrc ./
 
 # Add PGDG repository for PostgreSQL 18 client
 # Install build-time dependencies, add repo, install pg client, then remove build-time deps
@@ -54,19 +69,29 @@ RUN apt-get update \
 RUN if [ "$INSTALL_DEV_DEPS" = "true" ]; then \
       npm ci --prefer-offline --no-audit --no-fund; \
     else \
-      npm install --omit=dev --prefer-offline --no-audit --no-fund; \
+      npm ci --omit=dev --prefer-offline --no-audit --no-fund; \
     fi
 
 # Copy application files and built assets from the builder stage
 COPY --chown=node:node --from=builder /app ./
 
-# Clean up files not needed for production (only if not installing dev deps)
-# This reduces final image size by ~3MB
+# Keep only deployed application files in the production image. Development
+# builds retain the complete workspace for watch mode and in-container tests.
 RUN if [ "$INSTALL_DEV_DEPS" != "true" ]; then \
-      rm -rf test browser-extension .github scripts screenshots .cursor .opencode \
-      && rm -f AGENTS.md TESTING.md CHANGELOG.md playwright.config.js \
-      && rm -f vite.config.js postcss.config.js tailwind.config.js \
-      && rm -f eslint.config.mjs .prettierrc .prettierignore; \
+      for path in /app/* /app/.[!.]* /app/..?*; do \
+        [ -e "$path" ] || continue; \
+        name="$(basename "$path")"; \
+        case "$name" in \
+          config|db|middleware|node_modules|public|routes|services|templates|utils|views|index.js|package.json|templates.js) ;; \
+          *) rm -rf "$path" ;; \
+        esac; \
+      done; \
+    fi
+
+RUN if [ "$INSTALL_DEV_DEPS" != "true" ]; then \
+      node -e "const sharp = require('sharp'); process.stdout.write(sharp.versions.sharp + '\n')" \
+      && rm -rf node_modules/tslib \
+      && npm cache clean --force; \
     fi
 
 # Runtime configuration
