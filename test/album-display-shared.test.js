@@ -83,6 +83,7 @@ describe('album-display-shared module', () => {
 
     const container = {
       querySelectorAll(selector) {
+        if (selector === 'img[data-cover-src]') return [];
         if (selector === 'img[data-lazy-src]') return [img];
         return [];
       },
@@ -120,6 +121,7 @@ describe('album-display-shared module', () => {
     });
     const container = {
       querySelectorAll(selector) {
+        if (selector === 'img[data-cover-src]') return [];
         return selector === 'img[data-lazy-src]' ? images : [];
       },
     };
@@ -138,129 +140,15 @@ describe('album-display-shared module', () => {
     assert.strictEqual(loadedCount(), 15);
   });
 
-  it('reveals initial cover group together after images load', () => {
-    const timers = [];
-    const revealed = [];
-    const images = [
-      {
-        dataset: { coverRevealGroup: 'initial' },
-        complete: false,
-        naturalWidth: 100,
-        handlers: {},
-        classList: {
-          remove(name) {
-            revealed.push(['remove', name]);
-          },
-          add(name) {
-            revealed.push(['add', name]);
-          },
-        },
-        addEventListener(event, handler) {
-          this.handlers[event] = handler;
-        },
-      },
-      {
-        dataset: { coverRevealGroup: 'initial' },
-        complete: false,
-        naturalWidth: 100,
-        handlers: {},
-        classList: {
-          remove(name) {
-            revealed.push(['remove', name]);
-          },
-          add(name) {
-            revealed.push(['add', name]);
-          },
-        },
-        addEventListener(event, handler) {
-          this.handlers[event] = handler;
-        },
-      },
-    ];
-    const utils = createAlbumDisplayShared({
-      doc: { getElementById: () => null },
-      computeGridTemplate: () => '',
-      getVisibleColumns: () => [],
-      getToggleableColumns: () => [],
-      isColumnVisible: () => true,
-      setTimeout(callback, ms) {
-        timers.push({ callback, ms });
-      },
-    });
-
-    utils.revealInitialCoverGroup({
-      querySelectorAll(selector) {
-        return selector === 'img[data-cover-reveal-group="initial"]'
-          ? images
-          : [];
-      },
-    });
-
-    assert.strictEqual(timers[0].ms, 800);
-    images[0].handlers.load();
-    assert.deepStrictEqual(revealed, []);
-
-    images[1].handlers.load();
-    assert.strictEqual(
-      revealed.filter(
-        ([action, name]) => action === 'add' && name === 'cover-reveal-visible'
-      ).length,
-      2
-    );
-    assert.strictEqual(images[0].dataset.coverRevealGroup, undefined);
-  });
-
-  it('reveals initial cover group on timeout if images are still loading', () => {
-    const timers = [];
-    const revealed = [];
-    const img = {
-      dataset: { coverRevealGroup: 'initial' },
-      complete: false,
-      naturalWidth: 0,
-      classList: {
-        remove(name) {
-          revealed.push(['remove', name]);
-        },
-        add(name) {
-          revealed.push(['add', name]);
-        },
-      },
-      addEventListener() {},
-    };
-    const utils = createAlbumDisplayShared({
-      doc: { getElementById: () => null },
-      computeGridTemplate: () => '',
-      getVisibleColumns: () => [],
-      getToggleableColumns: () => [],
-      isColumnVisible: () => true,
-      setTimeout(callback, ms) {
-        timers.push({ callback, ms });
-      },
-    });
-
-    utils.revealInitialCoverGroup(
-      {
-        querySelectorAll() {
-          return [img];
-        },
-      },
-      { timeoutMs: 250 }
-    );
-
-    assert.strictEqual(timers[0].ms, 250);
-    timers[0].callback();
-    assert.deepStrictEqual(revealed, [
-      ['remove', 'cover-reveal-pending'],
-      ['add', 'cover-reveal-visible'],
-    ]);
-  });
-
   it('retries cover images after a load error then falls back to a placeholder', () => {
     const timers = [];
     let errorHandler = null;
     const parent = { innerHTML: '' };
     const img = {
-      dataset: { lazySrc: '/api/albums/album1/cover' },
+      dataset: {
+        lazySrc: '/api/albums/album1/cover',
+        coverSrc: '/api/albums/album1/cover',
+      },
       src: '',
       parentElement: parent,
       isConnected: true,
@@ -284,6 +172,7 @@ describe('album-display-shared module', () => {
 
     const container = {
       querySelectorAll(selector) {
+        if (selector === 'img[data-cover-src]') return [img];
         if (selector === 'img[data-lazy-src]') return [img];
         return [];
       },
@@ -343,6 +232,42 @@ describe('album-display-shared module', () => {
     assert.ok(queries > queryCountAfterCache);
   });
 
+  it('updates an existing cover image without replacing its node', () => {
+    const handlers = {};
+    const image = {
+      dataset: { coverSrc: '/cover?v=1', coverRetryCount: '2' },
+      src: '/cover?v=1',
+      addEventListener(event, handler) {
+        handlers[event] = handler;
+      },
+    };
+    const media = {
+      dataset: { coverImageClass: 'album-cover' },
+      querySelector(selector) {
+        return selector === 'img' ? image : null;
+      },
+    };
+    const utils = createAlbumDisplayShared({
+      doc: { getElementById: () => null },
+      computeGridTemplate: () => '',
+      getVisibleColumns: () => [],
+      getToggleableColumns: () => [],
+      isColumnVisible: () => true,
+    });
+
+    const updated = utils.updateCoverInPlace(media, {
+      src: '/cover?v=2',
+      fullSrc: '/cover/full?v=2',
+      alt: 'Updated cover',
+    });
+
+    assert.strictEqual(updated, image);
+    assert.strictEqual(image.src, '/cover?v=2');
+    assert.strictEqual(image.dataset.fullSrc, '/cover/full?v=2');
+    assert.strictEqual(image.dataset.coverRetryCount, undefined);
+    assert.strictEqual(typeof handlers.error, 'function');
+  });
+
   it('creates fingerprints from visible mutable album fields', () => {
     const utils = createAlbumDisplayShared({
       doc: { getElementById: () => null },
@@ -379,6 +304,14 @@ describe('album-display-shared module', () => {
     albums[0].availability = ['spotify'];
     const updated = utils.generateAlbumFingerprint(albums);
     assert.notStrictEqual(updated, first);
+
+    albums[0].cover_thumb_url = '/cover?v=2';
+    const coverUpdated = utils.generateAlbumFingerprint(albums);
+    assert.notStrictEqual(coverUpdated, updated);
+
+    albums[0].summary = 'Hydrated summary';
+    const hydrated = utils.generateAlbumFingerprint(albums);
+    assert.notStrictEqual(hydrated, coverUpdated);
 
     const mutable = utils.extractMutableFingerprints(albums);
     assert.strictEqual(Array.isArray(mutable), true);

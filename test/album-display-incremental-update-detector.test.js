@@ -120,6 +120,21 @@ describe('album-display incremental update detector', () => {
     assert.strictEqual(result, 'FIELD_UPDATE');
   });
 
+  it('allows bulk same-order field updates during hydration', () => {
+    const oldAlbums = Array.from({ length: 50 }, (_, i) => makeAlbum(i));
+    const oldFingerprints = oldAlbums.map(albumMutableFingerprint);
+    const newAlbums = oldAlbums.map((album, i) => ({
+      ...album,
+      summary: `Summary ${i}`,
+    }));
+
+    const result = detectUpdateType(oldFingerprints, newAlbums, {
+      allowBulkFieldUpdate: true,
+    });
+
+    assert.strictEqual(result, 'FIELD_UPDATE');
+  });
+
   it('returns SINGLE_ADD for one album appended to a 50-album list', () => {
     const oldAlbums = Array.from({ length: 50 }, (_, i) => makeAlbum(i));
     const oldFingerprints = oldAlbums.map(albumMutableFingerprint);

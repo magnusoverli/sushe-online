@@ -7,6 +7,7 @@ const { createMockLogger } = require('./helpers');
 
 function createTestApp(albumService) {
   const app = express();
+  app.use(express.json());
   registerAlbumRoutes(app, {
     ensureAuthAPI: (_req, _res, next) => next(),
     logger: createMockLogger(),
@@ -61,6 +62,36 @@ describe('album routes', () => {
         ['requested-album', { size: 'full', version: null }],
         ['canonical-album', { size: 'full', version }],
       ]
+    );
+  });
+
+  it('returns complete full and thumbnail metadata after a cover update', async () => {
+    const coverImageUpdatedAt = new Date('2026-08-12T10:00:00.000Z');
+    const coverThumbnailUpdatedAt = new Date('2026-08-12T10:00:01.000Z');
+    const albumService = {
+      updateCoverImage: mock.fn(async () => ({
+        albumId: 'album-1',
+        format: 'JPEG',
+        thumbnailFormat: 'JPEG',
+        coverImageUpdatedAt,
+        coverThumbnailUpdatedAt,
+      })),
+    };
+
+    const response = await request(createTestApp(albumService))
+      .patch('/api/albums/album-1/cover')
+      .send({ cover_image: 'base64-cover' })
+      .expect(200);
+
+    assert.strictEqual(response.body.cover_image_format, 'JPEG');
+    assert.strictEqual(response.body.cover_thumbnail_format, 'JPEG');
+    assert.strictEqual(
+      response.body.cover_thumbnail_updated_at,
+      coverThumbnailUpdatedAt.toISOString()
+    );
+    assert.strictEqual(
+      response.body.cover_thumb_url,
+      `/api/albums/album-1/cover?size=thumb&v=${coverThumbnailUpdatedAt.getTime()}`
     );
   });
 });

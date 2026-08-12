@@ -70,7 +70,6 @@ describe('album context menu submenu controller wiring', async () => {
       showToast: () => {},
       saveList: async () => {},
       selectList: () => {},
-      loadLists: async () => {},
       getRecommendationsModule: () => ({ recommendAlbum: async () => {} }),
       getMobileUIModule: () => ({
         showMoveConfirmation: () => {},
@@ -125,7 +124,6 @@ describe('album context menu submenu controller wiring', async () => {
       showToast: () => {},
       saveList: async () => {},
       selectList: () => {},
-      loadLists: async () => {},
       getRecommendationsModule: () => ({ recommendAlbum: async () => {} }),
       getMobileUIModule: () => ({
         showMoveConfirmation: () => {},
@@ -149,5 +147,71 @@ describe('album context menu submenu controller wiring', async () => {
     ]);
     assert.strictEqual(abort.mock.calls.length, 1);
     assert.strictEqual(setTrackAbortController.mock.calls.length, 1);
+  });
+
+  it('force refreshes only the selected list after a failed removal save', async () => {
+    const elements = {
+      albumContextMenu: createElement('albumContextMenu'),
+      removeAlbumOption: createElement('removeAlbumOption'),
+      editAlbumOption: createElement('editAlbumOption'),
+    };
+    globalThis.document = {
+      getElementById: (id) => elements[id] || null,
+    };
+    globalThis.window = { currentUser: {} };
+
+    const albums = [
+      { album_id: 'album-1', album: 'Album One', artist: 'Artist One' },
+    ];
+    let confirmRemoval;
+    const selectList = mock.fn(() => Promise.resolve());
+
+    const module = createAlbumContextMenu({
+      getListData: () => albums,
+      getLists: () => ({ 'list-1': { name: 'List One' } }),
+      getCurrentListId: () => 'list-1',
+      getCurrentRecommendationsYear: () => null,
+      getContextAlbum: () => ({ index: 0, albumId: 'album-1' }),
+      setContextAlbum: () => {},
+      getTrackAbortController: () => null,
+      setTrackAbortController: () => {},
+      findAlbumByIdentity: () => ({ album: albums[0], index: 0 }),
+      showMobileEditForm: () => {},
+      showMobileEditFormSafe: () => {},
+      showPlayAlbumSubmenu: () => {},
+      showConfirmation: (_title, _message, _details, _label, callback) => {
+        confirmRemoval = callback;
+      },
+      showToast: () => {},
+      saveList: async () => {
+        throw new Error('save failed');
+      },
+      selectList,
+      getRecommendationsModule: () => ({ recommendAlbum: async () => {} }),
+      getMobileUIModule: () => ({
+        showMoveConfirmation: () => {},
+        showCopyConfirmation: () => {},
+      }),
+      createContextSubmenuController: () => ({
+        initialize: () => {},
+        hideAll: () => {},
+        destroy: () => {},
+      }),
+    });
+
+    module.initializeAlbumContextMenu();
+    await elements.removeAlbumOption.onclick();
+    const consoleError = mock.method(console, 'error', () => {});
+    try {
+      await confirmRemoval();
+    } finally {
+      consoleError.mock.restore();
+    }
+
+    assert.strictEqual(selectList.mock.calls.length, 1);
+    assert.deepStrictEqual(selectList.mock.calls[0].arguments, [
+      'list-1',
+      { forceRefresh: true },
+    ]);
   });
 });

@@ -1,12 +1,21 @@
-export function fetchCoreList(apiCall, listId) {
-  return apiCall(`/api/lists/${encodeURIComponent(listId)}?profile=core`)
+export function fetchCoreList(apiCall, listId, options = {}) {
+  return apiCall(
+    `/api/lists/${encodeURIComponent(listId)}?profile=core`,
+    options
+  )
     .then((items) => ({ items, profile: 'core' }))
-    .catch(() =>
-      apiCall(`/api/lists/${encodeURIComponent(listId)}`).then((items) => ({
-        items,
-        profile: 'full',
-      }))
-    );
+    .catch((error) => {
+      if (error?.name === 'AbortError' || options.signal?.aborted) {
+        throw error;
+      }
+
+      return apiCall(`/api/lists/${encodeURIComponent(listId)}`, options).then(
+        (items) => ({
+          items,
+          profile: 'full',
+        })
+      );
+    });
 }
 
 export async function loadListStartupData({

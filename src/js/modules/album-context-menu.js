@@ -43,7 +43,6 @@ export function createAlbumContextMenu(deps = {}) {
     showToast,
     saveList,
     selectList,
-    loadLists,
     getRecommendationsModule,
     getMobileUIModule,
     getLockedYears = async () => [],
@@ -306,9 +305,8 @@ export function createAlbumContextMenu(deps = {}) {
             console.error('Error removing album:', error);
             showToast('Error removing album', 'error');
 
-            // Reload the list to ensure consistency
-            await loadLists();
-            selectList(getCurrentListId());
+            // Refetch this list without resetting the startup-owned list state.
+            await selectList(getCurrentListId(), { forceRefresh: true });
           }
 
           clearContextAlbumSelection();
@@ -526,9 +524,8 @@ export function createAlbumContextMenu(deps = {}) {
 
         if (data.changed) {
           showToast(`Updated with ${data.trackCount} tracks`, 'success');
-          // Reload the list to get updated track data
-          await loadLists();
-          selectList(getCurrentListId());
+          // Refetch the selected list to get updated track data.
+          await selectList(getCurrentListId(), { forceRefresh: true });
         } else {
           showToast(data.message || 'No changes made');
         }

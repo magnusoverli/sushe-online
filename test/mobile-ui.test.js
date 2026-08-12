@@ -12,6 +12,36 @@ const assert = require('node:assert');
 // The build process validates the module compiles correctly.
 
 describe('Mobile UI Module - Unit Tests', () => {
+  describe('cover updates', () => {
+    it('applies complete full and thumbnail metadata', async () => {
+      const { applyCoverUpdate } = await import('../src/js/utils/album-api.js');
+      const result = applyCoverUpdate(
+        {
+          album_id: 'album-1',
+          cover_image: 'temporary-base64',
+          cover_thumb_url: '/old-thumb',
+        },
+        {
+          cover_image_url: '/new-full',
+          cover_thumb_url: '/new-thumb',
+          cover_image_updated_at: '2026-08-12T10:00:00.000Z',
+          cover_thumbnail_updated_at: '2026-08-12T10:00:01.000Z',
+          cover_image_format: 'JPEG',
+          cover_thumbnail_format: 'JPEG',
+        }
+      );
+
+      assert.strictEqual(result.cover_image_url, '/new-full');
+      assert.strictEqual(result.cover_thumb_url, '/new-thumb');
+      assert.strictEqual(
+        result.cover_thumbnail_updated_at,
+        '2026-08-12T10:00:01.000Z'
+      );
+      assert.strictEqual(result.cover_thumbnail_format, 'JPEG');
+      assert.ok(!Object.hasOwn(result, 'cover_image'));
+    });
+  });
+
   describe('findAlbumByIdentity logic', () => {
     it('should find album by identity string', () => {
       const albums = [

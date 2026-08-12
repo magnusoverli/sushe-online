@@ -11,12 +11,10 @@ const sharp = require('sharp');
 const { ensureDb } = require('../db/postgres');
 const logger = require('../utils/logger');
 const { normalizeForLookup } = require('../utils/normalization');
-const {
-  processImage,
-  upscaleItunesArtworkUrl,
-} = require('../utils/image-processing');
+const { upscaleItunesArtworkUrl } = require('../utils/image-processing');
 const { wait } = require('../utils/request-queue');
 const { mbFetch } = require('../utils/mb-queue-singleton');
+const { createAlbumCoverService } = require('./album-cover-service');
 const {
   invalidateResponseCacheForAlbumUsers,
 } = require('./album-cache-invalidation');
@@ -35,7 +33,8 @@ const COVER_ART_ARCHIVE_BASE = 'https://coverartarchive.org';
 const ITUNES_API_BASE = 'https://itunes.apple.com/search';
 
 /**
- * Fetch image from URL and process it
+ * Fetch an image from a provider. Canonical processing happens immediately
+ * before the full and thumbnail variants are written together.
  * @param {string} url - Image URL
  * @returns {Promise<Buffer|null>} - Processed image buffer or null
  */
@@ -59,8 +58,7 @@ async function fetchAndProcessImage(url) {
 
     const buffer = await response.arrayBuffer();
 
-    // Process with sharp: resize and convert to JPEG
-    return await processImage(Buffer.from(buffer));
+    return Buffer.from(buffer);
   } catch (_error) {
     // Silently return null for fetch errors
     return null;
@@ -223,6 +221,8 @@ async function fetchCoverArt(artist, album) {
  *   Cover cache invalidated when an album image is replaced
  * @param {Object} [deps.responseCache] - Response cache invalidated for the
  *   users owning the album
+ * @param {Object} [deps.albumCoverService] - Canonical cover writer override
+ *   used by tests
  * @returns {Object} - Image refetch service
  */
 // eslint-disable-next-line max-lines-per-function -- Factory function with multiple internal methods
@@ -231,6 +231,9 @@ function createImageRefetchService(deps = {}) {
   const log = deps.logger || logger;
   const coverCache = deps.coverCache;
   const responseCache = deps.responseCache;
+  const albumCoverService =
+    deps.albumCoverService ||
+    createAlbumCoverService({ db, logger: log, coverCache });
 
   // Job state
   let isRunning = false;
@@ -300,9 +303,12 @@ function createImageRefetchService(deps = {}) {
    * Skip if: file size >= 145KB OR dimensions >= 512x512
    * @param {string} albumId - Album ID
    * @param {number} imageSizeBytes - Current image size in bytes
+   * @param {boolean} hasThumbnail - Whether a matching thumbnail exists
    * @returns {Promise<boolean>} - True if album should be skipped
    */
-  async function shouldSkipAlbum(albumId, imageSizeBytes) {
+  async function shouldSkipAlbum(albumId, imageSizeBytes, hasThumbnail) {
+    if (!hasThumbnail) return false;
+
     const imageSizeKb = imageSizeBytes / 1024;
 
     // Quick check: file size threshold
@@ -388,7 +394,10 @@ function createImageRefetchService(deps = {}) {
       const candidateResult = await db.raw(
         `SELECT COUNT(*) AS total
          FROM albums
-         WHERE COALESCE(OCTET_LENGTH(cover_image), 0) < $1`,
+         WHERE COALESCE(OCTET_LENGTH(cover_image), 0) < $1
+            OR COALESCE(OCTET_LENGTH(cover_thumbnail), 0) = 0
+            OR cover_thumbnail_updated_at IS NULL
+            OR cover_thumbnail_updated_at < cover_image_updated_at`,
         [skipSizeThresholdBytes]
       );
       const candidateAlbums = parseInt(candidateResult.rows[0]?.total, 10) || 0;
@@ -424,7 +433,10 @@ function createImageRefetchService(deps = {}) {
           break;
         }
         const params = [skipSizeThresholdBytes];
-        let whereClause = `WHERE COALESCE(OCTET_LENGTH(cover_image), 0) < $1`;
+        let whereClause = `WHERE (COALESCE(OCTET_LENGTH(cover_image), 0) < $1
+                                  OR COALESCE(OCTET_LENGTH(cover_thumbnail), 0) = 0
+                                  OR cover_thumbnail_updated_at IS NULL
+                                  OR cover_thumbnail_updated_at < cover_image_updated_at)`;
         if (lastAlbumId) {
           params.push(lastAlbumId);
           whereClause += ` AND album_id > $${params.length}`;
@@ -434,7 +446,11 @@ function createImageRefetchService(deps = {}) {
 
         const albumsResult = await db.raw(
           `SELECT album_id, artist, album,
-                  COALESCE(OCTET_LENGTH(cover_image), 0) as image_size_bytes
+                  COALESCE(OCTET_LENGTH(cover_image), 0) as image_size_bytes,
+                  COALESCE(OCTET_LENGTH(cover_thumbnail), 0) > 0
+                    AND cover_thumbnail_updated_at IS NOT NULL
+                    AND cover_thumbnail_updated_at >= cover_image_updated_at
+                    as has_thumbnail
            FROM albums
            ${whereClause}
            ORDER BY album_id
@@ -457,7 +473,8 @@ function createImageRefetchService(deps = {}) {
           // Skip if: file size >= 145KB OR dimensions >= 512x512
           const shouldSkip = await shouldSkipAlbum(
             album.album_id,
-            album.image_size_bytes
+            album.image_size_bytes,
+            album.has_thumbnail
           );
 
           if (shouldSkip) {
@@ -479,22 +496,10 @@ function createImageRefetchService(deps = {}) {
             const imageBuffer = await fetchCoverArt(album.artist, album.album);
 
             if (imageBuffer) {
-              // Update the album with new image
-              await db.raw(
-                `UPDATE albums 
-                  SET cover_image = $1,
-                      cover_image_format = 'JPEG',
-                      cover_image_updated_at = NOW(),
-                      updated_at = NOW()
-                  WHERE album_id = $2`,
-                [imageBuffer, album.album_id]
+              await albumCoverService.updateCoverImage(
+                album.album_id,
+                imageBuffer
               );
-              if (
-                coverCache &&
-                typeof coverCache.invalidateAlbum === 'function'
-              ) {
-                coverCache.invalidateAlbum(album.album_id);
-              }
               await invalidateResponseCacheForAlbumUsers({
                 db,
                 responseCache,

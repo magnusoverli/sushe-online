@@ -142,7 +142,9 @@ module.exports = (app, deps) => {
           success: true,
           album_id: result.albumId,
           cover_image_format: result.format,
+          cover_thumbnail_format: result.thumbnailFormat,
           cover_image_updated_at: result.coverImageUpdatedAt,
+          cover_thumbnail_updated_at: result.coverThumbnailUpdatedAt,
           cover_image_url: `/api/albums/${encodeURIComponent(
             result.albumId
           )}/cover?v=${new Date(result.coverImageUpdatedAt).getTime()}`,

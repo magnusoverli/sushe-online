@@ -16,6 +16,7 @@ export function createAppBootstrap(deps = {}) {
     convertFlashToToast,
     initColumnConfig,
     loadLists,
+    refreshGroupsAndLists,
     initializeSettingsDrawer,
     initAboutModal,
     initializeSidebarCollapse,
@@ -76,9 +77,11 @@ export function createAppBootstrap(deps = {}) {
 
     schedulePostRenderTask(
       () => {
-        checkListSetupStatus({ refreshLists: loadLists }).catch((err) => {
-          logger.warn('Failed to check list setup status:', err);
-        });
+        checkListSetupStatus({ refreshLists: refreshGroupsAndLists }).catch(
+          (err) => {
+            logger.warn('Failed to check list setup status:', err);
+          }
+        );
       },
       { delayMs: 1000, timeoutMs: 3000 }
     );

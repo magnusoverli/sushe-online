@@ -32,6 +32,7 @@ export function createAppListOperations(deps = {}) {
     win = typeof window !== 'undefined' ? window : null,
     logger = console,
   } = deps;
+  let metadataRefreshGeneration = 0;
 
   const importList = createListImporter({
     apiCall,
@@ -43,45 +44,32 @@ export function createAppListOperations(deps = {}) {
   });
 
   async function refreshGroupsAndLists() {
+    const refreshGeneration = ++metadataRefreshGeneration;
     try {
       const [fetchedLists, fetchedGroups] = await Promise.all([
         apiCall('/api/lists'),
         apiCall('/api/groups'),
       ]);
+      if (refreshGeneration !== metadataRefreshGeneration) return;
 
       updateGroupsFromServer(fetchedGroups);
 
       const currentLists = getLists();
-      Object.keys(fetchedLists).forEach((listId) => {
-        const meta = fetchedLists[listId];
-        if (currentLists[listId]) {
-          currentLists[listId] = {
-            ...currentLists[listId],
-            name: meta.name || currentLists[listId].name || 'Unknown',
-            year: meta.year || null,
-            isMain: meta.isMain || false,
-            count: meta.count || 0,
-            groupId: meta.groupId || null,
-            sortOrder: meta.sortOrder || 0,
-            updatedAt: meta.updatedAt || null,
-          };
-        } else {
-          currentLists[listId] = {
-            _id: listId,
-            name: meta.name || 'Unknown',
-            year: meta.year || null,
-            isMain: meta.isMain || false,
-            count: meta.count || 0,
-            groupId: meta.groupId || null,
-            sortOrder: meta.sortOrder || 0,
-            _data: null,
-            updatedAt: meta.updatedAt || null,
-            createdAt: meta.createdAt || null,
-          };
-        }
+      const reconciledLists = buildListMetadataEntries(fetchedLists);
+      Object.keys(reconciledLists).forEach((listId) => {
+        const current = currentLists[listId];
+        if (!Array.isArray(current?._data)) return;
+
+        reconciledLists[listId]._data = current._data;
+        reconciledLists[listId]._dataProfile = current._dataProfile || 'full';
       });
+      setLists(reconciledLists);
 
       updateListNav();
+      const currentListId = getCurrentListId();
+      if (currentListId && !reconciledLists[currentListId]) {
+        await selectList(null);
+      }
     } catch (error) {
       logger.error('Failed to refresh groups and lists:', error);
     }

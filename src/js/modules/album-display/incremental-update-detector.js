@@ -80,7 +80,7 @@ function findSingleRemoval(oldFingerprints, newAlbums) {
 export function detectUpdateType(
   oldFingerprints,
   newAlbums,
-  { incrementalEnabled = true } = {}
+  { incrementalEnabled = true, allowBulkFieldUpdate = false } = {}
 ) {
   if (!incrementalEnabled || !oldFingerprints) {
     return 'FULL_REBUILD';
@@ -122,7 +122,11 @@ export function detectUpdateType(
     }
   }
 
-  if (positionChanges === 0 && fieldChanges > 0 && fieldChanges <= 10) {
+  if (
+    positionChanges === 0 &&
+    fieldChanges > 0 &&
+    (allowBulkFieldUpdate || fieldChanges <= 10)
+  ) {
     return 'FIELD_UPDATE';
   }
   if (fieldChanges === 0 && positionChanges > 0) {

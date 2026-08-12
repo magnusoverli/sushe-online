@@ -18,6 +18,7 @@ import { createTrackPickService } from './track-pick-service.js';
 import { createAlbumIdentityFinder } from './mobile-ui/album-identity.js';
 import { createListMenuActions } from './list-menu-shared.js';
 import { createMobileListMenus } from './mobile-ui/list-menus.js';
+import { applyCoverUpdate } from '../utils/album-api.js';
 
 /**
  * Factory function to create the mobile UI module with injected dependencies
@@ -944,7 +945,7 @@ export function createMobileUI(deps = {}) {
           return numInput ? numInput.value.trim() : '';
         })();
 
-      const updatedAlbum = {
+      let updatedAlbum = {
         ...album,
         artist: document.getElementById('editArtist').value.trim(),
         album: document.getElementById('editAlbum').value.trim(),
@@ -965,6 +966,7 @@ export function createMobileUI(deps = {}) {
         updatedAlbum.cover_image_format = pendingCoverData.format;
         // Clear the URL to ensure base64 takes priority
         delete updatedAlbum.cover_image_url;
+        delete updatedAlbum.cover_thumb_url;
       }
 
       if (!updatedAlbum.artist || !updatedAlbum.album) {
@@ -985,11 +987,7 @@ export function createMobileUI(deps = {}) {
 
       closeEditor();
 
-      // Cover changes need a full rebuild; incremental updates skip covers
-      displayAlbums(
-        albumsToSave,
-        pendingCoverData ? { forceFullRebuild: true } : {}
-      );
+      displayAlbums(albumsToSave);
 
       try {
         let albumsForSave = albumsToSave;
@@ -1014,14 +1012,10 @@ export function createMobileUI(deps = {}) {
             }
           );
 
-          updatedAlbum.cover_image_url = coverResult.cover_image_url;
-          updatedAlbum.cover_image_updated_at =
-            coverResult.cover_image_updated_at;
-          delete updatedAlbum.cover_image;
-          delete updatedAlbum.cover_image_format;
+          updatedAlbum = applyCoverUpdate(updatedAlbum, coverResult);
           albumsToSave[index] = updatedAlbum;
           setListData(currentList, albumsToSave);
-          displayAlbums(albumsToSave, { forceFullRebuild: true });
+          displayAlbums(albumsToSave);
         }
         showToast('Album updated successfully');
       } catch (error) {

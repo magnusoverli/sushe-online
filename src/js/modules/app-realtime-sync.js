@@ -15,7 +15,7 @@ export function createAppRealtimeSync(deps = {}) {
     wasRecentLocalSave,
     setListData,
     displayAlbums,
-    loadLists,
+    refreshGroupsAndLists,
     showToast,
     logger = console,
     win = typeof window !== 'undefined' ? window : null,
@@ -63,7 +63,7 @@ export function createAppRealtimeSync(deps = {}) {
           }
         },
         refreshListNav: () => {
-          loadLists();
+          refreshGroupsAndLists();
         },
         showToast,
         displayAlbums,

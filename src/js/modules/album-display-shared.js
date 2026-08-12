@@ -16,6 +16,17 @@ function availabilityFingerprint(availability) {
   return Array.isArray(availability) ? [...availability].sort().join(',') : '';
 }
 
+function tracksFingerprint(tracks) {
+  if (!Array.isArray(tracks)) return '';
+  return tracks
+    .map((track) =>
+      typeof track === 'string'
+        ? track
+        : `${track?.name || track?.title || ''}:${track?.length || track?.duration || ''}`
+    )
+    .join(',');
+}
+
 function addRetryParam(url) {
   try {
     const origin = globalThis.location?.origin || 'http://localhost';
@@ -36,7 +47,10 @@ function addRetryParam(url) {
  * @returns {string} Pipe-separated fingerprint string
  */
 export function albumMutableFingerprint(album) {
-  return `${album._id || ''}|${album.artist || ''}|${album.album || ''}|${album.release_date || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}|${album.primary_track || ''}|${album.secondary_track || ''}|${availabilityFingerprint(album.availability)}`;
+  const inlineCoverFingerprint = album.cover_image
+    ? `${album.cover_image_format || ''}:${album.cover_image.length}`
+    : '';
+  return `${album._id || ''}|${album.artist || ''}|${album.album || ''}|${album.release_date || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}|${album.primary_track || ''}|${album.secondary_track || ''}|${availabilityFingerprint(album.availability)}|${album.cover_thumb_url || ''}|${album.cover_image_url || ''}|${album.cover_thumbnail_updated_at || ''}|${album.cover_image_updated_at || ''}|${inlineCoverFingerprint}|${album.summary || ''}|${album.summary_source || album.summarySource || ''}|${album.recommended_by || ''}|${album.recommended_at || ''}|${tracksFingerprint(album.tracks)}`;
 }
 
 function renderCoverPlaceholder(parent) {
@@ -47,12 +61,6 @@ function renderCoverPlaceholder(parent) {
       <polyline points="21 15 16 10 5 21"></polyline>
     </svg>
   </div>`;
-}
-
-function removeCoverRevealState(image) {
-  image.classList.remove('cover-reveal-pending');
-  image.classList.add('cover-reveal-visible');
-  delete image.dataset.coverRevealGroup;
 }
 
 export function createAlbumDisplayShared(deps = {}) {
@@ -68,6 +76,10 @@ export function createAlbumDisplayShared(deps = {}) {
 
   let rowElementsCache = new WeakMap();
 
+  function cacheAvailabilityHtml(root) {
+    return root.querySelector('.album-availability')?.outerHTML || '';
+  }
+
   function handleCoverError(image) {
     const coverSrc = image.dataset.coverSrc || image.src;
     const retryCount = Number.parseInt(
@@ -80,6 +92,7 @@ export function createAlbumDisplayShared(deps = {}) {
       image.src = PLACEHOLDER_GIF;
       setTimer(() => {
         if (image.isConnected === false) return;
+        if (image.dataset.coverSrc !== coverSrc) return;
         image.src = addRetryParam(coverSrc);
       }, COVER_RETRY_DELAY_MS);
       return;
@@ -128,6 +141,9 @@ export function createAlbumDisplayShared(deps = {}) {
   // connection race; we also drain them MAX_CONCURRENT_COVER_LOADS at a time so a
   // big list does not fire one request per album in a single cold-load burst.
   function loadCoverImages(container) {
+    Array.from(container.querySelectorAll('img[data-cover-src]')).forEach(
+      attachCoverErrorRetry
+    );
     const pending = Array.from(
       container.querySelectorAll('img[data-lazy-src]')
     );
@@ -140,8 +156,6 @@ export function createAlbumDisplayShared(deps = {}) {
         cursor += 1;
         const lazySrc = image.dataset.lazySrc;
         if (!lazySrc) continue;
-
-        attachCoverErrorRetry(image);
 
         active += 1;
         let released = false;
@@ -165,50 +179,34 @@ export function createAlbumDisplayShared(deps = {}) {
     startNext();
   }
 
-  function revealInitialCoverGroup(container, options = {}) {
-    const images = Array.from(
-      container?.querySelectorAll?.('img[data-cover-reveal-group="initial"]') ||
-        []
-    );
-    if (images.length === 0) return;
+  function updateCoverInPlace(media, { src, fullSrc, alt }) {
+    if (!media) return null;
+    let image = media.querySelector?.('img') || null;
 
-    const timeoutMs = options.timeoutMs ?? 800;
-    let remaining = images.length;
-    let released = false;
+    if (!src) {
+      renderCoverPlaceholder(media);
+      return null;
+    }
 
-    const release = () => {
-      if (released) return;
-      released = true;
-      images.forEach(removeCoverRevealState);
-    };
+    if (!image) {
+      image = doc?.createElement?.('img');
+      if (!image) return null;
+      image.className = media.dataset.coverImageClass || '';
+      image.loading = 'lazy';
+      image.decoding = 'async';
+      media.replaceChildren(image);
+    }
 
-    const markReady = () => {
-      remaining -= 1;
-      if (remaining <= 0) release();
-    };
-
-    setTimer(release, timeoutMs);
-
-    images.forEach((image) => {
-      const handleLoaded = () => {
-        if (typeof image.decode === 'function') {
-          image
-            .decode()
-            .catch(() => {})
-            .finally(markReady);
-          return;
-        }
-        markReady();
-      };
-
-      if (image.complete && image.naturalWidth !== 0) {
-        handleLoaded();
-        return;
-      }
-
-      image.addEventListener('load', handleLoaded, { once: true });
-      image.addEventListener('error', markReady, { once: true });
-    });
+    const previousSrc = image.dataset.coverSrc;
+    image.dataset.coverSrc = src;
+    image.dataset.fullSrc = fullSrc || src;
+    image.alt = alt || '';
+    attachCoverErrorRetry(image);
+    if (previousSrc !== src) {
+      delete image.dataset.coverRetryCount;
+      image.src = src;
+    }
+    return image;
   }
 
   function cacheDesktopRowElements(row) {
@@ -226,6 +224,9 @@ export function createAlbumDisplayShared(deps = {}) {
       commentCell: row.querySelector('.comment-cell'),
       comment2Cell: row.querySelector('.comment-2-cell'),
       trackCell: row.querySelector('.track-cell'),
+      coverMedia: row.querySelector('[data-cover-media]'),
+      badgeContainer: row.querySelector('[data-desktop-album-badges]'),
+      availabilityHtml: cacheAvailabilityHtml(row),
     };
 
     if (cache.countryCell) {
@@ -244,7 +245,15 @@ export function createAlbumDisplayShared(deps = {}) {
       cache.comment2Span = cache.comment2Cell.querySelector('span');
     }
     if (cache.trackCell) {
-      cache.trackSpan = cache.trackCell.querySelector('span');
+      cache.trackSpan = cache.trackCell.querySelector(
+        '[data-field="primary-track-text"]'
+      );
+      cache.secondaryTrackSpan = cache.trackCell.querySelector(
+        '[data-field="secondary-track-text"]'
+      );
+      cache.secondaryTrackDuration = cache.trackCell.querySelector(
+        '[data-field="secondary-track-duration"]'
+      );
     }
 
     rowElementsCache.set(row, cache);
@@ -264,6 +273,9 @@ export function createAlbumDisplayShared(deps = {}) {
       secondaryTrackText: card.querySelector(
         '[data-field="secondary-track-mobile-text"]'
       ),
+      coverMedia: card.querySelector('[data-cover-media]'),
+      badgeContainer: card.querySelector('[data-mobile-album-badges]'),
+      availabilityHtml: cacheAvailabilityHtml(card),
     };
 
     rowElementsCache.set(card, cache);
@@ -306,7 +318,7 @@ export function createAlbumDisplayShared(deps = {}) {
   return {
     applyVisibilityInPlace,
     loadCoverImages,
-    revealInitialCoverGroup,
+    updateCoverInPlace,
     getCachedElements,
     resetRowElementsCache,
     generateAlbumFingerprint,

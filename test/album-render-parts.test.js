@@ -48,10 +48,11 @@ describe('album render parts', () => {
     ].join('');
 
     assert.match(html, /loading="lazy"/);
-    assert.match(
-      html,
-      /onerror="this.onerror=null; this.parentElement.innerHTML=&quot;/
-    );
+    assert.doesNotMatch(html, /onerror=/);
+    assert.match(html, /data-cover-src="\/api\/albums\/abc\/cover"/);
+    assert.match(html, /data-cover-media/);
+    assert.match(html, /class="w-full h-full" data-cover-media/);
+    assert.match(html, /data-desktop-album-badges/);
     assert.match(html, /in-user-lists-badge/);
     assert.match(html, /Shared Album/);
     assert.match(html, /title="Shared Artist"/);

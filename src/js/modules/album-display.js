@@ -60,7 +60,6 @@ import {
 const ENABLE_INCREMENTAL_UPDATES = true;
 const PROGRESSIVE_RENDER_THRESHOLD = 120;
 const PROGRESSIVE_RENDER_BATCH_SIZE = 60;
-const INITIAL_COVER_REVEAL_TIMEOUT_MS = 800;
 
 // Module-level state
 // Store lightweight fingerprint instead of deep-cloned array for performance
@@ -69,6 +68,8 @@ let lastRenderedFingerprint = null;
 let lastRenderedMutableState = null;
 let positionElementCache = new WeakMap();
 let renderGeneration = 0;
+let progressiveRenderInProgress = false;
+let pendingHydration = null;
 
 // Album cover preview state
 let coverPreviewActive = null; // Stores { overlay, clone, originalRect }
@@ -83,7 +84,7 @@ const albumDisplayShared = createAlbumDisplayShared({
 const {
   applyVisibilityInPlace,
   loadCoverImages,
-  revealInitialCoverGroup,
+  updateCoverInPlace,
   getCachedElements,
   resetRowElementsCache,
   generateAlbumFingerprint,
@@ -170,7 +171,7 @@ export function createAlbumDisplay(deps = {}) {
 
   /**
    * Extract only the fields needed for DOM field updates (updateAlbumFields).
-   * ~20 properties vs processAlbumData's 40+, no closures, no cover/playcount/summary.
+   * Lightweight data for updating an existing row without rebuilding it.
    * @param {Object} album - Raw album data
    * @param {number} index - Album index in list
    * @returns {Object} Lightweight field data for DOM updates
@@ -203,6 +204,15 @@ export function createAlbumDisplay(deps = {}) {
     const availability = Array.isArray(album.availability)
       ? album.availability
       : [];
+    const inlineCover = album.cover_image
+      ? `data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}`
+      : '';
+    const coverImageUrl = album.cover_image_url || inlineCover;
+    const coverThumbUrl = inlineCover || album.cover_thumb_url || coverImageUrl;
+    const summary = album.summary || '';
+    const summarySource = album.summary_source || album.summarySource || '';
+    const recommendedBy = album.recommended_by || null;
+    const recommendedAt = album.recommended_at || null;
 
     const primaryTrack = album.primary_track || '';
 
@@ -240,6 +250,7 @@ export function createAlbumDisplay(deps = {}) {
 
     const secondaryTrack = album.secondary_track || '';
     let secondaryTrackDisplay = '';
+    let secondaryTrackDuration = '';
     if (secondaryTrack) {
       if (album.tracks && Array.isArray(album.tracks)) {
         const trackMatch = album.tracks.find(
@@ -253,6 +264,7 @@ export function createAlbumDisplay(deps = {}) {
               ? `${match[1]}. ${match[2]}`
               : `Track ${match[1]}`
             : trackName;
+          secondaryTrackDuration = formatTrackTime(getTrackLength(trackMatch));
         } else if (secondaryTrack.match(/^\d+$/)) {
           secondaryTrackDisplay = `Track ${secondaryTrack}`;
         } else {
@@ -289,8 +301,40 @@ export function createAlbumDisplay(deps = {}) {
       primaryTrackDuration,
       secondaryTrack,
       secondaryTrackDisplay,
+      secondaryTrackDuration,
       availability,
+      coverImageUrl,
+      coverThumbUrl,
+      summary,
+      summarySource,
+      recommendedBy,
+      recommendedAt,
     };
+  }
+
+  function reconcileAlbumBadges(row, cache, data, isMobile) {
+    const badgeHtml = `${renderRecommendationBadge(data, { mobile: isMobile })}${renderSummaryBadge(data, { mobile: isMobile })}`;
+    const badgeState = `${data.recommendedBy || ''}|${data.recommendedAt || ''}|${data.summary || ''}|${data.summarySource || ''}|${data.albumName}|${data.artist}`;
+    if (cache.badgeContainer?.dataset.badgeState === badgeState) return;
+    if (cache.badgeContainer) {
+      cache.badgeContainer.dataset.badgeState = badgeState;
+    }
+
+    if (isMobile) {
+      if (!cache.badgeContainer) return;
+      cache.badgeContainer.innerHTML = badgeHtml;
+      attachMobileBadgeHandlers(row);
+      return;
+    }
+
+    if (!cache.badgeContainer) return;
+    cache.badgeContainer
+      .querySelectorAll('.summary-badge, .recommendation-badge')
+      .forEach((badge) => badge.remove());
+    if (badgeHtml) {
+      cache.badgeContainer.insertAdjacentHTML('beforeend', badgeHtml);
+      initSummaryTooltips(cache.badgeContainer);
+    }
   }
 
   function updateAvailabilityBadges(
@@ -304,6 +348,8 @@ export function createAlbumDisplay(deps = {}) {
       availability,
       isMobile ? { variant: 'mobile' } : {}
     );
+    if (cache.availabilityHtml === html) return;
+    cache.availabilityHtml = html;
     const existing =
       cache.availabilityBadges || row.querySelector('.album-availability');
 
@@ -373,7 +419,8 @@ export function createAlbumDisplay(deps = {}) {
     const row = document.createElement('div');
     row.className = 'album-row album-grid gap-4 py-2';
     row.dataset.index = index;
-    const badgeHtml = `${renderSummaryBadge(data)}${renderRecommendationBadge(data)}`;
+    const badgeHtml = `${renderRecommendationBadge(data)}${renderSummaryBadge(data)}`;
+    const badgeState = `${data.recommendedBy || ''}|${data.recommendedAt || ''}|${data.summary || ''}|${data.summarySource || ''}|${data.albumName}|${data.artist}`;
 
     // Build cell HTML map — each column produces its own cell
     const cellMap = {
@@ -381,8 +428,12 @@ export function createAlbumDisplay(deps = {}) {
         data.position !== null
           ? `<div class="position-cell flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>`
           : '<div class="position-cell"></div>',
-      cover: renderDesktopCoverCell(data, index, { badgesHtml: badgeHtml }),
-      album: renderDesktopAlbumCell(data, { alwaysShowReleaseDate: true }),
+      cover: renderDesktopCoverCell(data, index),
+      album: renderDesktopAlbumCell(data, {
+        alwaysShowReleaseDate: true,
+        badgesHtml: badgeHtml,
+        badgeState,
+      }),
       artist: renderDesktopArtistCell(data),
       country: `<div class="flex items-center country-cell">
         <span class="album-cell-text ${data.countryClass} truncate cursor-pointer hover:text-gray-100">${data.countryDisplay}</span>
@@ -394,8 +445,8 @@ export function createAlbumDisplay(deps = {}) {
           data.primaryTrackDisplay
             ? `<div class="flex items-center min-w-0 overflow-hidden w-full">
             <span class="inline-block w-4 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Primary track">I</span>
-            <span class="album-cell-text ${data.primaryTrackClass} truncate hover:text-gray-100 flex-1 min-w-0" title="${data.primaryTrack || ''}">${data.primaryTrackDisplay}</span>
-            ${data.primaryTrackDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.primaryTrackDuration}</span>` : ''}
+            <span data-field="primary-track-text" class="album-cell-text ${data.primaryTrackClass} truncate hover:text-gray-100 flex-1 min-w-0" title="${data.primaryTrack || ''}">${data.primaryTrackDisplay}</span>
+            ${data.primaryTrackDuration ? `<span data-field="primary-track-duration" class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.primaryTrackDuration}</span>` : ''}
           </div>`
             : `<div class="flex items-center min-w-0">
             <span class="album-cell-text text-gray-800 italic hover:text-gray-100">Select Track</span>
@@ -405,8 +456,8 @@ export function createAlbumDisplay(deps = {}) {
           data.hasSecondaryTrack
             ? `<div class="flex items-center min-w-0 mt-1 overflow-hidden w-full">
             <span class="inline-block w-4 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Secondary track">II</span>
-            <span class="album-cell-text ${data.secondaryTrackClass} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${data.secondaryTrack || ''}">${data.secondaryTrackDisplay}</span>
-            ${data.secondaryTrackDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.secondaryTrackDuration}</span>` : ''}
+            <span data-field="secondary-track-text" class="album-cell-text ${data.secondaryTrackClass} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${data.secondaryTrack || ''}">${data.secondaryTrackDisplay}</span>
+            ${data.secondaryTrackDuration ? `<span data-field="secondary-track-duration" class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.secondaryTrackDuration}</span>` : ''}
           </div>`
             : ''
         }
@@ -447,13 +498,7 @@ export function createAlbumDisplay(deps = {}) {
 
     // Add click handler to album cover for preview
     const coverImage = row.querySelector('.album-cover');
-    if (coverImage) {
-      coverImage.style.cursor = 'zoom-in';
-      coverImage.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openCoverPreview(coverImage);
-      });
-    }
+    attachDesktopCoverPreview(coverImage);
 
     // Add click handler to track cell for quick selection
     const trackCell = row.querySelector('.track-cell');
@@ -649,6 +694,18 @@ export function createAlbumDisplay(deps = {}) {
     });
   }
 
+  function attachDesktopCoverPreview(coverImage) {
+    if (!coverImage || coverImage.dataset.coverPreviewAttached === 'true') {
+      return;
+    }
+    coverImage.dataset.coverPreviewAttached = 'true';
+    coverImage.style.cursor = 'zoom-in';
+    coverImage.addEventListener('click', (event) => {
+      event.stopPropagation();
+      openCoverPreview(coverImage);
+    });
+  }
+
   /**
    * Create mobile album card
    * @param {Object} data - Processed album data
@@ -711,6 +768,7 @@ export function createAlbumDisplay(deps = {}) {
     card.className = 'album-card album-row relative h-[145px] bg-gray-900';
     card.dataset.index = index;
     const mobileBadgeHtml = `${renderRecommendationBadge(data, { mobile: true })}${renderSummaryBadge(data, { mobile: true })}`;
+    const mobileBadgeState = `${data.recommendedBy || ''}|${data.recommendedAt || ''}|${data.summary || ''}|${data.summarySource || ''}|${data.albumName}|${data.artist}`;
 
     // === BUILD CARD HTML ===
     card.innerHTML = `
@@ -748,7 +806,7 @@ export function createAlbumDisplay(deps = {}) {
                truncated title cuts off at (info-section width - this padding).
                The summary/recommendation badges overlay that reserved zone,
                absolutely centered on the title line. -->
-          ${renderMobileTitleRow(data, { paddingRight: '55px', badgesHtml: mobileBadgeHtml })}
+          ${renderMobileTitleRow(data, { paddingRight: '55px', badgesHtml: mobileBadgeHtml, badgeState: mobileBadgeState })}
           <!-- Artist -->
           ${renderMobileArtistRow(data, { paddingRight: '55px' })}
           <!-- Last.fm playcount -->
@@ -861,62 +919,7 @@ export function createAlbumDisplay(deps = {}) {
       });
     }
 
-    // Attach summary badge handler (if summary exists)
-    const summaryBadge = card.querySelector('.summary-badge-mobile');
-    if (summaryBadge && showMobileSummarySheet) {
-      summaryBadge.addEventListener(
-        'touchstart',
-        (e) => {
-          e.stopPropagation();
-        },
-        { passive: true }
-      );
-
-      summaryBadge.addEventListener(
-        'touchend',
-        (e) => {
-          e.stopPropagation();
-        },
-        { passive: true }
-      );
-
-      summaryBadge.addEventListener('click', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        const summary = summaryBadge.dataset.summary;
-        const albumName = summaryBadge.dataset.albumName;
-        const artist = summaryBadge.dataset.artist;
-        if (summary) {
-          showMobileSummarySheet(summary, albumName, artist);
-        }
-      });
-    }
-
-    // Attach recommendation badge handler (if recommended)
-    const recBadge = card.querySelector('.recommendation-badge-mobile');
-    if (recBadge) {
-      recBadge.addEventListener(
-        'touchstart',
-        (e) => {
-          e.stopPropagation();
-        },
-        { passive: true }
-      );
-
-      recBadge.addEventListener(
-        'touchend',
-        (e) => {
-          e.stopPropagation();
-        },
-        { passive: true }
-      );
-
-      recBadge.addEventListener('click', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        showMobileRecommendationSheet(recBadge);
-      });
-    }
+    attachMobileBadgeHandlers(card);
 
     // Attach three-dot menu button handler
     const menuBtn = card.querySelector('[data-album-menu-btn]');
@@ -969,6 +972,47 @@ export function createAlbumDisplay(deps = {}) {
         playTrackButton(index, trackPlayBtn.dataset.trackIdentifier);
       });
     });
+  }
+
+  function attachMobileBadgeHandlers(card) {
+    const stopPropagation = (event) => event.stopPropagation();
+    const summaryBadge = card.querySelector('.summary-badge-mobile');
+    if (summaryBadge && showMobileSummarySheet) {
+      summaryBadge.addEventListener('touchstart', stopPropagation, {
+        passive: true,
+      });
+      summaryBadge.addEventListener('touchend', stopPropagation, {
+        passive: true,
+      });
+      summaryBadge.addEventListener('click', (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        if (summaryBadge.dataset.summary) {
+          showMobileSummarySheet(
+            summaryBadge.dataset.summary,
+            summaryBadge.dataset.albumName,
+            summaryBadge.dataset.artist
+          );
+        }
+      });
+    }
+
+    const recommendationBadge = card.querySelector(
+      '.recommendation-badge-mobile'
+    );
+    if (recommendationBadge) {
+      recommendationBadge.addEventListener('touchstart', stopPropagation, {
+        passive: true,
+      });
+      recommendationBadge.addEventListener('touchend', stopPropagation, {
+        passive: true,
+      });
+      recommendationBadge.addEventListener('click', (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        showMobileRecommendationSheet(recommendationBadge);
+      });
+    }
   }
 
   /**
@@ -1120,6 +1164,14 @@ export function createAlbumDisplay(deps = {}) {
         // Get cached element references (creates cache if missing)
         const cache = getCachedElements(row, isMobile);
 
+        const coverImage = updateCoverInPlace(cache.coverMedia, {
+          src: data.coverThumbUrl,
+          fullSrc: data.coverImageUrl,
+          alt: data.albumName,
+        });
+        if (!isMobile) attachDesktopCoverPreview(coverImage);
+        reconcileAlbumBadges(row, cache, data, isMobile);
+
         // Update position number (only for main lists where position is not null)
         if (cache.position && data.position !== null) {
           if (cache.position.textContent !== data.position.toString()) {
@@ -1222,13 +1274,15 @@ export function createAlbumDisplay(deps = {}) {
           // Update track pick using cached span
           if (cache.trackSpan) {
             cache.trackSpan.textContent = data.primaryTrackDisplay;
-            cache.trackSpan.className = `text-sm ${data.primaryTrackClass} truncate cursor-pointer hover:text-gray-100`;
+            cache.trackSpan.className = `album-cell-text ${data.primaryTrackClass} truncate hover:text-gray-100 flex-1 min-w-0`;
             cache.trackSpan.title =
               data.primaryTrack || 'Click to select track';
             // Update duration span (sibling of trackSpan)
             const trackCell = cache.trackSpan.parentElement;
             if (trackCell) {
-              const existingDuration = trackCell.querySelector('.shrink-0');
+              const existingDuration = trackCell.querySelector(
+                '[data-field="primary-track-duration"]'
+              );
               if (data.primaryTrackDuration) {
                 if (existingDuration) {
                   existingDuration.textContent = data.primaryTrackDuration;
@@ -1236,6 +1290,7 @@ export function createAlbumDisplay(deps = {}) {
                   const durationSpan = document.createElement('span');
                   durationSpan.className =
                     'text-xs text-gray-500 shrink-0 ml-2';
+                  durationSpan.dataset.field = 'primary-track-duration';
                   durationSpan.textContent = data.primaryTrackDuration;
                   trackCell.appendChild(durationSpan);
                 }
@@ -1243,6 +1298,15 @@ export function createAlbumDisplay(deps = {}) {
                 existingDuration.remove();
               }
             }
+          }
+
+          if (cache.secondaryTrackSpan) {
+            cache.secondaryTrackSpan.textContent = data.secondaryTrackDisplay;
+            cache.secondaryTrackSpan.title = data.secondaryTrack;
+          }
+          if (cache.secondaryTrackDuration) {
+            cache.secondaryTrackDuration.textContent =
+              data.secondaryTrackDuration || '';
           }
         } else {
           // Mobile: use cached elements
@@ -2013,10 +2077,10 @@ export function createAlbumDisplay(deps = {}) {
    * @param {Array} albums - Album array to display
    * @param {Object} options - Display options
    * @param {boolean} options.forceFullRebuild - Force full rebuild
-   * @param {boolean} options.skipCoverFetch - Skip fetching covers (useful for field-only updates)
+   * @param {boolean} options.hydrate - Reconcile same-order core-to-full metadata in place
    */
   function displayAlbums(albums, options = {}) {
-    const { forceFullRebuild = false, _skipCoverFetch = false } = options;
+    const { forceFullRebuild = false, hydrate = false } = options;
     const isMobile = isMobileViewport();
     const container = document.getElementById('albumContainer');
 
@@ -2024,6 +2088,12 @@ export function createAlbumDisplay(deps = {}) {
       console.error('Album container not found!');
       return;
     }
+
+    if (hydrate && progressiveRenderInProgress) {
+      pendingHydration = albums;
+      return;
+    }
+    if (forceFullRebuild) pendingHydration = null;
 
     // Clear lock UI eagerly on full rebuild (list switch) to prevent stale
     // indicators from a previous list's async isListLocked check
@@ -2042,6 +2112,7 @@ export function createAlbumDisplay(deps = {}) {
 
       const updateType = detectUpdateType(lastRenderedMutableState, albums, {
         incrementalEnabled: ENABLE_INCREMENTAL_UPDATES,
+        allowBulkFieldUpdate: hydrate,
       });
 
       // Handle single album addition
@@ -2086,7 +2157,7 @@ export function createAlbumDisplay(deps = {}) {
         console.warn('Single remove failed, falling back to full rebuild');
       }
 
-      // FIELD_UPDATE and HYBRID_UPDATE don't need cover refetch - covers don't change
+      // Reconcile mutable fields, including versioned cover URLs, in place.
       if (updateType === 'FIELD_UPDATE' || updateType === 'HYBRID_UPDATE') {
         const success = updateAlbumFields(albums, isMobile);
 
@@ -2123,6 +2194,7 @@ export function createAlbumDisplay(deps = {}) {
     let albumContainer;
     let progressiveParent = null;
     const useProgressiveRender = albums.length > PROGRESSIVE_RENDER_THRESHOLD;
+    progressiveRenderInProgress = useProgressiveRender;
 
     const appendAlbumBatch = (parent, startIndex, endIndex) => {
       const fragment = document.createDocumentFragment();
@@ -2145,6 +2217,7 @@ export function createAlbumDisplay(deps = {}) {
 
     const finalizeRenderedList = () => {
       if (activeRenderGeneration !== renderGeneration) return;
+      progressiveRenderInProgress = false;
 
       prePopulatePositionCache(container, isMobile);
 
@@ -2185,6 +2258,11 @@ export function createAlbumDisplay(deps = {}) {
         if (activeRenderGeneration !== renderGeneration) return;
         lastRenderedFingerprint = generateAlbumFingerprint(albums);
         lastRenderedMutableState = extractMutableFingerprints(albums);
+        if (pendingHydration) {
+          const hydrationData = pendingHydration;
+          pendingHydration = null;
+          displayAlbums(hydrationData, { hydrate: true });
+        }
       });
     };
 
@@ -2381,9 +2459,6 @@ export function createAlbumDisplay(deps = {}) {
 
     // Kick off cover-image loading for every album (not just the visible ones)
     loadCoverImages(container);
-    revealInitialCoverGroup(container, {
-      timeoutMs: INITIAL_COVER_REVEAL_TIMEOUT_MS,
-    });
 
     if (progressiveParent) {
       scheduleRenderBatch(() =>
@@ -2434,7 +2509,7 @@ export function createAlbumDisplay(deps = {}) {
         // Found the album - update summary badge
         const badgeContainer = isMobile
           ? row.querySelector('[data-mobile-album-badges]')
-          : row.querySelector('.album-cover-container');
+          : row.querySelector('[data-desktop-album-badges]');
         if (!badgeContainer) continue;
 
         const badge = badgeContainer.querySelector(

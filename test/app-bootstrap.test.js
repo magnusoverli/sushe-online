@@ -100,6 +100,7 @@ describe('app-bootstrap module', () => {
           resolveLoadLists = resolve;
         })
     );
+    const refreshGroupsAndLists = mock.fn(() => Promise.resolve());
 
     const scheduledTasks = [];
     const schedulePostRenderTask = mock.fn((task, options) => {
@@ -144,6 +145,7 @@ describe('app-bootstrap module', () => {
       convertFlashToToast,
       initColumnConfig,
       loadLists,
+      refreshGroupsAndLists,
       initializeSettingsDrawer,
       initAboutModal,
       initializeSidebarCollapse,
@@ -213,7 +215,7 @@ describe('app-bootstrap module', () => {
     assert.strictEqual(checkListSetupStatus.mock.calls.length, 1);
     assert.strictEqual(
       checkListSetupStatus.mock.calls[0].arguments[0].refreshLists,
-      loadLists
+      refreshGroupsAndLists
     );
 
     scheduledTasks[2].task();

@@ -710,31 +710,6 @@
   border-radius: 6px !important;
 }
 
-.cover-reveal-shell {
-  background-color: rgb(31 41 55);
-  overflow: hidden;
-}
-
-.cover-reveal-pending,
-.cover-reveal-visible {
-  transition: opacity 140ms ease-out;
-}
-
-.cover-reveal-pending {
-  opacity: 0;
-}
-
-.cover-reveal-visible {
-  opacity: 1;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cover-reveal-pending,
-  .cover-reveal-visible {
-    transition: none;
-  }
-}
-
 /* Desktop: positioning context for the cover's badge overlays */
 .album-cover-container {
   position: relative;
@@ -2776,30 +2751,30 @@
   position: relative;
 }
 
-/* Base summary badge styles */
+/* Summary and recommendation indicators live beside the title so hydrating
+   metadata never changes the already-painted cover composite. */
+.album-badge-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  min-width: 45px;
+  min-height: 18px;
+}
+
 .summary-badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 20px;
-  height: 20px;
-  background: rgba(0, 0, 0, 0.75);
-  border-radius: 50%;
-  display: flex;
+  position: static;
+  width: 18px;
+  height: 18px;
+  background: transparent;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
-  z-index: 1;
 }
 
 .summary-badge i {
   font-size: 10px;
-}
-
-.summary-badge:hover {
-  background: rgba(0, 0, 0, 1);
-  transform: scale(1.1);
 }
 
 /* Last.fm badge - red icon */
@@ -2909,31 +2884,21 @@
 }
 
 /* Recommendation badge (shown on albums that appear in the year's recommendations) */
-/* Desktop: mirrors .summary-badge but positioned top-left */
+/* Desktop recommendation indicator mirrors the summary indicator. */
 .recommendation-badge {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  background: rgba(0, 0, 0, 0.75);
-  border-radius: 50%;
-  display: flex;
+  position: static;
+  width: 18px;
+  height: 18px;
+  background: transparent;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: default;
-  transition: all 0.2s ease;
-  z-index: 1;
 }
 
 .recommendation-badge i {
   font-size: 10px;
   color: #3b82f6; /* blue-500 - vivid blue */
-}
-
-.recommendation-badge:hover {
-  background: rgba(0, 0, 0, 1);
-  transform: scale(1.1);
 }
 
 /* Mobile: mirrors .summary-badge-mobile but positioned top-left */

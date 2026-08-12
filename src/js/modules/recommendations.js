@@ -14,6 +14,15 @@ import {
   renderMobileGenreRow,
   renderMobileTitleRow,
 } from './album-display/render-parts.js';
+import { createAlbumDisplayShared } from './album-display-shared.js';
+
+const { loadCoverImages: initializeRecommendationCovers } =
+  createAlbumDisplayShared({
+    computeGridTemplate: () => '',
+    getVisibleColumns: () => [],
+    getToggleableColumns: () => [],
+    isColumnVisible: () => true,
+  });
 
 /**
  * Recommendations Module
@@ -705,6 +714,7 @@ export function createRecommendations(deps = {}) {
         
       </div>
     `;
+    initializeRecommendationCovers(card);
 
     cardWrapper.appendChild(card);
     attachRecommendationCardHandlers(card, rec, year, locked);
@@ -1246,6 +1256,7 @@ export function createRecommendations(deps = {}) {
               <span class="album-cell-text text-gray-500 truncate" title="${formattedDate}">${formattedDate}</span>
             </div>
           `;
+          initializeRecommendationCovers(row);
 
           row.addEventListener('click', (e) => {
             if (e.target.closest('.view-reasoning-btn')) return;

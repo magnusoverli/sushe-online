@@ -572,16 +572,28 @@ describe('refetchAllImages', () => {
       });
       const responseCache = { invalidate: mock.fn() };
       const coverCache = { invalidateAlbum: mock.fn() };
+      const albumCoverService = {
+        updateCoverImage: mock.fn(async (albumId, imageBuffer) => {
+          assert.strictEqual(albumId, 'album-1');
+          assert.deepStrictEqual(imageBuffer, MOCK_IMAGE_BUFFER);
+          coverCache.invalidateAlbum(albumId);
+        }),
+      };
       const service = createFreshService({
         db: createMockPool([], { query: queryFn }),
         logger: createMockLogger(),
         coverCache,
         responseCache,
+        albumCoverService,
       });
 
       const summary = await service.refetchAllImages();
 
       assert.strictEqual(summary.success, 1);
+      assert.strictEqual(
+        albumCoverService.updateCoverImage.mock.calls.length,
+        1
+      );
       assert.deepStrictEqual(
         coverCache.invalidateAlbum.mock.calls.map((call) => call.arguments[0]),
         ['album-1']

@@ -103,9 +103,10 @@ describe('list-selection module', () => {
     assert.deepStrictEqual(storageWrites, [['lastSelectedList', 'list-1']]);
     assert.deepStrictEqual(apiCalls[0], [
       '/api/lists/list-1?profile=core',
-      undefined,
+      { signal: apiCalls[0][1].signal },
     ]);
     assert.strictEqual(apiCalls[1][0], '/api/user/last-list');
+    assert.strictEqual(apiCalls[1][1].signal, apiCalls[0][1].signal);
     assert.deepStrictEqual(states[1], ['setCurrentRecommendationsYear', null]);
     assert.deepStrictEqual(states[5], [
       'setListData',
@@ -166,6 +167,174 @@ describe('list-selection module', () => {
 
     assert.strictEqual(apiCalls.length, 0);
     assert.deepStrictEqual(rendered[0], [cached, { forceFullRebuild: true }]);
+  });
+
+  it('force refreshes loaded data and forwards the selection signal', async () => {
+    const apiCalls = [];
+    const setListDataCalls = [];
+    let currentListId = null;
+
+    const { selectList } = createListSelection({
+      doc: { getElementById: () => null },
+      win: { lastSelectedList: 'list-1' },
+      storage: { setItem() {} },
+      logger: { warn() {} },
+      schedulePostRenderTask() {},
+      setCurrentListId(id) {
+        currentListId = id;
+      },
+      setCurrentRecommendationsYear() {},
+      getCurrentListId: () => currentListId,
+      getRealtimeSyncModuleInstance: () => null,
+      clearPlaycountCache() {},
+      getLists: () => ({ 'list-1': { name: 'List One' } }),
+      updateListNavActiveState() {},
+      updateHeaderTitle() {},
+      showLoadingSpinner() {},
+      getListData: () => [{ album_id: 'cached' }],
+      isListDataLoaded: () => true,
+      getListDataProfile: () => 'full',
+      apiCall: async (...args) => {
+        apiCalls.push(args);
+        return [{ album_id: 'refreshed' }];
+      },
+      setListData(...args) {
+        setListDataCalls.push(args);
+      },
+      displayAlbums() {},
+      fetchAndDisplayPlaycounts: async () => {},
+      showToast() {},
+    });
+
+    await selectList('list-1', { forceRefresh: true });
+
+    assert.strictEqual(apiCalls.length, 1);
+    assert.strictEqual(apiCalls[0][0], '/api/lists/list-1?profile=core');
+    assert.ok(apiCalls[0][1].signal);
+    assert.deepStrictEqual(setListDataCalls, [
+      ['list-1', [{ album_id: 'refreshed' }], true, { profile: 'core' }],
+    ]);
+  });
+
+  it('prevents an older same-list selection from writing fetched data', async () => {
+    let resolveFirstFetch;
+    let currentListId = null;
+    let coreFetchCount = 0;
+    const fetchSignals = [];
+    const setListDataCalls = [];
+    const renderCalls = [];
+
+    const { selectList } = createListSelection({
+      doc: { getElementById: () => null },
+      win: { lastSelectedList: 'list-1' },
+      storage: { setItem() {} },
+      logger: { warn() {} },
+      schedulePostRenderTask() {},
+      setCurrentListId(id) {
+        currentListId = id;
+      },
+      setCurrentRecommendationsYear() {},
+      getCurrentListId: () => currentListId,
+      getRealtimeSyncModuleInstance: () => null,
+      clearPlaycountCache() {},
+      getLists: () => ({ 'list-1': { name: 'List One' } }),
+      updateListNavActiveState() {},
+      updateHeaderTitle() {},
+      showLoadingSpinner() {},
+      getListData: () => null,
+      isListDataLoaded: () => false,
+      getListDataProfile: () => 'full',
+      apiCall: async (url, options) => {
+        if (url !== '/api/lists/list-1?profile=core') return { success: true };
+        coreFetchCount += 1;
+        fetchSignals.push(options.signal);
+        if (coreFetchCount === 1) {
+          return new Promise((resolve) => {
+            resolveFirstFetch = resolve;
+          });
+        }
+        return [{ album_id: 'new' }];
+      },
+      setListData(...args) {
+        setListDataCalls.push(args);
+      },
+      displayAlbums(...args) {
+        renderCalls.push(args);
+      },
+      fetchAndDisplayPlaycounts: async () => {},
+      showToast() {},
+    });
+
+    const firstSelection = selectList('list-1');
+    await new Promise((resolve) => setImmediate(resolve));
+    await selectList('list-1');
+
+    assert.strictEqual(fetchSignals[0].aborted, true);
+    assert.strictEqual(fetchSignals[1].aborted, false);
+    resolveFirstFetch([{ album_id: 'old' }]);
+    await firstSelection;
+
+    assert.deepStrictEqual(
+      setListDataCalls.map((call) => call[1]),
+      [[{ album_id: 'new' }]]
+    );
+    assert.deepStrictEqual(
+      renderCalls.map((call) => call[0]),
+      [[{ album_id: 'new' }]]
+    );
+  });
+
+  it('only lets the current selection complete the server preference write', async () => {
+    const preferenceResolvers = new Map();
+    const win = { lastSelectedList: null };
+    let currentListId = null;
+
+    const { selectList } = createListSelection({
+      doc: { getElementById: () => null },
+      win,
+      storage: { setItem() {} },
+      logger: { warn() {} },
+      schedulePostRenderTask() {},
+      setCurrentListId(id) {
+        currentListId = id;
+      },
+      setCurrentRecommendationsYear() {},
+      getCurrentListId: () => currentListId,
+      getRealtimeSyncModuleInstance: () => null,
+      clearPlaycountCache() {},
+      getLists: () => ({
+        'list-1': { name: 'List One' },
+        'list-2': { name: 'List Two' },
+      }),
+      updateListNavActiveState() {},
+      updateHeaderTitle() {},
+      showLoadingSpinner() {},
+      getListData: (listId) => [{ album_id: listId }],
+      isListDataLoaded: () => true,
+      getListDataProfile: () => 'full',
+      apiCall: async (url, options) => {
+        if (url !== '/api/user/last-list') return { success: true };
+        const listId = JSON.parse(options.body).listId;
+        return new Promise((resolve) => {
+          preferenceResolvers.set(listId, resolve);
+        });
+      },
+      setListData() {},
+      displayAlbums() {},
+      fetchAndDisplayPlaycounts: async () => {},
+      showToast() {},
+    });
+
+    await selectList('list-1');
+    await selectList('list-2');
+
+    preferenceResolvers.get('list-1')({ success: true });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(win.lastSelectedList, null);
+
+    preferenceResolvers.get('list-2')({ success: true });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(win.lastSelectedList, 'list-2');
   });
 
   it('shows list-data error toast when fetch fails', async () => {
@@ -263,7 +432,7 @@ describe('list-selection module', () => {
     ]);
   });
 
-  it('rerenders on hydration to surface full-profile details even when order is unchanged', async () => {
+  it('incrementally hydrates full-profile details when order is unchanged', async () => {
     const scheduledTasks = [];
     const apiCalls = [];
     const setListDataCalls = [];
@@ -337,7 +506,8 @@ describe('list-selection module', () => {
 
     scheduledTasks[0].task();
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepStrictEqual(apiCalls[0], ['/api/lists/list-1', undefined]);
+    assert.strictEqual(apiCalls[0][0], '/api/lists/list-1');
+    assert.ok(apiCalls[0][1].signal);
     assert.deepStrictEqual(setListDataCalls[0], [
       'list-1',
       [
@@ -350,14 +520,10 @@ describe('list-selection module', () => {
       true,
       { profile: 'full' },
     ]);
-    // The full profile carries details the core render cannot show (here the
-    // summary that drives the badge), and those fields are absent from the
-    // album-order identity and the mutable fingerprint, so hydration must
-    // re-render even though the album order is unchanged.
     assert.strictEqual(renderCalls.length, 2);
     assert.deepStrictEqual(renderCalls[1], [
       [{ _id: 'item-1', album_id: 'album-1', summary: 'Hydrated summary' }],
-      { forceFullRebuild: true },
+      { hydrate: true },
     ]);
 
     scheduledTasks[1].task();
@@ -422,7 +588,7 @@ describe('list-selection module', () => {
         { _id: 'item-2', album_id: 'album-2' },
         { _id: 'item-1', album_id: 'album-1' },
       ],
-      { forceFullRebuild: true },
+      { hydrate: true },
     ]);
   });
 

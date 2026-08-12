@@ -392,7 +392,6 @@ const getAlbumContextMenuModule = createLazyModule(() =>
     showToast,
     saveList,
     selectList,
-    loadLists,
     getRecommendationsModule: () => getRecommendationsModule(),
     getMobileUIModule: () => getMobileUIModule(),
     getLockedYears,
@@ -773,7 +772,7 @@ const { initializeRealtimeSync } = createAppRealtimeSync({
   wasRecentLocalSave,
   setListData,
   displayAlbums,
-  loadLists,
+  refreshGroupsAndLists,
   showToast,
   logger: console,
 });
@@ -867,8 +866,8 @@ const getListSelectionModule = createLazyModule(() =>
   })
 );
 
-export async function selectList(listId) {
-  return getListSelectionModule().selectList(listId);
+export async function selectList(listId, options = {}) {
+  return getListSelectionModule().selectList(listId, options);
 }
 
 // ============ RECOMMENDATIONS MODULE BRIDGE ============
@@ -945,6 +944,7 @@ createAppBootstrap({
   convertFlashToToast,
   initColumnConfig,
   loadLists,
+  refreshGroupsAndLists,
   initializeSettingsDrawer,
   initAboutModal,
   initializeSidebarCollapse,

@@ -28,85 +28,65 @@ function getCoverSrc(data) {
   return data.coverThumbUrl || null;
 }
 
-function compactErrorHtml(html) {
-  return html.replace(/\n\s*/g, '');
-}
-
-function renderErrorAttr(errorHtml) {
-  if (!errorHtml) return '';
-
-  const handler = `this.onerror=null; this.parentElement.innerHTML=${JSON.stringify(compactErrorHtml(errorHtml))}`;
-  return ` onerror="${escapeHtml(handler)}"`;
-}
-
-export function renderCoverImage({
-  src,
-  fullSrc,
-  alt,
-  className,
-  loadMode,
-  errorHtml = '',
-}) {
+export function renderCoverImage({ src, fullSrc, alt, className, loadMode }) {
   const escapedSrc = escapeHtml(src);
   const escapedFullSrc = escapeHtml(fullSrc || src);
   const escapedAlt = escapeHtml(alt || '');
-  const errorAttr = renderErrorAttr(errorHtml);
+  const coverData = `data-cover-src="${escapedSrc}" data-full-src="${escapedFullSrc}"`;
 
   if (loadMode === 'lazy') {
     return `<img src="${escapedSrc}"
-      data-full-src="${escapedFullSrc}"
+      ${coverData}
       alt="${escapedAlt}"
       class="${className}"
       loading="lazy"
-      decoding="async"${errorAttr}
+      decoding="async"
     >`;
   }
 
   if (loadMode === 'initial') {
     return `<img src="${escapedSrc}"
-      data-full-src="${escapedFullSrc}"
-      data-cover-reveal-group="initial"
+      ${coverData}
       alt="${escapedAlt}"
-      class="${className} cover-reveal-pending"
+      class="${className}"
       loading="eager"
       decoding="async"
-      fetchpriority="high"${errorAttr}
+      fetchpriority="high"
     >`;
   }
 
   return `<img src="${PLACEHOLDER_GIF}"
     data-lazy-src="${escapedSrc}"
-    data-full-src="${escapedFullSrc}"
+    ${coverData}
     alt="${escapedAlt}"
     class="${className}"
     loading="eager"
     decoding="async"
-    fetchpriority="low"${errorAttr}
+    fetchpriority="low"
   >`;
 }
 
 export function renderDesktopCoverCell(data, index, options = {}) {
   const coverImageSrc = getCoverSrc(data);
   const loadMode = options.loadMode || getCoverLoadMode(index, false);
-  const revealClass =
-    coverImageSrc && loadMode === 'initial' ? ' cover-reveal-shell' : '';
   const placeholderHtml = options.placeholderHtml || COVER_PLACEHOLDER_SVG;
   const badgesHtml = options.badgesHtml || '';
 
   return `<div class="${options.cellClass || 'cover-cell flex items-center'}">
-    <div class="album-cover-container${revealClass}">
+    <div class="album-cover-container">
       ${
         coverImageSrc
-          ? renderCoverImage({
-              src: coverImageSrc,
-              fullSrc: data.coverImageUrl || coverImageSrc,
-              alt: data.albumName,
-              className:
-                options.imageClassName || 'album-cover rounded-sm shadow-lg',
-              loadMode,
-              errorHtml: placeholderHtml,
-            })
-          : placeholderHtml
+          ? `<div class="w-full h-full" data-cover-media data-cover-image-class="${escapeHtml(options.imageClassName || 'album-cover rounded-sm shadow-lg')}">${renderCoverImage(
+              {
+                src: coverImageSrc,
+                fullSrc: data.coverImageUrl || coverImageSrc,
+                alt: data.albumName,
+                className:
+                  options.imageClassName || 'album-cover rounded-sm shadow-lg',
+                loadMode,
+              }
+            )}</div>`
+          : `<div class="w-full h-full" data-cover-media data-cover-image-class="${escapeHtml(options.imageClassName || 'album-cover rounded-sm shadow-lg')}">${placeholderHtml}</div>`
       }
       ${badgesHtml}
     </div>
@@ -132,21 +112,22 @@ export function renderMobileCoverSection(data, index, options = {}) {
     : dateHtml;
 
   return `<div class="${options.wrapperClass || 'h-full shrink-0 w-[88px] flex flex-col items-center justify-evenly pl-0.5'}">
-    <div class="${options.coverClass || `mobile-album-cover relative w-20 h-20 flex items-center justify-center ${!coverSrc ? 'bg-gray-800 rounded-lg' : ''} ${coverSrc && loadMode === 'initial' ? 'cover-reveal-shell' : ''}`}">
+    <div class="${options.coverClass || `mobile-album-cover relative w-20 h-20 flex items-center justify-center ${!coverSrc ? 'bg-gray-800 rounded-lg' : ''}`}">
       ${coverExtraHtml}
       ${
         coverSrc
-          ? renderCoverImage({
-              src: coverSrc,
-              fullSrc: data.coverImageUrl || coverSrc,
-              alt: data.albumName,
-              className:
-                options.imageClassName ||
-                'w-full h-full rounded-lg object-cover',
-              loadMode,
-              errorHtml: placeholderHtml,
-            })
-          : placeholderHtml
+          ? `<div class="w-full h-full" data-cover-media data-cover-image-class="${escapeHtml(options.imageClassName || 'w-full h-full rounded-lg object-cover')}">${renderCoverImage(
+              {
+                src: coverSrc,
+                fullSrc: data.coverImageUrl || coverSrc,
+                alt: data.albumName,
+                className:
+                  options.imageClassName ||
+                  'w-full h-full rounded-lg object-cover',
+                loadMode,
+              }
+            )}</div>`
+          : `<div class="w-full h-full" data-cover-media data-cover-image-class="${escapeHtml(options.imageClassName || 'w-full h-full rounded-lg object-cover')}">${placeholderHtml}</div>`
       }
     </div>
     ${wrappedDateHtml}

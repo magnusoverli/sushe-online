@@ -6,6 +6,7 @@
 
 import { createPostRenderScheduler } from './post-render-scheduler.js';
 import { createListSelectionPreloader } from './list-selection-preload.js';
+import { fetchCoreList } from './app-list-load-helpers.js';
 
 export function createListSelection(deps = {}) {
   const doc = deps.doc || (typeof document !== 'undefined' ? document : null);
@@ -15,6 +16,8 @@ export function createListSelection(deps = {}) {
   const logger = deps.logger || console;
   const setTimeoutFn = deps.setTimeoutFn || setTimeout;
   const clearTimeoutFn = deps.clearTimeoutFn || clearTimeout;
+  const createAbortController =
+    deps.createAbortController || (() => new AbortController());
   const { schedulePostRenderTask } = deps.schedulePostRenderTask
     ? { schedulePostRenderTask: deps.schedulePostRenderTask }
     : createPostRenderScheduler({ win, setTimeoutFn });
@@ -52,51 +55,65 @@ export function createListSelection(deps = {}) {
       primePlaycountCache,
       prefetchPlaycountsForRender,
     });
+  let selectionGeneration = 0;
+  let selectionAbortController = null;
 
-  async function hydrateListDetails(listId) {
+  function beginSelection(listId) {
+    selectionAbortController?.abort();
+    selectionGeneration += 1;
+    selectionAbortController = createAbortController();
+
+    return {
+      controller: selectionAbortController,
+      generation: selectionGeneration,
+      listId,
+    };
+  }
+
+  function ownsSelection(selection) {
+    return (
+      selection.generation === selectionGeneration &&
+      selection.controller === selectionAbortController &&
+      !selection.controller.signal.aborted &&
+      getCurrentListId() === selection.listId
+    );
+  }
+
+  function isSelectionAbort(error, selection) {
+    return error?.name === 'AbortError' || selection.controller.signal.aborted;
+  }
+
+  async function hydrateListDetails(selection) {
+    const { listId } = selection;
     if (!listId || isListDataFullyLoaded?.(listId)) return;
 
     try {
       const fullData = await apiCall(
-        `/api/lists/${encodeURIComponent(listId)}`
+        `/api/lists/${encodeURIComponent(listId)}`,
+        { signal: selection.controller.signal }
       );
-      if (getCurrentListId() !== listId) return;
+      if (!ownsSelection(selection)) return;
       if (wasRecentLocalSave?.(listId)) return;
 
       setListData(listId, fullData, true, { profile: 'full' });
-      if (getCurrentListId() === listId) {
-        // Always rebuild on the core->full upgrade. The full profile adds data
-        // the core render cannot show — the summary and recommendation badges
-        // and track names — and those fields are part of neither the album-order
-        // identity nor the mutable fingerprint, so a diff or order check would
-        // skip them and the badges would never appear. wasRecentLocalSave above
-        // already guards against clobbering in-flight local edits.
-        displayAlbums(fullData, { forceFullRebuild: true });
+      if (ownsSelection(selection)) {
+        displayAlbums(fullData, { hydrate: true });
       }
     } catch (error) {
+      if (isSelectionAbort(error, selection)) return;
       logger.warn('Failed to hydrate list details:', error);
     }
   }
 
-  async function fetchCoreList(listId) {
-    return apiCall(`/api/lists/${encodeURIComponent(listId)}?profile=core`)
-      .then((items) => ({ items, profile: 'core' }))
-      .catch(() =>
-        apiCall(`/api/lists/${encodeURIComponent(listId)}`).then((items) => ({
-          items,
-          profile: 'full',
-        }))
-      );
-  }
-
-  function scheduleCurrentListTask(listId, task, options) {
+  function scheduleCurrentListTask(selection, task, options) {
     schedulePostRenderTask(() => {
-      if (getCurrentListId() !== listId) return;
+      if (!ownsSelection(selection)) return;
       task();
     }, options);
   }
 
   async function selectList(listId, options = {}) {
+    const selection = beginSelection(listId);
     try {
       const previousListId = getCurrentListId();
 
@@ -144,29 +161,32 @@ export function createListSelection(deps = {}) {
       if (listId) {
         try {
           let data = getListData(listId);
-          const needsFetch = !isListDataLoaded(listId);
+          const needsFetch = options.forceRefresh || !isListDataLoaded(listId);
 
           if (needsFetch) {
-            const payload = await fetchCoreList(listId);
+            const payload = await fetchCoreList(apiCall, listId, {
+              signal: selection.controller.signal,
+            });
+            if (!ownsSelection(selection)) return;
             data = payload.items;
             setListData(listId, data, true, { profile: payload.profile });
           }
 
-          if (getCurrentListId() === listId) {
+          if (ownsSelection(selection)) {
             const [playcountPreloadResult] = await Promise.all([
               preloadInitialPlaycounts(listId, options.initialPlaycounts),
               preloadInitialCoverImages(data),
             ]);
-            if (getCurrentListId() !== listId) return;
+            if (!ownsSelection(selection)) return;
 
             displayAlbums(data, { forceFullRebuild: true });
 
             const loadedProfile = getListDataProfile?.(listId) || 'full';
             if (loadedProfile !== 'full') {
               scheduleCurrentListTask(
-                listId,
+                selection,
                 () => {
-                  hydrateListDetails(listId);
+                  hydrateListDetails(selection);
                 },
                 { timeoutMs: 2500 }
               );
@@ -178,7 +198,7 @@ export function createListSelection(deps = {}) {
                 !playcountPreloadResult?.timedOut)
             ) {
               scheduleCurrentListTask(
-                listId,
+                selection,
                 () => {
                   fetchAndDisplayPlaycounts(listId).catch((error) => {
                     logger.warn('Background playcount fetch failed:', error);
@@ -189,6 +209,7 @@ export function createListSelection(deps = {}) {
             }
           }
         } catch (error) {
+          if (isSelectionAbort(error, selection)) return;
           logger.warn('Failed to fetch list data:', error);
           showToast('Error loading list data', 'error');
         }
@@ -198,13 +219,15 @@ export function createListSelection(deps = {}) {
         apiCall('/api/user/last-list', {
           method: 'POST',
           body: JSON.stringify({ listId }),
+          signal: selection.controller.signal,
         })
           .then(() => {
-            if (win) {
+            if (win && ownsSelection(selection)) {
               win.lastSelectedList = listId;
             }
           })
           .catch((error) => {
+            if (isSelectionAbort(error, selection)) return;
             logger.warn('Failed to save list preference:', error);
           });
       }

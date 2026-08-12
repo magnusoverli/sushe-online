@@ -259,6 +259,7 @@ describe('album-service', () => {
 
   it('updateCoverImage should process and store an explicit cover replacement', async () => {
     const updatedAt = new Date('2026-05-11T10:20:34.794Z');
+    const thumbnailUpdatedAt = new Date('2026-05-11T10:20:35.794Z');
     const responseCache = { invalidate: mock.fn() };
     const pool = createMockPool([
       {
@@ -266,6 +267,7 @@ describe('album-service', () => {
           {
             album_id: 'album-1',
             cover_image_updated_at: updatedAt,
+            cover_thumbnail_updated_at: thumbnailUpdatedAt,
           },
         ],
         rowCount: 1,
@@ -289,6 +291,8 @@ describe('album-service', () => {
     assert.strictEqual(result.albumId, 'album-1');
     assert.strictEqual(result.format, 'JPEG');
     assert.strictEqual(result.coverImageUpdatedAt, updatedAt);
+    assert.strictEqual(result.coverThumbnailUpdatedAt, thumbnailUpdatedAt);
+    assert.strictEqual(result.thumbnailFormat, 'JPEG');
     assert.strictEqual(pool.query.mock.calls.length, 2);
     assert.ok(
       pool.query.mock.calls[0].arguments[0].includes(
@@ -296,6 +300,12 @@ describe('album-service', () => {
       )
     );
     assert.ok(Buffer.isBuffer(pool.query.mock.calls[0].arguments[1][0]));
+    assert.ok(Buffer.isBuffer(pool.query.mock.calls[0].arguments[1][2]));
+    assert.ok(
+      pool.query.mock.calls[0].arguments[0].includes(
+        'cover_thumbnail_updated_at = NOW()'
+      )
+    );
     assert.strictEqual(responseCache.invalidate.mock.calls.length, 1);
   });
 

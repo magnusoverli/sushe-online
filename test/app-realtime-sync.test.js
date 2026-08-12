@@ -35,7 +35,7 @@ describe('app-realtime-sync module', () => {
       wasRecentLocalSave: () => false,
       setListData: () => {},
       displayAlbums: () => {},
-      loadLists: () => {},
+      refreshGroupsAndLists: () => {},
       showToast: () => {},
       logger: { log: () => {} },
       win: {
@@ -67,6 +67,7 @@ describe('app-realtime-sync module', () => {
     const displayAlbums = mock.fn();
     const apiCall = mock.fn(async () => [{ album: 'A' }]);
     const logger = { log: mock.fn() };
+    const refreshGroupsAndLists = mock.fn();
 
     createAppRealtimeSync({
       createRealtimeSync: (config) => {
@@ -84,7 +85,7 @@ describe('app-realtime-sync module', () => {
       wasRecentLocalSave: () => localSave,
       setListData,
       displayAlbums,
-      loadLists: () => {},
+      refreshGroupsAndLists,
       showToast: () => {},
       logger,
       win: null,
@@ -110,5 +111,8 @@ describe('app-realtime-sync module', () => {
     await realtimeConfig.refreshListDataSilent('list-3');
     assert.strictEqual(apiCall.mock.calls.length, 2);
     assert.strictEqual(setListData.mock.calls.length, 2);
+
+    await realtimeConfig.refreshListNav();
+    assert.strictEqual(refreshGroupsAndLists.mock.calls.length, 1);
   });
 });

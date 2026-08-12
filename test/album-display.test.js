@@ -216,7 +216,7 @@ describe('album-display module', () => {
       }
     });
 
-    it('uses eager grouped cover loading for initial desktop covers only', () => {
+    it('uses eager loading without an opacity reveal for initial desktop covers', () => {
       const previousCreateElement = globalThis.document.createElement;
       globalThis.document.createElement = () => ({
         className: '',
@@ -261,7 +261,8 @@ describe('album-display module', () => {
 
         assert.match(firstRow.innerHTML, /src="\/thumb-1\.jpg"/);
         assert.match(firstRow.innerHTML, /fetchpriority="high"/);
-        assert.match(firstRow.innerHTML, /data-cover-reveal-group="initial"/);
+        assert.doesNotMatch(firstRow.innerHTML, /data-cover-reveal-group/);
+        assert.doesNotMatch(firstRow.innerHTML, /cover-reveal-pending/);
         assert.doesNotMatch(
           firstRow.innerHTML,
           /data-lazy-src="\/thumb-1\.jpg"/
@@ -742,21 +743,26 @@ describe('album-display module', () => {
       assert.strictEqual(result, 'FIELD_UPDATE');
     });
 
-    it('should not track cover_image changes (handled by URL-based loading)', () => {
-      // Note: cover_image is intentionally NOT tracked in detectUpdateType
-      // because storing it in the lightweight mutable state would be expensive.
-      // Cover images are loaded eagerly via URL right after each render.
-      // In practice, cover_image-only changes are also caught by the fingerprint
-      // comparison at the displayAlbums level before detectUpdateType is called.
+    it('should track versioned cover URL changes as field updates', () => {
       const module = createAlbumDisplay({});
-      const oldState = [{ artist: 'A', album: '1', release_date: '' }];
+      const oldState = [
+        {
+          artist: 'A',
+          album: '1',
+          release_date: '',
+          cover_thumb_url: '/cover?size=thumb&v=1',
+        },
+      ];
       const newAlbums = [
-        { artist: 'A', album: '1', release_date: '', cover_image: 'new' },
+        {
+          artist: 'A',
+          album: '1',
+          release_date: '',
+          cover_thumb_url: '/cover?size=thumb&v=2',
+        },
       ];
       const result = module.detectUpdateType(oldState.map(fp), newAlbums);
-      // No tracked field changes, no position changes = falls through to HYBRID_UPDATE
-      // (0 + 0 <= 15 is true, so HYBRID_UPDATE is returned)
-      assert.strictEqual(result, 'HYBRID_UPDATE');
+      assert.strictEqual(result, 'FIELD_UPDATE');
     });
 
     it('should return POSITION_UPDATE when only positions change', () => {

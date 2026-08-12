@@ -10,7 +10,7 @@ describe('app-list-operations module', () => {
   });
 
   it('refreshes groups and list metadata while preserving loaded list data', async () => {
-    const lists = {
+    let lists = {
       'list-1': {
         _id: 'list-1',
         name: 'Old Name',
@@ -20,6 +20,13 @@ describe('app-list-operations module', () => {
         groupId: null,
         sortOrder: 0,
         _data: [{ album_id: 'a1' }],
+        _dataProfile: 'core',
+      },
+      stale: {
+        _id: 'stale',
+        name: 'Deleted elsewhere',
+        _data: [{ album_id: 'stale' }],
+        _dataProfile: 'full',
       },
     };
 
@@ -79,7 +86,9 @@ describe('app-list-operations module', () => {
       apiCall,
       showToast: () => {},
       getLists: () => lists,
-      setLists: () => {},
+      setLists: (nextLists) => {
+        lists = nextLists;
+      },
       getListData: () => [],
       setListData: () => {},
       updateListMetadata: () => {},
@@ -102,8 +111,38 @@ describe('app-list-operations module', () => {
     assert.strictEqual(updateGroupsFromServer.mock.calls.length, 1);
     assert.strictEqual(updateListNav.mock.calls.length, 1);
     assert.deepStrictEqual(lists['list-1']._data, [{ album_id: 'a1' }]);
+    assert.strictEqual(lists['list-1']._dataProfile, 'core');
     assert.strictEqual(lists['list-1'].name, 'New Name');
     assert.strictEqual(lists['list-2']._data, null);
+    assert.strictEqual(Object.hasOwn(lists, 'stale'), false);
+  });
+
+  it('clears selection when metadata refresh removes the current list', async () => {
+    const selected = [];
+    const operations = createAppListOperations({
+      apiCall: async (url) => (url === '/api/lists' ? {} : []),
+      showToast() {},
+      getLists: () => ({ removed: { _data: [] } }),
+      setLists() {},
+      setListData() {},
+      updateListMetadata() {},
+      updateGroupsFromServer() {},
+      getCurrentListId: () => 'removed',
+      selectList: async (listId) => selected.push(listId),
+      updateListNav() {},
+      setRecommendationYears() {},
+      loadSnapshotFromStorage() {},
+      getLastSavedSnapshots: () => new Map(),
+      createListSnapshot() {},
+      saveSnapshotToStorage() {},
+      markLocalSave() {},
+      computeListDiff() {},
+      logger: { error() {} },
+    });
+
+    await operations.refreshGroupsAndLists();
+
+    assert.deepStrictEqual(selected, [null]);
   });
 
   it('loads lists metadata and auto-selects the stored list', async () => {

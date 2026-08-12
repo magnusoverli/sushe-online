@@ -37,6 +37,7 @@ export function renderRecommendationBadge(data, { mobile = false } = {}) {
 }
 
 export function renderDesktopAlbumCell(data, options = {}) {
+  const badgesHtml = options.badgesHtml || '';
   const playcountHtml =
     options.includePlaycount === false
       ? ''
@@ -58,9 +59,10 @@ export function renderDesktopAlbumCell(data, options = {}) {
       : '';
 
   return `<div class="${options.cellClass || 'album-cell flex flex-col justify-start'}">
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 min-w-0">
       <span class="album-name font-semibold text-gray-200 truncate"${titleAttr}>${escapeHtml(data.albumName)}</span>
       ${playcountHtml}
+      <div data-desktop-album-badges data-badge-state="${escapeHtml(options.badgeState || '')}" class="album-badge-strip">${badgesHtml}</div>
     </div>
     ${releaseDateHtml}
     ${availabilityHtml}
@@ -141,7 +143,7 @@ export function renderMobileTitleRow(data, options = {}) {
     <h3 class="${titleClass}"${titleStyleAttr}>
       <i class="${iconClass}"></i><span data-field="album-mobile-title"${titleSpanClass} title="${escapeHtml(data.albumName)}">${escapeHtml(data.albumName)}</span>
     </h3>
-    <div data-mobile-album-badges class="absolute flex items-center" style="top: 50%; right: 4px; transform: translateY(-50%); gap: 4px">${badgesHtml}</div>
+    <div data-mobile-album-badges data-badge-state="${escapeHtml(options.badgeState || '')}" class="absolute flex items-center" style="top: 50%; right: 4px; transform: translateY(-50%); gap: 4px">${badgesHtml}</div>
   </div>`;
 }
 
