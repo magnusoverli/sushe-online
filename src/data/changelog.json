@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-08-12",
+    "category": "ui",
+    "description": "Removed the attribution tooltip from album summaries.",
+    "hash": "025306a7e11639d7f41a3d97f5d555ee10ff63d8",
+    "commitMessage": "Remove summary tooltip attribution"
+  },
+  {
+    "date": "2026-08-12",
     "category": "fix",
     "description": "Fixed album covers flickering when the list first loads.",
     "hash": "6d8db01efd1c2cf2edbd47918c0414c6d5c70b5f",
