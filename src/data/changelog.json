@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-08-12",
+    "category": "fix",
+    "description": "Fixed album covers flickering when the list first loads.",
+    "hash": "6d8db01efd1c2cf2edbd47918c0414c6d5c70b5f",
+    "commitMessage": "Stop album covers flashing during list hydration"
+  },
+  {
     "date": "2026-08-11",
     "category": "fix",
     "description": "Search options now close when focusing the search input.",
