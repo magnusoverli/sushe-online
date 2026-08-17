@@ -1,5 +1,19 @@
 [
   {
+    "date": "2026-08-17",
+    "category": "ui",
+    "description": "RYM album badge now appears beneath the cover image.",
+    "hash": "3b3e2bf598068ec41133348f428c6101446cd769",
+    "commitMessage": "Place RYM album badge under cover"
+  },
+  {
+    "date": "2026-08-17",
+    "category": "feature",
+    "description": "Sidebar lists now show album counts.",
+    "hash": "4989d6f3d615118c6a21efe01d39bb29782f1547",
+    "commitMessage": "Show album counts in sidebar lists"
+  },
+  {
     "date": "2026-08-12",
     "category": "ui",
     "description": "Removed the attribution tooltip from album summaries.",
