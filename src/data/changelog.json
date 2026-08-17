@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-08-17",
+    "category": "feature",
+    "description": "RYM badges now link directly to your SuShe albums.",
+    "hash": "65b33ee12a2be863f7c8b3a8eb9951028e22af48",
+    "commitMessage": "Link RYM badges to SuShe albums"
+  },
+  {
+    "date": "2026-08-17",
     "category": "ui",
     "description": "RYM album badge now appears beneath the cover image.",
     "hash": "3b3e2bf598068ec41133348f428c6101446cd769",
