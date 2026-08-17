@@ -6,6 +6,7 @@ import {
   buildListMetadataEntries,
   fetchCoreList,
   loadListStartupData,
+  parseAlbumDeepLink,
   resolveLastSelectedList,
 } from './app-list-load-helpers.js';
 
@@ -20,6 +21,7 @@ export function createAppListOperations(deps = {}) {
     updateGroupsFromServer,
     getCurrentListId,
     selectList,
+    focusAlbum,
     updateListNav,
     setRecommendationYears,
     loadSnapshotFromStorage,
@@ -79,8 +81,10 @@ export function createAppListOperations(deps = {}) {
     try {
       const localLastListId = storage?.getItem?.('lastSelectedList');
       const serverLastListId = win?.lastSelectedList;
+      const albumDeepLink = parseAlbumDeepLink(win?.location);
 
-      const candidateTargetId = localLastListId || serverLastListId || null;
+      const candidateTargetId =
+        albumDeepLink?.listId || localLastListId || serverLastListId || null;
       const {
         candidateDataPromise,
         fetchedLists,
@@ -97,6 +101,7 @@ export function createAppListOperations(deps = {}) {
         Object.prototype.hasOwnProperty.call(newLists, listId);
 
       const targetListId = resolveLastSelectedList({
+        requestedListId: albumDeepLink?.listId,
         localLastListId,
         serverLastListId,
         lists: newLists,
@@ -139,10 +144,12 @@ export function createAppListOperations(deps = {}) {
             profile: listPayload.profile || 'full',
           });
 
+          let targetIsVisible = getCurrentListId() === targetListId;
           if (!getCurrentListId()) {
             await selectList(targetListId, {
               initialPlaycounts: listPayload.playcounts || null,
             });
+            targetIsVisible = true;
             if (localLastListId !== targetListId) {
               try {
                 storage?.setItem?.('lastSelectedList', targetListId);
@@ -150,6 +157,13 @@ export function createAppListOperations(deps = {}) {
                 // Ignore local storage write failures.
               }
             }
+          }
+          if (
+            targetIsVisible &&
+            albumDeepLink?.listId === targetListId &&
+            typeof focusAlbum === 'function'
+          ) {
+            focusAlbum(targetListId, albumDeepLink.albumId);
           }
         } catch (error) {
           logger.warn('Failed to load last selected list:', error);

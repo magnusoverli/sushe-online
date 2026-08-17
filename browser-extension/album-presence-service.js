@@ -74,6 +74,7 @@
           listId: item.listId,
           listName: item.listName || 'List',
           year: item.year || null,
+          isMain: !!item.isMain,
         });
       }
 
@@ -94,6 +95,7 @@
             listId,
             listName: list.name || 'List',
             year: list.year || null,
+            isMain: !!list.isMain,
           });
         }
       }
@@ -201,6 +203,7 @@
         listId: list.id,
         listName: list.name,
         year: list.year || null,
+        isMain: !!list.isMain,
       });
       lastFetched = Date.now();
       persistPresenceIndex().catch((error) => {

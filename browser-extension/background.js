@@ -10,6 +10,7 @@ importScripts(
   'auth-state.js',
   'context-menu-service.js',
   'album-presence-service.js',
+  'sushe-tab-navigation.js',
   'album-api-service.js',
   'album-add-service.js'
 );
@@ -73,6 +74,12 @@ const albumPresenceService =
     getAuthHeaders,
     findListById,
     logger: console,
+  });
+
+const susheTabNavigation =
+  globalThis.SusheTabNavigation.createSusheTabNavigation({
+    chrome,
+    getApiBase: () => SUSHE_API_BASE,
   });
 
 const albumAddService = globalThis.AlbumAddService.createAlbumAddService({
@@ -184,7 +191,9 @@ function notifyAlbumAddedToTab(tabId, album, list) {
         listId: list._id,
         listName: list.name || 'List',
         year: list.year || null,
+        isMain: !!list.isMain,
       },
+      apiBase: SUSHE_API_BASE,
     })
     .catch((error) => {
       console.debug('Could not update RYM badge immediately:', error.message);
@@ -611,8 +620,15 @@ async function fetchUserListsInternal(forceRefresh = false) {
         _id: listId,
         name: metadata.name || 'Unknown',
         count: metadata.count || 0,
+        year: metadata.year || null,
+        isMain: !!metadata.isMain,
       });
-      userLists.push({ _id: listId, name: metadata.name || 'Unknown' });
+      userLists.push({
+        _id: listId,
+        name: metadata.name || 'Unknown',
+        year: metadata.year || null,
+        isMain: !!metadata.isMain,
+      });
     }
 
     // Sort lists within each year alphabetically
@@ -954,10 +970,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           Array.isArray(message.albums) ? message.albums : [],
           { forceRefresh: !!message.forceRefresh }
         );
-        sendResponse({ success: true, matches });
+        sendResponse({ success: true, matches, apiBase: SUSHE_API_BASE });
       } catch (error) {
         console.error('[getAlbumPresence] Error:', error);
         sendResponse({ success: false, error: error.message, matches: {} });
+      }
+    })();
+    return true;
+  }
+
+  if (message.action === ACTIONS.OPEN_ALBUM_IN_SUSHE) {
+    (async () => {
+      try {
+        await ensureStateLoaded();
+        const result = await susheTabNavigation.openAlbum(
+          message.listId,
+          message.albumId
+        );
+        console.log('[openAlbumInSushe] Navigation result:', result);
+        sendResponse({ success: true, ...result });
+      } catch (error) {
+        console.error('[openAlbumInSushe] Error:', error);
+        sendResponse({ success: false, error: error.message });
       }
     })();
     return true;

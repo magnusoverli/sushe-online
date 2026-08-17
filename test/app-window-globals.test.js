@@ -9,12 +9,16 @@ describe('app-window-globals module', () => {
     registerAppWindowGlobals = module.registerAppWindowGlobals;
   });
 
-  it('registers only legacy shell window bindings', () => {
-    const win = {};
+  it('registers legacy bindings and the extension navigation API', () => {
+    const existingNavigation = () => {};
+    const win = {
+      SuSheAppNavigation: { existingNavigation },
+    };
     const selectList = () => {};
     const updateListNav = () => {};
     const collapseGroupsForActiveList = () => {};
     const displayAlbums = () => {};
+    const openAlbum = () => {};
 
     registerAppWindowGlobals({
       win,
@@ -22,6 +26,7 @@ describe('app-window-globals module', () => {
       updateListNav,
       collapseGroupsForActiveList,
       displayAlbums,
+      openAlbum,
     });
 
     assert.strictEqual(win.selectList, selectList);
@@ -31,6 +36,11 @@ describe('app-window-globals module', () => {
       collapseGroupsForActiveList
     );
     assert.strictEqual(win.displayAlbums, displayAlbums);
+    assert.strictEqual(win.SuSheAppNavigation.openAlbum, openAlbum);
+    assert.strictEqual(
+      win.SuSheAppNavigation.existingNavigation,
+      existingNavigation
+    );
 
     assert.strictEqual(win.apiCall, undefined);
     assert.strictEqual(win.saveList, undefined);

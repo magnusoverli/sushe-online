@@ -411,6 +411,7 @@ describe('list-service fetchers and setup status', () => {
               list_id: 'list1',
               list_name: '2024',
               year: 2024,
+              is_main: true,
               album_id: 'album1',
               artist: 'Artist',
               album: 'Album',
@@ -426,6 +427,7 @@ describe('list-service fetchers and setup status', () => {
 
     assert.ok(executedSql.includes('JOIN list_items'));
     assert.ok(executedSql.includes('JOIN albums'));
+    assert.ok(executedSql.includes('LEFT JOIN list_groups'));
     assert.ok(!executedSql.includes('tracks'));
     assert.deepStrictEqual(executedParams, ['user1']);
     assert.deepStrictEqual(result, [
@@ -433,6 +435,7 @@ describe('list-service fetchers and setup status', () => {
         listId: 'list1',
         listName: '2024',
         year: 2024,
+        isMain: true,
         albumId: 'album1',
         artist: 'Artist',
         album: 'Album',

@@ -46,6 +46,7 @@
     RYM_PAGE_LOADED: 'rymPageLoaded',
     GET_ALBUM_PRESENCE: 'getAlbumPresence',
     ALBUM_ADDED_TO_LIST: 'albumAddedToList',
+    OPEN_ALBUM_IN_SUSHE: 'openAlbumInSushe',
   };
 
   const API = {

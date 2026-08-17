@@ -85,6 +85,7 @@ export function buildListMetadataEntries(fetchedLists) {
 }
 
 export function resolveLastSelectedList({
+  requestedListId,
   localLastListId,
   serverLastListId,
   lists,
@@ -92,7 +93,16 @@ export function resolveLastSelectedList({
   const hasList = (listId) =>
     Object.prototype.hasOwnProperty.call(lists, listId);
 
+  if (requestedListId && hasList(requestedListId)) return requestedListId;
   if (localLastListId && hasList(localLastListId)) return localLastListId;
   if (serverLastListId && hasList(serverLastListId)) return serverLastListId;
   return null;
+}
+
+export function parseAlbumDeepLink(location) {
+  const params = new URLSearchParams(location?.search || '');
+  const listId = params.get('listId')?.trim();
+  const albumId = params.get('albumId')?.trim();
+
+  return listId && albumId ? { listId, albumId } : null;
 }

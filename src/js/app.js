@@ -65,9 +65,11 @@ import { createAppDiscoveryImport } from './modules/app-discovery-import.js';
 import { createAppServiceIntegrations } from './modules/app-service-integrations.js';
 import { createMainStatusToggler } from './modules/app-main-status.js';
 import { createAppListOperations } from './modules/app-list-operations.js';
+import { createAppAlbumNavigation } from './modules/app-album-navigation.js';
 import { apiCall } from './modules/api-client.js';
 import { registerListActions } from './modules/list-actions.js';
 import { createAlbumSearch } from './modules/album-search.js';
+import { createAlbumFlash } from './modules/album-search-flash.js';
 import { createMobileAlbumSearch } from './modules/mobile-album-search.js';
 import { createEmojiAutocomplete } from './modules/emoji-autocomplete.js';
 import { createNowPlayingRowHighlight } from './modules/now-playing-row-highlight.js';
@@ -178,6 +180,12 @@ const appServiceIntegrations = createAppServiceIntegrations({
   getListMetadata,
 });
 
+const albumDeepLinkFlash = createAlbumFlash({
+  doc: document,
+  win: window,
+  getListData,
+});
+
 const appListOperations = createAppListOperations({
   apiCall,
   showToast,
@@ -188,6 +196,7 @@ const appListOperations = createAppListOperations({
   updateGroupsFromServer,
   getCurrentListId,
   selectList,
+  focusAlbum: albumDeepLinkFlash.flash,
   updateListNav,
   setRecommendationYears,
   loadSnapshotFromStorage,
@@ -871,6 +880,14 @@ export async function selectList(listId, options = {}) {
   return getListSelectionModule().selectList(listId, options);
 }
 
+const appAlbumNavigation = createAppAlbumNavigation({
+  getLists,
+  getListData,
+  getCurrentListId,
+  selectList,
+  focusAlbum: albumDeepLinkFlash.flash,
+});
+
 // ============ RECOMMENDATIONS MODULE BRIDGE ============
 
 export function selectRecommendations(year) {
@@ -897,6 +914,7 @@ registerAppWindowGlobals({
   updateListNav,
   collapseGroupsForActiveList,
   displayAlbums,
+  openAlbum: appAlbumNavigation.openAlbum,
 });
 
 registerListActions({

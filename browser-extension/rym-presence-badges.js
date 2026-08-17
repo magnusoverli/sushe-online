@@ -8,6 +8,11 @@
   const badgeKeyAttribute = 'data-sushe-presence-badge-key';
   const badgeListsAttribute = 'data-sushe-presence-lists';
   const badgeVariantAttribute = 'data-sushe-presence-variant';
+  const badgeLinkListAttribute = 'data-sushe-list-id';
+  const badgeLinkAlbumAttribute = 'data-sushe-album-id';
+  const badgeLinkMainAttribute = 'data-sushe-list-main';
+  const badgeLinkYearAttribute = 'data-sushe-list-year';
+  const badgeApiBaseAttribute = 'data-sushe-api-base';
   const albumAttribute = 'data-sushe-presence-key';
   const platformRowAttribute = 'data-sushe-presence-platform-row';
   const maxAlbumsPerScan = 100;
@@ -46,11 +51,12 @@
         white-space: nowrap;
       }
       .sushe-presence-badge--platform {
+        box-sizing: border-box;
         width: 36px;
         height: 36px;
         margin: 0 4px 0 0;
         padding: 0;
-        border: 0;
+        border: 2px solid #4ade80;
         border-radius: 5px;
         overflow: hidden;
         background: #080808;
@@ -61,6 +67,10 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
+      }
+      .sushe-presence-badge--platform:focus-visible {
+        outline: 2px solid #8ee0b0;
+        outline-offset: 2px;
       }
       .sushe-presence-platform-row {
         display: flex;
@@ -324,17 +334,125 @@
       .filter(Boolean);
   }
 
-  function updateBadgeListNames(badge, matches, variant = 'listing') {
-    const listNames = [
-      ...getStoredBadgeListNames(badge),
-      ...getListNames(matches),
-    ].filter((name, index, names) => names.indexOf(name) === index);
+  function updateBadgeListNames(
+    badge,
+    matches,
+    variant = 'listing',
+    options = {}
+  ) {
+    const existingListNames = options.replaceExisting
+      ? []
+      : getStoredBadgeListNames(badge);
+    const listNames = [...existingListNames, ...getListNames(matches)].filter(
+      (name, index, names) => names.indexOf(name) === index
+    );
 
     badge.setAttribute(badgeListsAttribute, listNames.join('\n'));
     const listLabel = listNames.join(', ');
     badge.title =
       variant === 'platform' ? `In SuShe: ${listLabel}` : `In: ${listLabel}`;
     badge.setAttribute('aria-label', `In SuShe: ${listLabel}`);
+  }
+
+  function comparePresenceMatches(left, right) {
+    if (!!left?.isMain !== !!right?.isMain) return left?.isMain ? -1 : 1;
+
+    const leftYear = Number(left?.year) || 0;
+    const rightYear = Number(right?.year) || 0;
+    if (leftYear !== rightYear) return rightYear - leftYear;
+
+    return String(left?.listName || '').localeCompare(
+      String(right?.listName || '')
+    );
+  }
+
+  function getPreferredMatch(matches) {
+    return [...(matches || [])]
+      .filter((match) => match.listId && match.albumId)
+      .sort(comparePresenceMatches)[0];
+  }
+
+  function getStoredLinkMatch(badge) {
+    const listId = badge.getAttribute(badgeLinkListAttribute);
+    const albumId = badge.getAttribute(badgeLinkAlbumAttribute);
+    if (!listId || !albumId) return null;
+
+    return {
+      listId,
+      albumId,
+      isMain: badge.getAttribute(badgeLinkMainAttribute) === 'true',
+      year: badge.getAttribute(badgeLinkYearAttribute) || null,
+    };
+  }
+
+  function buildAlbumLink(apiBase, match) {
+    if (!apiBase || !match?.listId || !match?.albumId) return null;
+
+    try {
+      const url = new URL('/', apiBase);
+      url.searchParams.set('listId', match.listId);
+      url.searchParams.set('albumId', match.albumId);
+      return url.toString();
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function updateBadgeLink(badge, matches, options = {}) {
+    if (badge.getAttribute(badgeVariantAttribute) !== 'platform') return;
+
+    const storedMatch = getStoredLinkMatch(badge);
+    const linkMatches = (matches || []).map((match) => ({
+      ...match,
+      albumId: match.albumId || storedMatch?.albumId,
+    }));
+    const candidate = getPreferredMatch(linkMatches);
+    const existing = options.replaceExisting ? null : storedMatch;
+    const preferred =
+      existing &&
+      (!candidate || comparePresenceMatches(existing, candidate) <= 0)
+        ? existing
+        : candidate;
+    const apiBase =
+      options.apiBase || badge.getAttribute(badgeApiBaseAttribute);
+    const href = buildAlbumLink(apiBase, preferred);
+    if (!href) return;
+
+    badge.href = href;
+    badge.setAttribute('target', '_blank');
+    badge.setAttribute('rel', 'noopener noreferrer');
+    badge.setAttribute(badgeLinkListAttribute, preferred.listId);
+    badge.setAttribute(badgeLinkAlbumAttribute, preferred.albumId);
+    badge.setAttribute(badgeLinkMainAttribute, String(!!preferred.isMain));
+    badge.setAttribute(badgeLinkYearAttribute, preferred.year || '');
+    badge.setAttribute(badgeApiBaseAttribute, apiBase);
+  }
+
+  function handleBadgeClick(event, badge) {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    const listId = badge.getAttribute(badgeLinkListAttribute);
+    const albumId = badge.getAttribute(badgeLinkAlbumAttribute);
+    if (!listId || !albumId) return;
+
+    event.preventDefault();
+    chrome.runtime
+      .sendMessage({
+        action: ACTIONS.OPEN_ALBUM_IN_SUSHE,
+        listId,
+        albumId,
+      })
+      .catch((error) => {
+        console.debug('Could not open SuShe album link:', error.message);
+      });
   }
 
   function findBadgeForTarget(target) {
@@ -355,25 +473,29 @@
     }
   }
 
-  function renderBadge(target, matches) {
+  function renderBadge(target, matches, options = {}) {
     if (!matches || matches.length === 0) return;
 
     const existingBadge = findBadgeForTarget(target);
     if (target.container.getAttribute(albumAttribute) === target.key) {
       if (existingBadge) {
-        updateBadgeListNames(existingBadge, matches, target.variant);
+        updateBadgeListNames(existingBadge, matches, target.variant, options);
+        updateBadgeLink(existingBadge, matches, options);
       }
       return;
     }
 
     if (existingBadge && target.variant === 'platform') {
       target.container.appendChild(existingBadge);
-      updateBadgeListNames(existingBadge, matches, target.variant);
+      updateBadgeListNames(existingBadge, matches, target.variant, options);
+      updateBadgeLink(existingBadge, matches, options);
       target.container.setAttribute(albumAttribute, target.key);
       return;
     }
 
-    const badge = document.createElement('span');
+    const badge = document.createElement(
+      target.variant === 'platform' ? 'a' : 'span'
+    );
     badge.className =
       target.variant === 'platform'
         ? 'sushe-presence-badge sushe-presence-badge--platform'
@@ -392,7 +514,14 @@
       badge.textContent = 'In SuShe';
     }
 
-    updateBadgeListNames(badge, matches, target.variant);
+    updateBadgeListNames(badge, matches, target.variant, options);
+    updateBadgeLink(badge, matches, options);
+
+    if (target.variant === 'platform') {
+      badge.addEventListener('click', (event) =>
+        handleBadgeClick(event, badge)
+      );
+    }
 
     if (target.variant === 'platform') {
       target.container.appendChild(badge);
@@ -406,7 +535,10 @@
     for (const target of targets) {
       const targetMatches = matches?.[target.key];
       if (targetMatches?.length) {
-        renderBadge(target, targetMatches);
+        renderBadge(target, targetMatches, {
+          replaceExisting: options.replaceExisting,
+          apiBase: options.apiBase,
+        });
       } else if (options.removeMissing) {
         removeBadge(target);
       }
@@ -428,6 +560,8 @@
       if (response?.success) {
         applyPresenceMatches(targets, response.matches, {
           removeMissing: true,
+          replaceExisting: true,
+          apiBase: response.apiBase,
         });
         lastValidationAt = Date.now();
       }
@@ -455,14 +589,16 @@
 
       if (!response?.success) return;
 
-      applyPresenceMatches(targets, response.matches);
+      applyPresenceMatches(targets, response.matches, {
+        apiBase: response.apiBase,
+      });
       validateVisiblePresence(targets);
     } catch (error) {
       console.debug('SuShe presence lookup unavailable:', error.message);
     }
   }
 
-  function renderAddedAlbumBadge(album, list) {
+  function renderAddedAlbumBadge(album, list, apiBase) {
     const key = albumIdentity.getAlbumKey(album);
     if (!key) return;
 
@@ -470,14 +606,16 @@
 
     const matches = [
       {
+        albumId: album.album_id || album.albumId || '',
         listId: list.listId,
         listName: list.listName,
         year: list.year || null,
+        isMain: !!list.isMain,
       },
     ];
 
     for (const target of collectAlbumTargets()) {
-      if (target.key === key) renderBadge(target, matches);
+      if (target.key === key) renderBadge(target, matches, { apiBase });
     }
   }
 
@@ -494,7 +632,7 @@
   chrome.runtime.onMessage.addListener((message) => {
     if (message.action !== ACTIONS.ALBUM_ADDED_TO_LIST) return false;
 
-    renderAddedAlbumBadge(message.album, message.list);
+    renderAddedAlbumBadge(message.album, message.list, message.apiBase);
     return false;
   });
 

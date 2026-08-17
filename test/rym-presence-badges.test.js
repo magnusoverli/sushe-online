@@ -8,6 +8,7 @@ const singleUrl =
 const detailAlbumUrl =
   'https://rateyourmusic.com/release/album/warning/rituals-of-shame/';
 const detailAlbumKey = 'warning::rituals of shame';
+const detailAlbumId = 'album-warning-rituals';
 
 class FakeElement {
   constructor(tagName, options = {}) {
@@ -19,6 +20,7 @@ class FakeElement {
     this.children = [];
     this.parentElement = null;
     this.attributes = new Map();
+    this.listeners = new Map();
   }
 
   appendChild(child) {
@@ -59,6 +61,18 @@ class FakeElement {
     const index = siblings.indexOf(this);
     if (index !== -1) siblings.splice(index, 1);
     this.parentElement = null;
+  }
+
+  addEventListener(type, listener) {
+    const listeners = this.listeners.get(type) || [];
+    listeners.push(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  dispatchEvent(event) {
+    for (const listener of this.listeners.get(event.type) || []) {
+      listener(event);
+    }
   }
 
   querySelector(selector) {
@@ -274,7 +288,8 @@ function installBrowserGlobals(document, options = {}) {
         sentMessages.push(message);
         return {
           success: true,
-          matches,
+          matches: options.getMatches ? options.getMatches(message) : matches,
+          apiBase: options.apiBase || 'https://sushe.example',
         };
       }),
       onMessage: {
@@ -367,7 +382,12 @@ describe('RYM presence badges', () => {
       locationHref: detailAlbumUrl,
       matches: {
         [detailAlbumKey]: [
-          { listId: 'list-2026', listName: '2026', year: 2026 },
+          {
+            listId: 'list-2026',
+            listName: '2026',
+            year: 2026,
+            albumId: detailAlbumId,
+          },
         ],
       },
     });
@@ -401,7 +421,12 @@ describe('RYM presence badges', () => {
       locationHref: detailAlbumUrl,
       matches: {
         [detailAlbumKey]: [
-          { listId: 'list-2026', listName: '2026', year: 2026 },
+          {
+            listId: 'list-2026',
+            listName: '2026',
+            year: 2026,
+            albumId: detailAlbumId,
+          },
         ],
       },
     });
@@ -426,13 +451,126 @@ describe('RYM presence badges', () => {
     );
   });
 
+  it('replaces stale list names after fresh presence validation', async () => {
+    const page = buildAlbumDetailPage();
+    installBrowserGlobals(page.document, {
+      locationHref: detailAlbumUrl,
+      getMatches: (message) => ({
+        [detailAlbumKey]: message.forceRefresh
+          ? [
+              {
+                listId: 'favorites',
+                listName: 'Favorites',
+              },
+            ]
+          : [
+              {
+                listId: 'list-2026',
+                listName: '2026',
+                year: 2026,
+                albumId: detailAlbumId,
+              },
+            ],
+      }),
+    });
+    loadBadgeScripts();
+
+    await waitForBadgeScan();
+
+    const badges = page.document.querySelectorAll(badgeSelector);
+    assert.strictEqual(badges.length, 1);
+    assert.strictEqual(badges[0].title, 'In SuShe: Favorites');
+    assert.strictEqual(
+      badges[0].getAttribute('data-sushe-presence-lists'),
+      'Favorites'
+    );
+    assert.strictEqual(
+      badges[0].href,
+      `https://sushe.example/?listId=favorites&albumId=${detailAlbumId}`
+    );
+  });
+
+  it('links to the newest matching main list and delegates tab reuse', async () => {
+    const page = buildAlbumDetailPage();
+    const { sentMessages } = installBrowserGlobals(page.document, {
+      locationHref: detailAlbumUrl,
+      apiBase: 'https://sushe.example/app',
+      matches: {
+        [detailAlbumKey]: [
+          {
+            listId: 'regular-2026',
+            listName: 'Regular 2026',
+            year: 2026,
+            isMain: false,
+            albumId: detailAlbumId,
+          },
+          {
+            listId: 'main-2025',
+            listName: 'Main 2025',
+            year: 2025,
+            isMain: true,
+            albumId: detailAlbumId,
+          },
+          {
+            listId: 'main-2026',
+            listName: 'Main 2026',
+            year: 2026,
+            isMain: true,
+            albumId: detailAlbumId,
+          },
+        ],
+      },
+    });
+    loadBadgeScripts();
+
+    await waitForBadgeScan();
+
+    const badge = page.document.querySelector(badgeSelector);
+    assert.strictEqual(badge.tagName, 'A');
+    assert.strictEqual(
+      badge.href,
+      `https://sushe.example/?listId=main-2026&albumId=${detailAlbumId}`
+    );
+    assert.strictEqual(badge.getAttribute('target'), '_blank');
+    assert.strictEqual(badge.getAttribute('rel'), 'noopener noreferrer');
+
+    const preventDefault = mock.fn();
+    badge.dispatchEvent({
+      type: 'click',
+      button: 0,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      preventDefault,
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const openMessage = sentMessages.find(
+      (message) =>
+        message.action ===
+        globalThis.ExtensionConstants.ACTIONS.OPEN_ALBUM_IN_SUSHE
+    );
+    assert.deepStrictEqual(openMessage, {
+      action: globalThis.ExtensionConstants.ACTIONS.OPEN_ALBUM_IN_SUSHE,
+      listId: 'main-2026',
+      albumId: detailAlbumId,
+    });
+    assert.strictEqual(preventDefault.mock.calls.length, 1);
+  });
+
   it('moves the badge from its fallback row when native platform links load', async () => {
     const page = buildAlbumDetailPage({ includePlatformRow: false });
     const { observerCallbacks } = installBrowserGlobals(page.document, {
       locationHref: detailAlbumUrl,
       matches: {
         [detailAlbumKey]: [
-          { listId: 'list-2026', listName: '2026', year: 2026 },
+          {
+            listId: 'list-2026',
+            listName: '2026',
+            year: 2026,
+            albumId: detailAlbumId,
+          },
         ],
       },
     });

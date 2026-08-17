@@ -261,6 +261,70 @@ describe('app-list-operations module', () => {
     assert.strictEqual(storage.setItem.mock.calls.length, 0);
   });
 
+  it('prioritizes an album deep link and focuses the requested album', async () => {
+    let listsState = {};
+    const selectList = mock.fn();
+    const focusAlbum = mock.fn();
+    const apiCall = mock.fn(async (url) => {
+      assert.strictEqual(url, '/api/app-bootstrap?selectedListId=main-list');
+      return {
+        lists: {
+          'stored-list': { name: 'Stored', year: 2025 },
+          'main-list': { name: 'Main', year: 2026, isMain: true },
+        },
+        groups: [],
+        recommendationYears: [],
+        selectedListId: 'main-list',
+        selectedListItems: [{ album_id: 'album/1' }],
+        selectedListProfile: 'core',
+      };
+    });
+    const storage = {
+      getItem: mock.fn(() => 'stored-list'),
+      setItem: mock.fn(),
+    };
+    const operations = createAppListOperations({
+      apiCall,
+      showToast() {},
+      getLists: () => listsState,
+      setLists: (lists) => {
+        listsState = lists;
+      },
+      setListData() {},
+      updateListMetadata() {},
+      updateGroupsFromServer() {},
+      getCurrentListId: () => null,
+      selectList,
+      focusAlbum,
+      updateListNav() {},
+      setRecommendationYears() {},
+      loadSnapshotFromStorage() {},
+      getLastSavedSnapshots: () => new Map(),
+      createListSnapshot() {},
+      saveSnapshotToStorage() {},
+      markLocalSave() {},
+      computeListDiff() {},
+      storage,
+      win: {
+        lastSelectedList: 'stored-list',
+        location: { search: '?listId=main-list&albumId=album%2F1' },
+      },
+      logger: { warn() {}, error() {} },
+    });
+
+    await operations.loadLists();
+
+    assert.strictEqual(selectList.mock.calls[0].arguments[0], 'main-list');
+    assert.deepStrictEqual(focusAlbum.mock.calls[0].arguments, [
+      'main-list',
+      'album/1',
+    ]);
+    assert.deepStrictEqual(storage.setItem.mock.calls[0].arguments, [
+      'lastSelectedList',
+      'main-list',
+    ]);
+  });
+
   it('clears stale last-selected list references and never selects missing list data', async () => {
     let listsState = {};
     const setListData = mock.fn();
