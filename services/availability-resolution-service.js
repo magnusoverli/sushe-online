@@ -18,6 +18,7 @@ const {
 } = require('./availability/platforms');
 
 const MB_LINK_CONFIDENCE = 0.9; // MusicBrainz url-rels are identity-confirmed
+const AVAILABILITY_RESOLUTION_VERSION = 2;
 
 function isTransientStatus(status) {
   return !status || status === 429 || status >= 500;
@@ -139,7 +140,7 @@ function createAvailabilityResolutionService(deps = {}) {
         albumId,
         error: err.message,
       });
-      return { seedUrl: null, upc: null, links: [] };
+      return { seedUrl: null, upc: null, links: [], transient: true };
     }
   }
 
@@ -179,6 +180,15 @@ function createAvailabilityResolutionService(deps = {}) {
       mb.links.length > 0 || directContributions.length > 0;
 
     if (!seedResult && !hasNonOdesliLinks) {
+      if (mb.transient) {
+        return { action: 'skip', reason: 'musicbrainz-error', transient: true };
+      }
+      if (persist) {
+        await externalIdentityService.markAlbumAvailabilityResolved(
+          album.albumId,
+          AVAILABILITY_RESOLUTION_VERSION
+        );
+      }
       return { action: 'skip', reason: 'no-seed', transient: false };
     }
 
@@ -188,10 +198,17 @@ function createAvailabilityResolutionService(deps = {}) {
         odesliLinks = await odesliClient.fetchLinksBySeed(seedResult.seed);
       } catch (err) {
         if (!hasNonOdesliLinks) {
+          const transient = isTransientStatus(err.status);
+          if (persist && !transient) {
+            await externalIdentityService.markAlbumAvailabilityResolved(
+              album.albumId,
+              AVAILABILITY_RESOLUTION_VERSION
+            );
+          }
           return {
             action: 'skip',
             reason: 'odesli-error',
-            transient: isTransientStatus(err.status),
+            transient,
           };
         }
         logger.debug?.(
@@ -215,6 +232,12 @@ function createAvailabilityResolutionService(deps = {}) {
     );
 
     if (rows.length === 0) {
+      if (persist) {
+        await externalIdentityService.markAlbumAvailabilityResolved(
+          album.albumId,
+          AVAILABILITY_RESOLUTION_VERSION
+        );
+      }
       return { action: 'skip', reason: 'no-links', transient: false };
     }
 
@@ -231,6 +254,10 @@ function createAvailabilityResolutionService(deps = {}) {
           strategy: row.strategy,
         });
       }
+      await externalIdentityService.markAlbumAvailabilityResolved(
+        album.albumId,
+        AVAILABILITY_RESOLUTION_VERSION
+      );
     }
 
     return { action: 'resolved', services: rows.map((r) => r.service) };
@@ -240,6 +267,7 @@ function createAvailabilityResolutionService(deps = {}) {
 }
 
 module.exports = {
+  AVAILABILITY_RESOLUTION_VERSION,
   createAvailabilityResolutionService,
   mergeCandidates,
   buildCandidates,

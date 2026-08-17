@@ -212,6 +212,33 @@ describe('realtime-sync module', () => {
     assert.deepStrictEqual(refreshCalls, ['list-1']);
   });
 
+  it('forwards album availability and taxonomy socket events', async () => {
+    const fakeSocket = createFakeSocket();
+    const availabilityEvents = [];
+    const taxonomyEvents = [];
+    const availabilityPayload = {
+      albumId: 'album-1',
+      availability: ['spotify'],
+      availabilityLinks: [],
+    };
+    const taxonomyPayload = {
+      albumId: 'album-1',
+      taxonomyUpdatedAt: '2026-08-17T12:00:00.000Z',
+    };
+    const sync = createRealtimeSync({
+      ioFactory: () => fakeSocket,
+      onAlbumAvailabilityUpdated: async (data) => availabilityEvents.push(data),
+      onAlbumTaxonomyUpdated: async (data) => taxonomyEvents.push(data),
+    });
+
+    sync.connect();
+    await fakeSocket.trigger('album:availability-updated', availabilityPayload);
+    await fakeSocket.trigger('album:taxonomy-updated', taxonomyPayload);
+
+    assert.deepStrictEqual(availabilityEvents, [availabilityPayload]);
+    assert.deepStrictEqual(taxonomyEvents, [taxonomyPayload]);
+  });
+
   it('redirects to logout when session is invalidated by server event', async () => {
     const fakeSocket = createFakeSocket();
     const toasts = [];

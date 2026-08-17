@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SuShe Online - RateYourMusic Integration",
-  "version": "1.9.5",
+  "version": "1.9.6",
   "description": "Add albums from RateYourMusic directly to your SuShe Online lists",
   "permissions": ["contextMenus", "storage", "notifications", "scripting"],
   "host_permissions": [
@@ -19,6 +19,7 @@
       "js": [
         "extension-constants.js",
         "album-identity-service.js",
+        "rym-album-extractor.js",
         "rym-presence-badges.js",
         "content-script.js"
       ],

@@ -30,6 +30,282 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+const TAXONOMY_ARRAY_FIELDS = [
+  'primary_genres',
+  'secondary_genres',
+  'descriptors',
+  'languages',
+  'scenes',
+  'movements',
+];
+const MANUAL_GENRE_FIELDS = ['genre_1', 'genre_2'];
+
+function parseJSONValue(value) {
+  if (value && typeof value === 'object') return value;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function getImportedTaxonomy(album) {
+  const taxonomy = parseJSONValue(album?.taxonomy);
+  if (taxonomy && !Array.isArray(taxonomy)) return taxonomy;
+
+  const hasCSVTaxonomy = [
+    'rym_primary_genres_json',
+    'rym_secondary_genres_json',
+    'rym_descriptors_json',
+    'rym_languages_json',
+    'rym_scenes_json',
+    'rym_movements_json',
+    'rym_taxonomy_provenance_json',
+    'manual_genre_overrides_json',
+  ].some((field) => Object.hasOwn(album || {}, field));
+  if (!hasCSVTaxonomy) return null;
+
+  const provenance = parseJSONValue(album.rym_taxonomy_provenance_json);
+  const manualOverrides = parseJSONValue(album.manual_genre_overrides_json);
+  const primaryGenres = parseJSONValue(album.rym_primary_genres_json);
+  const secondaryGenres = parseJSONValue(album.rym_secondary_genres_json);
+  const descriptors = parseJSONValue(album.rym_descriptors_json);
+  const languages = parseJSONValue(album.rym_languages_json);
+  const scenes = parseJSONValue(album.rym_scenes_json);
+  const movements = parseJSONValue(album.rym_movements_json);
+  const hasRymTaxonomy =
+    (provenance && !Array.isArray(provenance)) ||
+    Array.isArray(primaryGenres) ||
+    Array.isArray(secondaryGenres) ||
+    Array.isArray(descriptors) ||
+    Array.isArray(languages) ||
+    Array.isArray(scenes) ||
+    Array.isArray(movements);
+
+  return {
+    schema_version: 1,
+    manual_overrides:
+      manualOverrides && !Array.isArray(manualOverrides) ? manualOverrides : {},
+    ...(hasRymTaxonomy && {
+      rym: {
+        ...(provenance && !Array.isArray(provenance) ? provenance : {}),
+        primary_genres: Array.isArray(primaryGenres) ? primaryGenres : [],
+        secondary_genres: Array.isArray(secondaryGenres) ? secondaryGenres : [],
+        descriptors: Array.isArray(descriptors) ? descriptors : [],
+        ...(Array.isArray(languages) ? { languages } : {}),
+        ...(Array.isArray(scenes) ? { scenes } : {}),
+        ...(Array.isArray(movements) ? { movements } : {}),
+      },
+    }),
+  };
+}
+
+export function getTaxonomyCSVFields(album) {
+  const taxonomy = getImportedTaxonomy(album) || {};
+  const rym =
+    taxonomy.rym && typeof taxonomy.rym === 'object' ? taxonomy.rym : {};
+  const provenance = Object.fromEntries(
+    Object.entries(rym).filter(
+      ([field]) => !TAXONOMY_ARRAY_FIELDS.includes(field)
+    )
+  );
+  const manualOverrides =
+    taxonomy.manual_overrides &&
+    typeof taxonomy.manual_overrides === 'object' &&
+    !Array.isArray(taxonomy.manual_overrides)
+      ? taxonomy.manual_overrides
+      : {};
+
+  return {
+    rym_primary_genres_json: JSON.stringify(
+      Array.isArray(rym.primary_genres) ? rym.primary_genres : []
+    ),
+    rym_secondary_genres_json: JSON.stringify(
+      Array.isArray(rym.secondary_genres) ? rym.secondary_genres : []
+    ),
+    rym_descriptors_json: JSON.stringify(
+      Array.isArray(rym.descriptors) ? rym.descriptors : []
+    ),
+    rym_languages_json: Object.hasOwn(rym, 'languages')
+      ? JSON.stringify(Array.isArray(rym.languages) ? rym.languages : [])
+      : '',
+    rym_scenes_json: Object.hasOwn(rym, 'scenes')
+      ? JSON.stringify(Array.isArray(rym.scenes) ? rym.scenes : [])
+      : '',
+    rym_movements_json: Object.hasOwn(rym, 'movements')
+      ? JSON.stringify(Array.isArray(rym.movements) ? rym.movements : [])
+      : '',
+    rym_taxonomy_provenance_json: JSON.stringify(provenance),
+    manual_genre_overrides_json: JSON.stringify(manualOverrides),
+    taxonomy_updated_at: album?.taxonomy_updated_at || '',
+  };
+}
+
+export function taxonomyToSourceObservation(album) {
+  const rym = getImportedTaxonomy(album)?.rym || {};
+  const canonicalUrl = album.rym_canonical_url || rym.source_url;
+  if (typeof canonicalUrl !== 'string' || !canonicalUrl) return null;
+  const availabilityLinks =
+    parseJSONValue(album.availability_links) ||
+    parseJSONValue(album.availability_links_json) ||
+    [];
+
+  const completeTaxonomy =
+    rym.complete === true &&
+    Array.isArray(rym.primary_genres) &&
+    Array.isArray(rym.secondary_genres) &&
+    Array.isArray(rym.descriptors) &&
+    typeof rym.extractor_version === 'string';
+
+  return {
+    schemaVersion: 1,
+    source: 'rateyourmusic',
+    identity: {
+      numericId: album.rym_numeric_id || null,
+      artist: album.artist || '',
+      title: album.album || '',
+      canonicalUrl,
+    },
+    platformLinks: Array.isArray(availabilityLinks)
+      ? availabilityLinks.map(({ service, url }) => ({ service, url }))
+      : [],
+    ...(completeTaxonomy && {
+      taxonomy: {
+        complete: true,
+        primaryGenres: [...rym.primary_genres],
+        secondaryGenres: [...rym.secondary_genres],
+        descriptors: [...rym.descriptors],
+        ...(Array.isArray(rym.languages)
+          ? { languages: [...rym.languages] }
+          : {}),
+        ...(Array.isArray(rym.scenes) ? { scenes: [...rym.scenes] } : {}),
+        ...(Array.isArray(rym.movements)
+          ? { movements: [...rym.movements] }
+          : {}),
+        sourceUrl: canonicalUrl,
+        extractorVersion: rym.extractor_version,
+        capturedAt: rym.captured_at || null,
+      },
+    }),
+  };
+}
+
+export function getManualGenreOverrides(album) {
+  const manualOverrides = getImportedTaxonomy(album)?.manual_overrides;
+  if (
+    !manualOverrides ||
+    typeof manualOverrides !== 'object' ||
+    Array.isArray(manualOverrides)
+  ) {
+    return null;
+  }
+
+  const overrides = {};
+  for (const field of MANUAL_GENRE_FIELDS) {
+    if (!Object.hasOwn(manualOverrides, field)) continue;
+    const entry = manualOverrides[field];
+    const value =
+      entry && typeof entry === 'object' && !Array.isArray(entry)
+        ? entry.value
+        : entry;
+    if (typeof value === 'string' || value === null) overrides[field] = value;
+  }
+  return Object.keys(overrides).length > 0 ? overrides : null;
+}
+
+export function prepareAlbumForImport(album) {
+  const prepared = { ...album };
+  const sourceObservation = taxonomyToSourceObservation(album);
+  if (sourceObservation && prepared.sourceObservation === undefined) {
+    prepared.sourceObservation = sourceObservation;
+  }
+  delete prepared.taxonomy_updated_at;
+  return prepared;
+}
+
+export function resolveImportedAlbum(album, savedAlbums) {
+  const hasIdentity = album?.artist && album?.album;
+  const byKey = hasIdentity
+    ? savedAlbums.find(
+        (savedAlbum) =>
+          savedAlbum?.artist &&
+          savedAlbum?.album &&
+          getAlbumKey(savedAlbum) === getAlbumKey(album)
+      )
+    : null;
+  return (
+    byKey ||
+    savedAlbums.find(
+      (savedAlbum) => album.album_id && savedAlbum.album_id === album.album_id
+    ) ||
+    null
+  );
+}
+
+export function buildTaxonomyAwareMerge(existingAlbums, importedAlbums) {
+  const existingKeys = new Set(existingAlbums.map(getAlbumKey));
+  const newAlbums = importedAlbums.filter(
+    (album) => !existingKeys.has(getAlbumKey(album))
+  );
+  const duplicateTaxonomyAlbums = importedAlbums
+    .filter((album) => existingKeys.has(getAlbumKey(album)))
+    .map(prepareAlbumForImport)
+    .filter((album) => album.sourceObservation);
+
+  return {
+    newAlbums,
+    duplicateTaxonomyAlbums,
+    mergedList: [...existingAlbums, ...newAlbums.map(prepareAlbumForImport)],
+  };
+}
+
+export function buildManualGenreOverrideUpdates(importedAlbums, savedAlbums) {
+  const updatesByAlbumId = new Map();
+
+  for (const album of importedAlbums) {
+    const overrides = getManualGenreOverrides(album);
+    if (!overrides) continue;
+    const saved = resolveImportedAlbum(album, savedAlbums);
+    if (!saved?.album_id) continue;
+    updatesByAlbumId.set(saved.album_id, {
+      ...(updatesByAlbumId.get(saved.album_id) || {}),
+      ...overrides,
+    });
+  }
+
+  return [...updatesByAlbumId].map(([albumId, overrides]) => ({
+    albumId,
+    overrides,
+  }));
+}
+
+export async function replayManualGenreOverrides(
+  importedAlbums,
+  savedAlbums,
+  request,
+  logger = console
+) {
+  let applied = 0;
+  let failed = 0;
+  for (const { albumId, overrides } of buildManualGenreOverrideUpdates(
+    importedAlbums,
+    savedAlbums
+  )) {
+    try {
+      await request(`/api/albums/${encodeURIComponent(albumId)}/genres`, {
+        method: 'PATCH',
+        body: JSON.stringify(overrides),
+      });
+      applied++;
+    } catch (error) {
+      failed++;
+      logger.warn('Failed to import manual genre overrides', albumId, error);
+    }
+  }
+  return { applied, failed };
+}
+
 /**
  * Download list as JSON file with embedded images
  * @param {string} listId - ID of the list to export
@@ -308,6 +584,18 @@ export async function downloadListAsCSV(listId) {
       'tracks',
       'points',
       'cover_image_format',
+      'rym_numeric_id',
+      'rym_canonical_url',
+      'availability_links_json',
+      'rym_primary_genres_json',
+      'rym_secondary_genres_json',
+      'rym_descriptors_json',
+      'rym_languages_json',
+      'rym_scenes_json',
+      'rym_movements_json',
+      'rym_taxonomy_provenance_json',
+      'manual_genre_overrides_json',
+      'taxonomy_updated_at',
     ];
 
     // Build CSV rows
@@ -323,6 +611,8 @@ export async function downloadListAsCSV(listId) {
           tracksValue = String(album.tracks);
         }
       }
+
+      const taxonomyFields = getTaxonomyCSVFields(album);
 
       const row = [
         album.rank || '',
@@ -340,6 +630,18 @@ export async function downloadListAsCSV(listId) {
         tracksValue,
         album.points || '',
         album.cover_image_format || '',
+        album.rym_numeric_id || '',
+        album.rym_canonical_url || '',
+        JSON.stringify(album.availability_links || []),
+        taxonomyFields.rym_primary_genres_json,
+        taxonomyFields.rym_secondary_genres_json,
+        taxonomyFields.rym_descriptors_json,
+        taxonomyFields.rym_languages_json,
+        taxonomyFields.rym_scenes_json,
+        taxonomyFields.rym_movements_json,
+        taxonomyFields.rym_taxonomy_provenance_json,
+        taxonomyFields.manual_genre_overrides_json,
+        taxonomyFields.taxonomy_updated_at,
       ];
 
       rows.push(row.map(escapeCSVField).join(','));
@@ -449,6 +751,7 @@ export function createImportConflictHandler(deps = {}) {
       conflictModal.classList.add('hidden');
 
       try {
+        let overrideFailures = 0;
         // Handle both old format (array) and new format (object with albums/metadata)
         let albums;
         if (Array.isArray(pendingImportData)) {
@@ -469,7 +772,7 @@ export function createImportConflictHandler(deps = {}) {
 
         // Clean albums data (remove rank/points)
         const cleanedAlbums = albums.map((album) => {
-          const cleaned = { ...album };
+          const cleaned = prepareAlbumForImport(album);
           delete cleaned.points;
           delete cleaned.rank;
           delete cleaned._id;
@@ -482,10 +785,31 @@ export function createImportConflictHandler(deps = {}) {
           body: JSON.stringify({ data: cleanedAlbums }),
         });
 
+        try {
+          const savedList = await apiCall(
+            `/api/lists/${encodeURIComponent(listId)}`
+          );
+          const overrideResult = await replayManualGenreOverrides(
+            albums,
+            savedList,
+            apiCall
+          );
+          overrideFailures = overrideResult.failed;
+        } catch (error) {
+          overrideFailures++;
+          console.warn(
+            'Failed to replay taxonomy overrides after overwrite',
+            error
+          );
+        }
+
         updateListNav();
         selectList(listId);
         showToast(
-          `Overwritten "${pendingImportFilename}" with ${albums.length} albums`
+          overrideFailures > 0
+            ? `Overwritten "${pendingImportFilename}", but ${overrideFailures} genre override update${overrideFailures === 1 ? '' : 's'} failed`
+            : `Overwritten "${pendingImportFilename}" with ${albums.length} albums`,
+          overrideFailures > 0 ? 'warning' : undefined
         );
       } catch (err) {
         console.error('Import overwrite error:', err);
@@ -550,17 +874,22 @@ export function createImportConflictHandler(deps = {}) {
         // Get existing list data using helper function with ID
         const existingListData = getListData(listId) || [];
 
-        // Merge the lists (avoiding duplicates based on artist + album)
-        const existingKeys = new Set(existingListData.map(getAlbumKey));
-
-        const newAlbums = albums.filter(
-          (album) => !existingKeys.has(getAlbumKey(album))
-        );
-
-        const mergedList = [...existingListData, ...newAlbums];
+        const { newAlbums, duplicateTaxonomyAlbums, mergedList } =
+          buildTaxonomyAwareMerge(existingListData, albums);
 
         // Use saveList for merge (don't import track picks/summaries for existing albums)
         await saveList(listId, mergedList);
+
+        if (duplicateTaxonomyAlbums.length > 0) {
+          try {
+            await apiCall(`/api/lists/${encodeURIComponent(listId)}/items`, {
+              method: 'PATCH',
+              body: JSON.stringify({ added: duplicateTaxonomyAlbums }),
+            });
+          } catch (error) {
+            console.warn('Failed to enrich duplicate album taxonomy', error);
+          }
+        }
 
         // Fetch the saved list to get list item IDs (needed for track picks API)
         let savedList = [];
@@ -578,13 +907,20 @@ export function createImportConflictHandler(deps = {}) {
           }
         }
 
+        const overrideResult = await replayManualGenreOverrides(
+          albums,
+          savedList,
+          apiCall
+        );
+
         // Import track picks and summaries for new albums only
         for (const album of newAlbums) {
-          const albumId = album.album_id;
+          const savedAlbum = resolveImportedAlbum(album, savedList);
+          const albumId = savedAlbum?.album_id;
           if (!albumId) continue;
 
           // Import track picks (now uses list item ID, not album ID)
-          const listItemId = albumToListItemMap.get(albumId);
+          const listItemId = savedAlbum?._id || albumToListItemMap.get(albumId);
           if (listItemId && (album.primary_track || album.secondary_track)) {
             try {
               if (album.primary_track) {
@@ -636,7 +972,12 @@ export function createImportConflictHandler(deps = {}) {
         const addedCount = newAlbums.length;
         const skippedCount = albums.length - addedCount;
 
-        if (skippedCount > 0) {
+        if (overrideResult.failed > 0) {
+          showToast(
+            `Merged list, but ${overrideResult.failed} genre override update${overrideResult.failed === 1 ? '' : 's'} failed`,
+            'warning'
+          );
+        } else if (skippedCount > 0) {
           showToast(
             `Added ${addedCount} new albums, skipped ${skippedCount} duplicates`
           );

@@ -309,6 +309,21 @@ describe('album-display module', () => {
             artist: 'Artist',
             album_id: 'album-1',
             availability: ['spotify'],
+            availability_links: [
+              {
+                service: 'spotify',
+                url: 'https://open.spotify.com/album/example',
+              },
+            ],
+            taxonomy: {
+              rym: {
+                primary_genres: ['Post-Rock'],
+                secondary_genres: ['Ambient'],
+                descriptors: ['Atmospheric'],
+                source_url:
+                  'https://rateyourmusic.com/release/album/artist/record/',
+              },
+            },
           },
           0,
           true
@@ -319,6 +334,9 @@ describe('album-display module', () => {
         assert.match(card.innerHTML, /Mutable Album/);
         assert.match(card.innerHTML, /album-availability--mobile/);
         assert.match(card.innerHTML, /fa-spotify/);
+        assert.match(card.innerHTML, /<a [^>]*aria-label="Spotify"/);
+        assert.match(card.innerHTML, /taxonomy-trigger-mobile/);
+        assert.doesNotMatch(card.innerHTML, /<dt>|album-taxonomy-panel/);
       } finally {
         globalThis.document.createElement = previousCreateElement;
       }

@@ -50,17 +50,84 @@
       .trim();
   }
 
+  function canonicalizeRymAlbumUrl(value) {
+    if (!value) return null;
+
+    const rawValue = String(value);
+    if (
+      rawValue.includes('\\') ||
+      /%(?:2f|5c)/i.test(rawValue) ||
+      Array.from(rawValue).some((character) => {
+        const code = character.charCodeAt(0);
+        return code <= 31 || (code >= 127 && code <= 159);
+      })
+    ) {
+      return null;
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(rawValue);
+    } catch (_error) {
+      return null;
+    }
+
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    if (
+      parsed.hostname !== 'rateyourmusic.com' &&
+      parsed.hostname !== 'www.rateyourmusic.com'
+    ) {
+      return null;
+    }
+    if (parsed.username || parsed.password || parsed.port) return null;
+
+    const pathMatch = parsed.pathname.match(
+      /^\/release\/album\/([^/]+)\/([^/]+)\/?$/i
+    );
+    if (!pathMatch) return null;
+
+    const artistSlug = pathMatch[1];
+    const albumSlug = pathMatch[2];
+    if (!artistSlug || !albumSlug) return null;
+
+    try {
+      const decodedPath = `${decodeURIComponent(artistSlug)}/${decodeURIComponent(albumSlug)}`;
+      if (
+        decodedPath.includes('\\') ||
+        Array.from(decodedPath).some((character) => {
+          const code = character.charCodeAt(0);
+          return code <= 31 || (code >= 127 && code <= 159);
+        })
+      ) {
+        return null;
+      }
+    } catch (_error) {
+      return null;
+    }
+
+    const canonicalPath = `/release/album/${artistSlug}/${albumSlug}/`;
+    return {
+      canonicalPath,
+      canonicalUrl: `https://rateyourmusic.com${canonicalPath}`,
+    };
+  }
+
   function getAlbumIdentityFromUrl(url) {
-    if (!url) return null;
+    const canonical = canonicalizeRymAlbumUrl(url);
+    if (!canonical) return null;
 
-    const match = String(url).match(/\/release\/[^/]+\/([^/?#]+)\/([^/?#]+)/);
-    if (!match) return null;
+    const parts = canonical.canonicalPath.split('/').filter(Boolean);
 
-    const artist = cleanName(match[1]);
-    const album = cleanName(match[2]);
+    const artist = cleanName(parts[2]);
+    const album = cleanName(parts[3]);
     if (!artist || !album) return null;
 
-    return { artist, album, albumUrl: url };
+    return {
+      artist,
+      album,
+      albumUrl: canonical.canonicalUrl,
+      canonicalPath: canonical.canonicalPath,
+    };
   }
 
   function getAlbumKey(albumData) {
@@ -72,6 +139,7 @@
   }
 
   globalThis.AlbumIdentity = {
+    canonicalizeRymAlbumUrl,
     cleanName,
     getAlbumIdentityFromUrl,
     getAlbumKey,

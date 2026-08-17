@@ -8,7 +8,7 @@
  */
 
 // Services that prior code already used for cross-platform identity resolution.
-const IDENTITY_SERVICES = ['spotify', 'tidal', 'lastfm'];
+const IDENTITY_SERVICES = ['spotify', 'tidal', 'lastfm', 'rateyourmusic'];
 
 // Canonical names for the only platforms whose album-level availability we
 // resolve and show. Other services may appear in upstream aggregators, but they
@@ -19,6 +19,8 @@ const AVAILABILITY_SERVICES = [
   'qobuz',
   'tidal',
   'bandcamp',
+  'soundcloud',
+  'youtube',
 ];
 
 // Full set the repository accepts on read/write (replaces the dropped DB CHECK).
@@ -34,6 +36,8 @@ const ODESLI_PLATFORM_TO_SERVICE = {
   qobuz: 'qobuz',
   tidal: 'tidal',
   bandcamp: 'bandcamp',
+  soundcloud: 'soundcloud',
+  youtube: 'youtube',
 };
 
 // MusicBrainz url-rels hostnames -> canonical service. Ordered most-specific
@@ -47,6 +51,9 @@ const MB_HOST_MATCHERS = [
   ['spotify.com', 'spotify'],
   ['tidal.com', 'tidal'],
   ['bandcamp.com', 'bandcamp'],
+  ['soundcloud.com', 'soundcloud'],
+  ['youtube.com', 'youtube'],
+  ['youtu.be', 'youtube'],
 ];
 
 // Odesli request configuration. Rate is held under the free tier's ~10 req/min.
@@ -81,7 +88,7 @@ function normalizeMusicbrainzUrl(url) {
     return null;
   }
   for (const [needle, service] of MB_HOST_MATCHERS) {
-    if (host.includes(needle)) return service;
+    if (host === needle || host.endsWith(`.${needle}`)) return service;
   }
   return null;
 }

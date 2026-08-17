@@ -35,6 +35,7 @@
             files: [
               'extension-constants.js',
               'album-identity-service.js',
+              'rym-album-extractor.js',
               'rym-presence-badges.js',
               'content-script.js',
             ],
@@ -131,14 +132,26 @@
         const rymCoverUrl = info.srcUrl || 'icons/icon128.png';
         logger.log('Sending message to content script...');
 
-        const albumData = await extractAlbumIdentity(info, tab);
+        let albumData = await extractAlbumIdentity(info, tab);
 
         if (!albumData || albumData.error) {
-          logger.error('Content script returned error:', albumData?.error);
-          throw new Error(
-            albumData?.error ||
-              'Failed to extract album data. Make sure you are on an album page.'
-          );
+          const fallbackIdentity =
+            globalThis.AlbumIdentity.getAlbumIdentityFromUrl(
+              info.linkUrl || info.pageUrl
+            );
+          if (fallbackIdentity) {
+            albumData = {
+              ...fallbackIdentity,
+              genre_1: '',
+              genre_2: '',
+            };
+          } else {
+            logger.error('Content script returned error:', albumData?.error);
+            throw new Error(
+              albumData?.error ||
+                'Failed to extract album data. Make sure you are on an album page.'
+            );
+          }
         }
 
         if (!albumData.artist || !albumData.album) {
@@ -158,7 +171,7 @@
         );
         logger.log('Found release group:', releaseGroup);
 
-        const genres = await genresPromise;
+        const genres = (await genresPromise) || {};
         albumData.genre_1 = genres.genre_1 || '';
         albumData.genre_2 = genres.genre_2 || '';
 
@@ -223,9 +236,13 @@
           rymCoverUrl
         );
 
+        const canonicalAlbum = {
+          ...newAlbum,
+          ...(result.addedItems?.[0] || {}),
+        };
         if (typeof onAlbumAdded === 'function') {
           onAlbumAdded({
-            album: newAlbum,
+            album: canonicalAlbum,
             listId,
             listName,
             tabId: tab.id,
@@ -237,7 +254,7 @@
         await enrichAlbumCountry(
           apiBase,
           releaseGroup,
-          newAlbum.album_id
+          canonicalAlbum.album_id
         ).catch((error) => {
           logger.warn('Post-add album country enrichment failed:', error);
         });

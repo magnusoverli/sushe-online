@@ -5,21 +5,32 @@ const {
   initializeAvailabilityFetchQueue,
   getAvailabilityFetchQueue,
 } = require('../services/availability-fetch-queue');
+const {
+  AVAILABILITY_RESOLUTION_VERSION,
+} = require('../services/availability-resolution-service');
 const { createMockLogger } = require('./helpers');
 
-function build({ existing = [], resolve } = {}) {
-  const getAlbumAvailability = mock.fn(async () => existing);
+function build({ version = 0, resolve, ...deps } = {}) {
+  const getAlbumAvailabilityResolutionState = mock.fn(async () => ({
+    checkedAt: version > 0 ? '2026-08-17T00:00:00.000Z' : null,
+    version,
+  }));
   const resolveAvailability = mock.fn(
     resolve || (async () => ({ action: 'resolved', services: ['spotify'] }))
   );
   const queue = createAvailabilityFetchQueue({
     logger: createMockLogger(),
     rateLimitMs: 0,
-    externalIdentityService: { getAlbumAvailability },
+    externalIdentityService: { getAlbumAvailabilityResolutionState },
     resolutionService: { resolveAvailability },
+    ...deps,
     // a db value so ensureDb is bypassed via injected services (db unused here)
   });
-  return { queue, getAlbumAvailability, resolveAvailability };
+  return {
+    queue,
+    getAlbumAvailabilityResolutionState,
+    resolveAvailability,
+  };
 }
 
 describe('availability-fetch-queue', () => {
@@ -32,7 +43,7 @@ describe('availability-fetch-queue', () => {
   });
 
   it('resolves availability for a new album', async () => {
-    const { queue, resolveAvailability } = build({ existing: [] });
+    const { queue, resolveAvailability } = build();
     await queue.add('alb-1', 'Metallica', '72 Seasons');
     assert.strictEqual(resolveAvailability.mock.calls.length, 1);
     assert.deepStrictEqual(resolveAvailability.mock.calls[0].arguments[0], {
@@ -42,27 +53,86 @@ describe('availability-fetch-queue', () => {
     });
   });
 
-  it('short-circuits when availability was already resolved', async () => {
+  it('invalidates caches then broadcasts current availability to affected users', async () => {
+    const operations = [];
+    let queryCount = 0;
+    const db = {
+      raw: mock.fn(async () => {
+        queryCount++;
+        if (queryCount === 1) {
+          operations.push('invalidate');
+          return { rows: [{ user_id: 'user-1' }] };
+        }
+        return {
+          rows: [
+            {
+              user_id: 'user-1',
+              availability: ['spotify'],
+              availability_links: [
+                {
+                  service: 'spotify',
+                  url: 'https://open.spotify.com/album/1',
+                },
+              ],
+            },
+          ],
+        };
+      }),
+    };
+    const responseCache = {
+      invalidate: mock.fn(() => operations.push('cache-invalidated')),
+    };
+    const albumAvailabilityUpdated = mock.fn((...args) => {
+      operations.push('broadcast');
+      return args;
+    });
+    const { queue } = build({
+      db,
+      responseCache,
+      broadcast: { albumAvailabilityUpdated },
+    });
+
+    await queue.add('alb-1', 'Metallica', '72 Seasons');
+
+    assert.deepStrictEqual(operations, [
+      'invalidate',
+      'cache-invalidated',
+      'broadcast',
+    ]);
+    assert.deepStrictEqual(albumAvailabilityUpdated.mock.calls[0].arguments, [
+      'user-1',
+      'alb-1',
+      ['spotify'],
+      [
+        {
+          service: 'spotify',
+          url: 'https://open.spotify.com/album/1',
+        },
+      ],
+    ]);
+  });
+
+  it('short-circuits when the current availability version was resolved', async () => {
     const { queue, resolveAvailability } = build({
-      existing: [{ service: 'spotify', strategy: 'availability:existing' }],
+      version: AVAILABILITY_RESOLUTION_VERSION,
     });
     await queue.add('alb-1', 'Metallica', '72 Seasons');
     assert.strictEqual(resolveAvailability.mock.calls.length, 0);
   });
 
-  it('still resolves when only a prior identity mapping exists', async () => {
+  it('still resolves albums checked by an older lifecycle version', async () => {
     const { queue, resolveAvailability } = build({
-      existing: [{ service: 'spotify', strategy: 'scored_search' }],
+      version: AVAILABILITY_RESOLUTION_VERSION - 1,
     });
     await queue.add('alb-1', 'Metallica', '72 Seasons');
     assert.strictEqual(resolveAvailability.mock.calls.length, 1);
   });
 
-  it('still resolves when only a non-target availability mapping exists', async () => {
-    const { queue, resolveAvailability } = build({
-      existing: [{ service: 'deezer', strategy: 'availability:deezer' }],
-    });
-    await queue.add('alb-1', 'Metallica', '72 Seasons');
+  it('keeps hint-only albums eligible while their lifecycle version is unresolved', async () => {
+    const { queue, resolveAvailability } = build({ version: 0 });
+
+    await queue.add('album-with-visible-hint', 'Artist', 'Album');
+
     assert.strictEqual(resolveAvailability.mock.calls.length, 1);
   });
 

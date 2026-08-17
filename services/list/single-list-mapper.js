@@ -1,4 +1,4 @@
-const { mapAlbumDataItemToResponse } = require('./item-mapper');
+const { asNullable, mapAlbumDataItemToResponse } = require('./item-mapper');
 
 function mapSingleListRowToList(listRow) {
   return {
@@ -30,6 +30,10 @@ function mapSingleListRowToItem(row) {
     country: row.country || '',
     genre1: row.genre_1 || '',
     genre2: row.genre_2 || '',
+    taxonomy: row.album_taxonomy || null,
+    taxonomyUpdatedAt: row.taxonomy_updated_at || null,
+    rymNumericId: asNullable(row.rym_numeric_id),
+    rymCanonicalUrl: asNullable(row.rym_canonical_url),
     primaryTrack: row.primary_track || null,
     secondaryTrack: row.secondary_track || null,
     comments: row.comments || '',
@@ -42,6 +46,7 @@ function mapSingleListRowToItem(row) {
     summary: row.summary || '',
     summarySource: row.summary_source || '',
     availability: row.availability || [],
+    availabilityLinks: row.availability_links || [],
     recommendedBy: row.recommended_by || null,
     recommendedAt: row.recommended_at || null,
   };

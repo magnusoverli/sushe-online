@@ -4,6 +4,7 @@
 (function () {
   const { ACTIONS } = globalThis.ExtensionConstants;
   const albumIdentity = globalThis.AlbumIdentity;
+  const rymExtractor = globalThis.RymAlbumExtractor;
   const badgeAttribute = 'data-sushe-presence-badge';
   const badgeKeyAttribute = 'data-sushe-presence-badge-key';
   const badgeListsAttribute = 'data-sushe-presence-lists';
@@ -17,16 +18,6 @@
   const platformRowAttribute = 'data-sushe-presence-platform-row';
   const maxAlbumsPerScan = 100;
   const freshValidationIntervalMs = 60 * 1000;
-  const platformHosts = [
-    'bandcamp.com',
-    'music.apple.com',
-    'open.spotify.com',
-    'qobuz.com',
-    'soundcloud.com',
-    'tidal.com',
-    'youtube.com',
-    'youtu.be',
-  ];
   let scanTimer = null;
   let validationInFlight = false;
   let lastValidationAt = 0;
@@ -177,23 +168,7 @@
   }
 
   function isPlatformLink(anchor) {
-    const linkedContent =
-      `${anchor.href || ''} ${anchor.querySelector('img')?.src || ''}`.toLowerCase();
-    if (platformHosts.some((host) => linkedContent.includes(host))) {
-      return true;
-    }
-
-    try {
-      const hostname = new URL(
-        anchor.href,
-        location.href
-      ).hostname.toLowerCase();
-      return platformHosts.some(
-        (host) => hostname === host || hostname.endsWith(`.${host}`)
-      );
-    } catch (_error) {
-      return false;
-    }
+    return !!rymExtractor?.getPlatformService(anchor.href);
   }
 
   function findCommonPlatformRow(platformLinks, scope) {
@@ -296,9 +271,20 @@
 
   function collectAlbumTargets() {
     const pageIdentity = getBadgeAlbumIdentityFromUrl(location.href);
-    return pageIdentity
-      ? collectAlbumDetailTarget(pageIdentity)
-      : collectListingTargets();
+    if (!pageIdentity) return collectListingTargets();
+
+    try {
+      const extractedIdentity = rymExtractor?.extract(
+        document,
+        location.href
+      )?.identity;
+      if (extractedIdentity?.numericId) {
+        pageIdentity.numericId = String(extractedIdentity.numericId);
+      }
+    } catch (_error) {
+      // URL identity still provides canonical-path and normalized-name matching.
+    }
+    return collectAlbumDetailTarget(pageIdentity);
   }
 
   function getUniqueAlbums(targets) {
@@ -309,6 +295,9 @@
           key: target.key,
           artist: target.identity.artist,
           album: target.identity.album,
+          numericId: target.identity.numericId || null,
+          canonicalPath: target.identity.canonicalPath || null,
+          canonicalUrl: target.identity.albumUrl || null,
         });
       }
     }

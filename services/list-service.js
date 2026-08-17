@@ -162,6 +162,7 @@ function createListService(deps = {}) {
     batchUpsertAlbumRecords: helpers.batchUpsertAlbumRecords,
     refreshPlaycountsInBackground,
     logger: log,
+    sourceObservationService: deps.sourceObservationService,
   });
 
   const listFetchers = createListFetchers({

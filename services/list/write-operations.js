@@ -54,6 +54,7 @@ function createListWriteOperations(deps = {}) {
 
     await prepareExplicitCovers(rawAlbums, TransactionAbort);
 
+    let observationResult = { sourceObservationResults: [], warnings: [] };
     const listYear = await db.withTransaction(async (client) => {
       let resultYear = null;
       let groupIdInternal;
@@ -108,7 +109,7 @@ function createListWriteOperations(deps = {}) {
       );
 
       if (rawAlbums && Array.isArray(rawAlbums)) {
-        await itemOperations.insertListItems(
+        observationResult = await itemOperations.insertListItems(
           client,
           listId,
           rawAlbums,
@@ -127,18 +128,25 @@ function createListWriteOperations(deps = {}) {
       albumCount: rawAlbums?.length || 0,
     });
 
+    if (typeof triggerAlbumBackgroundFetches === 'function') {
+      triggerAlbumBackgroundFetches(observationResult.backgroundItems);
+    }
+
     return {
       listId,
       name: trimmedName,
       year: listYear,
       groupId: requestGroupId || null,
       count: rawAlbums?.length || 0,
+      sourceObservationResults: observationResult.sourceObservationResults,
+      warnings: observationResult.warnings,
     };
   }
 
   async function replaceListItems(listId, userId, rawAlbums) {
     const timestamp = new Date();
     let list;
+    let observationResult = { sourceObservationResults: [], warnings: [] };
 
     await prepareExplicitCovers(rawAlbums, TransactionAbort);
 
@@ -161,7 +169,7 @@ function createListWriteOperations(deps = {}) {
         list._id,
       ]);
 
-      await itemOperations.insertListItems(
+      observationResult = await itemOperations.insertListItems(
         client,
         list._id,
         rawAlbums,
@@ -181,7 +189,16 @@ function createListWriteOperations(deps = {}) {
       albumCount: rawAlbums.length,
     });
 
-    return { list, count: rawAlbums.length };
+    if (typeof triggerAlbumBackgroundFetches === 'function') {
+      triggerAlbumBackgroundFetches(observationResult.backgroundItems);
+    }
+
+    return {
+      list,
+      count: rawAlbums.length,
+      sourceObservationResults: observationResult.sourceObservationResults,
+      warnings: observationResult.warnings,
+    };
   }
 
   async function incrementalUpdate(
@@ -194,6 +211,9 @@ function createListWriteOperations(deps = {}) {
     let changeCount = 0;
     const addedItems = [];
     const duplicateAlbums = [];
+    const sourceObservationResults = [];
+    const warnings = [];
+    const backgroundItems = [];
     let list;
 
     await prepareExplicitCovers(added, TransactionAbort);
@@ -227,6 +247,9 @@ function createListWriteOperations(deps = {}) {
       );
       addedItems.push(...addResult.addedItems);
       duplicateAlbums.push(...addResult.duplicateAlbums);
+      sourceObservationResults.push(...addResult.sourceObservationResults);
+      warnings.push(...addResult.warnings);
+      backgroundItems.push(...addResult.backgroundItems);
       changeCount += addResult.changeCount;
 
       changeCount += await itemOperations.processPositionUpdates(
@@ -254,12 +277,19 @@ function createListWriteOperations(deps = {}) {
     });
 
     if (typeof triggerAlbumBackgroundFetches === 'function') {
-      triggerAlbumBackgroundFetches(addedItems);
+      triggerAlbumBackgroundFetches(backgroundItems);
     }
 
     itemOperations.triggerPlaycountRefresh(user, addedItems);
 
-    return { list, changeCount, addedItems, duplicateAlbums };
+    return {
+      list,
+      changeCount,
+      addedItems,
+      duplicateAlbums,
+      sourceObservationResults,
+      warnings,
+    };
   }
 
   return {

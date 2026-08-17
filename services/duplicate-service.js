@@ -19,13 +19,22 @@ const {
   normalizeForComparison,
 } = require('../utils/fuzzy-match');
 const {
+  deriveGenreProjection,
+  projectTaxonomyForRead,
+} = require('../utils/album-taxonomy');
+const {
   invalidateResponseCacheForAlbumUsers: invalidateAlbumUserResponseCaches,
 } = require('./album-cache-invalidation');
+const {
+  storedMappingRank,
+} = require('../db/repositories/album-service-mappings-repository');
 
 const DEFAULT_PAIR_LIMIT = 100;
 const DEFAULT_CLUSTER_PAGE = 1;
 const DEFAULT_CLUSTER_PAGE_SIZE = 25;
 const MAX_CLUSTER_PAGE_SIZE = 100;
+const RYM_SERVICE = 'rateyourmusic';
+const OPTIONAL_RYM_FIELDS = ['languages', 'scenes', 'movements'];
 const DEPENDENT_MERGE_TABLES = [
   'recommendations',
   'album_service_mappings',
@@ -104,6 +113,190 @@ function collectUniqueTexts(values) {
   }
 
   return deduped;
+}
+
+function parseStoredTaxonomy(value) {
+  if (value === null || value === undefined) return null;
+
+  const taxonomy = typeof value === 'string' ? JSON.parse(value) : value;
+  if (
+    !taxonomy ||
+    typeof taxonomy !== 'object' ||
+    Array.isArray(taxonomy) ||
+    taxonomy.schema_version !== 1 ||
+    !taxonomy.manual_overrides ||
+    typeof taxonomy.manual_overrides !== 'object' ||
+    Array.isArray(taxonomy.manual_overrides)
+  ) {
+    throw new Error('Album taxonomy has an invalid stored shape');
+  }
+
+  return JSON.parse(JSON.stringify(taxonomy));
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function normalizeRymUrl(value) {
+  const text = normalizeText(value);
+  if (!text) return '';
+
+  try {
+    const parsed = new URL(text);
+    const match = parsed.pathname.match(
+      /^\/release\/album\/([^/]+)\/([^/]+)\/?$/i
+    );
+    if (match && /(^|\.)rateyourmusic\.com$/i.test(parsed.hostname)) {
+      return `https://rateyourmusic.com/release/album/${match[1]}/${match[2]}/`;
+    }
+  } catch (_error) {
+    return text;
+  }
+
+  return text;
+}
+
+function receivedAtValue(snapshot) {
+  const value = new Date(snapshot?.received_at || '').getTime();
+  return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
+}
+
+function preserveOmittedRymFields(selected, fallback) {
+  const merged = cloneJson(selected);
+  if (!fallback) return merged;
+  OPTIONAL_RYM_FIELDS.forEach((field) => {
+    if (!Object.hasOwn(merged, field) && Object.hasOwn(fallback, field)) {
+      merged[field] = cloneJson(fallback[field]);
+    }
+  });
+  return merged;
+}
+
+function mergeAlbumTaxonomies(keepValue, deleteValue) {
+  const keepTaxonomy = parseStoredTaxonomy(keepValue);
+  const deleteTaxonomy = parseStoredTaxonomy(deleteValue);
+  if (!keepTaxonomy && !deleteTaxonomy) {
+    return { taxonomy: null, taxonomyConflict: false };
+  }
+
+  const taxonomy = {
+    ...(deleteTaxonomy || {}),
+    ...(keepTaxonomy || {}),
+    schema_version: 1,
+    manual_overrides: {
+      ...(deleteTaxonomy?.manual_overrides || {}),
+      ...(keepTaxonomy?.manual_overrides || {}),
+    },
+  };
+  const keepRym = keepTaxonomy?.rym;
+  const deleteRym = deleteTaxonomy?.rym;
+  let taxonomyConflict = false;
+
+  if (!keepRym && deleteRym) {
+    taxonomy.rym = deleteRym;
+  } else if (keepRym && deleteRym) {
+    const keepUrl = normalizeRymUrl(keepRym.source_url);
+    const deleteUrl = normalizeRymUrl(deleteRym.source_url);
+    if (keepUrl && keepUrl === deleteUrl) {
+      const selected =
+        receivedAtValue(deleteRym) > receivedAtValue(keepRym)
+          ? deleteRym
+          : keepRym;
+      taxonomy.rym = preserveOmittedRymFields(
+        selected,
+        selected === keepRym ? deleteRym : keepRym
+      );
+    } else {
+      taxonomy.rym = keepRym;
+      taxonomyConflict = true;
+    }
+  } else if (!keepRym) {
+    delete taxonomy.rym;
+  }
+
+  return { taxonomy, taxonomyConflict };
+}
+
+function reconcileRymTaxonomyWithMapping(
+  mergedTaxonomy,
+  keepValue,
+  deleteValue,
+  rymMapping
+) {
+  if (!mergedTaxonomy?.rym || !rymMapping?.external_url) return mergedTaxonomy;
+  const mappingUrl = normalizeRymUrl(rymMapping.external_url);
+  if (!mappingUrl) return mergedTaxonomy;
+
+  const candidates = [
+    parseStoredTaxonomy(keepValue)?.rym,
+    parseStoredTaxonomy(deleteValue)?.rym,
+  ].filter((snapshot) => normalizeRymUrl(snapshot?.source_url) === mappingUrl);
+  if (candidates.length === 0) {
+    const taxonomy = cloneJson(mergedTaxonomy);
+    delete taxonomy.rym;
+    return taxonomy;
+  }
+
+  const selected = candidates.reduce((newest, snapshot) =>
+    receivedAtValue(snapshot) > receivedAtValue(newest) ? snapshot : newest
+  );
+  const fallback = candidates.find((snapshot) => snapshot !== selected);
+  return {
+    ...cloneJson(mergedTaxonomy),
+    rym: preserveOmittedRymFields(selected, fallback),
+  };
+}
+
+function deriveMergedGenres(taxonomy) {
+  const projection = deriveGenreProjection(taxonomy?.rym);
+  const overrides = taxonomy?.manual_overrides || {};
+  return Object.fromEntries(
+    ['genre_1', 'genre_2'].map((field) => [
+      field,
+      Object.hasOwn(overrides, field)
+        ? overrides[field]?.value || ''
+        : projection[field],
+    ])
+  );
+}
+
+function mappingIdentityConflict(canonical, retiring) {
+  if (canonical?.service !== RYM_SERVICE || retiring?.service !== RYM_SERVICE) {
+    return [];
+  }
+
+  const fields = [];
+  const canonicalId = normalizeText(canonical.external_album_id);
+  const retiringId = normalizeText(retiring.external_album_id);
+  if (canonicalId && retiringId && canonicalId !== retiringId) {
+    fields.push('external_album_id');
+  }
+
+  const canonicalUrl = normalizeRymUrl(canonical.external_url);
+  const retiringUrl = normalizeRymUrl(retiring.external_url);
+  if (canonicalUrl && retiringUrl && canonicalUrl !== retiringUrl) {
+    fields.push('external_url');
+  }
+  return fields;
+}
+
+function formatMappingConflict(canonical, retiring, conflictingFields) {
+  return {
+    service: RYM_SERVICE,
+    canonicalAlbumId: canonical.album_id,
+    retireAlbumId: retiring.album_id,
+    conflictingFields,
+    canonical: {
+      externalAlbumId: canonical.external_album_id || null,
+      externalUrl: canonical.external_url || null,
+    },
+    retiring: {
+      externalAlbumId: retiring.external_album_id || null,
+      externalUrl: retiring.external_url || null,
+    },
+    resolution: 'canonical_retained',
+  };
 }
 
 function parseTrackValue(value) {
@@ -512,15 +705,35 @@ function createDuplicateService(deps = {}) {
       pushField('country', bestCountry);
     }
 
-    const mergedGenres = collectUniqueTexts([
-      keepAlbum.genre_1,
-      keepAlbum.genre_2,
-      deleteAlbum.genre_1,
-      deleteAlbum.genre_2,
-    ]).slice(0, 2);
+    const taxonomyMerge = mergeAlbumTaxonomies(
+      keepAlbum.album_taxonomy,
+      deleteAlbum.album_taxonomy
+    );
+    let mergedGenre1;
+    let mergedGenre2;
 
-    const mergedGenre1 = mergedGenres[0] || normalizeText(keepAlbum.genre_1);
-    const mergedGenre2 = mergedGenres[1] || normalizeText(keepAlbum.genre_2);
+    if (taxonomyMerge.taxonomy) {
+      const projectedGenres = deriveMergedGenres(taxonomyMerge.taxonomy);
+      mergedGenre1 = projectedGenres.genre_1;
+      mergedGenre2 = projectedGenres.genre_2;
+
+      if (
+        JSON.stringify(taxonomyMerge.taxonomy) !==
+        JSON.stringify(parseStoredTaxonomy(keepAlbum.album_taxonomy))
+      ) {
+        pushField('album_taxonomy', JSON.stringify(taxonomyMerge.taxonomy));
+        pushField('taxonomy_updated_at', new Date());
+      }
+    } else {
+      const mergedGenres = collectUniqueTexts([
+        keepAlbum.genre_1,
+        keepAlbum.genre_2,
+        deleteAlbum.genre_1,
+        deleteAlbum.genre_2,
+      ]).slice(0, 2);
+      mergedGenre1 = mergedGenres[0] || normalizeText(keepAlbum.genre_1);
+      mergedGenre2 = mergedGenres[1] || normalizeText(keepAlbum.genre_2);
+    }
 
     if (normalizeText(mergedGenre1) !== normalizeText(keepAlbum.genre_1)) {
       pushField('genre_1', mergedGenre1);
@@ -558,7 +771,13 @@ function createDuplicateService(deps = {}) {
       pushField('summary_fetched_at', deleteAlbum.summary_fetched_at);
     }
 
-    return { fieldsToMerge, fieldNames, values };
+    return {
+      fieldsToMerge,
+      fieldNames,
+      values,
+      albumTaxonomy: taxonomyMerge.taxonomy,
+      taxonomyConflict: taxonomyMerge.taxonomyConflict,
+    };
   }
 
   function applyMergeFieldValues(album, fieldNames, values) {
@@ -603,7 +822,7 @@ function createDuplicateService(deps = {}) {
 
     if (lockIds.length > 0) {
       await client.query(
-        `SELECT album_id
+        `SELECT album_id, album_taxonomy, taxonomy_updated_at
          FROM albums
          WHERE album_id = ANY($1::text[])
          ORDER BY album_id
@@ -655,27 +874,161 @@ function createDuplicateService(deps = {}) {
     };
   }
 
-  async function remapAlbumServiceMappings(client, keepAlbumId, deleteAlbumId) {
-    const conflictDeleteResult = await client.query(
-      `DELETE FROM album_service_mappings retiring
-       USING album_service_mappings canonical
-       WHERE retiring.album_id = $2
-         AND canonical.album_id = $1
-         AND canonical.service = retiring.service`,
+  async function remapAlbumServiceMappings(
+    client,
+    keepAlbumId,
+    deleteAlbumId,
+    expectedRymUrl = ''
+  ) {
+    const mappingsResult = await client.query(
+      `SELECT album_id, service, external_album_id, external_artist,
+              external_album, external_url, confidence, strategy,
+              created_at, updated_at, last_used_at
+       FROM album_service_mappings
+       WHERE album_id = $1 OR album_id = $2
+       ORDER BY service, album_id
+       FOR UPDATE`,
       [keepAlbumId, deleteAlbumId]
     );
 
-    const updateResult = await client.query(
-      `UPDATE album_service_mappings
-       SET album_id = $1,
-           updated_at = NOW()
-       WHERE album_id = $2`,
-      [keepAlbumId, deleteAlbumId]
+    const canonicalByService = new Map(
+      mappingsResult.rows
+        .filter((row) => row.album_id === keepAlbumId)
+        .map((row) => [row.service, row])
     );
+    const retiringMappings = mappingsResult.rows.filter(
+      (row) => row.album_id === deleteAlbumId
+    );
+    const mappingConflicts = [];
+    let albumMappingsUpdated = 0;
+    let albumMappingsConflictsRemoved = 0;
+
+    for (const retiring of retiringMappings) {
+      const canonical = canonicalByService.get(retiring.service);
+      if (!canonical) {
+        if (
+          retiring.service === RYM_SERVICE &&
+          expectedRymUrl &&
+          normalizeRymUrl(retiring.external_url) !== expectedRymUrl
+        ) {
+          const conflictingFields = ['external_url'];
+          mappingConflicts.push(
+            formatMappingConflict(
+              {
+                album_id: keepAlbumId,
+                service: RYM_SERVICE,
+                external_album_id: null,
+                external_url: expectedRymUrl,
+              },
+              retiring,
+              conflictingFields
+            )
+          );
+          const deleteResult = await client.query(
+            `DELETE FROM album_service_mappings
+             WHERE album_id = $1 AND service = $2`,
+            [deleteAlbumId, retiring.service]
+          );
+          albumMappingsConflictsRemoved += deleteResult.rowCount;
+          continue;
+        }
+        const updateResult = await client.query(
+          `UPDATE album_service_mappings
+           SET album_id = $1,
+               updated_at = NOW()
+           WHERE album_id = $2 AND service = $3`,
+          [keepAlbumId, deleteAlbumId, retiring.service]
+        );
+        albumMappingsUpdated += updateResult.rowCount;
+        canonicalByService.set(retiring.service, {
+          ...retiring,
+          album_id: keepAlbumId,
+        });
+        continue;
+      }
+
+      const conflictingFields = mappingIdentityConflict(canonical, retiring);
+      if (conflictingFields.length > 0) {
+        mappingConflicts.push(
+          formatMappingConflict(canonical, retiring, conflictingFields)
+        );
+      }
+
+      const deleteResult = await client.query(
+        `DELETE FROM album_service_mappings
+         WHERE album_id = $1 AND service = $2`,
+        [deleteAlbumId, retiring.service]
+      );
+      albumMappingsConflictsRemoved += deleteResult.rowCount;
+
+      if (conflictingFields.length === 0) {
+        const replaceCanonical =
+          storedMappingRank(retiring) > storedMappingRank(canonical);
+        const canEnrichCanonical = [
+          'external_album_id',
+          'external_artist',
+          'external_album',
+          'external_url',
+          'confidence',
+          'strategy',
+        ].some(
+          (field) =>
+            (canonical[field] === null || canonical[field] === undefined) &&
+            retiring[field] !== null &&
+            retiring[field] !== undefined
+        );
+        if (!replaceCanonical && !canEnrichCanonical) continue;
+
+        const updateResult = await client.query(
+          `UPDATE album_service_mappings
+            SET external_album_id = CASE WHEN $10 THEN $3 ELSE COALESCE(external_album_id, $3) END,
+                external_artist = CASE WHEN $10 THEN $4 ELSE COALESCE(external_artist, $4) END,
+                external_album = CASE WHEN $10 THEN $5 ELSE COALESCE(external_album, $5) END,
+                external_url = CASE WHEN $10 THEN $6 ELSE COALESCE(external_url, $6) END,
+                confidence = CASE WHEN $10 THEN $7 ELSE COALESCE(confidence, $7) END,
+                strategy = CASE WHEN $10 THEN $8 ELSE COALESCE(strategy, $8) END,
+                updated_at = NOW(),
+                last_used_at = GREATEST(last_used_at, $9)
+            WHERE album_id = $1 AND service = $2`,
+          [
+            keepAlbumId,
+            retiring.service,
+            retiring.external_album_id,
+            retiring.external_artist,
+            retiring.external_album,
+            retiring.external_url,
+            retiring.confidence,
+            retiring.strategy,
+            retiring.last_used_at,
+            replaceCanonical,
+          ]
+        );
+        albumMappingsUpdated += updateResult.rowCount;
+        canonicalByService.set(
+          retiring.service,
+          replaceCanonical
+            ? { ...retiring, album_id: keepAlbumId }
+            : {
+                ...canonical,
+                external_album_id:
+                  canonical.external_album_id || retiring.external_album_id,
+                external_artist:
+                  canonical.external_artist || retiring.external_artist,
+                external_album:
+                  canonical.external_album || retiring.external_album,
+                external_url: canonical.external_url || retiring.external_url,
+                confidence: canonical.confidence ?? retiring.confidence,
+                strategy: canonical.strategy || retiring.strategy,
+              }
+        );
+      }
+    }
 
     return {
-      albumMappingsUpdated: updateResult.rowCount,
-      albumMappingsConflictsRemoved: conflictDeleteResult.rowCount,
+      albumMappingsUpdated,
+      albumMappingsConflictsRemoved,
+      mappingConflicts,
+      rymMapping: canonicalByService.get(RYM_SERVICE) || null,
     };
   }
 
@@ -760,9 +1113,12 @@ function createDuplicateService(deps = {}) {
     client,
     existingTables,
     keepAlbumId,
-    deleteAlbumId
+    deleteAlbumId,
+    expectedRymUrl = ''
   ) {
     const stats = emptyDependentRemapStats();
+    const mappingConflicts = [];
+    let rymMapping = null;
 
     if (existingTables.has('recommendations')) {
       sumDependentRemapStats(
@@ -772,10 +1128,19 @@ function createDuplicateService(deps = {}) {
     }
 
     if (existingTables.has('album_service_mappings')) {
-      sumDependentRemapStats(
-        stats,
-        await remapAlbumServiceMappings(client, keepAlbumId, deleteAlbumId)
+      const mappingResult = await remapAlbumServiceMappings(
+        client,
+        keepAlbumId,
+        deleteAlbumId,
+        expectedRymUrl
       );
+      mappingConflicts.push(...mappingResult.mappingConflicts);
+      rymMapping = mappingResult.rymMapping;
+      sumDependentRemapStats(stats, {
+        albumMappingsUpdated: mappingResult.albumMappingsUpdated,
+        albumMappingsConflictsRemoved:
+          mappingResult.albumMappingsConflictsRemoved,
+      });
     }
 
     if (existingTables.has('artist_service_aliases')) {
@@ -799,7 +1164,7 @@ function createDuplicateService(deps = {}) {
       );
     }
 
-    return stats;
+    return { stats, mappingConflicts, rymMapping };
   }
 
   async function resolveListItemCollisions(client, keepAlbumId, deleteAlbumId) {
@@ -901,9 +1266,10 @@ function createDuplicateService(deps = {}) {
 
     const albumsResult = await client.query(
       `SELECT album_id, artist, album, release_date, country,
-              genre_1, genre_2, tracks, cover_image, cover_image_format,
-              cover_image_updated_at,
-              summary, summary_source, summary_fetched_at
+               genre_1, genre_2, album_taxonomy, taxonomy_updated_at,
+               tracks, cover_image, cover_image_format,
+               cover_image_updated_at,
+               summary, summary_source, summary_fetched_at
        FROM albums WHERE album_id = $1 OR album_id = $2`,
       [keepAlbumId, deleteAlbumId]
     );
@@ -919,13 +1285,16 @@ function createDuplicateService(deps = {}) {
 
     let metadataMerged = false;
     let mergedFieldNames = [];
+    let taxonomyConflict = false;
+    let albumTaxonomy = parseStoredTaxonomy(keepAlbum.album_taxonomy);
+    const mappingConflicts = [];
     const dependentRemaps = emptyDependentRemapStats();
 
     if (deleteAlbum && mergeMetadata) {
-      const { fieldsToMerge, fieldNames, values } = buildMergeFields(
-        keepAlbum,
-        deleteAlbum
-      );
+      const mergePreview = buildMergeFields(keepAlbum, deleteAlbum);
+      const { fieldsToMerge, fieldNames, values } = mergePreview;
+      taxonomyConflict = mergePreview.taxonomyConflict;
+      albumTaxonomy = mergePreview.albumTaxonomy;
 
       if (fieldsToMerge.length > 0) {
         fieldsToMerge.push('updated_at = NOW()');
@@ -945,15 +1314,55 @@ function createDuplicateService(deps = {}) {
     );
 
     if (deleteAlbum) {
-      sumDependentRemapStats(
-        dependentRemaps,
-        await remapDependentReferences(
-          client,
-          existingTables,
-          keepAlbumId,
-          deleteAlbumId
-        )
+      const remapResult = await remapDependentReferences(
+        client,
+        existingTables,
+        keepAlbumId,
+        deleteAlbumId,
+        normalizeRymUrl(albumTaxonomy?.rym?.source_url)
       );
+      sumDependentRemapStats(dependentRemaps, remapResult.stats);
+      mappingConflicts.push(...remapResult.mappingConflicts);
+
+      if (mergeMetadata && albumTaxonomy) {
+        const reconciledTaxonomy = reconcileRymTaxonomyWithMapping(
+          albumTaxonomy,
+          keepAlbum.album_taxonomy,
+          deleteAlbum.album_taxonomy,
+          remapResult.rymMapping
+        );
+        if (
+          JSON.stringify(reconciledTaxonomy) !== JSON.stringify(albumTaxonomy)
+        ) {
+          const genres = deriveMergedGenres(reconciledTaxonomy);
+          await client.query(
+            `UPDATE albums
+             SET album_taxonomy = $2,
+                 taxonomy_updated_at = NOW(),
+                 genre_1 = $3,
+                 genre_2 = $4,
+                 updated_at = NOW()
+             WHERE album_id = $1`,
+            [
+              keepAlbumId,
+              JSON.stringify(reconciledTaxonomy),
+              genres.genre_1,
+              genres.genre_2,
+            ]
+          );
+          albumTaxonomy = reconciledTaxonomy;
+          taxonomyConflict = true;
+          metadataMerged = true;
+          for (const field of [
+            'album_taxonomy',
+            'taxonomy_updated_at',
+            'genre_1',
+            'genre_2',
+          ]) {
+            if (!mergedFieldNames.includes(field)) mergedFieldNames.push(field);
+          }
+        }
+      }
     }
 
     const updateResult = await client.query(
@@ -978,6 +1387,8 @@ function createDuplicateService(deps = {}) {
       collisionsResolved: collisionStats.collisionsResolved,
       collisionRowsDeleted: collisionStats.rowsDeleted,
       dependentRemaps,
+      taxonomyConflict,
+      mappingConflictCount: mappingConflicts.length,
     });
 
     return {
@@ -988,6 +1399,9 @@ function createDuplicateService(deps = {}) {
       collisionsResolved: collisionStats.collisionsResolved,
       collisionRowsDeleted: collisionStats.rowsDeleted,
       dependentRemaps,
+      taxonomyConflict,
+      albumTaxonomy: projectTaxonomyForRead(albumTaxonomy),
+      mappingConflicts,
     };
   }
 
@@ -1023,10 +1437,71 @@ function createDuplicateService(deps = {}) {
       recommendationsConflictsToDrop: 0,
       albumMappingRowsToUpdate: 0,
       albumMappingConflictsToDrop: 0,
+      albumMappingIdentityConflicts: 0,
       artistAliasSourcesToUpdate: 0,
       userAlbumStatsRowsToUpdate: 0,
       distinctPairsRowsToRewrite: 0,
     };
+  }
+
+  async function previewAlbumMappingConflicts(
+    queryable,
+    canonicalAlbumId,
+    retireAlbumIds
+  ) {
+    const mappingsResult = await queryable.query(
+      `SELECT album_id, service, external_album_id, external_artist,
+              external_album, external_url, confidence, strategy,
+              created_at, updated_at, last_used_at
+       FROM album_service_mappings
+       WHERE album_id = ANY($1::text[])
+       ORDER BY service, album_id`,
+      [[canonicalAlbumId, ...retireAlbumIds]]
+    );
+    const canonicalByService = new Map(
+      mappingsResult.rows
+        .filter((row) => row.album_id === canonicalAlbumId)
+        .map((row) => [row.service, row])
+    );
+    const conflicts = [];
+
+    for (const retireAlbumId of retireAlbumIds) {
+      const retiringRows = mappingsResult.rows.filter(
+        (row) => row.album_id === retireAlbumId
+      );
+      for (const retiring of retiringRows) {
+        const canonical = canonicalByService.get(retiring.service);
+        if (!canonical) {
+          canonicalByService.set(retiring.service, {
+            ...retiring,
+            album_id: canonicalAlbumId,
+          });
+          continue;
+        }
+
+        const conflictingFields = mappingIdentityConflict(canonical, retiring);
+        if (conflictingFields.length > 0) {
+          conflicts.push(
+            formatMappingConflict(canonical, retiring, conflictingFields)
+          );
+          continue;
+        }
+
+        if (retiring.service === RYM_SERVICE) {
+          canonicalByService.set(retiring.service, {
+            ...canonical,
+            external_album_id:
+              canonical.external_album_id || retiring.external_album_id,
+            external_artist:
+              canonical.external_artist || retiring.external_artist,
+            external_album: canonical.external_album || retiring.external_album,
+            external_url: canonical.external_url || retiring.external_url,
+          });
+        }
+      }
+    }
+
+    return conflicts;
   }
 
   async function previewDependentReferenceImpacts(
@@ -1036,6 +1511,7 @@ function createDuplicateService(deps = {}) {
     retireAlbumIds
   ) {
     const impacts = emptyDependentImpactPreview();
+    let mappingConflicts = [];
 
     if (existingTables.has('recommendations')) {
       const updateCountResult = await queryable.query(
@@ -1085,6 +1561,12 @@ function createDuplicateService(deps = {}) {
       impacts.albumMappingConflictsToDrop = toRowCount(
         conflictCountResult.rows[0]?.count
       );
+      mappingConflicts = await previewAlbumMappingConflicts(
+        queryable,
+        canonicalAlbumId,
+        retireAlbumIds
+      );
+      impacts.albumMappingIdentityConflicts = mappingConflicts.length;
     }
 
     if (existingTables.has('artist_service_aliases')) {
@@ -1124,7 +1606,7 @@ function createDuplicateService(deps = {}) {
       );
     }
 
-    return impacts;
+    return { impacts, mappingConflicts };
   }
 
   /**
@@ -1163,6 +1645,8 @@ function createDuplicateService(deps = {}) {
         country,
         genre_1,
         genre_2,
+        album_taxonomy,
+        taxonomy_updated_at,
         tracks,
         summary,
         COALESCE(jsonb_array_length(tracks), 0) as track_count,
@@ -1193,6 +1677,10 @@ function createDuplicateService(deps = {}) {
       country: row.country || null,
       genre_1: row.genre_1 || null,
       genre_2: row.genre_2 || null,
+      album_taxonomy: projectTaxonomyForRead(
+        parseStoredTaxonomy(row.album_taxonomy)
+      ),
+      taxonomy_updated_at: row.taxonomy_updated_at || null,
       tracks: parseTrackValue(row.tracks),
       summary: row.summary || null,
       trackCount: row.track_count > 0 ? row.track_count : null,
@@ -1364,8 +1852,9 @@ function createDuplicateService(deps = {}) {
 
     const albumsResult = await db.raw(
       `SELECT album_id, artist, album, release_date, country,
-              genre_1, genre_2, tracks, cover_image, cover_image_format,
-              cover_image_updated_at,
+               genre_1, genre_2, album_taxonomy, taxonomy_updated_at,
+               tracks, cover_image, cover_image_format,
+               cover_image_updated_at,
               summary, summary_source, summary_fetched_at
        FROM albums
        WHERE album_id = ANY($1::text[])`,
@@ -1432,6 +1921,7 @@ function createDuplicateService(deps = {}) {
 
     const mergedFieldNames = new Set();
     let simulatedCanonical = { ...canonicalAlbum };
+    let taxonomyConflict = false;
 
     for (const retireId of existingRetireIds) {
       const retireAlbum = albumsById.get(retireId);
@@ -1440,6 +1930,7 @@ function createDuplicateService(deps = {}) {
       for (const fieldName of mergePreview.fieldNames) {
         mergedFieldNames.add(fieldName);
       }
+      taxonomyConflict ||= mergePreview.taxonomyConflict;
 
       simulatedCanonical = applyMergeFieldValues(
         simulatedCanonical,
@@ -1448,7 +1939,7 @@ function createDuplicateService(deps = {}) {
       );
     }
 
-    const dependentImpacts = await previewDependentReferenceImpacts(
+    const dependentPreview = await previewDependentReferenceImpacts(
       dbAsQueryable,
       existingTables,
       canonicalId,
@@ -1464,7 +1955,15 @@ function createDuplicateService(deps = {}) {
       collisionCount: collisions.length,
       collisions: collisions.slice(0, 100),
       metadataFieldsLikelyMerged: [...mergedFieldNames].sort(),
-      dependentImpacts,
+      taxonomyConflict,
+      albumTaxonomy: projectTaxonomyForRead(
+        parseStoredTaxonomy(simulatedCanonical.album_taxonomy)
+      ),
+      taxonomyUpdatedAt: simulatedCanonical.taxonomy_updated_at || null,
+      genre_1: simulatedCanonical.genre_1 || '',
+      genre_2: simulatedCanonical.genre_2 || '',
+      mappingConflicts: dependentPreview.mappingConflicts,
+      dependentImpacts: dependentPreview.impacts,
     };
   }
 
@@ -1498,6 +1997,9 @@ function createDuplicateService(deps = {}) {
         albumsDeleted: 0,
         metadataMerged: false,
         mergedFieldNames: new Set(),
+        taxonomyConflict: false,
+        albumTaxonomy: null,
+        mappingConflicts: [],
         collisionsResolved: 0,
         collisionRowsDeleted: 0,
         dependentRemaps: emptyDependentRemapStats(),
@@ -1517,6 +2019,9 @@ function createDuplicateService(deps = {}) {
         aggregate.albumsDeleted += result.albumsDeleted;
         aggregate.collisionsResolved += result.collisionsResolved;
         aggregate.collisionRowsDeleted += result.collisionRowsDeleted;
+        aggregate.taxonomyConflict ||= result.taxonomyConflict;
+        aggregate.albumTaxonomy = result.albumTaxonomy;
+        aggregate.mappingConflicts.push(...result.mappingConflicts);
         sumDependentRemapStats(
           aggregate.dependentRemaps,
           result.dependentRemaps || emptyDependentRemapStats()
@@ -1546,6 +2051,9 @@ function createDuplicateService(deps = {}) {
         albumsDeleted: aggregate.albumsDeleted,
         metadataMerged: aggregate.metadataMerged,
         mergedFieldNames: [...aggregate.mergedFieldNames].sort(),
+        taxonomyConflict: aggregate.taxonomyConflict,
+        albumTaxonomy: aggregate.albumTaxonomy,
+        mappingConflicts: aggregate.mappingConflicts,
         collisionsResolved: aggregate.collisionsResolved,
         collisionRowsDeleted: aggregate.collisionRowsDeleted,
         dependentRemaps: aggregate.dependentRemaps,

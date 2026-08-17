@@ -87,6 +87,47 @@ describe('album-service', () => {
     );
   });
 
+  it('updateGenres delegates current edits to manual taxonomy overrides', async () => {
+    const taxonomyUpdatedAt = new Date('2026-08-17T12:00:00.000Z');
+    const albumTaxonomyService = {
+      applyManualGenreOverrides: mock.fn(async () => ({
+        taxonomy_updated_at: taxonomyUpdatedAt,
+      })),
+      resetManualGenreOverrides: mock.fn(async () => ({})),
+    };
+    const albumTaxonomyUpdated = mock.fn();
+    const pool = createMockPool([
+      { rows: [{ user_id: 'user-1' }], rowCount: 1 },
+    ]);
+    const service = createAlbumService({
+      db: pool,
+      logger: createMockLogger(),
+      upsertAlbumRecord: mock.fn(),
+      albumTaxonomyService,
+      broadcast: { albumTaxonomyUpdated },
+    });
+
+    await service.updateGenres(
+      'album-1',
+      { genre_1: ' Dream Pop ', genre_2: null },
+      'user-1'
+    );
+
+    assert.deepStrictEqual(
+      albumTaxonomyService.applyManualGenreOverrides.mock.calls[0].arguments,
+      [
+        'album-1',
+        { genre_1: ' Dream Pop ', genre_2: null },
+        { updatedBy: 'user-1' },
+      ]
+    );
+    assert.deepStrictEqual(albumTaxonomyUpdated.mock.calls[0].arguments, [
+      'user-1',
+      'album-1',
+      taxonomyUpdatedAt,
+    ]);
+  });
+
   it('updateGenres should throw 404 when no album row is updated', async () => {
     const pool = createMockPool([{ rows: [], rowCount: 0 }]);
 
@@ -108,7 +149,9 @@ describe('album-service', () => {
     );
 
     assert.ok(
-      pool.query.mock.calls[0].arguments[0].includes('RETURNING album_id')
+      pool.query.mock.calls.some((call) =>
+        call.arguments[0].includes('SELECT album_taxonomy')
+      )
     );
   });
 
@@ -189,6 +232,48 @@ describe('album-service', () => {
     assert.strictEqual(updated, 1);
     assert.ok(pool.query.mock.calls[1].arguments[0].includes('country = $1'));
     assert.strictEqual(pool.query.mock.calls[1].arguments[1][0], 'Norway');
+  });
+
+  it('batchUpdate applies genre fields as taxonomy overrides in its transaction', async () => {
+    const taxonomyUpdatedAt = new Date('2026-08-17T12:00:00.000Z');
+    const albumTaxonomyService = {
+      applyManualGenreOverrides: mock.fn(async () => ({
+        genre_1: 'Rock',
+        taxonomy_updated_at: taxonomyUpdatedAt,
+      })),
+      resetManualGenreOverrides: mock.fn(async () => ({})),
+    };
+    const albumTaxonomyUpdated = mock.fn();
+    const pool = createMockPool([
+      { rows: [], rowCount: 0 },
+      { rows: [], rowCount: 0 },
+      { rows: [{ user_id: 'user-1' }], rowCount: 1 },
+    ]);
+    const service = createAlbumService({
+      db: pool,
+      logger: createMockLogger(),
+      upsertAlbumRecord: mock.fn(),
+      albumTaxonomyService,
+      broadcast: { albumTaxonomyUpdated },
+    });
+
+    const updated = await service.batchUpdate(
+      [{ albumId: 'album-1', genre_1: 'Rock', genre_2: null }],
+      'user-1'
+    );
+
+    assert.strictEqual(updated, 1);
+    const [albumId, overrides, options] =
+      albumTaxonomyService.applyManualGenreOverrides.mock.calls[0].arguments;
+    assert.strictEqual(albumId, 'album-1');
+    assert.deepStrictEqual(overrides, { genre_1: 'Rock', genre_2: null });
+    assert.strictEqual(options.updatedBy, 'user-1');
+    assert.ok(options.client);
+    assert.deepStrictEqual(albumTaxonomyUpdated.mock.calls[0].arguments, [
+      'user-1',
+      'album-1',
+      taxonomyUpdatedAt,
+    ]);
   });
 
   it('markDistinct should resolve string user _id to numeric created_by', async () => {

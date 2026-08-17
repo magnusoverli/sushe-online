@@ -11,7 +11,7 @@
 export const FIELDS_STORAGE_KEY = 'albumSearch.fields';
 
 export const OPTIONAL_FIELDS = [
-  { key: 'meta', label: 'Year, genre & country' },
+  { key: 'meta', label: 'Year, taxonomy & country' },
   { key: 'notes', label: 'Notes & comments' },
   { key: 'tracks', label: 'Track names' },
 ];

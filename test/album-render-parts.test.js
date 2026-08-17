@@ -109,4 +109,44 @@ describe('album render parts', () => {
     assert.match(html, /Mobile Artist/);
     assert.match(html, /No genre/);
   });
+
+  it('integrates taxonomy triggers and provider links without inline details', async () => {
+    const { renderDesktopAlbumCell, renderMobileGenreRow } =
+      await import('../src/js/modules/album-display/render-parts.js');
+    const album = {
+      albumName: 'Taxonomy Album',
+      availability: ['soundcloud'],
+      availabilityLinks: [
+        {
+          service: 'soundcloud',
+          url: 'https://soundcloud.com/artist/sets/record',
+        },
+      ],
+      taxonomy: {
+        rym: {
+          primary_genres: ['Rock'],
+          secondary_genres: ['Ambient'],
+          descriptors: ['Warm'],
+          source_url: 'https://rateyourmusic.com/release/album/artist/record/',
+        },
+      },
+      genre1: 'Legacy genre 1',
+      genre2: 'Legacy genre 2',
+    };
+
+    const desktop = renderDesktopAlbumCell(album, {
+      includeAvailabilityLinks: true,
+      includePlaycount: false,
+      includeTaxonomy: true,
+    });
+    const mobile = renderMobileGenreRow(album, { includeTaxonomy: true });
+
+    assert.match(desktop, /<a [^>]*aria-label="SoundCloud"/);
+    assert.match(desktop, /data-taxonomy-slot/);
+    assert.match(desktop, /class="taxonomy-trigger"/);
+    assert.doesNotMatch(desktop, /<dt>|album-taxonomy-panel/);
+    assert.match(mobile, /Legacy genre 1 \/ Legacy genre 2/);
+    assert.match(mobile, /taxonomy-trigger-mobile/);
+    assert.doesNotMatch(mobile, /<dt>|album-taxonomy-panel/);
+  });
 });

@@ -86,8 +86,14 @@ function createHelpers(deps) {
 
     const { getCoverFetchQueue } = require('../../services/cover-fetch-queue');
     const { getTrackFetchQueue } = require('../../services/track-fetch-queue');
+    const { getNativeNameQueue } = require('../../services/native-name-queue');
+    const {
+      getAvailabilityFetchQueue,
+    } = require('../../services/availability-fetch-queue');
     let coverQueue = null;
     let trackQueue = null;
+    let nativeNameQueue = null;
+    let availabilityQueue = null;
 
     try {
       coverQueue = getCoverFetchQueue();
@@ -105,12 +111,37 @@ function createHelpers(deps) {
       });
     }
 
+    try {
+      nativeNameQueue = getNativeNameQueue();
+    } catch (error) {
+      logger.warn('Native name queue not available after list update', {
+        error: error.message,
+      });
+    }
+
+    try {
+      availabilityQueue = getAvailabilityFetchQueue();
+    } catch (error) {
+      logger.warn('Availability queue not available after list update', {
+        error: error.message,
+      });
+    }
+
+    const seen = new Set();
     for (const item of items) {
       if (!item?.album_id || !item.artist || !item.album) continue;
+      if (seen.has(item.album_id)) continue;
+      seen.add(item.album_id);
 
       triggerAlbumSummaryFetch(item.album_id, item.artist, item.album);
       if (coverQueue) coverQueue.add(item.album_id, item.artist, item.album);
       if (trackQueue) trackQueue.add(item.album_id, item.artist, item.album);
+      if (nativeNameQueue) {
+        nativeNameQueue.add(item.album_id, item.artist, item.album);
+      }
+      if (availabilityQueue) {
+        availabilityQueue.add(item.album_id, item.artist, item.album);
+      }
     }
   }
 
@@ -152,13 +183,13 @@ function createHelpers(deps) {
       result.needsCoverFetch = false;
     }
 
-    // Trigger async summary fetch if needed
-    if (result.needsSummaryFetch) {
+    // Transactional callers schedule all enrichment after commit.
+    if (!client && result.needsSummaryFetch) {
       triggerAlbumSummaryFetch(result.albumId, album.artist, album.album);
     }
 
     // Trigger async cover fetch if needed
-    if (result.needsCoverFetch && album.artist && album.album) {
+    if (!client && result.needsCoverFetch && album.artist && album.album) {
       const {
         getCoverFetchQueue,
       } = require('../../services/cover-fetch-queue');
@@ -175,7 +206,7 @@ function createHelpers(deps) {
     }
 
     // Trigger async track fetch if needed
-    if (result.needsTracksFetch && album.artist && album.album) {
+    if (!client && result.needsTracksFetch && album.artist && album.album) {
       const {
         getTrackFetchQueue,
       } = require('../../services/track-fetch-queue');
@@ -193,7 +224,7 @@ function createHelpers(deps) {
 
     // Restore native spelling for a newly-inserted album (no-op unless the name
     // looks slug-folded and the id is a MusicBrainz UUID).
-    if (result.wasInserted && album.artist && album.album) {
+    if (!client && result.wasInserted && album.artist && album.album) {
       const {
         getNativeNameQueue,
       } = require('../../services/native-name-queue');
@@ -208,7 +239,7 @@ function createHelpers(deps) {
     }
 
     // Resolve which platforms provide this album (cached; one-time per album).
-    if (album.artist && album.album) {
+    if (!client && album.artist && album.album) {
       const {
         getAvailabilityFetchQueue,
       } = require('../../services/availability-fetch-queue');
@@ -264,6 +295,9 @@ function createHelpers(deps) {
       result.needsCoverFetch = false;
       explicitCoverAlbumIds.add(result.albumId);
     }
+
+    // Transactional callers schedule async operations after commit.
+    if (client) return results;
 
     // Trigger async operations for all albums
     const { getCoverFetchQueue } = require('../../services/cover-fetch-queue');

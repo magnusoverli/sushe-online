@@ -311,6 +311,7 @@ function installBrowserGlobals(document, options = {}) {
 function loadBadgeScripts() {
   delete globalThis.ExtensionConstants;
   delete globalThis.AlbumIdentity;
+  delete globalThis.RymAlbumExtractor;
 
   delete require.cache[
     require.resolve('../browser-extension/extension-constants.js')
@@ -319,11 +320,15 @@ function loadBadgeScripts() {
     require.resolve('../browser-extension/album-identity-service.js')
   ];
   delete require.cache[
+    require.resolve('../browser-extension/rym-album-extractor.js')
+  ];
+  delete require.cache[
     require.resolve('../browser-extension/rym-presence-badges.js')
   ];
 
   require('../browser-extension/extension-constants.js');
   require('../browser-extension/album-identity-service.js');
+  require('../browser-extension/rym-album-extractor.js');
   require('../browser-extension/rym-presence-badges.js');
 }
 
@@ -378,6 +383,7 @@ describe('RYM presence badges', () => {
 
   it('adds one platform badge on album pages and none to issues or reviews', async () => {
     const page = buildAlbumDetailPage();
+    page.cover.setAttribute('data-album-id', 'Album123');
     const { sentMessages } = installBrowserGlobals(page.document, {
       locationHref: detailAlbumUrl,
       matches: {
@@ -413,6 +419,12 @@ describe('RYM presence badges', () => {
     );
     assert.strictEqual(sentMessages[0].albums.length, 1);
     assert.strictEqual(sentMessages[0].albums[0].key, detailAlbumKey);
+    assert.strictEqual(sentMessages[0].albums[0].numericId, '123');
+    assert.strictEqual(
+      sentMessages[0].albums[0].canonicalPath,
+      '/release/album/warning/rituals-of-shame/'
+    );
+    assert.strictEqual(sentMessages[0].albums[0].canonicalUrl, detailAlbumUrl);
   });
 
   it('updates the album platform badge without duplicating it', async () => {
@@ -602,5 +614,37 @@ describe('RYM presence badges', () => {
       nativeRow.querySelectorAll(badgeSelector)[0].parentElement,
       nativeRow
     );
+  });
+
+  it('does not treat spoofed href or image substrings as platform links', async () => {
+    const page = buildAlbumDetailPage({ includePlatformRow: false });
+    const spoofRow = page.leftColumn.appendChild(new FakeElement('div'));
+    const spoofLink = spoofRow.appendChild(
+      new FakeElement('a', {
+        href: 'https://open.spotify.com.evil.example/album/spoof',
+      })
+    );
+    const spoofImage = spoofLink.appendChild(new FakeElement('img'));
+    spoofImage.src = 'https://open.spotify.com/icon.png';
+    installBrowserGlobals(page.document, {
+      locationHref: detailAlbumUrl,
+      matches: {
+        [detailAlbumKey]: [
+          {
+            listId: 'list-2026',
+            listName: '2026',
+            albumId: detailAlbumId,
+          },
+        ],
+      },
+    });
+    loadBadgeScripts();
+
+    await waitForBadgeScan();
+
+    const badge = page.document.querySelector(badgeSelector);
+    assert.ok(badge);
+    assert.notStrictEqual(badge.parentElement, spoofRow);
+    assert.strictEqual(spoofRow.querySelectorAll(badgeSelector).length, 0);
   });
 });

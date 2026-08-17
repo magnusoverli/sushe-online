@@ -138,6 +138,9 @@ describe('album-search-service searchUserAlbums', () => {
     assert.match(sql, /a\.genre_1 ILIKE/);
     assert.match(sql, /li\.comments ILIKE/);
     assert.match(sql, /a\.tracks::text ILIKE/);
+    assert.match(sql, /album_taxonomy->'rym'->'languages'/);
+    assert.match(sql, /album_taxonomy->'rym'->'scenes'/);
+    assert.match(sql, /album_taxonomy->'rym'->'movements'/);
   });
 
   it('escapes LIKE wildcards in the search term', async () => {
@@ -167,6 +170,12 @@ describe('album-search-service searchUserAlbums', () => {
       artist: 'Radiohead',
       album: 'Kid A',
       year: '2000',
+      primaryGenres: [],
+      secondaryGenres: [],
+      descriptors: [],
+      languages: [],
+      scenes: [],
+      movements: [],
       listId: 'list1',
       listName: 'Best of 2000',
       position: 3,

@@ -1,0 +1,92 @@
+const { describe, it, beforeEach } = require('node:test');
+const assert = require('node:assert');
+
+describe('extension album payload compatibility', () => {
+  beforeEach(() => {
+    delete globalThis.AlbumApiService;
+    delete require.cache[
+      require.resolve('../browser-extension/album-api-service.js')
+    ];
+    require('../browser-extension/album-api-service.js');
+  });
+
+  it('retains legacy fields and carries sourceObservation', () => {
+    const observation = {
+      schemaVersion: 1,
+      identity: {
+        numericId: 123,
+        canonicalUrl:
+          'https://rateyourmusic.com/release/album/talk-talk/spirit-of-eden/',
+        canonicalPath: '/release/album/talk-talk/spirit-of-eden/',
+        artist: 'Talk Talk',
+        title: 'Spirit of Eden',
+      },
+      platformLinks: [
+        { service: 'spotify', url: 'https://open.spotify.com/album/id' },
+      ],
+      taxonomy: {
+        complete: true,
+        primaryGenres: ['Art Rock'],
+        secondaryGenres: ['Post-Rock'],
+        descriptors: ['atmospheric'],
+        languages: ['English'],
+        scenes: ['Canterbury Scene'],
+        movements: ['New Wave'],
+        sourceUrl:
+          'https://rateyourmusic.com/release/album/talk-talk/spirit-of-eden/',
+        extractorVersion: 'test/1',
+        capturedAt: '2026-08-17T12:00:00.000Z',
+      },
+      ignored: 'not part of schema v1',
+    };
+    const service = globalThis.AlbumApiService.createAlbumApiService({
+      constants: { API: {} },
+    });
+    const payload = service.buildAlbumPayload(
+      {
+        artist: 'Talk Talk',
+        album: 'Spirit of Eden',
+        genre_1: 'Art Rock',
+        genre_2: 'Post-Rock',
+        sourceObservation: observation,
+      },
+      { id: 'mbid', 'first-release-date': '1988-09-16' },
+      'GB'
+    );
+
+    assert.deepStrictEqual(payload, {
+      artist: 'Talk Talk',
+      album: 'Spirit of Eden',
+      album_id: 'mbid',
+      release_date: '1988-09-16',
+      country: 'GB',
+      genre_1: 'Art Rock',
+      genre_2: 'Post-Rock',
+      sourceObservation: {
+        schemaVersion: 1,
+        identity: { ...observation.identity, numericId: '123' },
+        platformLinks: observation.platformLinks,
+        taxonomy: observation.taxonomy,
+      },
+      comments: '',
+      tracks: null,
+      primary_track: null,
+      secondary_track: null,
+    });
+  });
+
+  it('keeps old album data callers compatible', () => {
+    const service = globalThis.AlbumApiService.createAlbumApiService({
+      constants: { API: {} },
+    });
+    const payload = service.buildAlbumPayload(
+      { artist: 'Artist', album: 'Album' },
+      {},
+      ''
+    );
+
+    assert.strictEqual(payload.genre_1, '');
+    assert.strictEqual(payload.genre_2, '');
+    assert.strictEqual('sourceObservation' in payload, false);
+  });
+});

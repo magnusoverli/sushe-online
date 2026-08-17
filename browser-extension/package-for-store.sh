@@ -22,6 +22,7 @@ echo "📋 Including files:"
 echo "  ✓ manifest.json"
 echo "  ✓ extension-constants.js"
 echo "  ✓ album-identity-service.js"
+echo "  ✓ rym-album-extractor.js"
 echo "  ✓ background.js"
 echo "  ✓ context-menu-service.js"
 echo "  ✓ album-presence-service.js"
@@ -46,6 +47,7 @@ zip -q "$OUTPUT_FILE" \
     manifest.json \
     extension-constants.js \
     album-identity-service.js \
+    rym-album-extractor.js \
     background.js \
     context-menu-service.js \
     album-presence-service.js \

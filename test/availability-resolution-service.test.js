@@ -2,6 +2,7 @@ const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
 const {
   createAvailabilityResolutionService,
+  AVAILABILITY_RESOLUTION_VERSION,
   mergeCandidates,
   buildCandidates,
 } = require('../services/availability-resolution-service');
@@ -11,9 +12,13 @@ const album = { albumId: 'alb-1', artist: 'Metallica', album: '72 Seasons' };
 
 function build({ seed, odesli, mb, directSources }) {
   const upsert = mock.fn(async () => {});
+  const markResolved = mock.fn(async () => {});
   const service = createAvailabilityResolutionService({
     logger: createMockLogger(),
-    externalIdentityService: { upsertAlbumServiceMapping: upsert },
+    externalIdentityService: {
+      upsertAlbumServiceMapping: upsert,
+      markAlbumAvailabilityResolved: markResolved,
+    },
     seedProviders: { acquireSeed: async () => seed },
     odesliClient: {
       fetchLinksBySeed: async () => {
@@ -26,7 +31,7 @@ function build({ seed, odesli, mb, directSources }) {
     },
     directSources,
   });
-  return { service, upsert };
+  return { service, upsert, markResolved };
 }
 
 describe('availability-resolution-service', () => {
@@ -94,7 +99,11 @@ describe('availability-resolution-service', () => {
   });
 
   it('skips when there is no seed and no MusicBrainz links', async () => {
-    const { service, upsert } = build({ seed: null, odesli: [], mb: null });
+    const { service, upsert, markResolved } = build({
+      seed: null,
+      odesli: [],
+      mb: null,
+    });
     const result = await service.resolveAvailability(album);
     assert.deepStrictEqual(result, {
       action: 'skip',
@@ -102,10 +111,14 @@ describe('availability-resolution-service', () => {
       transient: false,
     });
     assert.strictEqual(upsert.mock.calls.length, 0);
+    assert.deepStrictEqual(markResolved.mock.calls[0].arguments, [
+      'alb-1',
+      AVAILABILITY_RESOLUTION_VERSION,
+    ]);
   });
 
   it('resolves and persists one row per platform', async () => {
-    const { service, upsert } = build({
+    const { service, upsert, markResolved } = build({
       seed: { kind: 'existing', confidence: 0.95, seed: { url: 'x' } },
       odesli: [
         { platform: 'spotify', url: 'https://sp/1' },
@@ -123,6 +136,7 @@ describe('availability-resolution-service', () => {
     assert.strictEqual(first.albumId, 'alb-1');
     assert.ok(first.strategy.startsWith('availability:existing'));
     assert.ok(['https://sp/1', 'https://td/1'].includes(first.externalUrl));
+    assert.strictEqual(markResolved.mock.calls.length, 1);
   });
 
   it('falls through to MusicBrainz links when Odesli errors', async () => {
@@ -141,8 +155,8 @@ describe('availability-resolution-service', () => {
     assert.strictEqual(upsert.mock.calls.length, 1);
   });
 
-  it('returns a transient skip when Odesli errors and no MB links', async () => {
-    const { service } = build({
+  it('leaves a transient Odesli failure unresolved and retryable', async () => {
+    const { service, markResolved } = build({
       seed: { kind: 'itunes', confidence: 0.8, seed: { url: 'x' } },
       odesli: Object.assign(new Error('rate'), { status: 429 }),
       mb: null,
@@ -153,6 +167,58 @@ describe('availability-resolution-service', () => {
       reason: 'odesli-error',
       transient: true,
     });
+    assert.strictEqual(markResolved.mock.calls.length, 0);
+  });
+
+  it('marks a successful no-links attempt as terminal', async () => {
+    const { service, markResolved } = build({
+      seed: { kind: 'existing', confidence: 0.95, seed: { url: 'x' } },
+      odesli: [],
+      mb: null,
+    });
+
+    const result = await service.resolveAvailability(album);
+
+    assert.deepStrictEqual(result, {
+      action: 'skip',
+      reason: 'no-links',
+      transient: false,
+    });
+    assert.strictEqual(markResolved.mock.calls.length, 1);
+  });
+
+  it('leaves thrown attempts unresolved and retryable', async () => {
+    const markResolved = mock.fn(async () => {});
+    const service = createAvailabilityResolutionService({
+      logger: createMockLogger(),
+      externalIdentityService: {
+        upsertAlbumServiceMapping: async () => {
+          throw new Error('database unavailable');
+        },
+        markAlbumAvailabilityResolved: markResolved,
+      },
+      seedProviders: {
+        acquireSeed: async () => ({
+          kind: 'existing',
+          confidence: 0.95,
+          seed: { url: 'x' },
+        }),
+      },
+      odesliClient: {
+        fetchLinksBySeed: async () => [
+          { platform: 'spotify', url: 'https://sp/1' },
+        ],
+      },
+      mbUrlRelsSource: {
+        getDirectLinks: async () => ({ seedUrl: null, upc: null, links: [] }),
+      },
+    });
+
+    await assert.rejects(
+      () => service.resolveAvailability(album),
+      /database unavailable/
+    );
+    assert.strictEqual(markResolved.mock.calls.length, 0);
   });
 
   it('resolves via a target direct source when there is no seed', async () => {
@@ -226,7 +292,7 @@ describe('availability-resolution-service', () => {
   });
 
   it('does not persist in dry-run mode', async () => {
-    const { service, upsert } = build({
+    const { service, upsert, markResolved } = build({
       seed: { kind: 'existing', confidence: 0.95, seed: { url: 'x' } },
       odesli: [{ platform: 'bandcamp', url: 'https://bc/1' }],
       mb: null,
@@ -235,5 +301,6 @@ describe('availability-resolution-service', () => {
     assert.strictEqual(result.action, 'resolved');
     assert.deepStrictEqual(result.services, ['bandcamp']);
     assert.strictEqual(upsert.mock.calls.length, 0);
+    assert.strictEqual(markResolved.mock.calls.length, 0);
   });
 });

@@ -1,3 +1,5 @@
+const { projectTaxonomyForRead } = require('../../utils/album-taxonomy');
+
 /**
  * List item mapping helpers.
  *
@@ -7,6 +9,10 @@
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function asNullable(value) {
+  return value ?? null;
 }
 
 /**
@@ -36,6 +42,10 @@ function mapListRowToItem(row, recommendationMap = null) {
     country: row.country || '',
     genre_1: row.genre_1 || '',
     genre_2: row.genre_2 || '',
+    taxonomy: projectTaxonomyForRead(row.album_taxonomy),
+    taxonomy_updated_at: row.taxonomy_updated_at,
+    rym_numeric_id: asNullable(row.rym_numeric_id),
+    rym_canonical_url: asNullable(row.rym_canonical_url),
     track_pick: row.primary_track || '',
     primary_track: row.primary_track || null,
     secondary_track: row.secondary_track || null,
@@ -54,6 +64,7 @@ function mapListRowToItem(row, recommendationMap = null) {
     summary: row.summary || '',
     summary_source: row.summary_source || '',
     availability: asArray(row.availability),
+    availability_links: asArray(row.availability_links),
     recommended_by: recommendation?.recommendedBy || null,
     recommended_at: recommendation?.recommendedAt || null,
   };
@@ -100,6 +111,10 @@ function mapAlbumDataItemToResponse(item, options = {}) {
     country: item.country,
     genre_1: item.genre1,
     genre_2: item.genre2,
+    taxonomy: projectTaxonomyForRead(item.taxonomy || null),
+    taxonomy_updated_at: item.taxonomyUpdatedAt || null,
+    rym_numeric_id: item.rymNumericId || null,
+    rym_canonical_url: item.rymCanonicalUrl || null,
     track_pick: item.primaryTrack || '',
     primary_track: item.primaryTrack || null,
     secondary_track: item.secondaryTrack || null,
@@ -117,6 +132,7 @@ function mapAlbumDataItemToResponse(item, options = {}) {
     summary: item.summary || '',
     summary_source: item.summarySource || '',
     availability: asArray(item.availability),
+    availability_links: asArray(item.availabilityLinks),
     recommended_by: recommendation?.recommendedBy || null,
     recommended_at: recommendation?.recommendedAt || null,
   };
@@ -141,6 +157,7 @@ function mapAlbumDataItemToResponse(item, options = {}) {
 }
 
 module.exports = {
+  asNullable,
   coverImageUrl,
   mapListRowToItem,
   mapAlbumDataItemToResponse,

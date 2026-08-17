@@ -29,10 +29,10 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 const logger = require('../utils/logger');
+const { ODESLI_RATE_LIMIT_MS } = require('../services/availability/platforms');
 const {
-  AVAILABILITY_SERVICES,
-  ODESLI_RATE_LIMIT_MS,
-} = require('../services/availability/platforms');
+  AVAILABILITY_RESOLUTION_VERSION,
+} = require('../services/availability-resolution-service');
 const {
   buildAvailabilityResolution,
 } = require('../services/availability/build-resolution');
@@ -100,21 +100,12 @@ async function main() {
   const resolution = buildResolution(pool);
 
   try {
-    const selectParams = all ? [] : [AVAILABILITY_SERVICES];
+    const selectParams = all ? [] : [AVAILABILITY_RESOLUTION_VERSION];
     const { rows } = await pool.query(
       `SELECT a.album_id, a.artist, a.album
          FROM albums a
         WHERE a.artist IS NOT NULL AND a.album IS NOT NULL
-          ${
-            all
-              ? ''
-              : `AND NOT EXISTS (
-             SELECT 1 FROM album_service_mappings m
-              WHERE m.album_id = a.album_id
-                AND m.strategy LIKE 'availability:%'
-                AND m.service = ANY($1)
-           )`
-          }
+          ${all ? '' : 'AND a.availability_resolution_version < $1'}
         ORDER BY a.artist, a.album
         ${limit ? `LIMIT ${limit}` : ''}`,
       selectParams

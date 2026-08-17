@@ -19,11 +19,23 @@ module.exports = (app, deps) => {
     logger,
     cacheConfigs,
     listService,
+    albumService,
     helpers: { triggerAggregateListRecompute, invalidateListCaches },
   } = deps;
 
   const { createAsyncHandler } = require('../../middleware/async-handler');
   const asyncHandler = createAsyncHandler(logger);
+
+  async function notifyTaxonomyUpdates(results = []) {
+    if (typeof albumService?.notifyTaxonomyUpdated !== 'function') return;
+    for (const result of results) {
+      if (!result?.taxonomyUpdatedAt || !result.albumId) continue;
+      await albumService.notifyTaxonomyUpdated(
+        result.albumId,
+        result.taxonomyUpdatedAt
+      );
+    }
+  }
 
   // ============================================
   // GET ROUTES
@@ -171,6 +183,7 @@ module.exports = (app, deps) => {
       });
 
       invalidateListCaches(req.user._id);
+      await notifyTaxonomyUpdates(result.sourceObservationResults);
 
       if (result.year) {
         triggerAggregateListRecompute(result.year);
@@ -183,6 +196,8 @@ module.exports = (app, deps) => {
         year: result.year,
         groupId: result.groupId,
         count: result.count,
+        sourceObservationResults: result.sourceObservationResults,
+        warnings: result.warnings,
       });
     }, 'creating list')
   );
@@ -241,19 +256,17 @@ module.exports = (app, deps) => {
           return res.status(400).json({ error: 'Invalid albums array' });
         }
 
-        const { list, count } = await listService.replaceListItems(
-          id,
-          req.user._id,
-          rawAlbums
-        );
+        const { list, count, sourceObservationResults, warnings } =
+          await listService.replaceListItems(id, req.user._id, rawAlbums);
 
         invalidateListCaches(req.user._id, id);
+        await notifyTaxonomyUpdates(sourceObservationResults);
 
         if (list.year) {
           triggerAggregateListRecompute(list.year);
         }
 
-        res.json({ success: true, count });
+        res.json({ success: true, count, sourceObservationResults, warnings });
       },
       'updating list items',
       { errorMessage: 'Error updating list' }
@@ -373,6 +386,7 @@ module.exports = (app, deps) => {
         );
 
         invalidateListCaches(req.user._id, id);
+        await notifyTaxonomyUpdates(result.sourceObservationResults);
 
         const broadcast = req.app.locals.broadcast;
         if (broadcast) {
@@ -391,6 +405,8 @@ module.exports = (app, deps) => {
           changes: result.changeCount,
           addedItems: result.addedItems,
           duplicates: result.duplicateAlbums,
+          sourceObservationResults: result.sourceObservationResults,
+          warnings: result.warnings,
         });
       },
       'incrementally updating list',

@@ -1,12 +1,18 @@
 /**
  * List import flow extracted from app list operations.
  */
+import {
+  prepareAlbumForImport,
+  replayManualGenreOverrides,
+  resolveImportedAlbum,
+} from './import-export.js';
+
 export function createListImporter(deps = {}) {
   const { apiCall, showToast, getLists, logger = console } = deps;
 
   function sanitizeImportedAlbums(albums) {
     return albums.map((album) => {
-      const cleaned = { ...album };
+      const cleaned = prepareAlbumForImport(album);
       delete cleaned.points;
       delete cleaned.rank;
       delete cleaned._id;
@@ -33,25 +39,16 @@ export function createListImporter(deps = {}) {
     return { year, groupId };
   }
 
-  function buildAlbumToListItemMap(savedList) {
-    const map = new Map();
-    for (const item of savedList) {
-      if (item.album_id && item._id) {
-        map.set(item.album_id, item._id);
-      }
-    }
-    return map;
-  }
-
-  async function importTrackPicksAndSummaries(albums, albumToListItemMap) {
+  async function importTrackPicksAndSummaries(albums, savedList) {
     let trackPicksImported = 0;
     let summariesImported = 0;
 
     for (const album of albums) {
-      const albumId = album.album_id;
+      const savedAlbum = resolveImportedAlbum(album, savedList);
+      const albumId = savedAlbum?.album_id;
       if (!albumId) continue;
 
-      const listItemId = albumToListItemMap.get(albumId);
+      const listItemId = savedAlbum._id;
       if (listItemId && (album.primary_track || album.secondary_track)) {
         try {
           if (album.primary_track) {
@@ -139,9 +136,20 @@ export function createListImporter(deps = {}) {
         createdAt: new Date().toISOString(),
       };
 
-      const albumToListItemMap = buildAlbumToListItemMap(savedList);
+      const overrideResult = await replayManualGenreOverrides(
+        albums,
+        savedList,
+        apiCall,
+        logger
+      );
+      if (overrideResult.failed > 0) {
+        showToast(
+          `List imported, but ${overrideResult.failed} genre override update${overrideResult.failed === 1 ? '' : 's'} failed`,
+          'warning'
+        );
+      }
       const { trackPicksImported, summariesImported } =
-        await importTrackPicksAndSummaries(albums, albumToListItemMap);
+        await importTrackPicksAndSummaries(albums, savedList);
 
       if (trackPicksImported > 0 || summariesImported > 0) {
         logger.log(

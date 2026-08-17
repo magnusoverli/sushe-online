@@ -26,6 +26,8 @@ export function createRealtimeSync(deps = {}) {
     showToast = () => {},
     apiCall = async () => {},
     updateAlbumSummaryInPlace = async () => {},
+    onAlbumAvailabilityUpdated = async () => {},
+    onAlbumTaxonomyUpdated = async () => {},
     displayAlbums = () => {},
     ioFactory = io,
     win = typeof window !== 'undefined' ? window : null,
@@ -58,6 +60,8 @@ export function createRealtimeSync(deps = {}) {
     socket.on('list:renamed', handleListRenamed);
     socket.on('list:main-changed', handleListMainChanged);
     socket.on('album:summary-updated', handleAlbumSummaryUpdated);
+    socket.on('album:availability-updated', onAlbumAvailabilityUpdated);
+    socket.on('album:taxonomy-updated', onAlbumTaxonomyUpdated);
     socket.on('session:invalidated', handleSessionInvalidated);
   }
 

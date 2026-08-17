@@ -32,8 +32,16 @@ function buildBatchInsertPayload(itemsToInsert, listId, timestamp) {
 }
 
 async function insertListItems(ctx, client, listId, albums, timestamp) {
-  const validAlbums = (albums || []).filter(Boolean);
-  if (validAlbums.length === 0) return;
+  const result = {
+    sourceObservationResults: [],
+    warnings: [],
+    backgroundItems: [],
+  };
+  const validEntries = (albums || [])
+    .map((album, index) => ({ album, index }))
+    .filter(({ album }) => album);
+  const validAlbums = validEntries.map(({ album }) => album);
+  if (validAlbums.length === 0) return result;
 
   const upsertResults = await ctx.batchUpsertAlbumRecords(
     validAlbums,
@@ -41,7 +49,7 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
     client
   );
 
-  const itemsToInsert = validAlbums.map((album, index) => {
+  const canonicalEntries = validEntries.map(({ album, index }) => {
     const key = `${album.artist}|${album.album}`;
     const upsertResult = upsertResults.get(key);
     if (!upsertResult) {
@@ -50,13 +58,24 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
       );
     }
 
+    return { album, index, albumId: upsertResult.albumId };
+  });
+
+  await applySourceObservations(ctx, client, canonicalEntries, result);
+  result.backgroundItems = canonicalEntries.map(({ album, albumId }) => ({
+    album_id: albumId,
+    artist: album.artist,
+    album: album.album,
+  }));
+
+  const itemsToInsert = canonicalEntries.map(({ album, albumId }, index) => {
     return {
       // Reuse the client-provided id for existing items so a full-list save
       // (replaceListItems) keeps list-item _ids stable. Other features key on
       // _id (track picks, playcounts); regenerating it orphaned them until a
       // page refresh. New items (no _id yet) still get a fresh id.
       _id: album._id || ctx.crypto.randomBytes(12).toString('hex'),
-      album_id: upsertResult.albumId,
+      album_id: albumId,
       position: index + 1,
       comments: album.comments || null,
       comments_2: album.comments_2 || null,
@@ -93,6 +112,22 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
     listId,
     count: itemsToInsert.length,
   });
+  return result;
+}
+
+async function applySourceObservations(ctx, client, entries, result) {
+  if (!ctx.sourceObservationService) return;
+  for (const entry of entries) {
+    if (entry.album.sourceObservation === undefined) continue;
+    const applied = await ctx.sourceObservationService.apply(
+      client,
+      entry.albumId,
+      entry.album.sourceObservation,
+      { index: entry.index }
+    );
+    result.sourceObservationResults.push(applied.result);
+    result.warnings.push(...applied.warnings);
+  }
 }
 
 async function processRemovals(client, listId, removed) {
@@ -110,13 +145,10 @@ async function processRemovals(client, listId, removed) {
 function mapItemToInsertRecord(
   ctx,
   duplicateSet,
-  upsertResults,
+  upsertResult,
   item,
   nextPositionRef
 ) {
-  const key = `${item.artist}|${item.album}`;
-  const upsertResult = upsertResults.get(key);
-
   if (!upsertResult) {
     ctx.logger?.warn('Album not found in upsert results', {
       artist: item.artist,
@@ -168,6 +200,9 @@ async function processAdditions(ctx, client, list, added, timestamp) {
     addedItems: [],
     duplicateAlbums: [],
     changeCount: 0,
+    sourceObservationResults: [],
+    warnings: [],
+    backgroundItems: [],
   };
 
   if (!added || !Array.isArray(added) || added.length === 0) {
@@ -180,7 +215,10 @@ async function processAdditions(ctx, client, list, added, timestamp) {
   );
   const nextPositionRef = { value: maxPosResult.rows[0].max_pos + 1 };
 
-  const validItems = added.filter((item) => item);
+  const validEntries = added
+    .map((item, index) => ({ album: item, index }))
+    .filter(({ album }) => album);
+  const validItems = validEntries.map(({ album }) => album);
   if (validItems.length === 0) return result;
 
   const upsertResults = await ctx.batchUpsertAlbumRecords(
@@ -188,9 +226,19 @@ async function processAdditions(ctx, client, list, added, timestamp) {
     timestamp,
     client
   );
-  const albumIds = Array.from(upsertResults.values()).map(
-    (item) => item.albumId
+  const canonicalEntries = validEntries.map(({ album, index }) => {
+    const upsertResult = upsertResults.get(`${album.artist}|${album.album}`);
+    return { album, index, albumId: upsertResult?.albumId, upsertResult };
+  });
+  await applySourceObservations(
+    ctx,
+    client,
+    canonicalEntries.filter(({ albumId }) => albumId),
+    result
   );
+  const albumIds = canonicalEntries
+    .map(({ albumId }) => albumId)
+    .filter(Boolean);
 
   const duplicateCheck = await client.query(
     `SELECT album_id, _id FROM list_items
@@ -200,19 +248,24 @@ async function processAdditions(ctx, client, list, added, timestamp) {
   const duplicateSet = new Set(duplicateCheck.rows.map((row) => row.album_id));
 
   const itemsToInsert = [];
-  for (const item of validItems) {
+  for (const { album: item, upsertResult } of canonicalEntries) {
     const mapped = mapItemToInsertRecord(
       ctx,
       duplicateSet,
-      upsertResults,
+      upsertResult,
       item,
       nextPositionRef
     );
 
     if (mapped.duplicate) result.duplicateAlbums.push(mapped.duplicate);
-    if (mapped.insertRecord) itemsToInsert.push(mapped.insertRecord);
+    if (mapped.insertRecord) {
+      itemsToInsert.push(mapped.insertRecord);
+      duplicateSet.add(mapped.insertRecord.album_id);
+    }
     if (mapped.addedItem) result.addedItems.push(mapped.addedItem);
   }
+
+  result.backgroundItems = [...result.addedItems, ...result.duplicateAlbums];
 
   if (itemsToInsert.length === 0) return result;
 
@@ -272,6 +325,7 @@ function createListItemOperations(deps = {}) {
     batchUpsertAlbumRecords: deps.batchUpsertAlbumRecords,
     refreshPlaycountsInBackground: deps.refreshPlaycountsInBackground,
     logger: deps.logger,
+    sourceObservationService: deps.sourceObservationService,
   };
 
   if (!context.crypto) throw new Error('crypto is required');

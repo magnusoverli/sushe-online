@@ -7,16 +7,17 @@ const { createMockLogger } = require('./helpers');
 
 // Mock db whose raw() routes by the SQL text it receives.
 function createDb({ candidates = [], stats = { total: 0, resolved: 0 } }) {
+  const raw = mock.fn(async (sql) => {
+    if (/AS resolved/i.test(sql)) {
+      return { rows: [stats] };
+    }
+    if (/SELECT a\.album_id/i.test(sql)) {
+      return { rows: candidates };
+    }
+    return { rows: [] };
+  });
   return {
-    raw: async (sql) => {
-      if (/COUNT\(DISTINCT/i.test(sql)) {
-        return { rows: [stats] };
-      }
-      if (/SELECT a\.album_id/i.test(sql)) {
-        return { rows: candidates };
-      }
-      return { rows: [] };
-    },
+    raw,
   };
 }
 
@@ -28,8 +29,9 @@ const ALBUMS = [
 
 describe('availability-resolution-job', () => {
   it('reports catalog coverage stats', async () => {
+    const db = createDb({ stats: { total: '10', resolved: '4' } });
     const job = createAvailabilityResolutionJob({
-      db: createDb({ stats: { total: '10', resolved: '4' } }),
+      db,
       logger: createMockLogger(),
       resolution: { resolveAvailability: async () => ({ action: 'skip' }) },
       rateLimitMs: 0,
@@ -39,6 +41,38 @@ describe('availability-resolution-job', () => {
       resolved: 4,
       unresolved: 6,
     });
+    assert.match(
+      db.raw.mock.calls[0].arguments[0],
+      /availability_resolution_version >= \$1/
+    );
+    assert.deepStrictEqual(db.raw.mock.calls[0].arguments[1], [2]);
+  });
+
+  it('selects unresolved candidates by lifecycle version, not mappings', async () => {
+    const db = createDb({ candidates: ALBUMS.slice(0, 1) });
+    const job = createAvailabilityResolutionJob({
+      db,
+      logger: createMockLogger(),
+      resolution: {
+        resolveAvailability: async () => ({
+          action: 'skip',
+          reason: 'no-seed',
+        }),
+      },
+      rateLimitMs: 0,
+    });
+
+    await job.resolveAll();
+
+    const candidateCall = db.raw.mock.calls.find((call) =>
+      call.arguments[0].includes('SELECT a.album_id')
+    );
+    assert.match(
+      candidateCall.arguments[0],
+      /a\.availability_resolution_version < \$1/
+    );
+    assert.doesNotMatch(candidateCall.arguments[0], /album_service_mappings/);
+    assert.deepStrictEqual(candidateCall.arguments[1], [2]);
   });
 
   it('resolves every candidate and tallies the summary', async () => {

@@ -24,6 +24,10 @@ const {
   invalidateResponseCacheForAlbumUsers,
 } = require('./album-cache-invalidation');
 const { createAlbumCoverService } = require('./album-cover-service');
+const {
+  createAlbumTaxonomyService,
+  projectTaxonomyForRead,
+} = require('./album-taxonomy-service');
 
 /**
  * Create album service with injected dependencies
@@ -34,6 +38,8 @@ const { createAlbumCoverService } = require('./album-cover-service');
  * @param {Function} [deps.upsertAlbumRecord] - Helper from _helpers.js
  * @param {Object} [deps.responseCache] - Response cache for list invalidation
  * @param {Object} [deps.coverCache] - Cover cache passed through to the cover service
+ * @param {ReturnType<typeof createAlbumTaxonomyService>} [deps.albumTaxonomyService]
+ * @param {Object} [deps.broadcast] - WebSocket broadcast helpers
  */
 // eslint-disable-next-line max-lines-per-function -- Cohesive service module with related album operations
 function createAlbumService(deps = {}) {
@@ -47,6 +53,9 @@ function createAlbumService(deps = {}) {
     logger,
     coverCache,
   });
+  const albumTaxonomyService =
+    deps.albumTaxonomyService || createAlbumTaxonomyService({ db, logger });
+  const broadcast = deps.broadcast || require('../utils/websocket').broadcast;
 
   async function invalidateCachesForAlbumUsers(albumId) {
     return invalidateResponseCacheForAlbumUsers({
@@ -56,6 +65,37 @@ function createAlbumService(deps = {}) {
       albumIds: albumId,
       operation: 'album-service',
     });
+  }
+
+  async function broadcastTaxonomyUpdate(albumId, taxonomyUpdatedAt) {
+    if (typeof broadcast?.albumTaxonomyUpdated !== 'function') return;
+
+    try {
+      const result = await db.raw(
+        `SELECT DISTINCT l.user_id
+         FROM lists l
+         JOIN list_items li ON li.list_id = l._id
+         WHERE li.album_id = $1`,
+        [albumId],
+        {
+          name: 'album-service-broadcast-taxonomy-update',
+          retryable: true,
+        }
+      );
+      for (const row of result.rows) {
+        broadcast.albumTaxonomyUpdated(row.user_id, albumId, taxonomyUpdatedAt);
+      }
+    } catch (error) {
+      logger.warn('Failed to broadcast album taxonomy update', {
+        albumId,
+        error: error.message,
+      });
+    }
+  }
+
+  async function notifyTaxonomyUpdated(albumId, taxonomyUpdatedAt) {
+    await invalidateCachesForAlbumUsers(albumId);
+    await broadcastTaxonomyUpdate(albumId, taxonomyUpdatedAt);
   }
 
   function validateOptionalTextField(value, errorMessage) {
@@ -387,27 +427,58 @@ function createAlbumService(deps = {}) {
     validateOptionalTextField(genre_1, 'Invalid genre values');
     validateOptionalTextField(genre_2, 'Invalid genre values');
 
-    const fields = buildAlbumMetadataFields({ genre_1, genre_2 });
-
-    if (fields.length === 0) {
+    if (genre_1 === undefined && genre_2 === undefined) {
       throw new TransactionAbort(400, {
         error: 'No genre updates provided',
       });
     }
-
-    const update = buildPartialUpdate('albums', 'album_id', albumId, fields);
-    const result = await db.raw(
-      `${update.query} RETURNING album_id`,
-      update.values
+    const taxonomyResult = await albumTaxonomyService.applyManualGenreOverrides(
+      albumId,
+      {
+        ...(genre_1 !== undefined && { genre_1 }),
+        ...(genre_2 !== undefined && { genre_2 }),
+      },
+      { updatedBy: userId == null ? null : String(userId) }
     );
 
+    await notifyTaxonomyUpdated(
+      albumId,
+      taxonomyResult?.taxonomy_updated_at || null
+    );
+
+    logger.info('Album genres updated', { userId, albumId, genre_1, genre_2 });
+  }
+
+  async function resetGenres(albumId, userId) {
+    const taxonomyResult = await albumTaxonomyService.resetManualGenreOverrides(
+      albumId,
+      {
+        updatedBy: userId == null ? null : String(userId),
+      }
+    );
+    await notifyTaxonomyUpdated(
+      albumId,
+      taxonomyResult?.taxonomy_updated_at || null
+    );
+    logger.info('Album genre overrides reset', { userId, albumId });
+  }
+
+  async function getTaxonomy(albumId) {
+    const result = await db.raw(
+      `SELECT album_taxonomy, taxonomy_updated_at, genre_1, genre_2
+       FROM albums WHERE album_id = $1`,
+      [albumId]
+    );
     if (result.rows.length === 0) {
       throw new TransactionAbort(404, { error: 'Album not found' });
     }
-
-    await invalidateCachesForAlbumUsers(albumId);
-
-    logger.info('Album genres updated', { userId, albumId, genre_1, genre_2 });
+    const row = result.rows[0];
+    return {
+      taxonomy: projectTaxonomyForRead(row.album_taxonomy),
+      taxonomy_updated_at: row.taxonomy_updated_at || null,
+      genre_1: row.genre_1 || '',
+      genre_2: row.genre_2 || '',
+    };
   }
 
   /**
@@ -430,6 +501,7 @@ function createAlbumService(deps = {}) {
     const timestamp = new Date();
     let successCount = 0;
     const albumIds = new Set();
+    const taxonomyUpdates = new Map();
 
     await db.withTransaction(async (client) => {
       for (const update of updates) {
@@ -440,23 +512,55 @@ function createAlbumService(deps = {}) {
         validateOptionalTextField(genre_1, 'Invalid genre values');
         validateOptionalTextField(genre_2, 'Invalid genre values');
 
-        const fields = buildAlbumMetadataFields({ country, genre_1, genre_2 });
-
+        let wasUpdated = false;
+        const countryFields = buildAlbumMetadataFields({ country });
         const partialUpdate = buildPartialUpdate(
           'albums',
           'album_id',
           albumId,
-          fields,
+          countryFields,
           { timestamp }
         );
-        if (!partialUpdate) continue;
+        if (partialUpdate) {
+          const result = await client.query(
+            partialUpdate.query,
+            partialUpdate.values
+          );
+          wasUpdated = result.rowCount > 0;
+        }
 
-        const result = await client.query(
-          partialUpdate.query,
-          partialUpdate.values
-        );
+        if (genre_1 !== undefined || genre_2 !== undefined) {
+          try {
+            const taxonomyResult =
+              await albumTaxonomyService.applyManualGenreOverrides(
+                albumId,
+                {
+                  ...(genre_1 !== undefined && { genre_1 }),
+                  ...(genre_2 !== undefined && { genre_2 }),
+                },
+                {
+                  client,
+                  updatedBy: userId == null ? null : String(userId),
+                }
+              );
+            wasUpdated = !!taxonomyResult || wasUpdated;
+            if (taxonomyResult) {
+              taxonomyUpdates.set(
+                albumId,
+                taxonomyResult.taxonomy_updated_at || null
+              );
+            }
+          } catch (error) {
+            if (
+              !(error instanceof TransactionAbort) ||
+              error.statusCode !== 404
+            ) {
+              throw error;
+            }
+          }
+        }
 
-        if (result.rowCount > 0) {
+        if (wasUpdated) {
           successCount++;
           albumIds.add(albumId);
         }
@@ -465,6 +569,9 @@ function createAlbumService(deps = {}) {
 
     for (const albumId of albumIds) {
       await invalidateCachesForAlbumUsers(albumId);
+    }
+    for (const [albumId, taxonomyUpdatedAt] of taxonomyUpdates) {
+      await broadcastTaxonomyUpdate(albumId, taxonomyUpdatedAt);
     }
 
     logger.info('Batch album update completed', {
@@ -619,6 +726,9 @@ function createAlbumService(deps = {}) {
     updateSummary,
     updateCountry,
     updateGenres,
+    resetGenres,
+    getTaxonomy,
+    notifyTaxonomyUpdated,
     batchUpdate,
     checkSimilar,
     markDistinct,

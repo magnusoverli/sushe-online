@@ -21,6 +21,12 @@ test('mapListRowToItem maps row fields and recommendation metadata', () => {
       country: 'NO',
       genre_1: 'Metal',
       genre_2: 'Progressive',
+      album_taxonomy: {
+        schema_version: 1,
+        manual_overrides: {},
+        rym: { primary_genres: ['Metal'], updated_by: 'private' },
+      },
+      taxonomy_updated_at: '2026-08-17T12:00:00.000Z',
       primary_track: 'Track A',
       secondary_track: 'Track B',
       comments: 'Great',
@@ -33,6 +39,9 @@ test('mapListRowToItem maps row fields and recommendation metadata', () => {
       summary: 'Summary',
       summary_source: 'claude',
       availability: ['spotify', 'deezer'],
+      availability_links: [
+        { service: 'spotify', url: 'https://open.spotify.com/album/id' },
+      ],
     },
     recommendationMap
   );
@@ -46,6 +55,14 @@ test('mapListRowToItem maps row fields and recommendation metadata', () => {
     country: 'NO',
     genre_1: 'Metal',
     genre_2: 'Progressive',
+    taxonomy: {
+      schema_version: 1,
+      manual_overrides: {},
+      rym: { primary_genres: ['Metal'] },
+    },
+    taxonomy_updated_at: '2026-08-17T12:00:00.000Z',
+    rym_numeric_id: null,
+    rym_canonical_url: null,
     track_pick: 'Track A',
     primary_track: 'Track A',
     secondary_track: 'Track B',
@@ -60,6 +77,9 @@ test('mapListRowToItem maps row fields and recommendation metadata', () => {
     summary: 'Summary',
     summary_source: 'claude',
     availability: ['spotify', 'deezer'],
+    availability_links: [
+      { service: 'spotify', url: 'https://open.spotify.com/album/id' },
+    ],
     recommended_by: 'alice',
     recommended_at: '2025-01-01',
   });

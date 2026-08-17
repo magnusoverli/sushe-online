@@ -11,11 +11,15 @@ function createListPresence(deps = {}) {
                l.is_main,
                li.album_id,
                a.artist,
-               a.album
+                a.album,
+                rym.external_album_id AS rym_album_id,
+                rym.external_url AS rym_url
         FROM lists l
         LEFT JOIN list_groups g ON g._id = l.group_id
         JOIN list_items li ON li.list_id = l._id
        JOIN albums a ON a.album_id = li.album_id
+       LEFT JOIN album_service_mappings rym
+         ON rym.album_id = li.album_id AND rym.service = 'rateyourmusic'
        WHERE l.user_id = $1
        ORDER BY l.sort_order, l.name, li.position`,
       [userId],
@@ -30,6 +34,8 @@ function createListPresence(deps = {}) {
       albumId: row.album_id,
       artist: row.artist,
       album: row.album,
+      rymNumericId: row.rym_album_id || null,
+      rymCanonicalUrl: row.rym_url || null,
     }));
   }
 

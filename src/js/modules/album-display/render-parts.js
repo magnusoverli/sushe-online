@@ -2,6 +2,7 @@ import { escapeHtmlAttr as escapeHtml } from '../html-utils.js';
 import { renderAvailabilityBadges } from './availability-badges.js';
 import { getPositionBadgeColor } from './position-badge.js';
 import { desktopPlaycountSpan, mobilePlaycountSpan } from './playcount-view.js';
+import { renderTaxonomyTrigger } from './taxonomy-details.js';
 export {
   getCoverLoadMode,
   renderCoverImage,
@@ -49,7 +50,15 @@ export function renderDesktopAlbumCell(data, options = {}) {
   const availabilityHtml =
     options.includeAvailability === false
       ? ''
-      : renderAvailabilityBadges(data.availability);
+      : renderAvailabilityBadges(data.availability, {
+          links: options.includeAvailabilityLinks ? data.availabilityLinks : [],
+        });
+  const taxonomyHtml = options.includeTaxonomy
+    ? renderTaxonomyTrigger(data.taxonomy, {
+        albumName: data.albumName,
+        artist: data.artist,
+      })
+    : '';
   const titleAttr = options.includeTitle
     ? ` title="${escapeHtml(data.albumName)}"`
     : '';
@@ -66,6 +75,7 @@ export function renderDesktopAlbumCell(data, options = {}) {
     </div>
     ${releaseDateHtml}
     ${availabilityHtml}
+    ${options.includeTaxonomy ? `<div class="album-taxonomy-slot" data-taxonomy-slot>${taxonomyHtml}</div>` : ''}
   </div>`;
 }
 
@@ -166,11 +176,19 @@ export function renderMobileGenreRow(data, options = {}) {
   const valueSpanClass = options.valueSpanClass
     ? ` class="${options.valueSpanClass}"`
     : '';
+  const taxonomyHtml = options.includeTaxonomy
+    ? renderTaxonomyTrigger(data.taxonomy, {
+        mobile: true,
+        albumName: data.albumName,
+        artist: data.artist,
+      })
+    : '';
 
-  return `<div class="${options.wrapperClass || 'flex items-center'}">
-    <span class="${options.textClass || 'text-[12px] text-gray-400 truncate'}" title="${escapeHtml(value || emptyText)}">
+  return `<div class="${options.wrapperClass || 'flex items-center min-w-0'}">
+    <span class="${options.textClass || 'text-[12px] text-gray-400 truncate min-w-0'}" title="${escapeHtml(value || emptyText)}">
       <i class="${options.iconClass || 'fas fa-music fa-xs inline-block w-4 text-center mr-1'}"></i><span data-field="genre-mobile-text"${valueSpanClass}>${value ? escapeHtml(value) : options.emptyHtml || escapeHtml(emptyText)}</span>
     </span>
+    ${options.includeTaxonomy ? `<span class="album-taxonomy-slot" data-taxonomy-slot>${taxonomyHtml}</span>` : ''}
   </div>`;
 }
 

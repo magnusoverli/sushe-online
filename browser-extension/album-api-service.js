@@ -1,6 +1,14 @@
 // MusicBrainz and SuShe API helpers for extension album additions.
 
 (function () {
+  function copyOptionalTaxonomyArrays(taxonomy) {
+    return Object.fromEntries(
+      ['languages', 'scenes', 'movements']
+        .filter((field) => Object.hasOwn(taxonomy || {}, field))
+        .map((field) => [field, taxonomy[field] || []])
+    );
+  }
+
   function createAlbumApiService(deps = {}) {
     const logger = deps.logger || console;
     const { API } = deps.constants || globalThis.ExtensionConstants;
@@ -83,6 +91,45 @@
     }
 
     function buildAlbumPayload(albumData, releaseGroup, artistCountry) {
+      const sourceObservation = albumData.sourceObservation
+        ? {
+            schemaVersion: 1,
+            identity: {
+              numericId:
+                albumData.sourceObservation.identity?.numericId == null
+                  ? null
+                  : String(albumData.sourceObservation.identity.numericId),
+              canonicalUrl:
+                albumData.sourceObservation.identity?.canonicalUrl || null,
+              canonicalPath:
+                albumData.sourceObservation.identity?.canonicalPath || null,
+              artist: albumData.sourceObservation.identity?.artist || '',
+              title: albumData.sourceObservation.identity?.title || '',
+            },
+            platformLinks: (
+              albumData.sourceObservation.platformLinks || []
+            ).map((link) => ({ service: link.service, url: link.url })),
+            taxonomy: {
+              complete: albumData.sourceObservation.taxonomy?.complete === true,
+              primaryGenres:
+                albumData.sourceObservation.taxonomy?.primaryGenres || [],
+              secondaryGenres:
+                albumData.sourceObservation.taxonomy?.secondaryGenres || [],
+              descriptors:
+                albumData.sourceObservation.taxonomy?.descriptors || [],
+              ...copyOptionalTaxonomyArrays(
+                albumData.sourceObservation.taxonomy
+              ),
+              sourceUrl:
+                albumData.sourceObservation.taxonomy?.sourceUrl || null,
+              extractorVersion:
+                albumData.sourceObservation.taxonomy?.extractorVersion || '',
+              capturedAt:
+                albumData.sourceObservation.taxonomy?.capturedAt || null,
+            },
+          }
+        : null;
+
       return {
         artist: albumData.artist,
         album: albumData.album,
@@ -91,6 +138,7 @@
         country: artistCountry,
         genre_1: albumData.genre_1 || '',
         genre_2: albumData.genre_2 || '',
+        ...(sourceObservation ? { sourceObservation } : {}),
         comments: '',
         tracks: null,
         primary_track: null,

@@ -216,16 +216,28 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     asyncHandler(
       async (req, res) => {
-        await albumService.updateGenres(
-          req.params.albumId,
-          { genre_1: req.body.genre_1, genre_2: req.body.genre_2 },
-          req.user._id
-        );
+        if (req.body.reset === true) {
+          await albumService.resetGenres(req.params.albumId, req.user._id);
+        } else {
+          await albumService.updateGenres(
+            req.params.albumId,
+            { genre_1: req.body.genre_1, genre_2: req.body.genre_2 },
+            req.user._id
+          );
+        }
         res.json({ success: true });
       },
       'updating album genres',
       { errorMessage: 'Error updating genres' }
     )
+  );
+
+  app.get(
+    '/api/albums/:albumId/taxonomy',
+    ensureAuthAPI,
+    asyncHandler(async (req, res) => {
+      res.json(await albumService.getTaxonomy(req.params.albumId));
+    }, 'fetching album taxonomy')
   );
 
   // Batch update album metadata

@@ -51,6 +51,22 @@ const PRESERVE_NATIVE_NAME_SQL = `
              AND NOT (albums.album ~ '[^\\x20-\\x7E]' AND EXCLUDED.album !~ '[^\\x20-\\x7E]')
             THEN EXCLUDED.album
             ELSE albums.album
+           END,`;
+
+const PRESERVE_STRUCTURED_GENRES_SQL = `
+          genre_1 = CASE
+            WHEN albums.album_taxonomy ? 'rym'
+              OR (albums.album_taxonomy->'manual_overrides') ? 'genre_1'
+            THEN albums.genre_1
+            WHEN EXCLUDED.genre_1 != '' THEN EXCLUDED.genre_1
+            ELSE albums.genre_1
+          END,
+          genre_2 = CASE
+            WHEN albums.album_taxonomy ? 'rym'
+              OR (albums.album_taxonomy->'manual_overrides') ? 'genre_2'
+            THEN albums.genre_2
+            WHEN EXCLUDED.genre_2 != '' THEN EXCLUDED.genre_2
+            ELSE albums.genre_2
           END,`;
 
 /**
@@ -358,14 +374,7 @@ function createAlbumCanonical(deps = {}) {
             WHEN EXCLUDED.country != '' THEN EXCLUDED.country
             ELSE albums.country
           END,
-          genre_1 = CASE 
-            WHEN EXCLUDED.genre_1 != '' THEN EXCLUDED.genre_1 
-            ELSE albums.genre_1 
-          END,
-          genre_2 = CASE 
-            WHEN EXCLUDED.genre_2 != '' THEN EXCLUDED.genre_2 
-            ELSE albums.genre_2 
-          END,
+          ${PRESERVE_STRUCTURED_GENRES_SQL}
           tracks = COALESCE(EXCLUDED.tracks, albums.tracks),
           -- Cover image: prefer larger file (better quality)
           cover_image = CASE 
@@ -448,14 +457,7 @@ function createAlbumCanonical(deps = {}) {
             WHEN EXCLUDED.country != '' THEN EXCLUDED.country 
             ELSE albums.country 
           END,
-          genre_1 = CASE 
-            WHEN EXCLUDED.genre_1 != '' THEN EXCLUDED.genre_1 
-            ELSE albums.genre_1 
-          END,
-          genre_2 = CASE 
-            WHEN EXCLUDED.genre_2 != '' THEN EXCLUDED.genre_2 
-            ELSE albums.genre_2 
-          END,
+          ${PRESERVE_STRUCTURED_GENRES_SQL}
           tracks = COALESCE(EXCLUDED.tracks, albums.tracks),
           cover_image = CASE 
             WHEN EXCLUDED.cover_image IS NOT NULL AND 
@@ -597,14 +599,7 @@ function createAlbumCanonical(deps = {}) {
             WHEN EXCLUDED.country != '' THEN EXCLUDED.country 
             ELSE albums.country 
           END,
-          genre_1 = CASE 
-            WHEN EXCLUDED.genre_1 != '' THEN EXCLUDED.genre_1 
-            ELSE albums.genre_1 
-          END,
-          genre_2 = CASE 
-            WHEN EXCLUDED.genre_2 != '' THEN EXCLUDED.genre_2 
-            ELSE albums.genre_2 
-          END,
+          ${PRESERVE_STRUCTURED_GENRES_SQL}
           tracks = COALESCE(EXCLUDED.tracks, albums.tracks),
           updated_at = EXCLUDED.updated_at
         RETURNING 
@@ -693,14 +688,7 @@ function createAlbumCanonical(deps = {}) {
             WHEN EXCLUDED.country != '' THEN EXCLUDED.country 
             ELSE albums.country 
           END,
-          genre_1 = CASE 
-            WHEN EXCLUDED.genre_1 != '' THEN EXCLUDED.genre_1 
-            ELSE albums.genre_1 
-          END,
-          genre_2 = CASE 
-            WHEN EXCLUDED.genre_2 != '' THEN EXCLUDED.genre_2 
-            ELSE albums.genre_2 
-          END,
+          ${PRESERVE_STRUCTURED_GENRES_SQL}
           tracks = COALESCE(EXCLUDED.tracks, albums.tracks),
           updated_at = EXCLUDED.updated_at
         RETURNING 

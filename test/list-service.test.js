@@ -89,6 +89,11 @@ function createSingleListItemRow(overrides = {}) {
     summary: 'Summary',
     summary_source: 'musicbrainz',
     availability: ['spotify'],
+    availability_links: [
+      { service: 'spotify', url: 'https://open.spotify.com/album/id' },
+    ],
+    album_taxonomy: { schema_version: 1, manual_overrides: {} },
+    taxonomy_updated_at: '2026-08-17T12:00:00.000Z',
     recommended_by: 'alice',
     recommended_at: '2025-01-01',
     ...overrides,
@@ -415,6 +420,8 @@ describe('list-service fetchers and setup status', () => {
               album_id: 'album1',
               artist: 'Artist',
               album: 'Album',
+              rym_album_id: '123',
+              rym_url: 'https://rateyourmusic.com/release/album/artist/album/',
             },
           ],
         };
@@ -439,6 +446,9 @@ describe('list-service fetchers and setup status', () => {
         albumId: 'album1',
         artist: 'Artist',
         album: 'Album',
+        rymNumericId: '123',
+        rymCanonicalUrl:
+          'https://rateyourmusic.com/release/album/artist/album/',
       },
     ]);
   });
@@ -515,6 +525,13 @@ describe('list-service fetchers and setup status', () => {
     assert.strictEqual(result.items[0].recommended_by, 'alice');
     assert.strictEqual(result.items[0].recommended_at, '2025-01-01');
     assert.deepStrictEqual(result.items[0].availability, ['spotify']);
+    assert.deepStrictEqual(result.items[0].availability_links, [
+      { service: 'spotify', url: 'https://open.spotify.com/album/id' },
+    ]);
+    assert.deepStrictEqual(result.items[0].taxonomy, {
+      schema_version: 1,
+      manual_overrides: {},
+    });
     assert.ok(executedSql.includes('LEFT JOIN availability av'));
     assert.ok(executedSql.includes('LEFT JOIN recommendations r'));
     assert.strictEqual(executedParams.length, 3);
@@ -556,6 +573,9 @@ describe('list-service fetchers and setup status', () => {
     // Availability ships in the core profile (like the cover URL) so badges
     // render on the first paint instead of waiting for the detail hydrate.
     assert.deepStrictEqual(result.items[0].availability, ['spotify']);
+    assert.deepStrictEqual(result.items[0].availability_links, [
+      { service: 'spotify', url: 'https://open.spotify.com/album/id' },
+    ]);
     assert.strictEqual(result.items[0].recommended_by, null);
     assert.ok(executedSql.includes('NULL AS tracks'));
     assert.ok(executedSql.includes('LEFT JOIN availability av'));
@@ -842,6 +862,8 @@ describe('list-service write operations', () => {
     assert.strictEqual(result.changeCount, 0);
     assert.deepStrictEqual(result.addedItems, []);
     assert.deepStrictEqual(result.duplicateAlbums, []);
+    assert.deepStrictEqual(result.sourceObservationResults, []);
+    assert.deepStrictEqual(result.warnings, []);
     assert.strictEqual(result.list._id, 'list1');
   });
 
@@ -906,6 +928,12 @@ describe('list-service write operations', () => {
     deps.helpers.triggerAlbumBackgroundFetches = mock.fn(() => {
       events.push('background-fetches');
     });
+    deps.sourceObservationService = {
+      apply: mock.fn(async (_client, albumId) => ({
+        result: { albumId, status: 'applied' },
+        warnings: [],
+      })),
+    };
 
     const service = createListService(deps);
     const result = await service.incrementalUpdate(
@@ -917,6 +945,7 @@ describe('list-service write operations', () => {
             artist: 'Panopticon',
             album: 'Det Hjemsokte Hjertet',
             album_id: '01ce764b-626f-43a7-b73a-378bcb4c03ea',
+            sourceObservation: { schemaVersion: 1 },
           },
         ],
         removed: [],
@@ -926,6 +955,16 @@ describe('list-service write operations', () => {
     );
 
     assert.strictEqual(result.changeCount, 1);
+    assert.strictEqual(
+      deps.sourceObservationService.apply.mock.calls.length,
+      1
+    );
+    assert.deepStrictEqual(result.sourceObservationResults, [
+      {
+        albumId: '01ce764b-626f-43a7-b73a-378bcb4c03ea',
+        status: 'applied',
+      },
+    ]);
     assert.deepStrictEqual(events.slice(-2), ['COMMIT', 'background-fetches']);
     assert.deepStrictEqual(
       deps.helpers.triggerAlbumBackgroundFetches.mock.calls[0].arguments[0],

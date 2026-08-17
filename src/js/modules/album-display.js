@@ -40,6 +40,10 @@ import {
 import { createPlaycountSync } from './album-display/playcount-sync.js';
 import { renderAvailabilityBadges } from './album-display/availability-badges.js';
 import { getPositionBadgeColor } from './album-display/position-badge.js';
+import {
+  renderTaxonomyContent,
+  renderTaxonomyTrigger,
+} from './album-display/taxonomy-details.js';
 import { createModal, destroyModalForElement } from './modal-factory.js';
 import {
   renderDesktopAlbumCell,
@@ -204,6 +208,10 @@ export function createAlbumDisplay(deps = {}) {
     const availability = Array.isArray(album.availability)
       ? album.availability
       : [];
+    const availabilityLinks = Array.isArray(album.availability_links)
+      ? album.availability_links
+      : [];
+    const taxonomy = album.taxonomy || null;
     const inlineCover = album.cover_image
       ? `data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}`
       : '';
@@ -303,6 +311,8 @@ export function createAlbumDisplay(deps = {}) {
       secondaryTrackDisplay,
       secondaryTrackDuration,
       availability,
+      availabilityLinks,
+      taxonomy,
       coverImageUrl,
       coverThumbUrl,
       summary,
@@ -342,11 +352,14 @@ export function createAlbumDisplay(deps = {}) {
     cache,
     releaseDate,
     availability,
+    availabilityLinks,
     isMobile
   ) {
     const html = renderAvailabilityBadges(
       availability,
-      isMobile ? { variant: 'mobile' } : {}
+      isMobile
+        ? { variant: 'mobile', links: availabilityLinks }
+        : { links: availabilityLinks }
     );
     if (cache.availabilityHtml === html) return;
     cache.availabilityHtml = html;
@@ -367,6 +380,23 @@ export function createAlbumDisplay(deps = {}) {
     if (html && releaseDate) {
       releaseDate.insertAdjacentHTML('afterend', html);
       cache.availabilityBadges = row.querySelector('.album-availability');
+    }
+  }
+
+  function updateTaxonomyDetails(row, cache, data, isMobile) {
+    if (!cache.taxonomySlot) return;
+    const html = renderTaxonomyTrigger(data.taxonomy, {
+      mobile: isMobile,
+      albumName: data.albumName,
+      artist: data.artist,
+    });
+    if (cache.taxonomySlot.innerHTML !== html) {
+      cache.taxonomySlot.innerHTML = html;
+      if (isMobile) {
+        attachMobileTaxonomyHandler(row);
+      } else {
+        initSummaryTooltips(cache.taxonomySlot);
+      }
     }
   }
 
@@ -433,6 +463,8 @@ export function createAlbumDisplay(deps = {}) {
         alwaysShowReleaseDate: true,
         badgesHtml: badgeHtml,
         badgeState,
+        includeAvailabilityLinks: true,
+        includeTaxonomy: true,
       }),
       artist: renderDesktopArtistCell(data),
       country: `<div class="flex items-center country-cell">
@@ -609,7 +641,8 @@ export function createAlbumDisplay(deps = {}) {
         e.target.closest('.genre-2-cell') ||
         e.target.closest('.comment-cell') ||
         e.target.closest('.comment-2-cell') ||
-        e.target.closest('.track-cell');
+        e.target.closest('.track-cell') ||
+        e.target.closest('.taxonomy-trigger');
 
       if (isInteractiveCell) {
         return;
@@ -797,7 +830,7 @@ export function createAlbumDisplay(deps = {}) {
              four gaps visually equal. The live-update twin (mobile branch of the
              release-date className reset, ~line 1310) MUST keep these same
              classes or the asymmetry returns on the next in-place update. -->
-        ${renderMobileCoverSection(data, index)}
+        ${renderMobileCoverSection(data, index, { includeAvailabilityLinks: true })}
         
         <!-- INFO SECTION -->
         <div class="flex-1 min-w-0 pl-0.5 pr-1 flex flex-col justify-evenly h-[130px] leading-[18px]">
@@ -818,7 +851,7 @@ export function createAlbumDisplay(deps = {}) {
             </span>
           </div>
           <!-- Genres -->
-          ${renderMobileGenreRow(data)}
+          ${renderMobileGenreRow(data, { includeTaxonomy: true })}
           <!-- Primary track (marker: 1) -->
           <div class="flex items-center ${data.primaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}"
                data-track-play-btn="${data.primaryTrackDisplay ? 'true' : ''}"
@@ -1013,6 +1046,21 @@ export function createAlbumDisplay(deps = {}) {
         showMobileRecommendationSheet(recommendationBadge);
       });
     }
+    attachMobileTaxonomyHandler(card);
+  }
+
+  function attachMobileTaxonomyHandler(card) {
+    const trigger = card.querySelector('.taxonomy-trigger-mobile');
+    if (!trigger || trigger.dataset.taxonomyBound === 'true') return;
+    trigger.dataset.taxonomyBound = 'true';
+    const stopPropagation = (event) => event.stopPropagation();
+    trigger.addEventListener('touchstart', stopPropagation, { passive: true });
+    trigger.addEventListener('touchend', stopPropagation, { passive: true });
+    trigger.addEventListener('click', (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+      showMobileTaxonomySheet(trigger);
+    });
   }
 
   /**
@@ -1024,6 +1072,10 @@ export function createAlbumDisplay(deps = {}) {
    */
   function createAlbumItem(album, index, isMobile = false) {
     const data = processAlbumData(album, index);
+    data.availabilityLinks = Array.isArray(album.availability_links)
+      ? album.availability_links
+      : [];
+    data.taxonomy = album.taxonomy || null;
 
     if (isMobile) {
       return createMobileAlbumCard(data, index);
@@ -1225,8 +1277,10 @@ export function createAlbumDisplay(deps = {}) {
           cache,
           cache.releaseDate,
           data.availability,
+          data.availabilityLinks,
           isMobile
         );
+        updateTaxonomyDetails(row, cache, data, isMobile);
 
         if (!isMobile) {
           // Update country using cached span
@@ -1591,6 +1645,55 @@ export function createAlbumDisplay(deps = {}) {
       badge.addEventListener('mouseenter', handleRecommendationBadgeMouseEnter);
       badge.addEventListener('mouseleave', handleBadgeMouseLeave);
     });
+
+    const taxonomyTriggers = container.querySelectorAll(
+      '.taxonomy-trigger:not(.taxonomy-trigger-mobile)'
+    );
+    taxonomyTriggers.forEach((trigger) => {
+      trigger.addEventListener('mouseenter', handleTaxonomyMouseEnter);
+      trigger.addEventListener('mouseleave', handleBadgeMouseLeave);
+      trigger.addEventListener('focus', handleTaxonomyMouseEnter);
+      trigger.addEventListener('blur', handleBadgeMouseLeave);
+    });
+  }
+
+  function showAlbumTooltip(badge, { className, iconClass, contentHtml }) {
+    if (tooltipHideTimeout) {
+      clearTimeout(tooltipHideTimeout);
+      tooltipHideTimeout = null;
+    }
+    if (tooltipRemoveTimeout) {
+      clearTimeout(tooltipRemoveTimeout);
+      tooltipRemoveTimeout = null;
+    }
+
+    if (activeTooltip && activeBadge === badge && activeTooltip.parentNode) {
+      activeTooltip.classList.add('visible');
+      positionTooltip(badge, activeTooltip);
+      return;
+    }
+    if (activeTooltip && activeBadge !== badge) {
+      activeTooltip.remove();
+      activeTooltip = null;
+      activeBadge = null;
+    }
+
+    const tooltip = document.createElement('div');
+    tooltip.className = `summary-tooltip ${className}`;
+    tooltip.innerHTML = `
+      <div class="summary-tooltip-header">
+        <i class="${iconClass}"></i>
+        <span>${escapeHtml(badge.dataset.albumName)} - ${escapeHtml(badge.dataset.artist)}</span>
+      </div>
+      <div class="summary-tooltip-content">${contentHtml}</div>
+    `;
+    tooltip.addEventListener('mouseenter', handleTooltipMouseEnter);
+    tooltip.addEventListener('mouseleave', handleTooltipMouseLeave);
+    document.body.appendChild(tooltip);
+    activeTooltip = tooltip;
+    activeBadge = badge;
+    positionTooltip(badge, tooltip);
+    requestAnimationFrame(() => tooltip.classList.add('visible'));
   }
 
   /**
@@ -1600,64 +1703,31 @@ export function createAlbumDisplay(deps = {}) {
   function handleBadgeMouseEnter(e) {
     const badge = e.currentTarget;
     const summary = badge.dataset.summary;
-    const albumName = badge.dataset.albumName;
-    const artist = badge.dataset.artist;
-
     if (!summary) return;
+    showAlbumTooltip(badge, {
+      className: 'claude-tooltip',
+      iconClass: 'fas fa-robot',
+      contentHtml: escapeHtml(summary),
+    });
+  }
 
-    // Clear any pending hide timeout
-    if (tooltipHideTimeout) {
-      clearTimeout(tooltipHideTimeout);
-      tooltipHideTimeout = null;
+  function taxonomyFromTrigger(trigger) {
+    try {
+      const taxonomy = JSON.parse(trigger.dataset.taxonomy || '');
+      return renderTaxonomyContent(taxonomy) ? taxonomy : null;
+    } catch (_error) {
+      return null;
     }
+  }
 
-    // Cancel any pending removal animation
-    if (tooltipRemoveTimeout) {
-      clearTimeout(tooltipRemoveTimeout);
-      tooltipRemoveTimeout = null;
-    }
-
-    // If tooltip is already showing for this badge, just ensure it's visible
-    if (activeTooltip && activeBadge === badge && activeTooltip.parentNode) {
-      activeTooltip.classList.add('visible');
-      positionTooltip(badge, activeTooltip);
-      return;
-    }
-
-    // Remove existing tooltip if any (for a different badge)
-    if (activeTooltip && activeBadge !== badge) {
-      hideTooltip();
-    }
-
-    // All summaries now use Claude styling
-    const tooltipClass = 'summary-tooltip claude-tooltip';
-    const iconClass = 'fas fa-robot';
-
-    // Create tooltip element
-    const tooltip = document.createElement('div');
-    tooltip.className = tooltipClass;
-    tooltip.innerHTML = `
-      <div class="summary-tooltip-header">
-        <i class="${iconClass}"></i>
-        <span>${escapeHtml(albumName)} - ${escapeHtml(artist)}</span>
-      </div>
-      <div class="summary-tooltip-content">${escapeHtml(summary)}</div>
-    `;
-
-    // Add event listeners to tooltip for hover persistence
-    tooltip.addEventListener('mouseenter', handleTooltipMouseEnter);
-    tooltip.addEventListener('mouseleave', handleTooltipMouseLeave);
-
-    document.body.appendChild(tooltip);
-    activeTooltip = tooltip;
-    activeBadge = badge; // Track which badge this tooltip is for
-
-    // Position tooltip to the right of the badge, top-aligned
-    positionTooltip(badge, tooltip);
-
-    // Show tooltip with animation
-    requestAnimationFrame(() => {
-      tooltip.classList.add('visible');
+  function handleTaxonomyMouseEnter(event) {
+    const trigger = event.currentTarget;
+    const taxonomy = taxonomyFromTrigger(trigger);
+    if (!taxonomy) return;
+    showAlbumTooltip(trigger, {
+      className: 'taxonomy-tooltip',
+      iconClass: 'fas fa-tags',
+      contentHtml: renderTaxonomyContent(taxonomy),
     });
   }
 
@@ -1688,58 +1758,13 @@ export function createAlbumDisplay(deps = {}) {
     const badge = e.currentTarget;
     const recommendedBy = badge.dataset.recommendedBy;
     const recommendedAt = badge.dataset.recommendedAt;
-    const albumName = badge.dataset.albumName;
-    const artist = badge.dataset.artist;
-
     if (!recommendedBy) return;
 
-    // Clear any pending hide/removal timeouts
-    if (tooltipHideTimeout) {
-      clearTimeout(tooltipHideTimeout);
-      tooltipHideTimeout = null;
-    }
-    if (tooltipRemoveTimeout) {
-      clearTimeout(tooltipRemoveTimeout);
-      tooltipRemoveTimeout = null;
-    }
-
-    // If tooltip already showing for this badge, just reposition
-    if (activeTooltip && activeBadge === badge && activeTooltip.parentNode) {
-      activeTooltip.classList.add('visible');
-      positionTooltip(badge, activeTooltip);
-      return;
-    }
-
-    // Remove existing tooltip if showing for a different badge
-    if (activeTooltip && activeBadge !== badge) {
-      hideTooltip();
-    }
-
     const dateDisplay = formatRecommendationDate(recommendedAt);
-
-    const tooltip = document.createElement('div');
-    tooltip.className = 'summary-tooltip recommendation-tooltip';
-    tooltip.innerHTML = `
-      <div class="summary-tooltip-header">
-        <i class="fas fa-thumbs-up"></i>
-        <span>${escapeHtml(albumName)} - ${escapeHtml(artist)}</span>
-      </div>
-      <div class="summary-tooltip-content">
-        Recommended by <strong style="color: #bfdbfe;">${escapeHtml(recommendedBy)}</strong>${dateDisplay ? ` on ${dateDisplay}` : ''}
-      </div>
-    `;
-
-    tooltip.addEventListener('mouseenter', handleTooltipMouseEnter);
-    tooltip.addEventListener('mouseleave', handleTooltipMouseLeave);
-
-    document.body.appendChild(tooltip);
-    activeTooltip = tooltip;
-    activeBadge = badge;
-
-    positionTooltip(badge, tooltip);
-
-    requestAnimationFrame(() => {
-      tooltip.classList.add('visible');
+    showAlbumTooltip(badge, {
+      className: 'recommendation-tooltip',
+      iconClass: 'fas fa-thumbs-up',
+      contentHtml: `Recommended by <strong style="color: #bfdbfe;">${escapeHtml(recommendedBy)}</strong>${dateDisplay ? ` on ${dateDisplay}` : ''}`,
     });
   }
 
@@ -1827,6 +1852,56 @@ export function createAlbumDisplay(deps = {}) {
     controller.open();
   }
 
+  function showMobileTaxonomySheet(trigger) {
+    const taxonomy = taxonomyFromTrigger(trigger);
+    if (!taxonomy) return;
+
+    document
+      .querySelectorAll('[data-taxonomy-modal]')
+      .forEach((modal) => destroyModalForElement(modal));
+    const fab = document.getElementById('addAlbumFAB');
+    if (fab) fab.style.display = 'none';
+
+    const modal = document.createElement('div');
+    modal.className =
+      'fixed inset-0 modal-layer flex items-center justify-center p-4 safe-area-modal';
+    modal.setAttribute('data-taxonomy-modal', 'true');
+    modal.innerHTML = `
+      <div class="absolute inset-0 modal-overlay" data-backdrop></div>
+      <div class="relative bg-gray-900 rounded-lg shadow-2xl flex flex-col w-full max-w-lg max-h-[85vh] overflow-hidden">
+        <div class="flex items-center justify-between p-4 border-b border-gray-800 shrink-0">
+          <button data-close-taxonomy class="p-2 -m-2 text-gray-400 hover:text-white active:text-white" aria-label="Close taxonomy">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+          <div class="flex-1 text-center px-4 min-w-0">
+            <div class="flex items-center justify-center gap-2 mb-1">
+              <i class="fas fa-tags taxonomy-modal-icon"></i>
+              <h3 class="text-lg font-semibold text-white truncate">${escapeHtml(trigger.dataset.albumName)}</h3>
+            </div>
+            <p class="text-sm text-gray-400 truncate">${escapeHtml(trigger.dataset.artist)}</p>
+          </div>
+          <div class="w-10"></div>
+        </div>
+        <div class="taxonomy-modal-content flex-1 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch p-4">
+          ${renderTaxonomyContent(taxonomy)}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    const controller = createModal({
+      element: modal,
+      backdrop: modal.querySelector('[data-backdrop]'),
+      closeButton: modal.querySelector('[data-close-taxonomy]'),
+      label: 'Album taxonomy',
+      onClose: () => {
+        modal.remove();
+        const fabEl = document.getElementById('addAlbumFAB');
+        if (fabEl && getCurrentList()) fabEl.style.display = 'flex';
+      },
+    });
+    controller.open();
+  }
+
   /**
    * Handle mouse enter on tooltip (keep it visible)
    */
@@ -1862,14 +1937,15 @@ export function createAlbumDisplay(deps = {}) {
    */
   function hideTooltip() {
     if (activeTooltip) {
-      activeTooltip.classList.remove('visible');
+      const tooltipToRemove = activeTooltip;
+      tooltipToRemove.classList.remove('visible');
       // Remove after animation
       tooltipRemoveTimeout = setTimeout(() => {
-        if (activeTooltip && activeTooltip.parentNode) {
-          activeTooltip.parentNode.removeChild(activeTooltip);
+        tooltipToRemove.remove();
+        if (activeTooltip === tooltipToRemove) {
+          activeTooltip = null;
+          activeBadge = null;
         }
-        activeTooltip = null;
-        activeBadge = null;
         tooltipRemoveTimeout = null;
       }, 200);
     }
@@ -1882,7 +1958,7 @@ export function createAlbumDisplay(deps = {}) {
    */
   function positionTooltip(badge, tooltip) {
     const badgeRect = badge.getBoundingClientRect();
-    const tooltipWidth = 320; // Match CSS width
+    const tooltipWidth = tooltip.offsetWidth || 320;
     const gap = 8; // Gap between badge and tooltip
 
     // Position to the right of the badge, top-aligned

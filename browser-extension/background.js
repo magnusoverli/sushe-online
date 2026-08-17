@@ -203,7 +203,7 @@ function notifyAlbumAddedToTab(tabId, album, list) {
 async function onAlbumAdded({ listId, listName, album, tabId }) {
   const list = findListById(listId) || { _id: listId, name: listName };
   await saveLastUsedList(list);
-  albumPresenceService.rememberAlbumInList(album, {
+  await albumPresenceService.rememberAlbumInList(album, {
     id: list._id,
     name: list.name || listName || 'List',
     year: list.year || null,

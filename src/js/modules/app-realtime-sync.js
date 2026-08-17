@@ -9,6 +9,7 @@ export function createAppRealtimeSync(deps = {}) {
     getRealtimeSyncModuleInstance,
     setRealtimeSyncModuleInstance,
     getCurrentListId,
+    getLists = () => ({}),
     getListData,
     apiCall,
     updateAlbumSummaryInPlace,
@@ -21,6 +22,110 @@ export function createAppRealtimeSync(deps = {}) {
     logger = console,
     win = typeof window !== 'undefined' ? window : null,
   } = deps;
+  const taxonomyRequests = new Map();
+
+  function patchLoadedAlbumCopies(albumId, patch) {
+    let currentListChanged = false;
+    const currentListId = getCurrentListId();
+
+    for (const listId of Object.keys(getLists() || {})) {
+      const albums = getListData(listId);
+      if (!Array.isArray(albums)) continue;
+
+      let listChanged = false;
+      for (const album of albums) {
+        if (album?.album_id !== albumId) continue;
+        Object.assign(album, patch);
+        listChanged = true;
+      }
+      if (listChanged && listId === currentListId) {
+        currentListChanged = true;
+      }
+    }
+
+    if (currentListChanged) {
+      displayAlbums(getListData(currentListId));
+    }
+  }
+
+  function hasLoadedAlbum(albumId) {
+    return Object.keys(getLists() || {}).some((listId) =>
+      getListData(listId)?.some((album) => album?.album_id === albumId)
+    );
+  }
+
+  function handleAlbumAvailabilityUpdated(data) {
+    if (
+      typeof data?.albumId !== 'string' ||
+      !Array.isArray(data.availability) ||
+      !Array.isArray(data.availabilityLinks)
+    ) {
+      logger.warn?.(
+        '[RealtimeSync] Ignoring invalid availability update',
+        data
+      );
+      return;
+    }
+
+    patchLoadedAlbumCopies(data.albumId, {
+      availability: data.availability,
+      availability_links: data.availabilityLinks,
+    });
+  }
+
+  async function handleAlbumTaxonomyUpdated(data) {
+    if (typeof data?.albumId !== 'string' || !hasLoadedAlbum(data.albumId)) {
+      return;
+    }
+
+    const eventTimestamp = Date.parse(data.taxonomyUpdatedAt || '');
+    const previousRequest = taxonomyRequests.get(data.albumId);
+    if (
+      previousRequest?.timestamp &&
+      Number.isFinite(eventTimestamp) &&
+      eventTimestamp < previousRequest.timestamp
+    ) {
+      return;
+    }
+    const token = Symbol(data.albumId);
+    taxonomyRequests.set(data.albumId, {
+      token,
+      timestamp: Number.isFinite(eventTimestamp)
+        ? eventTimestamp
+        : previousRequest?.timestamp || null,
+    });
+
+    try {
+      const taxonomy = await apiCall(
+        `/api/albums/${encodeURIComponent(data.albumId)}/taxonomy`
+      );
+      if (!taxonomy || typeof taxonomy !== 'object') {
+        throw new Error('Invalid taxonomy response');
+      }
+      if (taxonomyRequests.get(data.albumId)?.token !== token) return;
+
+      const responseTimestamp = Date.parse(taxonomy.taxonomy_updated_at || '');
+      if (
+        Number.isFinite(eventTimestamp) &&
+        Number.isFinite(responseTimestamp) &&
+        responseTimestamp < eventTimestamp
+      ) {
+        return;
+      }
+      patchLoadedAlbumCopies(data.albumId, {
+        taxonomy: taxonomy.taxonomy,
+        genre_1: taxonomy.genre_1,
+        genre_2: taxonomy.genre_2,
+        taxonomy_updated_at:
+          taxonomy.taxonomy_updated_at ?? data.taxonomyUpdatedAt ?? null,
+      });
+    } catch (error) {
+      logger.warn?.('[RealtimeSync] Failed to apply taxonomy update', {
+        albumId: data.albumId,
+        error,
+      });
+    }
+  }
 
   function getRealtimeSyncModule() {
     let realtimeSyncModule = getRealtimeSyncModuleInstance();
@@ -30,6 +135,8 @@ export function createAppRealtimeSync(deps = {}) {
         getListData,
         apiCall,
         updateAlbumSummaryInPlace,
+        onAlbumAvailabilityUpdated: handleAlbumAvailabilityUpdated,
+        onAlbumTaxonomyUpdated: handleAlbumTaxonomyUpdated,
         refreshListData: async (listId) => {
           if (wasRecentLocalSave(listId)) {
             logger.log(

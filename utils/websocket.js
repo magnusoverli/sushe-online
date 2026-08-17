@@ -129,6 +129,27 @@ function createBroadcast(getIO, logger) {
         userRoom,
       });
     },
+    albumAvailabilityUpdated(userId, albumId, availability, availabilityLinks) {
+      emitToUser(
+        'album:availability-updated',
+        'WebSocket not initialized, cannot broadcast album:availability-updated',
+        userId,
+        { albumId, availability, availabilityLinks }
+      );
+      logger.debug('Broadcast album:availability-updated', {
+        userId,
+        albumId,
+      });
+    },
+    albumTaxonomyUpdated(userId, albumId, taxonomyUpdatedAt) {
+      emitToUser(
+        'album:taxonomy-updated',
+        'WebSocket not initialized, cannot broadcast album:taxonomy-updated',
+        userId,
+        { albumId, taxonomyUpdatedAt }
+      );
+      logger.debug('Broadcast album:taxonomy-updated', { userId, albumId });
+    },
     forceLogoutAll(payload = {}) {
       const io = getIO();
       if (!io) {

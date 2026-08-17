@@ -14,10 +14,10 @@
 const { ensureDb } = require('../db/postgres');
 const logger = require('../utils/logger');
 const { wait } = require('../utils/request-queue');
+const { ODESLI_RATE_LIMIT_MS } = require('./availability/platforms');
 const {
-  AVAILABILITY_SERVICES,
-  ODESLI_RATE_LIMIT_MS,
-} = require('./availability/platforms');
+  AVAILABILITY_RESOLUTION_VERSION,
+} = require('./availability-resolution-service');
 const {
   buildAvailabilityResolution,
 } = require('./availability/build-resolution');
@@ -50,11 +50,12 @@ function createAvailabilityResolutionJob(deps = {}) {
       SELECT
         (SELECT COUNT(*) FROM albums
           WHERE artist IS NOT NULL AND album IS NOT NULL) AS total,
-        (SELECT COUNT(DISTINCT m.album_id) FROM album_service_mappings m
-          WHERE m.strategy LIKE 'availability:%'
-            AND m.service = ANY($1)) AS resolved
+         (SELECT COUNT(*) FROM albums
+           WHERE artist IS NOT NULL
+             AND album IS NOT NULL
+             AND availability_resolution_version >= $1) AS resolved
     `,
-      [AVAILABILITY_SERVICES]
+      [AVAILABILITY_RESOLUTION_VERSION]
     );
     const row = result.rows[0] || {};
     const totalAlbums = parseInt(row.total, 10) || 0;
@@ -95,21 +96,12 @@ function createAvailabilityResolutionJob(deps = {}) {
    * re-resolution, matching the backfill CLI).
    */
   async function selectCandidates(all) {
-    const params = all ? [] : [AVAILABILITY_SERVICES];
+    const params = all ? [] : [AVAILABILITY_RESOLUTION_VERSION];
     const { rows } = await db.raw(
       `SELECT a.album_id, a.artist, a.album
          FROM albums a
         WHERE a.artist IS NOT NULL AND a.album IS NOT NULL
-          ${
-            all
-              ? ''
-              : `AND NOT EXISTS (
-             SELECT 1 FROM album_service_mappings m
-              WHERE m.album_id = a.album_id
-                AND m.strategy LIKE 'availability:%'
-                AND m.service = ANY($1)
-           )`
-          }
+          ${all ? '' : 'AND a.availability_resolution_version < $1'}
         ORDER BY a.artist, a.album`,
       params
     );
@@ -175,6 +167,9 @@ function createAvailabilityResolutionJob(deps = {}) {
           if (result.action === 'resolved') {
             summary.resolved++;
             currentProgress.resolved++;
+          } else if (result.transient === true) {
+            summary.failed++;
+            currentProgress.failed++;
           } else {
             summary.skipped++;
             currentProgress.skipped++;

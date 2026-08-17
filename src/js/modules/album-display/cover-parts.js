@@ -104,7 +104,10 @@ export function renderMobileCoverSection(data, index, options = {}) {
   const availabilityHtml =
     options.includeAvailability === false
       ? ''
-      : renderAvailabilityBadges(data.availability, { variant: 'mobile' });
+      : renderAvailabilityBadges(data.availability, {
+          variant: 'mobile',
+          links: options.includeAvailabilityLinks ? data.availabilityLinks : [],
+        });
   const dateHtml = `<span class="${options.dateClass || `release-date-display text-xs leading-none whitespace-nowrap ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}`}"
     ${data.yearMismatch ? `title="${escapeHtml(data.yearMismatchTooltip || '')}"` : ''}>${escapeHtml(dateText || '')}</span>`;
   const wrappedDateHtml = options.dateWrapperClass

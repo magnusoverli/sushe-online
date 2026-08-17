@@ -38,6 +38,14 @@ function createListFetchers(deps = {}) {
          a.country,
          a.genre_1,
          a.genre_2,
+         a.album_taxonomy,
+         a.taxonomy_updated_at,
+         (SELECT m.external_album_id FROM album_service_mappings m
+           WHERE m.album_id = li.album_id AND m.service = 'rateyourmusic'
+           LIMIT 1) AS rym_numeric_id,
+         (SELECT m.external_url FROM album_service_mappings m
+           WHERE m.album_id = li.album_id AND m.service = 'rateyourmusic'
+           LIMIT 1) AS rym_canonical_url,
          a.tracks,
           a.cover_image_format,
            a.cover_image_updated_at,
@@ -45,12 +53,22 @@ function createListFetchers(deps = {}) {
           a.summary,
          a.summary_source,
          COALESCE((
-           SELECT json_agg(m.service)
+           SELECT json_agg(m.service ORDER BY m.service)
            FROM album_service_mappings m
             WHERE m.album_id = li.album_id
-              AND m.strategy LIKE 'availability:%'
+               AND (m.strategy LIKE 'availability:%' OR m.external_url IS NOT NULL)
               AND m.service = ANY($2)
-          ), '[]'::json) AS availability
+          ), '[]'::json) AS availability,
+         COALESCE((
+           SELECT json_agg(
+             json_build_object('service', m.service, 'url', m.external_url)
+             ORDER BY m.service
+           )
+           FROM album_service_mappings m
+            WHERE m.album_id = li.album_id
+               AND m.service = ANY($2)
+               AND m.external_url IS NOT NULL
+         ), '[]'::json) AS availability_links
        FROM lists l
        LEFT JOIN list_items li ON li.list_id = l._id
        LEFT JOIN albums a ON li.album_id = a.album_id
@@ -177,9 +195,17 @@ function createListFetchers(deps = {}) {
     // badges while scoping the aggregate to this list's albums.
     const availabilityCte = `,
       availability AS (
-        SELECT album_id, json_agg(service ORDER BY service) AS services
+        SELECT album_id,
+               json_agg(service ORDER BY service) AS services,
+               COALESCE(
+                 json_agg(
+                   json_build_object('service', service, 'url', external_url)
+                   ORDER BY service
+                 ) FILTER (WHERE external_url IS NOT NULL),
+                 '[]'::json
+               ) AS links
         FROM album_service_mappings
-        WHERE strategy LIKE 'availability:%'
+        WHERE (strategy LIKE 'availability:%' OR external_url IS NOT NULL)
           AND service = ANY($3)
           AND album_id IN (
             SELECT album_id FROM list_items WHERE list_id = $1
@@ -195,14 +221,16 @@ function createListFetchers(deps = {}) {
     const detailsColumns = includeDetails
       ? `a.tracks,
               a.summary,
-              a.summary_source,
-              COALESCE(av.services, '[]'::json) AS availability,
+               a.summary_source,
+               COALESCE(av.services, '[]'::json) AS availability,
+               COALESCE(av.links, '[]'::json) AS availability_links,
               u.username AS recommended_by,
               r.created_at AS recommended_at,`
       : `NULL AS tracks,
               '' AS summary,
-              '' AS summary_source,
-              COALESCE(av.services, '[]'::json) AS availability,
+               '' AS summary_source,
+               COALESCE(av.services, '[]'::json) AS availability,
+               COALESCE(av.links, '[]'::json) AS availability_links,
               NULL AS recommended_by,
               NULL AS recommended_at,`;
 
@@ -252,8 +280,12 @@ function createListFetchers(deps = {}) {
               a.album,
               a.release_date,
               a.country,
-              a.genre_1,
-              a.genre_2,
+               a.genre_1,
+               a.genre_2,
+                a.album_taxonomy,
+                a.taxonomy_updated_at,
+                rym.external_album_id AS rym_numeric_id,
+                rym.external_url AS rym_canonical_url,
               ${detailsColumns}
               ${isExport ? 'a.cover_image,' : ''}
               a.cover_image_format,
@@ -262,6 +294,8 @@ function createListFetchers(deps = {}) {
        FROM target_list tl
        LEFT JOIN list_items li ON li.list_id = tl._id
        LEFT JOIN albums a ON li.album_id = a.album_id
+       LEFT JOIN album_service_mappings rym
+         ON rym.album_id = li.album_id AND rym.service = 'rateyourmusic'
        ${availabilityJoin}
        ${recommendationJoin}
        ORDER BY li.position`,

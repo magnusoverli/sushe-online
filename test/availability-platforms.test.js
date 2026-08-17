@@ -1,6 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const {
+  AVAILABILITY_SERVICES,
   SUPPORTED_SERVICES,
   normalizeOdesliPlatform,
   normalizeMusicbrainzUrl,
@@ -8,15 +9,35 @@ const {
 
 describe('availability/platforms', () => {
   it('allows identity + availability services', () => {
-    for (const s of ['spotify', 'tidal', 'lastfm', 'itunes', 'qobuz']) {
+    for (const s of [
+      'spotify',
+      'tidal',
+      'lastfm',
+      'rateyourmusic',
+      'itunes',
+      'qobuz',
+      'soundcloud',
+      'youtube',
+    ]) {
       assert.ok(SUPPORTED_SERVICES.has(s), `${s} should be supported`);
     }
+    assert.deepStrictEqual(AVAILABILITY_SERVICES, [
+      'spotify',
+      'itunes',
+      'qobuz',
+      'tidal',
+      'bandcamp',
+      'soundcloud',
+      'youtube',
+    ]);
   });
 
   it('maps Odesli platform keys to canonical services', () => {
     assert.strictEqual(normalizeOdesliPlatform('itunes'), 'itunes');
     assert.strictEqual(normalizeOdesliPlatform('qobuz'), 'qobuz');
     assert.strictEqual(normalizeOdesliPlatform('tidal'), 'tidal');
+    assert.strictEqual(normalizeOdesliPlatform('soundcloud'), 'soundcloud');
+    assert.strictEqual(normalizeOdesliPlatform('youtube'), 'youtube');
     assert.strictEqual(normalizeOdesliPlatform('amazonMusic'), null);
     assert.strictEqual(normalizeOdesliPlatform('unknownThing'), null);
   });
@@ -44,5 +65,13 @@ describe('availability/platforms', () => {
     );
     assert.strictEqual(normalizeMusicbrainzUrl('not a url'), null);
     assert.strictEqual(normalizeMusicbrainzUrl('https://example.com/x'), null);
+    assert.strictEqual(
+      normalizeMusicbrainzUrl('https://open.spotify.com.evil.example/album/x'),
+      null
+    );
+    assert.strictEqual(
+      normalizeMusicbrainzUrl('https://notspotify.com/album/x'),
+      null
+    );
   });
 });

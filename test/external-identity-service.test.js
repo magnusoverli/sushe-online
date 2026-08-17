@@ -23,13 +23,14 @@ describe('external-identity-service', () => {
 
   it('returns cached album mapping and updates last_used_at', async () => {
     const pool = createMockPoolWithQuery(async (sql) => {
-      if (sql.includes('UPDATE album_service_mappings')) {
+      if (sql.includes('SELECT')) {
         return {
           rows: [
             {
               external_album_id: 'sp123',
               external_artist: 'Exxul',
               external_album: 'Meteahna Timpurilor',
+              external_url: 'https://open.spotify.com/album/sp123',
               confidence: 0.91,
               strategy: 'scored_search',
             },
@@ -46,8 +47,16 @@ describe('external-identity-service', () => {
     const result = await service.getAlbumServiceMapping('spotify', 'album-1');
 
     assert.strictEqual(result.external_album_id, 'sp123');
-    assert.strictEqual(pool.query.mock.calls.length, 1);
-    assert.ok(pool.query.mock.calls[0].arguments[0].includes('RETURNING'));
+    assert.strictEqual(
+      result.external_url,
+      'https://open.spotify.com/album/sp123'
+    );
+    assert.strictEqual(pool.query.mock.calls.length, 2);
+    assert.match(pool.query.mock.calls[0].arguments[0], /external_url/);
+    assert.match(
+      pool.query.mock.calls[1].arguments[0],
+      /last_used_at = NOW\(\)/
+    );
   });
 
   it('skips album mapping upsert for unsupported services', async () => {
@@ -83,7 +92,10 @@ describe('external-identity-service', () => {
       strategy: 'scored_search',
     });
 
-    const queryArgs = pool.query.mock.calls[0].arguments[1];
+    const insertCall = pool.query.mock.calls.find((call) =>
+      call.arguments[0].includes('INSERT INTO album_service_mappings')
+    );
+    const queryArgs = insertCall.arguments[1];
     assert.strictEqual(queryArgs[3], '...and Oceans');
     assert.strictEqual(queryArgs[4], 'Cypher');
   });
@@ -164,20 +176,85 @@ describe('external-identity-service', () => {
       strategy: 'availability:itunes',
     });
 
-    assert.strictEqual(pool.query.mock.calls.length, 1);
-    const args = pool.query.mock.calls[0].arguments[1];
+    const insertCall = pool.query.mock.calls.find((call) =>
+      call.arguments[0].includes('INSERT INTO album_service_mappings')
+    );
+    assert.ok(insertCall);
+    const args = insertCall.arguments[1];
     assert.ok(
-      pool.query.mock.calls[0].arguments[0].includes('external_url'),
+      insertCall.arguments[0].includes('external_url'),
       'INSERT should include external_url column'
     );
     assert.strictEqual(args[5], 'https://play.qobuz.com/album/9');
   });
 
+  it('preserves availability strategy while repository identity metadata is refreshed', async () => {
+    const pool = createMockPoolWithQuery(async () => ({ rows: [] }));
+    const albumServiceMappingsRepository = {
+      findByAlbumAndService: mock.fn(async () => ({
+        strategy: 'availability:musicbrainz',
+      })),
+      upsertCandidate: mock.fn(async () => ({})),
+    };
+    const service = createExternalIdentityService({
+      db: pool,
+      logger: createMockLogger(),
+      albumServiceMappingsRepository,
+    });
+
+    await service.upsertAlbumServiceMapping({
+      albumId: 'album-9',
+      service: 'spotify',
+      externalAlbumId: '1234567890123456789012',
+      externalUrl: 'https://open.spotify.com/album/1234567890123456789012',
+      strategy: 'scored_search',
+    });
+
+    const candidate =
+      albumServiceMappingsRepository.upsertCandidate.mock.calls[0].arguments[0];
+    assert.strictEqual(candidate.strategy, 'availability:musicbrainz');
+    assert.strictEqual(candidate.rank, 200);
+    assert.strictEqual(
+      candidate.externalUrl,
+      'https://open.spotify.com/album/1234567890123456789012'
+    );
+  });
+
+  it('rejects malformed provider URLs instead of creating availability rows', async () => {
+    const repository = {
+      findByAlbumAndService: mock.fn(),
+      upsertCandidate: mock.fn(),
+    };
+    const service = createExternalIdentityService({
+      db: createMockPoolWithQuery(async () => ({ rows: [] })),
+      logger: createMockLogger(),
+      albumServiceMappingsRepository: repository,
+    });
+
+    const result = await service.upsertAlbumServiceMapping({
+      albumId: 'album-9',
+      service: 'spotify',
+      externalUrl: 'https://open.spotify.com/track/0123456789012345678901',
+      strategy: 'availability:musicbrainz',
+    });
+
+    assert.strictEqual(result, null);
+    assert.strictEqual(repository.upsertCandidate.mock.calls.length, 0);
+  });
+
   it('reads target availability rows for an album', async () => {
     const pool = createMockPoolWithQuery(async () => ({
       rows: [
-        { service: 'qobuz', external_url: 'https://q/1' },
-        { service: 'tidal', external_url: 'https://t/1' },
+        {
+          service: 'qobuz',
+          external_url: 'https://play.qobuz.com/album/1',
+          strategy: 'availability:qobuz',
+        },
+        {
+          service: 'tidal',
+          external_url: 'https://tidal.com/browse/album/1',
+          strategy: 'availability:odesli',
+        },
       ],
     }));
     const service = createExternalIdentityService({
@@ -198,6 +275,81 @@ describe('external-identity-service', () => {
       'qobuz',
       'tidal',
       'bandcamp',
+      'soundcloud',
+      'youtube',
+    ]);
+  });
+
+  it('shows valid links without exposing malformed availability rows', async () => {
+    const pool = createMockPoolWithQuery(async () => ({
+      rows: [
+        {
+          service: 'youtube',
+          external_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          strategy: 'rym:link-hint',
+        },
+        {
+          service: 'spotify',
+          external_url: 'https://example.com/not-spotify',
+          strategy: 'scored_search',
+        },
+        {
+          service: 'qobuz',
+          external_url: 'https://legacy.example/qobuz/1',
+          strategy: 'availability:qobuz',
+        },
+      ],
+    }));
+    const service = createExternalIdentityService({
+      db: pool,
+      logger: createMockLogger(),
+    });
+
+    const rows = await service.getAlbumAvailability('album-9');
+
+    assert.deepStrictEqual(
+      rows.map((row) => row.service),
+      ['youtube']
+    );
+    assert.match(pool.query.mock.calls[0].arguments[0], /external_url/);
+    assert.doesNotMatch(
+      pool.query.mock.calls[0].arguments[0],
+      /strategy LIKE 'availability:%'/
+    );
+  });
+
+  it('reads and marks album availability resolution state', async () => {
+    const pool = createMockPoolWithQuery(async (sql) => {
+      if (sql.includes('SELECT availability_checked_at')) {
+        return {
+          rows: [
+            {
+              availability_checked_at: '2026-08-17T00:00:00.000Z',
+              availability_resolution_version: 2,
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+    const service = createExternalIdentityService({
+      db: pool,
+      logger: createMockLogger(),
+    });
+
+    assert.deepStrictEqual(
+      await service.getAlbumAvailabilityResolutionState('album-9'),
+      { checkedAt: '2026-08-17T00:00:00.000Z', version: 2 }
+    );
+    await service.markAlbumAvailabilityResolved('album-9', 2);
+
+    assert.match(
+      pool.query.mock.calls[1].arguments[0],
+      /availability_resolution_version = GREATEST/
+    );
+    assert.deepStrictEqual(pool.query.mock.calls[1].arguments[1], [
+      'album-9',
+      2,
     ]);
   });
 

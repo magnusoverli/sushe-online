@@ -42,7 +42,10 @@ function initializeQueues(db, options = {}) {
   const {
     initializeAvailabilityFetchQueue,
   } = require('../services/availability-fetch-queue');
-  initializeAvailabilityFetchQueue(db, { mbFetch });
+  initializeAvailabilityFetchQueue(db, {
+    mbFetch,
+    responseCache: options.responseCache,
+  });
 }
 
 /**

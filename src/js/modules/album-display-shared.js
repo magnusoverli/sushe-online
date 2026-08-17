@@ -16,6 +16,14 @@ function availabilityFingerprint(availability) {
   return Array.isArray(availability) ? [...availability].sort().join(',') : '';
 }
 
+function jsonFingerprint(value) {
+  try {
+    return value ? JSON.stringify(value) : '';
+  } catch {
+    return '';
+  }
+}
+
 function tracksFingerprint(tracks) {
   if (!Array.isArray(tracks)) return '';
   return tracks
@@ -50,7 +58,7 @@ export function albumMutableFingerprint(album) {
   const inlineCoverFingerprint = album.cover_image
     ? `${album.cover_image_format || ''}:${album.cover_image.length}`
     : '';
-  return `${album._id || ''}|${album.artist || ''}|${album.album || ''}|${album.release_date || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}|${album.primary_track || ''}|${album.secondary_track || ''}|${availabilityFingerprint(album.availability)}|${album.cover_thumb_url || ''}|${album.cover_image_url || ''}|${album.cover_thumbnail_updated_at || ''}|${album.cover_image_updated_at || ''}|${inlineCoverFingerprint}|${album.summary || ''}|${album.summary_source || album.summarySource || ''}|${album.recommended_by || ''}|${album.recommended_at || ''}|${tracksFingerprint(album.tracks)}`;
+  return `${album._id || ''}|${album.artist || ''}|${album.album || ''}|${album.release_date || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}|${album.primary_track || ''}|${album.secondary_track || ''}|${availabilityFingerprint(album.availability)}|${jsonFingerprint(album.availability_links)}|${jsonFingerprint(album.taxonomy)}|${album.cover_thumb_url || ''}|${album.cover_image_url || ''}|${album.cover_thumbnail_updated_at || ''}|${album.cover_image_updated_at || ''}|${inlineCoverFingerprint}|${album.summary || ''}|${album.summary_source || album.summarySource || ''}|${album.recommended_by || ''}|${album.recommended_at || ''}|${tracksFingerprint(album.tracks)}`;
 }
 
 function renderCoverPlaceholder(parent) {
@@ -217,6 +225,7 @@ export function createAlbumDisplayShared(deps = {}) {
       albumName: row.querySelector('.album-name'),
       releaseDate: row.querySelector('.release-date-display'),
       availabilityBadges: row.querySelector('.album-availability'),
+      taxonomySlot: row.querySelector('[data-taxonomy-slot]'),
       artist: row.querySelector('.artist-cell span'),
       countryCell: row.querySelector('.country-cell'),
       genre1Cell: row.querySelector('.genre-1-cell'),
@@ -266,6 +275,7 @@ export function createAlbumDisplayShared(deps = {}) {
       albumTitle: card.querySelector('[data-field="album-mobile-title"]'),
       releaseDate: card.querySelector('.release-date-display'),
       availabilityBadges: card.querySelector('.album-availability'),
+      taxonomySlot: card.querySelector('[data-taxonomy-slot]'),
       artistText: card.querySelector('[data-field="artist-mobile-text"]'),
       countryText: card.querySelector('[data-field="country-mobile-text"]'),
       genreText: card.querySelector('[data-field="genre-mobile-text"]'),

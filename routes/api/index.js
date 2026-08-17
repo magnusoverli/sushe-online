@@ -41,6 +41,12 @@ const { createListService } = require('../../services/list-service');
 const { createGroupService } = require('../../services/group-service');
 const { createAlbumService } = require('../../services/album-service');
 const {
+  createAlbumTaxonomyService,
+} = require('../../services/album-taxonomy-service');
+const {
+  createAlbumSourceObservationService,
+} = require('../../services/album-source-observation-service');
+const {
   createExternalIdentityService,
 } = require('../../services/external-identity-service');
 const { createAlbumCoverCache } = require('../../services/album-cover-cache');
@@ -138,6 +144,12 @@ module.exports = (app, deps) => {
   // Create playlist service
   const playlistService = createPlaylistService({ logger });
 
+  const albumTaxonomyService = createAlbumTaxonomyService({ db, logger });
+  const sourceObservationService = createAlbumSourceObservationService({
+    albumTaxonomyService,
+    logger,
+  });
+
   // Create list service
   const listService = createListService({
     db,
@@ -147,6 +159,7 @@ module.exports = (app, deps) => {
     helpers,
     getPointsForPosition,
     refreshPlaycountsInBackground,
+    sourceObservationService,
   });
 
   // Create group service
@@ -166,6 +179,7 @@ module.exports = (app, deps) => {
     responseCache,
     coverCache,
     upsertAlbumRecord: helpers.upsertAlbumRecord,
+    albumTaxonomyService,
   });
 
   const externalIdentityService = createExternalIdentityService({

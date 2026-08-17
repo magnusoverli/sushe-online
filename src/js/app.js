@@ -774,6 +774,7 @@ const { initializeRealtimeSync } = createAppRealtimeSync({
   getRealtimeSyncModuleInstance,
   setRealtimeSyncModuleInstance,
   getCurrentListId,
+  getLists,
   getListData,
   apiCall,
   updateAlbumSummaryInPlace: (albumId, summaryData) =>

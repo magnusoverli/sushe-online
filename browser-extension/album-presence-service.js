@@ -1,6 +1,11 @@
 // Background-side album presence index for RYM page badges.
 
 (function () {
+  const CACHE_VERSION = 2;
+  const NUMERIC_KEY_PREFIX = 'rym-id:';
+  const CANONICAL_KEY_PREFIX = 'rym-path:';
+  const NAME_KEY_PREFIX = 'name:';
+
   function createAlbumPresenceService(deps = {}) {
     const chromeApi = deps.chrome || chrome;
     const logger = deps.logger || console;
@@ -16,6 +21,7 @@
     let lastFetched = 0;
     let fetchInFlight = null;
     let storageLoaded = false;
+    let cacheNeedsRebuild = false;
 
     function isFresh() {
       return (
@@ -39,9 +45,21 @@
       const storedIndex = data[STORAGE_KEYS.ALBUM_PRESENCE_INDEX];
       const storedFetchedAt = data[STORAGE_KEYS.ALBUM_PRESENCE_LAST_FETCHED];
 
-      if (storedIndex && typeof storedIndex === 'object') {
-        presenceIndex = storedIndex;
+      if (
+        storedIndex?.version === CACHE_VERSION &&
+        storedIndex.entries &&
+        typeof storedIndex.entries === 'object'
+      ) {
+        presenceIndex = storedIndex.entries;
         lastFetched = Number(storedFetchedAt) || 0;
+      } else if (storedIndex && typeof storedIndex === 'object') {
+        presenceIndex = Object.fromEntries(
+          Object.entries(storedIndex)
+            .filter(([, entries]) => Array.isArray(entries))
+            .map(([key, entries]) => [`${NAME_KEY_PREFIX}${key}`, entries])
+        );
+        lastFetched = 0;
+        cacheNeedsRebuild = true;
       }
 
       storageLoaded = true;
@@ -49,7 +67,10 @@
 
     async function persistPresenceIndex() {
       await chromeApi.storage.local.set({
-        [STORAGE_KEYS.ALBUM_PRESENCE_INDEX]: presenceIndex,
+        [STORAGE_KEYS.ALBUM_PRESENCE_INDEX]: {
+          version: CACHE_VERSION,
+          entries: presenceIndex,
+        },
         [STORAGE_KEYS.ALBUM_PRESENCE_LAST_FETCHED]: lastFetched,
       });
     }
@@ -64,12 +85,70 @@
       if (!alreadyTracked) index[key].push(entry);
     }
 
+    function normalizeNumericId(value) {
+      if (value == null) return null;
+      const numericId = String(value).trim();
+      return /^\d+$/.test(numericId) ? numericId : null;
+    }
+
+    function getCanonicalPath(album) {
+      const identity =
+        album?.sourceObservation?.identity || album?.identity || {};
+      const candidates = [
+        album?.rymCanonicalUrl,
+        album?.canonicalUrl,
+        album?.canonicalPath,
+        album?.albumUrl,
+        identity.canonicalUrl,
+        identity.canonicalPath,
+      ];
+
+      for (const candidate of candidates) {
+        if (!candidate) continue;
+        const value = String(candidate);
+        const canonical = albumIdentity.canonicalizeRymAlbumUrl(
+          value.startsWith('/') ? `https://rateyourmusic.com${value}` : value
+        );
+        if (canonical) return canonical.canonicalPath;
+      }
+      return null;
+    }
+
+    function getNameKey(album) {
+      const identity =
+        album?.sourceObservation?.identity || album?.identity || {};
+      const key = albumIdentity.getAlbumKey({
+        artist: album?.artist || identity.artist,
+        album: album?.album || album?.title || identity.title,
+      });
+      return key ? `${NAME_KEY_PREFIX}${key}` : null;
+    }
+
+    function getIdentityKeys(album) {
+      const identity =
+        album?.sourceObservation?.identity || album?.identity || {};
+      const numericId = normalizeNumericId(
+        album?.rymNumericId ?? album?.numericId ?? identity.numericId
+      );
+      const canonicalPath = getCanonicalPath(album);
+      return [
+        numericId ? `${NUMERIC_KEY_PREFIX}${numericId}` : null,
+        canonicalPath ? `${CANONICAL_KEY_PREFIX}${canonicalPath}` : null,
+        getNameKey(album),
+      ].filter(Boolean);
+    }
+
+    function addAlbumPresence(index, album, entry) {
+      for (const key of getIdentityKeys(album)) {
+        addPresenceEntry(index, key, entry);
+      }
+    }
+
     function buildPresenceIndex(items) {
       const index = {};
 
       for (const item of items || []) {
-        const key = albumIdentity.getAlbumKey(item);
-        addPresenceEntry(index, key, {
+        addAlbumPresence(index, item, {
           albumId: item.albumId || '',
           listId: item.listId,
           listName: item.listName || 'List',
@@ -89,8 +168,7 @@
         const list = findListById(listId) || {};
 
         for (const item of items) {
-          const key = albumIdentity.getAlbumKey(item);
-          addPresenceEntry(index, key, {
+          addAlbumPresence(index, item, {
             albumId: item.album_id || item.albumId || '',
             listId,
             listName: list.name || 'List',
@@ -141,6 +219,7 @@
         if (!apiBase || !headers.Authorization) {
           presenceIndex = {};
           lastFetched = 0;
+          cacheNeedsRebuild = false;
           await persistPresenceIndex();
           return presenceIndex;
         }
@@ -157,6 +236,7 @@
             ? buildPresenceIndexFromFullLists(data)
             : buildPresenceIndex(data.items);
         lastFetched = Date.now();
+        cacheNeedsRebuild = false;
         await persistPresenceIndex();
         return presenceIndex;
       })().finally(() => {
@@ -174,7 +254,7 @@
     async function getPresenceForAlbums(albums = [], options = {}) {
       await loadStoredCache();
 
-      if (options.forceRefresh) {
+      if (options.forceRefresh || cacheNeedsRebuild) {
         await fetchPresenceIndex(true);
       } else if (!isFresh()) {
         if (hasCachedPresence()) {
@@ -189,16 +269,21 @@
       const matches = {};
 
       for (const album of albums) {
-        const key = album.key || albumIdentity.getAlbumKey(album);
-        if (key && presenceIndex[key]) matches[key] = presenceIndex[key];
+        const responseKey = album.key || albumIdentity.getAlbumKey(album);
+        const matchKey = getIdentityKeys(album).find(
+          (key) => presenceIndex[key]?.length
+        );
+        if (responseKey && matchKey) {
+          matches[responseKey] = presenceIndex[matchKey];
+        }
       }
 
       return matches;
     }
 
-    function rememberAlbumInList(albumData, list) {
-      const key = albumIdentity.getAlbumKey(albumData);
-      addPresenceEntry(presenceIndex, key, {
+    async function rememberAlbumInList(albumData, list) {
+      await loadStoredCache();
+      addAlbumPresence(presenceIndex, albumData, {
         albumId: albumData.album_id || '',
         listId: list.id,
         listName: list.name,
@@ -206,9 +291,7 @@
         isMain: !!list.isMain,
       });
       lastFetched = Date.now();
-      persistPresenceIndex().catch((error) => {
-        logger.warn('Could not persist album presence cache:', error);
-      });
+      await persistPresenceIndex();
     }
 
     function clear() {
@@ -216,6 +299,7 @@
       lastFetched = 0;
       fetchInFlight = null;
       storageLoaded = true;
+      cacheNeedsRebuild = false;
       chromeApi.storage.local.remove([
         STORAGE_KEYS.ALBUM_PRESENCE_INDEX,
         STORAGE_KEYS.ALBUM_PRESENCE_LAST_FETCHED,

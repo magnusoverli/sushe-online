@@ -33,7 +33,18 @@ const BASE_COLUMNS = ['a.artist', 'a.album'];
 // and tracks are cast to text so a substring match works regardless of the
 // underlying column type (date / jsonb).
 const OPTIONAL_COLUMNS = {
-  meta: ['a.release_date::text', 'a.country', 'a.genre_1', 'a.genre_2'],
+  meta: [
+    'a.release_date::text',
+    'a.country',
+    'a.genre_1',
+    'a.genre_2',
+    `(a.album_taxonomy->'rym'->'primary_genres')::text`,
+    `(a.album_taxonomy->'rym'->'secondary_genres')::text`,
+    `(a.album_taxonomy->'rym'->'descriptors')::text`,
+    `(a.album_taxonomy->'rym'->'languages')::text`,
+    `(a.album_taxonomy->'rym'->'scenes')::text`,
+    `(a.album_taxonomy->'rym'->'movements')::text`,
+  ],
   notes: ['li.comments', 'li.comments_2'],
   tracks: ['a.tracks::text', 'li.primary_track', 'li.secondary_track'],
 };
@@ -148,6 +159,12 @@ function createAlbumSearchService(deps = {}) {
              a.artist,
              a.album,
              a.release_date,
+             COALESCE(a.album_taxonomy->'rym'->'primary_genres', '[]'::jsonb) AS primary_genres,
+             COALESCE(a.album_taxonomy->'rym'->'secondary_genres', '[]'::jsonb) AS secondary_genres,
+             COALESCE(a.album_taxonomy->'rym'->'descriptors', '[]'::jsonb) AS descriptors,
+             COALESCE(a.album_taxonomy->'rym'->'languages', '[]'::jsonb) AS languages,
+             COALESCE(a.album_taxonomy->'rym'->'scenes', '[]'::jsonb) AS scenes,
+             COALESCE(a.album_taxonomy->'rym'->'movements', '[]'::jsonb) AS movements,
              l._id  AS list_id,
              l.name AS list_name,
              li.position
@@ -174,6 +191,16 @@ function createAlbumSearchService(deps = {}) {
         artist: row.artist || '',
         album: row.album || '',
         year: extractYear(row.release_date),
+        primaryGenres: Array.isArray(row.primary_genres)
+          ? row.primary_genres
+          : [],
+        secondaryGenres: Array.isArray(row.secondary_genres)
+          ? row.secondary_genres
+          : [],
+        descriptors: Array.isArray(row.descriptors) ? row.descriptors : [],
+        languages: Array.isArray(row.languages) ? row.languages : [],
+        scenes: Array.isArray(row.scenes) ? row.scenes : [],
+        movements: Array.isArray(row.movements) ? row.movements : [],
         listId: row.list_id,
         listName: row.list_name || '',
         position: row.position,

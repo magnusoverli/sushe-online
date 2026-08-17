@@ -305,9 +305,21 @@ describe('album-display-shared module', () => {
     const updated = utils.generateAlbumFingerprint(albums);
     assert.notStrictEqual(updated, first);
 
+    albums[0].availability_links = [
+      { service: 'spotify', url: 'https://open.spotify.com/album/example' },
+    ];
+    const linksUpdated = utils.generateAlbumFingerprint(albums);
+    assert.notStrictEqual(linksUpdated, updated);
+
+    albums[0].taxonomy = {
+      rym: { primary_genres: ['Post-Rock'] },
+    };
+    const taxonomyUpdated = utils.generateAlbumFingerprint(albums);
+    assert.notStrictEqual(taxonomyUpdated, linksUpdated);
+
     albums[0].cover_thumb_url = '/cover?v=2';
     const coverUpdated = utils.generateAlbumFingerprint(albums);
-    assert.notStrictEqual(coverUpdated, updated);
+    assert.notStrictEqual(coverUpdated, taxonomyUpdated);
 
     albums[0].summary = 'Hydrated summary';
     const hydrated = utils.generateAlbumFingerprint(albums);
