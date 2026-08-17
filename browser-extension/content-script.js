@@ -252,17 +252,17 @@ function currentDocumentIsDetail(identity) {
 
 async function extractAlbumDataFromPage(context) {
   const identity = getContextAlbumIdentity(context);
-  let legacyGenres = { genre_1: '', genre_2: '' };
+  let pageGenres = { genre_1: '', genre_2: '' };
   try {
-    legacyGenres = extractLegacyGenres(context);
+    pageGenres = extractLegacyGenres(context);
   } catch (error) {
-    console.warn('Could not extract legacy RYM genres:', error);
+    console.warn('Could not extract basic RYM genres:', error);
   }
   const data = {
     artist: identity?.artist || '',
     album: identity?.album || '',
-    genre_1: legacyGenres.genre_1,
-    genre_2: legacyGenres.genre_2,
+    genre_1: pageGenres.genre_1,
+    genre_2: pageGenres.genre_2,
     albumUrl: identity?.albumUrl || null,
   };
 

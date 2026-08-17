@@ -162,12 +162,12 @@ function receivedAtValue(snapshot) {
   return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
 }
 
-function preserveOmittedRymFields(selected, fallback) {
+function preserveOmittedRymFields(selected, olderSnapshot) {
   const merged = cloneJson(selected);
-  if (!fallback) return merged;
+  if (!olderSnapshot) return merged;
   OPTIONAL_RYM_FIELDS.forEach((field) => {
-    if (!Object.hasOwn(merged, field) && Object.hasOwn(fallback, field)) {
-      merged[field] = cloneJson(fallback[field]);
+    if (!Object.hasOwn(merged, field) && Object.hasOwn(olderSnapshot, field)) {
+      merged[field] = cloneJson(olderSnapshot[field]);
     }
   });
   return merged;
@@ -241,10 +241,10 @@ function reconcileRymTaxonomyWithMapping(
   const selected = candidates.reduce((newest, snapshot) =>
     receivedAtValue(snapshot) > receivedAtValue(newest) ? snapshot : newest
   );
-  const fallback = candidates.find((snapshot) => snapshot !== selected);
+  const olderSnapshot = candidates.find((snapshot) => snapshot !== selected);
   return {
     ...cloneJson(mergedTaxonomy),
-    rym: preserveOmittedRymFields(selected, fallback),
+    rym: preserveOmittedRymFields(selected, olderSnapshot),
   };
 }
 

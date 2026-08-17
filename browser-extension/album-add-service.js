@@ -135,13 +135,12 @@
         let albumData = await extractAlbumIdentity(info, tab);
 
         if (!albumData || albumData.error) {
-          const fallbackIdentity =
-            globalThis.AlbumIdentity.getAlbumIdentityFromUrl(
-              info.linkUrl || info.pageUrl
-            );
-          if (fallbackIdentity) {
+          const urlIdentity = globalThis.AlbumIdentity.getAlbumIdentityFromUrl(
+            info.linkUrl || info.pageUrl
+          );
+          if (urlIdentity) {
             albumData = {
-              ...fallbackIdentity,
+              ...urlIdentity,
               genre_1: '',
               genre_2: '',
             };
