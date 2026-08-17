@@ -7,9 +7,21 @@
   const badgeAttribute = 'data-sushe-presence-badge';
   const badgeKeyAttribute = 'data-sushe-presence-badge-key';
   const badgeListsAttribute = 'data-sushe-presence-lists';
+  const badgeVariantAttribute = 'data-sushe-presence-variant';
   const albumAttribute = 'data-sushe-presence-key';
+  const platformRowAttribute = 'data-sushe-presence-platform-row';
   const maxAlbumsPerScan = 100;
   const freshValidationIntervalMs = 60 * 1000;
+  const platformHosts = [
+    'bandcamp.com',
+    'music.apple.com',
+    'open.spotify.com',
+    'qobuz.com',
+    'soundcloud.com',
+    'tidal.com',
+    'youtube.com',
+    'youtu.be',
+  ];
   let scanTimer = null;
   let validationInFlight = false;
   let lastValidationAt = 0;
@@ -33,6 +45,28 @@
         vertical-align: baseline;
         white-space: nowrap;
       }
+      .sushe-presence-badge--platform {
+        width: 36px;
+        height: 36px;
+        margin: 0 4px 0 0;
+        padding: 0;
+        border: 0;
+        border-radius: 5px;
+        overflow: hidden;
+        background: #080808;
+        vertical-align: middle;
+      }
+      .sushe-presence-badge--platform img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .sushe-presence-platform-row {
+        display: flex;
+        align-items: center;
+        margin-top: 12px;
+      }
     `;
     document.documentElement.appendChild(style);
   }
@@ -45,14 +79,6 @@
       anchor.closest('[class*="release_row"]') ||
       anchor.closest('tr') ||
       anchor.parentElement
-    );
-  }
-
-  function findCurrentPageTarget() {
-    return (
-      document.querySelector('h1') ||
-      document.querySelector('.release_title') ||
-      document.querySelector('[class*="release_title"]')
     );
   }
 
@@ -80,10 +106,16 @@
     const existing = targetByContainer.get(container);
     if (existing && !shouldReplaceTarget(existing, anchor)) return;
 
-    targetByContainer.set(container, { anchor, container, identity, key });
+    targetByContainer.set(container, {
+      anchor,
+      container,
+      identity,
+      key,
+      variant: 'listing',
+    });
   }
 
-  function collectAlbumTargets() {
+  function collectListingTargets() {
     const targetByContainer = new Map();
     const anchors = Array.from(
       document.querySelectorAll('a[href*="/release/"]')
@@ -99,27 +131,164 @@
       addTarget(targetByContainer, identity, anchor, getAlbumContainer(anchor));
     }
 
-    const targets = Array.from(targetByContainer.values());
+    return Array.from(targetByContainer.values());
+  }
 
-    const pageIdentity = getBadgeAlbumIdentityFromUrl(location.href);
-    const pageTarget = findCurrentPageTarget();
-    if (
-      pageIdentity &&
-      pageTarget &&
-      !pageTarget.querySelector(`[${badgeAttribute}]`)
-    ) {
-      const key = albumIdentity.getAlbumKey(pageIdentity);
-      if (!targets.some((target) => target.key === key)) {
-        targets.push({
-          anchor: pageTarget,
-          container: pageTarget.parentElement || pageTarget,
-          identity: pageIdentity,
-          key,
-        });
-      }
+  function findAlbumCover() {
+    const selectors = [
+      'img.coverart_img',
+      'img[itemprop="image"]',
+      '.release_left_column img',
+      '[class*="release_left"] img',
+      '[class*="coverart"] img',
+    ];
+
+    for (const selector of selectors) {
+      const covers = Array.from(document.querySelectorAll(selector));
+      const visibleCover = covers.find(
+        (cover) =>
+          typeof cover.getClientRects !== 'function' ||
+          cover.getClientRects().length > 0
+      );
+      if (visibleCover) return visibleCover;
+      if (covers[0]) return covers[0];
     }
 
-    return targets;
+    return null;
+  }
+
+  function getCoverScope(cover) {
+    return (
+      cover.closest('.release_left_column') ||
+      cover.closest('[class*="release_left"]') ||
+      cover.parentElement?.parentElement ||
+      cover.parentElement
+    );
+  }
+
+  function isPlatformLink(anchor) {
+    const linkedContent =
+      `${anchor.href || ''} ${anchor.querySelector('img')?.src || ''}`.toLowerCase();
+    if (platformHosts.some((host) => linkedContent.includes(host))) {
+      return true;
+    }
+
+    try {
+      const hostname = new URL(
+        anchor.href,
+        location.href
+      ).hostname.toLowerCase();
+      return platformHosts.some(
+        (host) => hostname === host || hostname.endsWith(`.${host}`)
+      );
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function findCommonPlatformRow(platformLinks, scope) {
+    let candidate = platformLinks[0]?.parentElement;
+    while (candidate && candidate !== scope) {
+      const candidateLinks = Array.from(
+        candidate.querySelectorAll('a[href]')
+      ).filter(isPlatformLink);
+      if (candidateLinks.length === platformLinks.length) return candidate;
+      candidate = candidate.parentElement;
+    }
+    return null;
+  }
+
+  function findNativePlatformRow(scope) {
+    const platformLinks = Array.from(scope.querySelectorAll('a[href]')).filter(
+      isPlatformLink
+    );
+    if (platformLinks.length > 0) {
+      return (
+        findCommonPlatformRow(platformLinks, scope) ||
+        platformLinks[0].parentElement
+      );
+    }
+
+    const selectors = [
+      '.release_media_links',
+      '[class*="media_links"]',
+      '[class*="streaming_links"]',
+    ];
+    for (const selector of selectors) {
+      const row = scope.querySelector(selector);
+      if (row) return row;
+    }
+
+    return null;
+  }
+
+  function ensureFallbackPlatformRow(cover) {
+    const existing = document.querySelector(`[${platformRowAttribute}]`);
+    if (existing) return existing;
+
+    const row = document.createElement('div');
+    row.className = 'sushe-presence-platform-row';
+    row.setAttribute(platformRowAttribute, 'true');
+
+    const placement = cover.closest('a') || cover;
+    placement.insertAdjacentElement('afterend', row);
+    return row;
+  }
+
+  function removeAlbumDetailDuplicates(platformRow) {
+    for (const badge of document.querySelectorAll(`[${badgeAttribute}]`)) {
+      if (badge.parentElement !== platformRow) badge.remove();
+    }
+
+    for (const container of document.querySelectorAll(`[${albumAttribute}]`)) {
+      if (container !== platformRow) container.removeAttribute(albumAttribute);
+    }
+  }
+
+  function collectAlbumDetailTarget(identity) {
+    const cover = findAlbumCover();
+    if (!cover) {
+      removeAlbumDetailDuplicates(null);
+      return [];
+    }
+
+    const scope = getCoverScope(cover);
+    const nativePlatformRow = findNativePlatformRow(scope);
+    const fallbackPlatformRow = document.querySelector(
+      `[${platformRowAttribute}]`
+    );
+    if (
+      nativePlatformRow &&
+      fallbackPlatformRow &&
+      fallbackPlatformRow !== nativePlatformRow
+    ) {
+      fallbackPlatformRow.remove();
+    }
+    const platformRow =
+      nativePlatformRow ||
+      fallbackPlatformRow ||
+      ensureFallbackPlatformRow(cover);
+    removeAlbumDetailDuplicates(platformRow);
+
+    const key = albumIdentity.getAlbumKey(identity);
+    if (!key) return [];
+
+    return [
+      {
+        anchor: null,
+        container: platformRow,
+        identity,
+        key,
+        variant: 'platform',
+      },
+    ];
+  }
+
+  function collectAlbumTargets() {
+    const pageIdentity = getBadgeAlbumIdentityFromUrl(location.href);
+    return pageIdentity
+      ? collectAlbumDetailTarget(pageIdentity)
+      : collectListingTargets();
   }
 
   function getUniqueAlbums(targets) {
@@ -150,25 +319,27 @@
     }
 
     return badge.title
-      .replace(/^In:\s*/, '')
+      .replace(/^In(?: SuShe)?:\s*/, '')
       .split(/,\s*/)
       .filter(Boolean);
   }
 
-  function updateBadgeListNames(badge, matches) {
+  function updateBadgeListNames(badge, matches, variant = 'listing') {
     const listNames = [
       ...getStoredBadgeListNames(badge),
       ...getListNames(matches),
     ].filter((name, index, names) => names.indexOf(name) === index);
 
     badge.setAttribute(badgeListsAttribute, listNames.join('\n'));
-    badge.title = `In: ${listNames.join(', ')}`;
+    const listLabel = listNames.join(', ');
+    badge.title =
+      variant === 'platform' ? `In SuShe: ${listLabel}` : `In: ${listLabel}`;
+    badge.setAttribute('aria-label', `In SuShe: ${listLabel}`);
   }
 
   function findBadgeForTarget(target) {
-    return Array.from(
-      target.container.querySelectorAll(`[${badgeAttribute}]`)
-    ).find(
+    const scope = target.variant === 'platform' ? document : target.container;
+    return Array.from(scope.querySelectorAll(`[${badgeAttribute}]`)).find(
       (badge) =>
         badge.getAttribute(badgeKeyAttribute) === target.key ||
         (!badge.getAttribute(badgeKeyAttribute) &&
@@ -189,18 +360,45 @@
 
     const existingBadge = findBadgeForTarget(target);
     if (target.container.getAttribute(albumAttribute) === target.key) {
-      if (existingBadge) updateBadgeListNames(existingBadge, matches);
+      if (existingBadge) {
+        updateBadgeListNames(existingBadge, matches, target.variant);
+      }
+      return;
+    }
+
+    if (existingBadge && target.variant === 'platform') {
+      target.container.appendChild(existingBadge);
+      updateBadgeListNames(existingBadge, matches, target.variant);
+      target.container.setAttribute(albumAttribute, target.key);
       return;
     }
 
     const badge = document.createElement('span');
-    badge.className = 'sushe-presence-badge';
+    badge.className =
+      target.variant === 'platform'
+        ? 'sushe-presence-badge sushe-presence-badge--platform'
+        : 'sushe-presence-badge';
     badge.setAttribute(badgeAttribute, 'true');
     badge.setAttribute(badgeKeyAttribute, target.key);
-    badge.textContent = 'In SuShe';
-    updateBadgeListNames(badge, matches);
+    badge.setAttribute(badgeVariantAttribute, target.variant);
 
-    target.anchor.insertAdjacentElement('afterend', badge);
+    if (target.variant === 'platform') {
+      const image = document.createElement('img');
+      image.src = chrome.runtime.getURL('store-icon-128.png');
+      image.alt = '';
+      image.setAttribute('aria-hidden', 'true');
+      badge.appendChild(image);
+    } else {
+      badge.textContent = 'In SuShe';
+    }
+
+    updateBadgeListNames(badge, matches, target.variant);
+
+    if (target.variant === 'platform') {
+      target.container.appendChild(badge);
+    } else {
+      target.anchor.insertAdjacentElement('afterend', badge);
+    }
     target.container.setAttribute(albumAttribute, target.key);
   }
 

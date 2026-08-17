@@ -37,6 +37,7 @@ echo "  ✓ options.js"
 echo "  ✓ popup.html"
 echo "  ✓ popup.js"
 echo "  ✓ icons/"
+echo "  ✓ store-icon-128.png"
 echo ""
 
 # Create the ZIP file with only the necessary files
@@ -58,6 +59,7 @@ zip -q "$OUTPUT_FILE" \
     options.js \
     popup.html \
     popup.js \
+    store-icon-128.png \
     icons/*.png
 
 echo "✅ Package created: $OUTPUT_FILE"
