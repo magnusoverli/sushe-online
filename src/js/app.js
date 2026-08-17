@@ -771,6 +771,7 @@ const { initializeRealtimeSync } = createAppRealtimeSync({
     getAlbumDisplayModule().updateAlbumSummaryInPlace(albumId, summaryData),
   wasRecentLocalSave,
   setListData,
+  updateListNav,
   displayAlbums,
   refreshGroupsAndLists,
   showToast,

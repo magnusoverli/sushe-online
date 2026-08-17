@@ -411,6 +411,51 @@ describe('app-list-operations module', () => {
     );
   });
 
+  it('refreshes sidebar counts only when a save changes the album total', async () => {
+    const snapshots = new Map([['list-1', [{ album_id: 'old' }]]]);
+    const updateListNav = mock.fn();
+    const operations = createAppListOperations({
+      apiCall: async () => ({ addedItems: [] }),
+      showToast: () => {},
+      getLists: () => ({ 'list-1': { name: 'My List', count: 2 } }),
+      setLists: () => {},
+      setListData: () => {},
+      updateListMetadata: () => {},
+      updateGroupsFromServer: () => {},
+      getCurrentListId: () => 'list-1',
+      selectList: () => {},
+      updateListNav,
+      setRecommendationYears: () => {},
+      loadSnapshotFromStorage: () => null,
+      getLastSavedSnapshots: () => snapshots,
+      createListSnapshot: (data) => data,
+      saveSnapshotToStorage: () => {},
+      markLocalSave: () => {},
+      computeListDiff: () => ({
+        added: [{ album_id: 'new' }],
+        removed: [],
+        updated: [],
+        totalChanges: 1,
+      }),
+      win: {},
+      logger: { log: () => {} },
+    });
+
+    await operations.saveList('list-1', [
+      { album_id: 'old' },
+      { album_id: 'new' },
+    ]);
+
+    assert.strictEqual(updateListNav.mock.calls.length, 1);
+
+    await operations.saveList('list-1', [
+      { album_id: 'old' },
+      { album_id: 'new' },
+    ]);
+
+    assert.strictEqual(updateListNav.mock.calls.length, 1);
+  });
+
   it('imports list data and related track picks/summaries', async () => {
     const listsState = {};
     const logger = { warn: mock.fn(), log: mock.fn() };

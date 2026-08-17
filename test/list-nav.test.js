@@ -229,6 +229,37 @@ describe('List Navigation Module - Unit Tests', () => {
   });
 
   describe('createListButtonHTML logic', () => {
+    it('should show the album count after the list name', async () => {
+      const { createListNav } = await import('../src/js/modules/list-nav.js');
+      const listNav = createListNav();
+
+      const html = listNav.createListButtonHTML(
+        'list-1',
+        'Favorites',
+        false,
+        false,
+        false,
+        42
+      );
+
+      assert.ok(html.includes('Favorites (42)'));
+    });
+
+    it('should default a missing album count to zero', async () => {
+      const { createListNav } = await import('../src/js/modules/list-nav.js');
+      const listNav = createListNav();
+
+      const html = listNav.createListButtonHTML(
+        'list-1',
+        'Empty List',
+        false,
+        false,
+        false
+      );
+
+      assert.ok(html.includes('Empty List (0)'));
+    });
+
     it('should include active class when list is active', () => {
       const isActive = true;
       const activeClass = isActive ? 'active' : '';
@@ -361,6 +392,22 @@ describe('List Navigation Module - Unit Tests', () => {
   });
 
   describe('Sidebar list selection behavior', () => {
+    it('renders the metadata album count on desktop and mobile', async () => {
+      const { createListNav } = await import('../src/js/modules/list-nav.js');
+      const { deps } = createSidebarSelectionDeps({
+        getListMetadata: () => ({ name: 'List One', count: 7 }),
+      });
+      const listNav = createListNav(deps);
+
+      await withFakeDocument(() => {
+        const desktopItem = listNav.createListButton('list-1', false);
+        const mobileItem = listNav.createListButton('list-1', true);
+
+        assert.ok(desktopItem.innerHTML.includes('List One (7)'));
+        assert.ok(mobileItem.innerHTML.includes('List One (7)'));
+      });
+    });
+
     it('ignores desktop clicks on the active list', async () => {
       const { createListNav } = await import('../src/js/modules/list-nav.js');
       const { deps, calls } = createSidebarSelectionDeps();

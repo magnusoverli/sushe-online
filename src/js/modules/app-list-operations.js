@@ -173,6 +173,9 @@ export function createAppListOperations(deps = {}) {
       markLocalSave(listId);
 
       const oldSnapshot = getLastSavedSnapshots().get(listId);
+      const previousCount = Array.isArray(oldSnapshot)
+        ? oldSnapshot.length
+        : getLists()[listId]?.count;
       const diff = computeListDiff(oldSnapshot, cleanedData);
 
       if (diff && diff.totalChanges > 0) {
@@ -215,6 +218,9 @@ export function createAppListOperations(deps = {}) {
       saveSnapshotToStorage(listId, snapshot);
 
       setListData(listId, cleanedData);
+      if (previousCount !== cleanedData.length) {
+        updateListNav();
+      }
 
       if (year !== undefined) {
         updateListMetadata(listId, { year });

@@ -336,9 +336,17 @@ export function createListNav(deps = {}) {
    * @param {boolean} isActive - Whether list is currently selected
    * @param {boolean} isMain - Whether list is marked as main
    * @param {boolean} isMobile - Whether rendering for mobile
+   * @param {number} albumCount - Number of albums in the list
    * @returns {string} HTML string
    */
-  function createListButtonHTML(listId, listName, isActive, isMain, isMobile) {
+  function createListButtonHTML(
+    listId,
+    listName,
+    isActive,
+    isMain,
+    isMobile,
+    albumCount = 0
+  ) {
     const paddingClass = isMobile ? 'py-2.5' : 'py-2';
     const widthClass = isMobile ? 'flex-1' : 'w-full';
     const activeClass = isActive ? 'active' : '';
@@ -350,7 +358,7 @@ export function createListNav(deps = {}) {
     const buttonHTML = `
       <button data-list-id="${listId}" data-list-name="${listName}" class="sidebar-list-btn ${widthClass} text-left px-3 ${paddingClass} rounded-sm text-sm transition duration-200 text-gray-300 ${activeClass} flex items-center">
         <i class="fas fa-list mr-2 shrink-0"></i>
-        <span class="truncate flex-1">${listName}</span>
+        <span class="truncate flex-1">${listName} (${albumCount})</span>
         ${mainBadge}
       </button>
     `;
@@ -380,6 +388,7 @@ export function createListNav(deps = {}) {
     const meta = getListMetadata(listId);
     const listName = meta?.name || 'Unknown';
     const isMain = meta?.isMain || false;
+    const albumCount = meta?.count ?? 0;
     const isActive = isListActive(listId);
     const li = document.createElement('li');
 
@@ -391,7 +400,8 @@ export function createListNav(deps = {}) {
       listName,
       isActive,
       isMain,
-      isMobile
+      isMobile,
+      albumCount
     );
 
     const button = li.querySelector('[data-list-id]');

@@ -14,6 +14,7 @@ export function createAppRealtimeSync(deps = {}) {
     updateAlbumSummaryInPlace,
     wasRecentLocalSave,
     setListData,
+    updateListNav,
     displayAlbums,
     refreshGroupsAndLists,
     showToast,
@@ -38,10 +39,14 @@ export function createAppRealtimeSync(deps = {}) {
             return { wasLocalSave: true };
           }
 
+          const previousCount = getListData(listId)?.length;
           const data = await apiCall(
             `/api/lists/${encodeURIComponent(listId)}`
           );
           setListData(listId, data);
+          if (previousCount !== data.length) {
+            updateListNav();
+          }
           if (getCurrentListId() === listId) {
             // Let the incremental detector apply the remote add/remove/edit/
             // reorder instead of forcing a full rebuild — this avoids the
@@ -54,10 +59,14 @@ export function createAppRealtimeSync(deps = {}) {
           return { wasLocalSave: false };
         },
         refreshListDataSilent: async (listId) => {
+          const previousCount = getListData(listId)?.length;
           const data = await apiCall(
             `/api/lists/${encodeURIComponent(listId)}`
           );
           setListData(listId, data);
+          if (previousCount !== data.length) {
+            updateListNav();
+          }
           if (getCurrentListId() === listId) {
             displayAlbums(data, { forceFullRebuild: true });
           }
