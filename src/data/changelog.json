@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-08-18",
+    "category": "feature",
+    "description": "Album taxonomy now includes RYM release type, labels, and personnel credits.",
+    "hash": "a744ae7381b965151a64eacb6bf2f98572b17f4b",
+    "commitMessage": "Add RYM release metadata"
+  },
+  {
+    "date": "2026-08-18",
     "category": "ui",
     "description": "Mobile album badges now stack to leave more room for titles.",
     "hash": "a978bc833b48ca5d7b49a76d4e1e201ce8ae9375",
