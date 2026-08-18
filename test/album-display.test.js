@@ -390,10 +390,10 @@ describe('album-display module', () => {
 
         for (const markup of [desktop.innerHTML, mobile.innerHTML]) {
           assert.match(markup, /I:/);
-          assert.match(markup, /Primary Track - #2/);
+          assert.match(markup, /#2 - Primary Track/);
           assert.match(markup, /\(03:02\)/);
           assert.match(markup, /II:/);
-          assert.match(markup, /Secondary Track - #5/);
+          assert.match(markup, /#5 - Secondary Track/);
           assert.match(markup, /\(04:29\)/);
         }
       } finally {
@@ -606,7 +606,7 @@ describe('album-display module', () => {
         tracks: ['1. First', '2. Second', '3. Favorite Song'],
       };
       let data = module.processAlbumData(album, 0);
-      assert.strictEqual(data.primaryTrackDisplay, 'Favorite Song - #3');
+      assert.strictEqual(data.primaryTrackDisplay, '#3 - Favorite Song');
       assert.strictEqual(data.primaryTrackClass, 'text-gray-300');
 
       // Test with just track number
@@ -615,7 +615,7 @@ describe('album-display module', () => {
         tracks: [],
       };
       data = module.processAlbumData(album, 0);
-      assert.strictEqual(data.primaryTrackDisplay, 'Track 5 - #5');
+      assert.strictEqual(data.primaryTrackDisplay, '#5 - Track 5');
     });
 
     it('should set position only for main lists', () => {

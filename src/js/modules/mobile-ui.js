@@ -870,6 +870,9 @@ export function createMobileUI(deps = {}) {
             // Update local album data for save
             album.primary_track = currentPrimaryTrack;
             album.secondary_track = currentSecondaryTrack;
+
+            // Reuse the card renderer so its track number and duration update now.
+            displayAlbums(albumsForEdit);
           } catch (err) {
             console.error('Track pick error:', err);
             showToast('Error updating track selection', 'error');

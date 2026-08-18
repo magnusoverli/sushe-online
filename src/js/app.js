@@ -285,6 +285,10 @@ const getTrackSelectionModule = createLazyModule(() =>
     getCurrentListId: () => getCurrentListId(),
     formatTrackTime,
     saveList,
+    refreshAlbumDisplay: () =>
+      getAlbumDisplayModule().displayAlbums(
+        getListData(getCurrentListId()) || []
+      ),
   })
 );
 

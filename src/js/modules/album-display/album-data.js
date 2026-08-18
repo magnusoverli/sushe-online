@@ -39,7 +39,7 @@ function formatTrackPickDisplay(trackName, trackNumber) {
   const match = trackName.match(/^(\d+)[.\s-]+\s*(.*)$/);
   const displayName = match?.[2] || trackName;
   const number = trackNumber || match?.[1] || null;
-  return number ? `${displayName} - #${number}` : displayName;
+  return number ? `#${number} - ${displayName}` : displayName;
 }
 
 /**
@@ -74,7 +74,7 @@ export function processTrackPick(trackIdentifier, tracks, deps = {}) {
 
   if (trackIdentifier.match(/^\d+$/)) {
     return {
-      display: `Track ${trackIdentifier} - #${trackIdentifier}`,
+      display: `#${trackIdentifier} - Track ${trackIdentifier}`,
       class: 'text-gray-300',
       duration: '',
     };

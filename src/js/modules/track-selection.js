@@ -7,7 +7,6 @@
  * @param {Object} deps - External dependencies
  * @returns {Object} Public API
  */
-import { isMobileViewport } from '../utils/viewport.js';
 import { createTrackPickService } from './track-pick-service.js';
 
 export function createTrackSelection(deps = {}) {
@@ -18,6 +17,7 @@ export function createTrackSelection(deps = {}) {
     getCurrentListId,
     formatTrackTime,
     saveList: _saveList,
+    refreshAlbumDisplay = () => {},
   } = deps;
   const trackPickService = createTrackPickService({ apiCall });
 
@@ -90,139 +90,12 @@ export function createTrackSelection(deps = {}) {
   // ============ TRACK CELL DISPLAY ============
 
   /**
-   * Update track cell display for dual track picks (primary + secondary).
-   * Handles both mobile cards and desktop table rows.
+   * Re-render the album card after a track-pick mutation. Album display owns the
+   * selected-track markup, preventing this immediate update from drifting from
+   * the normal desktop and mobile card renderers.
    */
-  function updateTrackCellDisplayDual(albumIndex, trackPicks, tracks) {
-    const isMobile = isMobileViewport();
-
-    function processTrack(trackIdentifier) {
-      if (!trackIdentifier) return null;
-      const name = getTrackName(trackIdentifier);
-      if (!name) return null;
-
-      const matchingTrack = tracks
-        ? tracks.find((t) => {
-            const tName = typeof t === 'string' ? t : t.name || String(t);
-            return tName === name;
-          })
-        : null;
-
-      const duration = matchingTrack ? getTrackLength(matchingTrack) : null;
-      const formatted = duration ? formatTrackTime(duration) : '';
-
-      const numMatch = name.match(/^(\d+)\.\s*(.*)$/);
-      const displayName = numMatch
-        ? `<span class="text-gray-500 font-mono text-xs">${numMatch[1]}.</span> ${numMatch[2]}`
-        : name;
-
-      return { name, displayName, formatted, trackClass: 'text-gray-300' };
-    }
-
-    const primary = processTrack(trackPicks?.primary);
-    const secondary = processTrack(trackPicks?.secondary);
-
-    let cellHtml;
-    if (isMobile) {
-      // Mobile: compact format for card layout
-      if (primary && secondary) {
-        cellHtml = `
-          <div class="flex flex-col gap-0.5">
-            <div class="flex items-center gap-1 ${primary.trackClass}">
-              <span class="inline-block w-4 text-center text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Primary pick">I</span>
-              <span class="truncate">${primary.displayName}</span>
-              ${primary.formatted ? `<span class="text-gray-500 text-xs ml-auto shrink-0">${primary.formatted}</span>` : ''}
-            </div>
-            <div class="flex items-center gap-1 text-gray-500 text-xs">
-              <span class="inline-block w-4 text-center text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Secondary pick">II</span>
-              <span class="truncate">${secondary.displayName}</span>
-              ${secondary.formatted ? `<span class="text-gray-600 text-xs ml-auto shrink-0">${secondary.formatted}</span>` : ''}
-            </div>
-          </div>`;
-      } else if (primary) {
-        cellHtml = `
-          <div class="flex items-center gap-1 ${primary.trackClass}">
-            <span class="inline-block w-4 text-center text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Primary pick">I</span>
-            <span class="truncate">${primary.displayName}</span>
-            ${primary.formatted ? `<span class="text-gray-500 text-xs ml-auto shrink-0">${primary.formatted}</span>` : ''}
-          </div>`;
-      } else if (secondary) {
-        cellHtml = `
-          <div class="flex items-center gap-1 text-gray-500 text-xs">
-            <span class="inline-block w-4 text-center text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Secondary pick">II</span>
-            <span class="truncate">${secondary.displayName}</span>
-            ${secondary.formatted ? `<span class="text-gray-600 text-xs ml-auto shrink-0">${secondary.formatted}</span>` : ''}
-          </div>`;
-      } else {
-        cellHtml = '<span class="text-gray-600 italic text-xs">No track</span>';
-      }
-    } else {
-      // Desktop: match createDesktopAlbumRow() HTML structure exactly
-      const primaryHtml = primary
-        ? `<div class="flex items-center min-w-0 overflow-hidden w-full">
-            <span class="inline-block w-4 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Primary track">I</span>
-            <span class="album-cell-text ${primary.trackClass} truncate hover:text-gray-100 flex-1 min-w-0" title="${primary.name}">${primary.displayName}</span>
-            ${primary.formatted ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${primary.formatted}</span>` : ''}
-          </div>`
-        : `<div class="flex items-center min-w-0">
-            <span class="album-cell-text text-gray-800 italic hover:text-gray-100">Select Track</span>
-          </div>`;
-
-      const secondaryHtml = secondary
-        ? `<div class="flex items-center min-w-0 mt-1 overflow-hidden w-full">
-            <span class="inline-block w-4 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Secondary track">II</span>
-            <span class="album-cell-text ${secondary.trackClass} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${secondary.name}">${secondary.displayName}</span>
-            ${secondary.formatted ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${secondary.formatted}</span>` : ''}
-          </div>`
-        : '';
-
-      cellHtml = primaryHtml + secondaryHtml;
-    }
-
-    let trackCell = null;
-
-    if (isMobile) {
-      const cards = document.querySelectorAll('.album-card');
-      const card = cards[albumIndex];
-      if (!card) return;
-
-      trackCell = card
-        .querySelector('[data-field="track-mobile-text"]')
-        ?.closest('div[data-track-play-btn]');
-      const secondaryRow = card
-        .querySelector('[data-field="secondary-track-mobile-text"]')
-        ?.closest('div[data-track-play-btn]');
-      if (secondaryRow && secondaryRow !== trackCell) {
-        secondaryRow.remove();
-      }
-    } else {
-      const rows = document.querySelectorAll('.album-row');
-      const row = rows[albumIndex];
-      if (!row) return;
-      trackCell = row.querySelector('.track-cell');
-    }
-
-    if (!trackCell) return;
-
-    trackCell.innerHTML = cellHtml;
-    trackCell.style.cursor = 'pointer';
-    trackCell.onclick = async (e) => {
-      e.stopPropagation();
-      const listData = getListData(getCurrentListId());
-      if (!listData) return;
-      const album = listData[albumIndex];
-      if (!album) return;
-      if (!album.tracks) {
-        try {
-          await fetchTracksForAlbum(album);
-        } catch (_err) {
-          showToast('Could not load tracks', 'error');
-          return;
-        }
-      }
-      const rect = trackCell.getBoundingClientRect();
-      showTrackSelectionMenu(album, albumIndex, rect.left, rect.bottom);
-    };
+  function updateTrackCellDisplayDual() {
+    refreshAlbumDisplay();
   }
 
   // ============ TRACK SELECTION MENU ============

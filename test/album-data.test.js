@@ -103,9 +103,9 @@ describe('album-data module', () => {
       assert.strictEqual(data.genre2, '');
       assert.strictEqual(data.comment, '');
       assert.strictEqual(data.comment2, '');
-      assert.strictEqual(data.primaryTrackDisplay, 'The Leper Affinity - #2');
+      assert.strictEqual(data.primaryTrackDisplay, '#2 - The Leper Affinity');
       assert.strictEqual(data.primaryTrackDuration, '03:02');
-      assert.strictEqual(data.secondaryTrackDisplay, 'Bleak - #5');
+      assert.strictEqual(data.secondaryTrackDisplay, '#5 - Bleak');
       assert.strictEqual(data.secondaryTrackDuration, '04:29');
       assert.strictEqual(data.playcountDisplay.html, '1.3K');
       assert.strictEqual(data.yearMismatch, true);
