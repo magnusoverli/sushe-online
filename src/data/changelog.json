@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-08-18",
+    "category": "ui",
+    "description": "Mobile album taxonomy now appears with the other title badges.",
+    "hash": "9008be094e18d73763f8a7e303c2d41601a227c3",
+    "commitMessage": "Move mobile taxonomy into badge strip"
+  },
+  {
+    "date": "2026-08-18",
     "category": "fix",
     "description": "Selected album tracks now immediately show their number and duration.",
     "hash": "7e93881279705d1e91c9c38361cb84cb42643b88",
