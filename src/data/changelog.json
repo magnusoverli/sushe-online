@@ -2,6 +2,13 @@
   {
     "date": "2026-08-18",
     "category": "ui",
+    "description": "Mobile album badges now stack to leave more room for titles.",
+    "hash": "a978bc833b48ca5d7b49a76d4e1e201ce8ae9375",
+    "commitMessage": "Stack mobile album badges"
+  },
+  {
+    "date": "2026-08-18",
+    "category": "ui",
     "description": "Mobile album taxonomy now appears with the other title badges.",
     "hash": "9008be094e18d73763f8a7e303c2d41601a227c3",
     "commitMessage": "Move mobile taxonomy into badge strip"
