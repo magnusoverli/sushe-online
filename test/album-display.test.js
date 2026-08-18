@@ -315,6 +315,8 @@ describe('album-display module', () => {
                 url: 'https://open.spotify.com/album/example',
               },
             ],
+            summary: 'A concise album summary.',
+            recommended_by: 'Test user',
             taxonomy: {
               rym: {
                 primary_genres: ['Post-Rock'],
@@ -338,8 +340,16 @@ describe('album-display module', () => {
         assert.match(card.innerHTML, /taxonomy-trigger-mobile/);
         assert.match(
           card.innerHTML,
-          /data-mobile-album-badges[^>]*>[\s\S]*taxonomy-trigger-mobile/
+          /data-mobile-album-badges[^>]*class="absolute flex flex-col items-center"[^>]*style="top: 0; right: 4px; gap: 0"/
         );
+        const summaryIndex = card.innerHTML.indexOf('summary-badge-mobile');
+        const recommendationIndex = card.innerHTML.indexOf(
+          'recommendation-badge-mobile'
+        );
+        const taxonomyIndex = card.innerHTML.indexOf('taxonomy-trigger-mobile');
+        assert.ok(summaryIndex < recommendationIndex);
+        assert.ok(recommendationIndex < taxonomyIndex);
+        assert.match(card.innerHTML, /padding-right: 31px/);
         assert.doesNotMatch(card.innerHTML, /data-taxonomy-slot/);
         assert.doesNotMatch(card.innerHTML, /<dt>|album-taxonomy-panel/);
       } finally {

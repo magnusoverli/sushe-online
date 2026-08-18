@@ -156,19 +156,28 @@ export function renderMobileTitleRow(data, options = {}) {
   const titleSpanClass = options.titleSpanClass
     ? ` class="${options.titleSpanClass}"`
     : '';
+  const badgeClass = options.stackBadges
+    ? 'absolute flex flex-col items-center'
+    : 'absolute flex items-center';
+  const badgeStyle = options.stackBadges
+    ? 'top: 0; right: 4px; gap: 0'
+    : 'top: 50%; right: 4px; transform: translateY(-50%); gap: 4px';
 
   return `<div data-mobile-title-row class="${options.wrapperClass || 'flex items-center relative'}"${paddingStyle}>
     <h3 class="${titleClass}"${titleStyleAttr}>
       <i class="${iconClass}"></i><span data-field="album-mobile-title"${titleSpanClass} title="${escapeHtml(data.albumName)}">${escapeHtml(data.albumName)}</span>
     </h3>
-    <div data-mobile-album-badges data-badge-state="${escapeHtml(options.badgeState || '')}" class="absolute flex items-center" style="top: 50%; right: 4px; transform: translateY(-50%); gap: 4px">${badgesHtml}</div>
+    <div data-mobile-album-badges data-badge-state="${escapeHtml(options.badgeState || '')}" class="${badgeClass}" style="${badgeStyle}">${badgesHtml}</div>
   </div>`;
 }
 
 export function renderMobileArtistRow(data, options = {}) {
   const spanClass = options.spanClass ? ` class="${options.spanClass}"` : '';
+  const badgePaddingAttr = options.paddingRight
+    ? ' data-mobile-badge-padding'
+    : '';
 
-  return `<div class="${options.wrapperClass || 'flex items-center'}"${options.paddingRight ? ` style="padding-right: ${options.paddingRight}"` : ''}>
+  return `<div${badgePaddingAttr} class="${options.wrapperClass || 'flex items-center'}"${options.paddingRight ? ` style="padding-right: ${options.paddingRight}"` : ''}>
     <p class="${options.textClass || 'text-[12px] text-gray-400 truncate min-w-0'}">
       <i class="${options.iconClass || 'fas fa-user fa-xs inline-block w-4 text-center mr-1'}"></i><span data-field="artist-mobile-text"${spanClass} title="${escapeHtml(data.artist)}">${escapeHtml(data.artist)}</span>
     </p>
@@ -184,6 +193,12 @@ export function renderMobileGenreRow(data, options = {}) {
   const valueSpanClass = options.valueSpanClass
     ? ` class="${options.valueSpanClass}"`
     : '';
+  const paddingStyle = options.paddingRight
+    ? ` style="padding-right: ${options.paddingRight}"`
+    : '';
+  const badgePaddingAttr = options.paddingRight
+    ? ' data-mobile-badge-padding'
+    : '';
   const taxonomyHtml = options.includeTaxonomy
     ? renderTaxonomyTrigger(data.taxonomy, {
         mobile: true,
@@ -192,7 +207,7 @@ export function renderMobileGenreRow(data, options = {}) {
       })
     : '';
 
-  return `<div class="${options.wrapperClass || 'flex items-center min-w-0'}">
+  return `<div${badgePaddingAttr} class="${options.wrapperClass || 'flex items-center min-w-0'}"${paddingStyle}>
     <span class="${options.textClass || 'text-[12px] text-gray-400 truncate min-w-0'}" title="${escapeHtml(value || emptyText)}">
       <i class="${options.iconClass || 'fas fa-music fa-xs inline-block w-4 text-center mr-1'}"></i><span data-field="genre-mobile-text"${valueSpanClass}>${value ? escapeHtml(value) : options.emptyHtml || escapeHtml(emptyText)}</span>
     </span>
@@ -200,8 +215,15 @@ export function renderMobileGenreRow(data, options = {}) {
   </div>`;
 }
 
-export function renderMobilePlaycountRow(data) {
-  return `<div class="flex items-center">
+export function renderMobilePlaycountRow(data, options = {}) {
+  const paddingStyle = options.paddingRight
+    ? ` style="padding-right: ${options.paddingRight}"`
+    : '';
+  const badgePaddingAttr = options.paddingRight
+    ? ' data-mobile-badge-padding'
+    : '';
+
+  return `<div${badgePaddingAttr} class="flex items-center"${paddingStyle}>
     ${mobilePlaycountSpan(data.itemId, data.playcountDisplay)}
   </div>`;
 }

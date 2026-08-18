@@ -303,20 +303,26 @@ export function createAlbumDisplay(deps = {}) {
 
   function getMobileBadgeData(data) {
     const badges = [
-      renderRecommendationBadge(data, { mobile: true }),
       renderSummaryBadge(data, { mobile: true }),
+      renderRecommendationBadge(data, { mobile: true }),
       renderMobileTaxonomyBadge(data),
     ].filter(Boolean);
-    const gap = 4;
-    const padding = badges.length
-      ? badges.length * 24 + (badges.length - 1) * gap + 7
-      : 0;
+    const padding = badges.length ? 31 : 0;
 
     return {
       html: badges.join(''),
       paddingRight: `${padding}px`,
       state: `${data.recommendedBy || ''}|${data.recommendedAt || ''}|${data.summary || ''}|${data.summarySource || ''}|${JSON.stringify(data.taxonomy || {})}|${data.albumName}|${data.artist}`,
     };
+  }
+
+  function updateMobileBadgePadding(row, cache, paddingRight) {
+    if (cache.titleRow) {
+      cache.titleRow.style.paddingRight = paddingRight;
+    }
+    row.querySelectorAll('[data-mobile-badge-padding]').forEach((element) => {
+      element.style.paddingRight = paddingRight;
+    });
   }
 
   function reconcileAlbumBadges(row, cache, data, isMobile) {
@@ -335,9 +341,7 @@ export function createAlbumDisplay(deps = {}) {
     if (isMobile) {
       if (!cache.badgeContainer) return;
       cache.badgeContainer.innerHTML = badgeHtml;
-      if (cache.titleRow) {
-        cache.titleRow.style.paddingRight = mobileBadgeData.paddingRight;
-      }
+      updateMobileBadgePadding(row, cache, mobileBadgeData.paddingRight);
       attachMobileBadgeHandlers(row);
       return;
     }
@@ -842,21 +846,20 @@ export function createAlbumDisplay(deps = {}) {
           <!-- Album name -->
           <!-- The right padding reserves space on the title row, so the
                truncated title cuts off at (info-section width - this padding).
-               The summary, recommendation, and taxonomy badges overlay that reserved zone,
-               absolutely centered on the title line. -->
-          ${renderMobileTitleRow(data, { paddingRight: mobileBadgeData.paddingRight, badgesHtml: mobileBadgeData.html, badgeState: mobileBadgeData.state })}
+               The badge stack uses a narrow right-side lane. -->
+          ${renderMobileTitleRow(data, { paddingRight: mobileBadgeData.paddingRight, badgesHtml: mobileBadgeData.html, badgeState: mobileBadgeData.state, stackBadges: true })}
           <!-- Artist -->
-          ${renderMobileArtistRow(data, { paddingRight: '55px' })}
+          ${renderMobileArtistRow(data, { paddingRight: mobileBadgeData.paddingRight })}
           <!-- Last.fm playcount -->
-          ${renderMobilePlaycountRow(data)}
+          ${renderMobilePlaycountRow(data, { paddingRight: mobileBadgeData.paddingRight })}
           <!-- Country -->
-          <div class="flex items-center">
+          <div data-mobile-badge-padding class="flex items-center" style="padding-right: ${mobileBadgeData.paddingRight}">
             <span class="text-[12px] text-gray-400">
               <i class="fas fa-globe fa-xs inline-block w-4 text-center mr-1"></i><span data-field="country-mobile-text">${escapeHtml(data.country || '')}</span>
             </span>
           </div>
           <!-- Genres -->
-          ${renderMobileGenreRow(data)}
+          ${renderMobileGenreRow(data, { paddingRight: mobileBadgeData.paddingRight })}
           <!-- Primary track (marker: 1) -->
           <div class="flex items-center ${data.primaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}"
                data-track-play-btn="${data.primaryTrackDisplay ? 'true' : ''}"
