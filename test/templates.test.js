@@ -369,6 +369,18 @@ describe('templates utilities', () => {
       assert.ok(result.includes('overflow-y-auto'));
       assert.ok(!result.includes('relative overflow-hidden'));
     });
+
+    it('should use an opaque iOS PWA status bar', () => {
+      const result = templates.htmlTemplate('<div>Content</div>');
+
+      assert.ok(
+        result.includes(
+          '<meta name="apple-mobile-web-app-status-bar-style" content="black">'
+        )
+      );
+      assert.ok(result.includes('<meta name="theme-color" content="#000000">'));
+      assert.ok(!result.includes('black-translucent'));
+    });
   });
 
   describe('registerTemplate', () => {
@@ -792,6 +804,18 @@ describe('templates utilities', () => {
       );
       assert.ok(!result.includes('maximum-scale'));
       assert.ok(!result.includes('user-scalable'));
+    });
+
+    it('should use an opaque iOS PWA status bar', () => {
+      const user = { username: 'test' };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(
+        result.includes(
+          '<meta name="apple-mobile-web-app-status-bar-style" content="black">'
+        )
+      );
+      assert.ok(!result.includes('black-translucent'));
     });
 
     it('should render valid album context menu markup', () => {
