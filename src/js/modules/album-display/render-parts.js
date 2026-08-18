@@ -37,6 +37,14 @@ export function renderRecommendationBadge(data, { mobile = false } = {}) {
   </div>`;
 }
 
+export function renderMobileTaxonomyBadge(data) {
+  return renderTaxonomyTrigger(data.taxonomy, {
+    mobile: true,
+    albumName: data.albumName,
+    artist: data.artist,
+  });
+}
+
 export function renderDesktopAlbumCell(data, options = {}) {
   const badgesHtml = options.badgesHtml || '';
   const playcountHtml =
@@ -149,7 +157,7 @@ export function renderMobileTitleRow(data, options = {}) {
     ? ` class="${options.titleSpanClass}"`
     : '';
 
-  return `<div class="${options.wrapperClass || 'flex items-center relative'}"${paddingStyle}>
+  return `<div data-mobile-title-row class="${options.wrapperClass || 'flex items-center relative'}"${paddingStyle}>
     <h3 class="${titleClass}"${titleStyleAttr}>
       <i class="${iconClass}"></i><span data-field="album-mobile-title"${titleSpanClass} title="${escapeHtml(data.albumName)}">${escapeHtml(data.albumName)}</span>
     </h3>

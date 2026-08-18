@@ -2923,11 +2923,26 @@
 }
 
 .taxonomy-trigger-mobile {
-  flex: 0 0 auto;
-  margin: 0 0 0 5px;
-  width: 22px;
-  height: 22px;
+  position: static;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
   justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.taxonomy-trigger-mobile i {
+  font-size: 13px;
+}
+
+.taxonomy-trigger-mobile:active {
+  background: transparent;
+  transform: scale(0.95);
 }
 
 .summary-tooltip.taxonomy-tooltip {

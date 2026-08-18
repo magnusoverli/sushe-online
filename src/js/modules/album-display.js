@@ -54,6 +54,7 @@ import {
   renderMobileArtistRow,
   renderMobileCoverSection,
   renderMobileGenreRow,
+  renderMobileTaxonomyBadge,
   renderMobilePlaycountRow,
   renderMobilePositionBadge,
   renderMobileTitleRow,
@@ -300,9 +301,32 @@ export function createAlbumDisplay(deps = {}) {
     }
   }
 
+  function getMobileBadgeData(data) {
+    const badges = [
+      renderRecommendationBadge(data, { mobile: true }),
+      renderSummaryBadge(data, { mobile: true }),
+      renderMobileTaxonomyBadge(data),
+    ].filter(Boolean);
+    const gap = 4;
+    const padding = badges.length
+      ? badges.length * 24 + (badges.length - 1) * gap + 7
+      : 0;
+
+    return {
+      html: badges.join(''),
+      paddingRight: `${padding}px`,
+      state: `${data.recommendedBy || ''}|${data.recommendedAt || ''}|${data.summary || ''}|${data.summarySource || ''}|${JSON.stringify(data.taxonomy || {})}|${data.albumName}|${data.artist}`,
+    };
+  }
+
   function reconcileAlbumBadges(row, cache, data, isMobile) {
-    const badgeHtml = `${renderRecommendationBadge(data, { mobile: isMobile })}${renderSummaryBadge(data, { mobile: isMobile })}`;
-    const badgeState = `${data.recommendedBy || ''}|${data.recommendedAt || ''}|${data.summary || ''}|${data.summarySource || ''}|${data.albumName}|${data.artist}`;
+    const mobileBadgeData = isMobile ? getMobileBadgeData(data) : null;
+    const badgeHtml = mobileBadgeData
+      ? mobileBadgeData.html
+      : `${renderRecommendationBadge(data)}${renderSummaryBadge(data)}`;
+    const badgeState = mobileBadgeData
+      ? mobileBadgeData.state
+      : `${data.recommendedBy || ''}|${data.recommendedAt || ''}|${data.summary || ''}|${data.summarySource || ''}|${data.albumName}|${data.artist}`;
     if (cache.badgeContainer?.dataset.badgeState === badgeState) return;
     if (cache.badgeContainer) {
       cache.badgeContainer.dataset.badgeState = badgeState;
@@ -311,6 +335,9 @@ export function createAlbumDisplay(deps = {}) {
     if (isMobile) {
       if (!cache.badgeContainer) return;
       cache.badgeContainer.innerHTML = badgeHtml;
+      if (cache.titleRow) {
+        cache.titleRow.style.paddingRight = mobileBadgeData.paddingRight;
+      }
       attachMobileBadgeHandlers(row);
       return;
     }
@@ -362,6 +389,7 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   function updateTaxonomyDetails(row, cache, data, isMobile) {
+    if (isMobile) return;
     if (!cache.taxonomySlot) return;
     const html = renderTaxonomyTrigger(data.taxonomy, {
       mobile: isMobile,
@@ -778,8 +806,7 @@ export function createAlbumDisplay(deps = {}) {
     const card = document.createElement('div');
     card.className = 'album-card album-row relative h-[145px] bg-gray-900';
     card.dataset.index = index;
-    const mobileBadgeHtml = `${renderRecommendationBadge(data, { mobile: true })}${renderSummaryBadge(data, { mobile: true })}`;
-    const mobileBadgeState = `${data.recommendedBy || ''}|${data.recommendedAt || ''}|${data.summary || ''}|${data.summarySource || ''}|${data.albumName}|${data.artist}`;
+    const mobileBadgeData = getMobileBadgeData(data);
 
     // === BUILD CARD HTML ===
     card.innerHTML = `
@@ -815,9 +842,9 @@ export function createAlbumDisplay(deps = {}) {
           <!-- Album name -->
           <!-- The right padding reserves space on the title row, so the
                truncated title cuts off at (info-section width - this padding).
-               The summary/recommendation badges overlay that reserved zone,
+               The summary, recommendation, and taxonomy badges overlay that reserved zone,
                absolutely centered on the title line. -->
-          ${renderMobileTitleRow(data, { paddingRight: '55px', badgesHtml: mobileBadgeHtml, badgeState: mobileBadgeState })}
+          ${renderMobileTitleRow(data, { paddingRight: mobileBadgeData.paddingRight, badgesHtml: mobileBadgeData.html, badgeState: mobileBadgeData.state })}
           <!-- Artist -->
           ${renderMobileArtistRow(data, { paddingRight: '55px' })}
           <!-- Last.fm playcount -->
@@ -829,7 +856,7 @@ export function createAlbumDisplay(deps = {}) {
             </span>
           </div>
           <!-- Genres -->
-          ${renderMobileGenreRow(data, { includeTaxonomy: true })}
+          ${renderMobileGenreRow(data)}
           <!-- Primary track (marker: 1) -->
           <div class="flex items-center ${data.primaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}"
                data-track-play-btn="${data.primaryTrackDisplay ? 'true' : ''}"

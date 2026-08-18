@@ -336,6 +336,11 @@ describe('album-display module', () => {
         assert.match(card.innerHTML, /fa-spotify/);
         assert.match(card.innerHTML, /<a [^>]*aria-label="Spotify"/);
         assert.match(card.innerHTML, /taxonomy-trigger-mobile/);
+        assert.match(
+          card.innerHTML,
+          /data-mobile-album-badges[^>]*>[\s\S]*taxonomy-trigger-mobile/
+        );
+        assert.doesNotMatch(card.innerHTML, /data-taxonomy-slot/);
         assert.doesNotMatch(card.innerHTML, /<dt>|album-taxonomy-panel/);
       } finally {
         globalThis.document.createElement = previousCreateElement;

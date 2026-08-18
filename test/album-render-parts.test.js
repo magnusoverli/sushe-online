@@ -111,8 +111,11 @@ describe('album render parts', () => {
   });
 
   it('integrates taxonomy triggers and provider links without inline details', async () => {
-    const { renderDesktopAlbumCell, renderMobileGenreRow } =
-      await import('../src/js/modules/album-display/render-parts.js');
+    const {
+      renderDesktopAlbumCell,
+      renderMobileGenreRow,
+      renderMobileTaxonomyBadge,
+    } = await import('../src/js/modules/album-display/render-parts.js');
     const album = {
       albumName: 'Taxonomy Album',
       availability: ['soundcloud'],
@@ -139,14 +142,16 @@ describe('album render parts', () => {
       includePlaycount: false,
       includeTaxonomy: true,
     });
-    const mobile = renderMobileGenreRow(album, { includeTaxonomy: true });
+    const mobileGenre = renderMobileGenreRow(album);
+    const mobileBadge = renderMobileTaxonomyBadge(album);
 
     assert.match(desktop, /<a [^>]*aria-label="SoundCloud"/);
     assert.match(desktop, /data-taxonomy-slot/);
     assert.match(desktop, /class="taxonomy-trigger"/);
     assert.doesNotMatch(desktop, /<dt>|album-taxonomy-panel/);
-    assert.match(mobile, /Legacy genre 1 \/ Legacy genre 2/);
-    assert.match(mobile, /taxonomy-trigger-mobile/);
-    assert.doesNotMatch(mobile, /<dt>|album-taxonomy-panel/);
+    assert.match(mobileGenre, /Legacy genre 1 \/ Legacy genre 2/);
+    assert.doesNotMatch(mobileGenre, /taxonomy-trigger-mobile/);
+    assert.match(mobileBadge, /taxonomy-trigger-mobile/);
+    assert.doesNotMatch(mobileBadge, /<dt>|album-taxonomy-panel/);
   });
 });

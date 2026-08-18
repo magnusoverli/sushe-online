@@ -272,6 +272,7 @@ export function createAlbumDisplayShared(deps = {}) {
   function cacheMobileCardElements(card) {
     const cache = {
       position: card.querySelector('[data-position-element="true"]'),
+      titleRow: card.querySelector('[data-mobile-title-row]'),
       albumTitle: card.querySelector('[data-field="album-mobile-title"]'),
       releaseDate: card.querySelector('.release-date-display'),
       availabilityBadges: card.querySelector('.album-availability'),
