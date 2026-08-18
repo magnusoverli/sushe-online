@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-08-18",
+    "category": "perf",
+    "description": "Albums added from RYM now appear and finish enriching much faster.",
+    "hash": "ad0c445d60e0c4829f834e6667a8ef94faeb8407",
+    "commitMessage": "Optimize RYM album add pipeline"
+  },
+  {
     "date": "2026-08-17",
     "category": "feature",
     "description": "Albums now enriched with RYM taxonomy and availability data automatically.",
