@@ -435,6 +435,8 @@ describe('list-service fetchers and setup status', () => {
     assert.ok(executedSql.includes('JOIN list_items'));
     assert.ok(executedSql.includes('JOIN albums'));
     assert.ok(executedSql.includes('LEFT JOIN list_groups'));
+    assert.ok(executedSql.includes('l.group_id = g.id'));
+    assert.ok(!executedSql.includes('g._id = l.group_id'));
     assert.ok(!executedSql.includes('tracks'));
     assert.deepStrictEqual(executedParams, ['user1']);
     assert.deepStrictEqual(result, [

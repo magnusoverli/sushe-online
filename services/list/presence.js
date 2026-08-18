@@ -15,7 +15,7 @@ function createListPresence(deps = {}) {
                 rym.external_album_id AS rym_album_id,
                 rym.external_url AS rym_url
         FROM lists l
-        LEFT JOIN list_groups g ON g._id = l.group_id
+        LEFT JOIN list_groups g ON l.group_id = g.id
         JOIN list_items li ON li.list_id = l._id
        JOIN albums a ON a.album_id = li.album_id
        LEFT JOIN album_service_mappings rym

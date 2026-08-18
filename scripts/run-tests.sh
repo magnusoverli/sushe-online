@@ -5,6 +5,7 @@ set -e
 # the parallel unit tests to avoid exhausting PostgreSQL max_connections.
 # Add new integration test files here if they create a Pool() connection.
 INTEGRATION_TESTS=(
+  "test/list-presence.integration.test.js"
   "test/recommendations.test.js"
   "test/year-locking.test.js"
 )
