@@ -148,6 +148,9 @@ function normalizeSourceObservation(observation) {
           languages: field(taxonomy, 'languages', 'languages'),
           scenes: field(taxonomy, 'scenes', 'scenes'),
           movements: field(taxonomy, 'movements', 'movements'),
+          releaseType: field(taxonomy, 'releaseType', 'release_type'),
+          labels: field(taxonomy, 'labels', 'labels'),
+          credits: field(taxonomy, 'credits', 'credits'),
           sourceUrl: canonicalUrl,
           extractorVersion:
             field(taxonomy, 'extractorVersion', 'extractor_version') ??

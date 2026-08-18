@@ -9,6 +9,15 @@ const taxonomy = {
     languages: ['English'],
     scenes: ['Canterbury Scene'],
     movements: ['New Wave'],
+    release_type: 'Album',
+    labels: [
+      { name: 'Example Records', catalog_number: 'EX-001' },
+      { name: '<script>Label</script>' },
+    ],
+    credits: [
+      { name: 'Jane Doe', roles: ['Vocals', 'Guitar'] },
+      { name: '<script>Person</script>', roles: [] },
+    ],
     source_url:
       'https://rateyourmusic.com/release/album/artist/record/?a=1&b=2',
   },
@@ -29,6 +38,15 @@ describe('taxonomy-details', () => {
     assert.match(html, /<dt>Languages<\/dt><dd>English<\/dd>/);
     assert.match(html, /<dt>Scenes<\/dt><dd>Canterbury Scene<\/dd>/);
     assert.match(html, /<dt>Movements<\/dt><dd>New Wave<\/dd>/);
+    assert.match(html, /<dt>Release type<\/dt><dd>Album<\/dd>/);
+    assert.match(
+      html,
+      /<dt>Labels<\/dt><dd>Example Records \(EX-001\), &lt;script&gt;Label&lt;\/script&gt;<\/dd>/
+    );
+    assert.match(
+      html,
+      /<dt>Credits<\/dt><dd>Jane Doe - Vocals, Guitar, &lt;script&gt;Person&lt;\/script&gt;<\/dd>/
+    );
     assert.match(
       html,
       /href="https:\/\/rateyourmusic\.com\/release\/album\/artist\/record\/\?a=1&amp;b=2"/

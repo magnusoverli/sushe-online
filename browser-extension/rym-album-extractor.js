@@ -3,7 +3,7 @@
 (function () {
   const SCHEMA_VERSION = 1;
   const SOURCE = 'rateyourmusic';
-  const EXTRACTOR_VERSION = 'rym-extension/1.9.7';
+  const EXTRACTOR_VERSION = 'rym-extension/1.10.0';
   const primaryGenreSelectors = [
     '.release_pri_genres .genre',
     '.release_pri_genres a[href*="/genre/"]',
@@ -151,6 +151,95 @@
         .map((cell) => cell.textContent)
         .join(',')
     );
+  }
+
+  function extractRowText(row) {
+    return normalizeText(
+      queryAll(row, 'td')
+        .map((cell) => cell.textContent)
+        .join(' ')
+    );
+  }
+
+  function extractLabels(row, catalogNumbers = []) {
+    if (!row) return [];
+    const names = collectOrderedText(row, ['td a[href*="/label/"]', 'td a']);
+    if (names.length > 0) {
+      return names.map((name, index) => ({
+        name,
+        ...(catalogNumbers[index]
+          ? { catalogNumber: catalogNumbers[index] }
+          : {}),
+      }));
+    }
+
+    const name = extractRowText(row);
+    return name
+      ? [
+          {
+            name,
+            ...(catalogNumbers[0] ? { catalogNumber: catalogNumbers[0] } : {}),
+          },
+        ]
+      : [];
+  }
+
+  function creditRows(documentLike) {
+    const rows = [];
+    const seen = new Set();
+    for (const selector of [
+      '.release_credits tr',
+      'table.release_credits tr',
+      'table.credits tr',
+      '[class*="credits"] tr',
+    ]) {
+      for (const row of queryAll(documentLike, selector)) {
+        if (seen.has(row)) continue;
+        seen.add(row);
+        rows.push(row);
+      }
+    }
+    const creditsInfoRow = findAlbumInfoRow(documentLike, ['Credits']);
+    if (creditsInfoRow && !seen.has(creditsInfoRow)) rows.push(creditsInfoRow);
+    return rows;
+  }
+
+  function extractCredits(documentLike) {
+    const rows = creditRows(documentLike);
+    const credits = [];
+    for (const row of rows) {
+      const cells = queryAll(row, 'td');
+      if (cells.length === 0) continue;
+      const nameElement =
+        queryOne(row, '.credit_name') ||
+        queryOne(row, '.artist_name') ||
+        queryOne(row, 'a[href*="/artist/"]');
+      let name = normalizeText(
+        nameElement?.textContent || cells[0]?.textContent
+      );
+      let roles = splitOrderedText(
+        queryAll(row, '.credit_role, .role, .roles')
+          .map((element) => element.textContent)
+          .join(',')
+      );
+      if (roles.length === 0) {
+        roles = splitOrderedText(
+          cells
+            .slice(1)
+            .map((cell) => cell.textContent)
+            .join(',')
+        );
+      }
+      if (cells.length === 1 && roles.length === 0) {
+        const inlineCredit = name.match(/^(.+?)\s+[–—]\s+(.+)$/);
+        if (inlineCredit) {
+          name = normalizeText(inlineCredit[1]);
+          roles = splitOrderedText(inlineCredit[2]);
+        }
+      }
+      if (name) credits.push({ name, roles });
+    }
+    return { found: rows.length > 0, credits };
   }
 
   function parseAlbumId(value, textFormat = false) {
@@ -346,6 +435,16 @@
     ]);
     const scenesRow = findAlbumInfoRow(documentLike, ['Scenes']);
     const movementsRow = findAlbumInfoRow(documentLike, ['Movements']);
+    const releaseTypeRow = findAlbumInfoRow(documentLike, [
+      'Release type',
+      'Type',
+    ]);
+    const labelsRow = findAlbumInfoRow(documentLike, ['Label', 'Labels']);
+    const catalogNumbersRow = findAlbumInfoRow(documentLike, [
+      'Catalog number',
+      'Catalog numbers',
+      'Catalog #',
+    ]);
     const languages = extractRowTerms(languageRow);
     const scenes = extractRowTerms(scenesRow, [
       '.release_pri_genres a',
@@ -355,6 +454,9 @@
       '.release_pri_genres a',
       'td a',
     ]);
+    const releaseType = extractRowText(releaseTypeRow);
+    const catalogNumbers = extractRowTerms(catalogNumbersRow, ['td']);
+    const credits = extractCredits(documentLike);
     const platformResult = collectPlatformLinks(documentLike);
     const identity = canonical
       ? {
@@ -385,6 +487,11 @@
         ...(languageRow ? { languages } : {}),
         ...(scenesRow ? { scenes } : {}),
         ...(movementsRow ? { movements } : {}),
+        ...(releaseType ? { releaseType } : {}),
+        ...(labelsRow
+          ? { labels: extractLabels(labelsRow, catalogNumbers) }
+          : {}),
+        ...(credits.found ? { credits: credits.credits } : {}),
         sourceUrl: canonical?.canonicalUrl || null,
         extractorVersion: EXTRACTOR_VERSION,
         capturedAt: new Date().toISOString(),

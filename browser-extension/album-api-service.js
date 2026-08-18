@@ -1,11 +1,11 @@
 // MusicBrainz and SuShe API helpers for extension album additions.
 
 (function () {
-  function copyOptionalTaxonomyArrays(taxonomy) {
+  function copyOptionalTaxonomyFields(taxonomy) {
     return Object.fromEntries(
-      ['languages', 'scenes', 'movements']
+      ['languages', 'scenes', 'movements', 'releaseType', 'labels', 'credits']
         .filter((field) => Object.hasOwn(taxonomy || {}, field))
-        .map((field) => [field, taxonomy[field] || []])
+        .map((field) => [field, taxonomy[field]])
     );
   }
 
@@ -117,7 +117,7 @@
                 albumData.sourceObservation.taxonomy?.secondaryGenres || [],
               descriptors:
                 albumData.sourceObservation.taxonomy?.descriptors || [],
-              ...copyOptionalTaxonomyArrays(
+              ...copyOptionalTaxonomyFields(
                 albumData.sourceObservation.taxonomy
               ),
               sourceUrl:

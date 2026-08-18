@@ -9,7 +9,14 @@ const {
 } = require('../utils/album-taxonomy');
 
 const GENRE_FIELDS = ['genre_1', 'genre_2'];
-const OPTIONAL_RYM_FIELDS = ['languages', 'scenes', 'movements'];
+const OPTIONAL_RYM_FIELDS = [
+  'languages',
+  'scenes',
+  'movements',
+  'release_type',
+  'labels',
+  'credits',
+];
 
 function parseTaxonomy(value) {
   const taxonomy = typeof value === 'string' ? JSON.parse(value) : value;

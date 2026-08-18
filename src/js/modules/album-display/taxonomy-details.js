@@ -39,6 +39,41 @@ function renderTaxonomyRow(label, values) {
   return `<div><dt>${escapeHtml(label)}</dt><dd>${renderTerms(values)}</dd></div>`;
 }
 
+function renderTextRow(label, value) {
+  return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+}
+
+function renderLabelRow(labels) {
+  if (!Array.isArray(labels)) return '';
+  const values = labels
+    .filter((label) => label && typeof label === 'object')
+    .map((label) => {
+      const name = typeof label.name === 'string' ? label.name.trim() : '';
+      const catalogNumber =
+        typeof label.catalog_number === 'string'
+          ? label.catalog_number.trim()
+          : '';
+      if (!name) return '';
+      return catalogNumber ? `${name} (${catalogNumber})` : name;
+    })
+    .filter(Boolean);
+  return renderTaxonomyRow('Labels', values);
+}
+
+function renderCreditsRow(credits) {
+  if (!Array.isArray(credits)) return '';
+  const values = credits
+    .filter((credit) => credit && typeof credit === 'object')
+    .map((credit) => {
+      const name = typeof credit.name === 'string' ? credit.name.trim() : '';
+      const roles = taxonomyTerms(credit.roles);
+      if (!name) return '';
+      return roles.length ? `${name} - ${roles.join(', ')}` : name;
+    })
+    .filter(Boolean);
+  return renderTaxonomyRow('Credits', values);
+}
+
 /** Render compact, read-only Rate Your Music taxonomy details. */
 export function renderTaxonomyContent(taxonomy) {
   const rym = taxonomy?.rym;
@@ -50,6 +85,10 @@ export function renderTaxonomyContent(taxonomy) {
   const languages = taxonomyTerms(rym.languages);
   const scenes = taxonomyTerms(rym.scenes);
   const movements = taxonomyTerms(rym.movements);
+  const releaseType =
+    typeof rym.release_type === 'string' ? rym.release_type.trim() : '';
+  const labels = renderLabelRow(rym.labels);
+  const credits = renderCreditsRow(rym.credits);
   const sourceUrl = validatedRymUrl(rym.source_url);
   if (
     primary.length === 0 &&
@@ -58,6 +97,9 @@ export function renderTaxonomyContent(taxonomy) {
     languages.length === 0 &&
     scenes.length === 0 &&
     movements.length === 0 &&
+    !releaseType &&
+    !labels &&
+    !credits &&
     !rym.source_url
   ) {
     return '';
@@ -74,12 +116,18 @@ export function renderTaxonomyContent(taxonomy) {
     .filter(([, , field]) => Object.hasOwn(rym, field))
     .map(([label, values]) => renderTaxonomyRow(label, values))
     .join('');
+  const releaseRows = [
+    releaseType ? renderTextRow('Release type', releaseType) : '',
+    labels,
+    credits,
+  ].join('');
 
   return `<dl class="album-taxonomy-panel">
     ${renderTaxonomyRow('Primary', primary)}
     ${renderTaxonomyRow('Secondary', secondary)}
     ${renderTaxonomyRow('Descriptors', descriptors)}
     ${optionalRows}
+    ${releaseRows}
     <div><dt>Source</dt><dd>${sourceHtml}</dd></div>
   </dl>`;
 }

@@ -32,6 +32,9 @@ describe('extension album payload compatibility', () => {
         languages: ['English'],
         scenes: ['Canterbury Scene'],
         movements: ['New Wave'],
+        releaseType: 'Album',
+        labels: [{ name: 'Example Records', catalogNumber: 'EX-001' }],
+        credits: [{ name: 'Jane Doe', roles: ['Vocals'] }],
         sourceUrl:
           'https://rateyourmusic.com/release/album/talk-talk/spirit-of-eden/',
         extractorVersion: 'test/1',

@@ -69,6 +69,33 @@ describe('RateYourMusic album observation extractor', () => {
         '.release_pri_genres a': [element({ text: 'Rock Against Communism' })],
       },
     });
+    const releaseTypeRow = element({
+      children: {
+        'th.info_hdr': [element({ text: 'Type' })],
+        td: [element({ text: 'Album' })],
+      },
+    });
+    const labelsRow = element({
+      children: {
+        'th.info_hdr': [element({ text: 'Labels' })],
+        'td a[href*="/label/"]': [element({ text: 'Example Records' })],
+        td: [element({ text: 'Example Records' })],
+      },
+    });
+    const catalogNumbersRow = element({
+      children: {
+        'th.info_hdr': [element({ text: 'Catalog number' })],
+        td: [element({ text: 'EX-001' })],
+      },
+    });
+    const creditsRow = element({
+      children: {
+        td: [
+          element({ text: 'Jane Doe' }),
+          element({ text: 'Vocals, Guitar' }),
+        ],
+      },
+    });
     const platformUrls = [
       'https://open.spotify.com/album/0123456789012345678901',
       'https://music.apple.com/us/album/example/1',
@@ -94,7 +121,15 @@ describe('RateYourMusic album observation extractor', () => {
       '.release_sec_genres .genre': secondary,
       '.release_descriptors': [section],
       '.release_descriptors .release_pri_descriptors': [descriptorText],
-      'table.album_info tr': [languageRow, scenesRow, movementsRow],
+      'table.album_info tr': [
+        languageRow,
+        scenesRow,
+        movementsRow,
+        releaseTypeRow,
+        labelsRow,
+        catalogNumbersRow,
+      ],
+      '.release_credits tr': [creditsRow],
       '.release_media_links': [mediaScope],
     });
 
@@ -134,6 +169,13 @@ describe('RateYourMusic album observation extractor', () => {
     assert.deepStrictEqual(observation.taxonomy.movements, [
       'Rock Against Communism',
     ]);
+    assert.strictEqual(observation.taxonomy.releaseType, 'Album');
+    assert.deepStrictEqual(observation.taxonomy.labels, [
+      { name: 'Example Records', catalogNumber: 'EX-001' },
+    ]);
+    assert.deepStrictEqual(observation.taxonomy.credits, [
+      { name: 'Jane Doe', roles: ['Vocals', 'Guitar'] },
+    ]);
     assert.deepStrictEqual(
       observation.platformLinks.map(({ service }) => service),
       [
@@ -153,7 +195,7 @@ describe('RateYourMusic album observation extractor', () => {
     );
     assert.strictEqual(
       observation.taxonomy.extractorVersion,
-      'rym-extension/1.9.7'
+      'rym-extension/1.10.0'
     );
     assert.ok(!Number.isNaN(Date.parse(observation.taxonomy.capturedAt)));
     assert.deepStrictEqual(Object.keys(observation).sort(), [

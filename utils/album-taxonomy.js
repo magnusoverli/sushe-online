@@ -5,6 +5,9 @@ const MAX_DESCRIPTORS = 128;
 const MAX_LANGUAGES = 32;
 const MAX_SCENES = 32;
 const MAX_MOVEMENTS = 32;
+const MAX_LABELS = 64;
+const MAX_CREDITS = 256;
+const MAX_CREDIT_ROLES = 32;
 const MAX_SOURCE_URL_LENGTH = 2048;
 const MAX_EXTRACTOR_VERSION_LENGTH = 64;
 const RYM_HOST = 'rateyourmusic.com';
@@ -60,6 +63,81 @@ function normalizeTerms(values, fieldName, maxItems) {
     }
   });
   return normalized;
+}
+
+function normalizeOptionalTerm(snapshot, camelName, snakeName, fieldName) {
+  const value = getSnapshotField(snapshot, camelName, snakeName);
+  if (value === undefined) return undefined;
+  const normalized = normalizeTaxonomyTerm(value, fieldName);
+  if (!normalized) throw new RangeError(`${fieldName} must not be empty`);
+  return normalized;
+}
+
+function normalizeLabels(values) {
+  if (!Array.isArray(values)) {
+    throw new TypeError('labels is required and must be an array');
+  }
+  if (values.length > MAX_LABELS) {
+    throw new RangeError(`labels must have at most ${MAX_LABELS} items`);
+  }
+
+  const seen = new Set();
+  return values.reduce((labels, value, index) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new TypeError(`labels[${index}] must be an object`);
+    }
+    const name = normalizeTaxonomyTerm(value.name, `labels[${index}].name`);
+    if (!name) throw new RangeError(`labels[${index}].name must not be empty`);
+    const catalogNumber = normalizeOptionalTerm(
+      value,
+      'catalogNumber',
+      'catalog_number',
+      `labels[${index}].catalogNumber`
+    );
+    const key = `${name.toLowerCase()}|${catalogNumber?.toLowerCase() || ''}`;
+    if (seen.has(key)) return labels;
+    seen.add(key);
+    labels.push({
+      name,
+      ...(catalogNumber === undefined ? {} : { catalog_number: catalogNumber }),
+    });
+    return labels;
+  }, []);
+}
+
+function normalizeCredits(values) {
+  if (!Array.isArray(values)) {
+    throw new TypeError('credits is required and must be an array');
+  }
+  if (values.length > MAX_CREDITS) {
+    throw new RangeError(`credits must have at most ${MAX_CREDITS} items`);
+  }
+
+  const creditsByName = new Map();
+  values.forEach((value, index) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new TypeError(`credits[${index}] must be an object`);
+    }
+    const name = normalizeTaxonomyTerm(value.name, `credits[${index}].name`);
+    if (!name) throw new RangeError(`credits[${index}].name must not be empty`);
+    const roles = normalizeTerms(
+      value.roles,
+      `credits[${index}].roles`,
+      MAX_CREDIT_ROLES
+    );
+    const key = name.toLowerCase();
+    const current = creditsByName.get(key);
+    if (!current) {
+      creditsByName.set(key, { name, roles });
+      return;
+    }
+    current.roles = normalizeTerms(
+      [...current.roles, ...roles],
+      `credits[${index}].roles`,
+      MAX_CREDIT_ROLES
+    );
+  });
+  return [...creditsByName.values()];
 }
 
 function normalizeSourceUrl(value) {
@@ -136,6 +214,14 @@ function normalizeRymSnapshot(snapshot) {
   const languages = getSnapshotField(snapshot, 'languages', 'languages');
   const scenes = getSnapshotField(snapshot, 'scenes', 'scenes');
   const movements = getSnapshotField(snapshot, 'movements', 'movements');
+  const releaseType = normalizeOptionalTerm(
+    snapshot,
+    'releaseType',
+    'release_type',
+    'releaseType'
+  );
+  const labels = getSnapshotField(snapshot, 'labels', 'labels');
+  const credits = getSnapshotField(snapshot, 'credits', 'credits');
 
   return {
     primary_genres: normalizeTerms(
@@ -166,6 +252,9 @@ function normalizeRymSnapshot(snapshot) {
       : {
           movements: normalizeTerms(movements, 'movements', MAX_MOVEMENTS),
         }),
+    ...(releaseType === undefined ? {} : { release_type: releaseType }),
+    ...(labels === undefined ? {} : { labels: normalizeLabels(labels) }),
+    ...(credits === undefined ? {} : { credits: normalizeCredits(credits) }),
     source_url: normalizeSourceUrl(
       getSnapshotField(snapshot, 'sourceUrl', 'source_url')
     ),
@@ -217,6 +306,9 @@ module.exports = {
   MAX_LANGUAGES,
   MAX_SCENES,
   MAX_MOVEMENTS,
+  MAX_LABELS,
+  MAX_CREDITS,
+  MAX_CREDIT_ROLES,
   MAX_SOURCE_URL_LENGTH,
   MAX_EXTRACTOR_VERSION_LENGTH,
   normalizeTaxonomyText,

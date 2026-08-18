@@ -3,6 +3,8 @@ const assert = require('node:assert');
 
 const {
   MAX_DESCRIPTORS,
+  MAX_CREDITS,
+  MAX_LABELS,
   MAX_EXTRACTOR_VERSION_LENGTH,
   MAX_LANGUAGES,
   MAX_MOVEMENTS,
@@ -92,6 +94,30 @@ describe('album-taxonomy utility', () => {
     assert.deepStrictEqual(explicit.languages, []);
     assert.deepStrictEqual(explicit.scenes, []);
     assert.deepStrictEqual(explicit.movements, []);
+  });
+
+  it('normalizes optional RYM release metadata into a structured shape', () => {
+    const snapshot = normalizeRymSnapshot(
+      validSnapshot({
+        releaseType: ' Album ',
+        labels: [
+          { name: ' Example Records ', catalogNumber: ' EX-001 ' },
+          { name: 'example records', catalogNumber: 'ex-001' },
+        ],
+        credits: [
+          { name: ' Jane Doe ', roles: [' Vocals ', 'vocals'] },
+          { name: 'jane doe', roles: ['Guitar'] },
+        ],
+      })
+    );
+
+    assert.strictEqual(snapshot.release_type, 'Album');
+    assert.deepStrictEqual(snapshot.labels, [
+      { name: 'Example Records', catalog_number: 'EX-001' },
+    ]);
+    assert.deepStrictEqual(snapshot.credits, [
+      { name: 'Jane Doe', roles: ['Vocals', 'Guitar'] },
+    ]);
   });
 
   it('derives scalar genre projections in established priority order', () => {
@@ -196,6 +222,22 @@ describe('album-taxonomy utility', () => {
           })
         ),
       /extractorVersion must be between 1 and 64 characters/
+    );
+    assert.throws(
+      () =>
+        normalizeRymSnapshot(
+          validSnapshot({ labels: Array(MAX_LABELS + 1).fill({ name: 'x' }) })
+        ),
+      /labels must have at most 64 items/
+    );
+    assert.throws(
+      () =>
+        normalizeRymSnapshot(
+          validSnapshot({
+            credits: Array(MAX_CREDITS + 1).fill({ name: 'x', roles: [] }),
+          })
+        ),
+      /credits must have at most 256 items/
     );
   });
 

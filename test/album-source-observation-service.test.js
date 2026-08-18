@@ -71,6 +71,9 @@ describe('album-source-observation-service normalization', () => {
           languages: ['English'],
           scenes: ['Canterbury Scene'],
           movements: ['New Wave'],
+          releaseType: 'Album',
+          labels: [{ name: 'Example Records', catalogNumber: 'EX-001' }],
+          credits: [{ name: 'Jane Doe', roles: ['Vocals'] }],
           extractorVersion: 'extension/2',
           complete: true,
         },
@@ -82,6 +85,13 @@ describe('album-source-observation-service normalization', () => {
     assert.deepStrictEqual(normalized.snapshot.languages, ['English']);
     assert.deepStrictEqual(normalized.snapshot.scenes, ['Canterbury Scene']);
     assert.deepStrictEqual(normalized.snapshot.movements, ['New Wave']);
+    assert.strictEqual(normalized.snapshot.release_type, 'Album');
+    assert.deepStrictEqual(normalized.snapshot.labels, [
+      { name: 'Example Records', catalog_number: 'EX-001' },
+    ]);
+    assert.deepStrictEqual(normalized.snapshot.credits, [
+      { name: 'Jane Doe', roles: ['Vocals'] },
+    ]);
   });
 
   it('drops invalid provider hints without discarding identity and taxonomy', () => {
