@@ -342,6 +342,65 @@ describe('album-display module', () => {
       }
     });
 
+    it('renders selected-track details consistently in desktop and mobile cards', () => {
+      const previousCreateElement = globalThis.document.createElement;
+      globalThis.document.createElement = () => ({
+        className: '',
+        dataset: {},
+        style: {},
+        children: [],
+        innerHTML: '',
+        appendChild(child) {
+          this.children.push(child);
+        },
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        addEventListener: () => {},
+      });
+
+      try {
+        const module = createAlbumDisplay({
+          getCurrentList: () => 'list-1',
+          getListMetadata: () => ({ isMain: false }),
+          getListData: () => [],
+          getTrackName: (track) => track.name,
+          getTrackLength: (track) => track.length,
+          formatTrackTime: (length) => {
+            if (length === 182000) return '3:02';
+            if (length === 269000) return '4:29';
+            return '';
+          },
+        });
+        const album = {
+          album: 'Example Album',
+          artist: 'Example Artist',
+          primary_track: 'Primary Track',
+          secondary_track: 'Secondary Track',
+          tracks: [
+            { name: 'Opening Track', length: 120000 },
+            { name: 'Primary Track', length: 182000 },
+            { name: 'Interlude', length: 65000 },
+            { name: 'Closing Track', length: 208000 },
+            { name: 'Secondary Track', length: 269000 },
+          ],
+        };
+
+        const desktop = module.createAlbumItem(album, 0, false);
+        const mobile = module.createAlbumItem(album, 0, true).children[0];
+
+        for (const markup of [desktop.innerHTML, mobile.innerHTML]) {
+          assert.match(markup, /I:/);
+          assert.match(markup, /Primary Track - #2/);
+          assert.match(markup, /\(03:02\)/);
+          assert.match(markup, /II:/);
+          assert.match(markup, /Secondary Track - #5/);
+          assert.match(markup, /\(04:29\)/);
+        }
+      } finally {
+        globalThis.document.createElement = previousCreateElement;
+      }
+    });
+
     it('adds a regenerated mobile summary badge to the title row', async () => {
       const previousGetElementById = globalThis.document.getElementById;
       const previousCreateElement = globalThis.document.createElement;
@@ -547,7 +606,7 @@ describe('album-display module', () => {
         tracks: ['1. First', '2. Second', '3. Favorite Song'],
       };
       let data = module.processAlbumData(album, 0);
-      assert.strictEqual(data.primaryTrackDisplay, '3. Favorite Song');
+      assert.strictEqual(data.primaryTrackDisplay, 'Favorite Song - #3');
       assert.strictEqual(data.primaryTrackClass, 'text-gray-300');
 
       // Test with just track number
@@ -556,7 +615,7 @@ describe('album-display module', () => {
         tracks: [],
       };
       data = module.processAlbumData(album, 0);
-      assert.strictEqual(data.primaryTrackDisplay, 'Track 5');
+      assert.strictEqual(data.primaryTrackDisplay, 'Track 5 - #5');
     });
 
     it('should set position only for main lists', () => {

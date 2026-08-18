@@ -32,12 +32,16 @@ function initializeQueues(db, options = {}) {
   const {
     initializeTrackFetchQueue,
   } = require('../services/track-fetch-queue');
-  initializeTrackFetchQueue(db);
+  initializeTrackFetchQueue(db, {
+    responseCache: options.responseCache,
+  });
 
   const {
     initializeNativeNameQueue,
   } = require('../services/native-name-queue');
-  initializeNativeNameQueue(db);
+  initializeNativeNameQueue(db, {
+    responseCache: options.responseCache,
+  });
 
   const {
     initializeAvailabilityFetchQueue,

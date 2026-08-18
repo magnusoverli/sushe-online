@@ -26,6 +26,7 @@ class ResponseCache {
       options.maxBytes ??
       resolveRamAccelerationConfig(process.env).responseCacheMaxBytes;
     this.totalBytes = 0;
+    this.invalidationVersion = 0;
     this.cleanupInterval = options.cleanupInterval || 300000; // 5 minutes
 
     // Periodic cleanup of expired entries
@@ -103,6 +104,12 @@ class ResponseCache {
   }
 
   set(key, data, ttl = this.defaultTTL, options = {}) {
+    if (
+      options.invalidationVersion !== undefined &&
+      options.invalidationVersion !== this.invalidationVersion
+    ) {
+      return false;
+    }
     const now = Date.now();
     const body = serializeJson(data);
     const bytes = byteLength(body);
@@ -139,6 +146,7 @@ class ResponseCache {
   }
 
   invalidate(pattern) {
+    this.invalidationVersion += 1;
     // Invalidate cache entries matching a pattern
     for (const key of this.cache.keys()) {
       if (key.includes(pattern)) {
@@ -149,6 +157,7 @@ class ResponseCache {
   }
 
   clear() {
+    this.invalidationVersion += 1;
     this.cache.clear();
     this.totalBytes = 0;
     this.updateMetrics();
@@ -217,6 +226,7 @@ function createCacheMiddleware(options = {}) {
     // Cache miss - intercept response
     incCacheMiss();
     if (onMiss) onMiss(req, cacheKey);
+    const invalidationVersion = responseCache.invalidationVersion;
 
     const originalJson = res.json;
     res.json = function (data) {
@@ -224,6 +234,7 @@ function createCacheMiddleware(options = {}) {
       if (res.statusCode >= 200 && res.statusCode < 300) {
         responseCache.set(cacheKey, data, ttl, {
           contentType: res.get('Content-Type'),
+          invalidationVersion,
         });
 
         // Set cache headers

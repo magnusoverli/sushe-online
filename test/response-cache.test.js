@@ -201,6 +201,22 @@ test.describe('ResponseCache Class', () => {
       assert.strictEqual(cache.get('GET:/api/other:user123'), null);
       assert.ok(cache.get('GET:/api/data:user456')); // Different user
     });
+
+    test('should not refill from a response started before invalidation', () => {
+      const cache = createTestCache();
+      const requestVersion = cache.invalidationVersion;
+
+      cache.invalidate('user123');
+      const stored = cache.set(
+        'GET:/api/data:user123',
+        { data: 'stale' },
+        undefined,
+        { invalidationVersion: requestVersion }
+      );
+
+      assert.strictEqual(stored, false);
+      assert.strictEqual(cache.get('GET:/api/data:user123'), null);
+    });
   });
 
   test.describe('Key Generation', () => {

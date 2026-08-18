@@ -56,8 +56,16 @@ function buildAvailabilityResolution(deps = {}) {
       externalIdentityService,
     }),
     directSources: [
-      { name: 'spotify', getLinks: spotifySource.getLinks },
-      { name: 'itunes', getLinks: itunesSource.getLinks },
+      {
+        name: 'spotify',
+        getLinks: spotifySource.getLinks,
+        supportsUpc: true,
+      },
+      {
+        name: 'itunes',
+        getLinks: itunesSource.getLinks,
+        requiresUpc: true,
+      },
       { name: 'qobuz', getLinks: qobuzSource.getLinks },
     ],
   });

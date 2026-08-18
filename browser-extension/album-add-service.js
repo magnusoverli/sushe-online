@@ -1,6 +1,12 @@
-// Add-album workflow for the SuShe Online extension.
-
 (function () {
+  function identityKey(album) {
+    return `${album?.artist || ''}\u0000${album?.album || ''}`
+      .normalize('NFKC')
+      .toLocaleLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   function createAlbumAddService(deps = {}) {
     const chromeApi = deps.chrome || chrome;
     const logger = deps.logger || console;
@@ -18,6 +24,14 @@
     } = deps;
     const albumApi =
       deps.albumApi || globalThis.AlbumApiService.createAlbumApiService(deps);
+    const albumIdentity = deps.albumIdentity || globalThis.AlbumIdentity;
+    const enrichment =
+      deps.enrichment ||
+      globalThis.AlbumAddEnrichment.createAlbumAddEnrichment({
+        albumApi,
+        handleUnauthorized,
+        logger,
+      });
 
     async function extractAlbumIdentity(info, tab) {
       try {
@@ -57,49 +71,12 @@
       }
     }
 
-    function fetchFallbackGenres(tab, albumData) {
-      if (albumData.genre_1) {
-        return Promise.resolve({
-          genre_1: albumData.genre_1,
-          genre_2: albumData.genre_2,
-        });
+    function getClickedIdentity(info) {
+      for (const url of [info.linkUrl, info.pageUrl]) {
+        const identity = albumIdentity?.getAlbumIdentityFromUrl?.(url);
+        if (identity) return identity;
       }
-
-      return chromeApi.tabs
-        .sendMessage(tab.id, {
-          action: ACTIONS.FETCH_GENRES_FOR_ALBUM,
-          albumUrl: albumData.albumUrl,
-        })
-        .catch((error) => {
-          logger.warn('Could not fetch fallback RYM genres:', error);
-          return { genre_1: '', genre_2: '' };
-        });
-    }
-
-    async function enrichAlbumCountry(apiBase, releaseGroup, albumId) {
-      if (!albumId) return;
-
-      const artistCountry = await albumApi.fetchArtistCountry(
-        apiBase,
-        releaseGroup
-      );
-      if (!artistCountry) return;
-
-      const response = await albumApi.updateAlbumMetadata(apiBase, [
-        { albumId, country: artistCountry },
-      ]);
-
-      if (response.status === 401) {
-        await handleUnauthorized();
-        return;
-      }
-
-      if (!response.ok) {
-        logger.warn(
-          'Could not update album country after add:',
-          response.status
-        );
-      }
+      return null;
     }
 
     async function addAlbumToList(info, tab, listId, listName) {
@@ -132,12 +109,17 @@
         const rymCoverUrl = info.srcUrl || 'icons/icon128.png';
         logger.log('Sending message to content script...');
 
+        const clickedIdentity = getClickedIdentity(info);
+        const speculativeMusicBrainz = clickedIdentity
+          ? albumApi
+              .searchMusicBrainz(apiBase, clickedIdentity)
+              .then((releaseGroup) => ({ releaseGroup }))
+              .catch((error) => ({ error }))
+          : null;
         let albumData = await extractAlbumIdentity(info, tab);
 
         if (!albumData || albumData.error) {
-          const urlIdentity = globalThis.AlbumIdentity.getAlbumIdentityFromUrl(
-            info.linkUrl || info.pageUrl
-          );
+          const urlIdentity = clickedIdentity;
           if (urlIdentity) {
             albumData = {
               ...urlIdentity,
@@ -161,18 +143,40 @@
         }
 
         logger.log('Extracted album data:', albumData);
-
-        const genresPromise = fetchFallbackGenres(tab, albumData);
-        logger.log('Searching MusicBrainz for album...');
-        const releaseGroup = await albumApi.searchMusicBrainz(
-          apiBase,
-          albumData
+        const observationRetry = enrichment.startObservationRetry(
+          albumData,
+          () => extractAlbumIdentity(info, tab)
         );
-        logger.log('Found release group:', releaseGroup);
 
-        const genres = (await genresPromise) || {};
-        albumData.genre_1 = genres.genre_1 || '';
-        albumData.genre_2 = genres.genre_2 || '';
+        logger.log('Searching MusicBrainz for album...');
+        let releaseGroup;
+        if (
+          speculativeMusicBrainz &&
+          identityKey(clickedIdentity) === identityKey(albumData)
+        ) {
+          const speculativeResult = await speculativeMusicBrainz;
+          if (speculativeResult.error) {
+            logger.warn(
+              'Speculative MusicBrainz lookup failed; retrying with extracted data:',
+              speculativeResult.error
+            );
+            releaseGroup = await albumApi.searchMusicBrainz(apiBase, albumData);
+          } else {
+            releaseGroup = speculativeResult.releaseGroup;
+          }
+        } else {
+          releaseGroup = await albumApi.searchMusicBrainz(apiBase, albumData);
+        }
+        logger.log('Found release group:', releaseGroup);
+        let observationAppliedBeforeSave = false;
+        if (observationRetry?.value) {
+          albumData = { ...albumData, ...observationRetry.value };
+          observationAppliedBeforeSave = true;
+        }
+        const countryPromise = albumApi.fetchArtistCountry(
+          apiBase,
+          releaseGroup
+        );
 
         const newAlbum = albumApi.buildAlbumPayload(
           albumData,
@@ -218,6 +222,18 @@
 
         const result = await saveResponse.json();
         logger.log('Add result:', result);
+        const canonicalAlbumId =
+          result.addedItems?.[0]?.album_id ||
+          result.duplicates?.[0]?.album_id ||
+          newAlbum.album_id;
+        const observationPersistenceTask =
+          observationRetry?.promise && !observationAppliedBeforeSave
+            ? enrichment.persistObservation({
+                apiBase,
+                albumId: canonicalAlbumId,
+                retryPromise: observationRetry.promise,
+              })
+            : null;
 
         if (result.duplicates && result.duplicates.length > 0) {
           logger.log('Album already exists in list');
@@ -226,6 +242,9 @@
             `${albumData.album} by ${albumData.artist}`,
             rymCoverUrl
           );
+          await observationPersistenceTask?.catch((error) => {
+            logger.warn('Post-add RYM observation retry failed:', error);
+          });
           return;
         }
 
@@ -239,23 +258,31 @@
           ...newAlbum,
           ...(result.addedItems?.[0] || {}),
         };
-        if (typeof onAlbumAdded === 'function') {
-          onAlbumAdded({
-            album: canonicalAlbum,
-            listId,
-            listName,
-            tabId: tab.id,
-          }).catch((error) => {
-            logger.warn('Post-add extension state update failed:', error);
-          });
+        const postAddTasks = [
+          enrichment.enrichCountry(
+            apiBase,
+            countryPromise,
+            canonicalAlbum.album_id
+          ),
+        ];
+        if (observationPersistenceTask) {
+          postAddTasks.push(observationPersistenceTask);
         }
-
-        await enrichAlbumCountry(
-          apiBase,
-          releaseGroup,
-          canonicalAlbum.album_id
-        ).catch((error) => {
-          logger.warn('Post-add album country enrichment failed:', error);
+        if (typeof onAlbumAdded === 'function') {
+          postAddTasks.push(
+            onAlbumAdded({
+              album: canonicalAlbum,
+              listId,
+              listName,
+              tabId: tab.id,
+            })
+          );
+        }
+        const postAddResults = await Promise.allSettled(postAddTasks);
+        postAddResults.forEach((postAddResult) => {
+          if (postAddResult.status === 'rejected') {
+            logger.warn('Post-add enrichment failed:', postAddResult.reason);
+          }
         });
       } catch (error) {
         logger.error('Error adding album:', error);
@@ -268,8 +295,5 @@
 
     return { addAlbumToList };
   }
-
-  globalThis.AlbumAddService = {
-    createAlbumAddService,
-  };
+  globalThis.AlbumAddService = { createAlbumAddService };
 })();

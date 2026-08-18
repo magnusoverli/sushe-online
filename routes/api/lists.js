@@ -37,6 +37,14 @@ module.exports = (app, deps) => {
     }
   }
 
+  function scheduleTaxonomyUpdates(results) {
+    void notifyTaxonomyUpdates(results).catch((error) => {
+      logger.warn('Failed to broadcast album taxonomy updates', {
+        error: error.message,
+      });
+    });
+  }
+
   // ============================================
   // GET ROUTES
   // ============================================
@@ -183,7 +191,7 @@ module.exports = (app, deps) => {
       });
 
       invalidateListCaches(req.user._id);
-      await notifyTaxonomyUpdates(result.sourceObservationResults);
+      scheduleTaxonomyUpdates(result.sourceObservationResults);
 
       if (result.year) {
         triggerAggregateListRecompute(result.year);
@@ -260,7 +268,7 @@ module.exports = (app, deps) => {
           await listService.replaceListItems(id, req.user._id, rawAlbums);
 
         invalidateListCaches(req.user._id, id);
-        await notifyTaxonomyUpdates(sourceObservationResults);
+        scheduleTaxonomyUpdates(sourceObservationResults);
 
         if (list.year) {
           triggerAggregateListRecompute(list.year);
@@ -386,7 +394,7 @@ module.exports = (app, deps) => {
         );
 
         invalidateListCaches(req.user._id, id);
-        await notifyTaxonomyUpdates(result.sourceObservationResults);
+        scheduleTaxonomyUpdates(result.sourceObservationResults);
 
         const broadcast = req.app.locals.broadcast;
         if (broadcast) {

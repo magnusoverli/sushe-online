@@ -153,7 +153,7 @@ describe('RateYourMusic album observation extractor', () => {
     );
     assert.strictEqual(
       observation.taxonomy.extractorVersion,
-      'rym-extension/1.9.6'
+      'rym-extension/1.9.7'
     );
     assert.ok(!Number.isNaN(Date.parse(observation.taxonomy.capturedAt)));
     assert.deepStrictEqual(Object.keys(observation).sort(), [

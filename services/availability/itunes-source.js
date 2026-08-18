@@ -15,6 +15,7 @@ const defaultLogger = require('../../utils/logger');
 
 const ITUNES_LOOKUP_URL = 'https://itunes.apple.com/lookup';
 const ITUNES_COUNTRY = 'US';
+const ITUNES_LOOKUP_TIMEOUT_MS = 2500;
 
 // Exact barcode identity — high confidence, comfortably above the floor.
 const ITUNES_UPC_CONFIDENCE = 0.97;
@@ -34,6 +35,7 @@ function createItunesSource(deps = {}) {
   const fetchFn = deps.fetch || fetch;
   const logger = deps.logger || defaultLogger;
   const country = deps.country || ITUNES_COUNTRY;
+  const timeoutMs = deps.timeoutMs ?? ITUNES_LOOKUP_TIMEOUT_MS;
 
   /**
    * @param {{upc?: string|null}} album
@@ -49,10 +51,19 @@ function createItunesSource(deps = {}) {
         entity: 'album',
         country,
       });
-      const resp = await fetchFn(`${ITUNES_LOOKUP_URL}?${params.toString()}`);
-      if (!resp.ok) return { links: [] };
-
-      const data = await resp.json();
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      let data;
+      try {
+        const resp = await fetchFn(
+          `${ITUNES_LOOKUP_URL}?${params.toString()}`,
+          { signal: controller.signal }
+        );
+        if (!resp.ok) return { links: [] };
+        data = await resp.json();
+      } finally {
+        clearTimeout(timeout);
+      }
       const results = (data && data.results) || [];
       const collection = results.find(
         (r) => r.wrapperType === 'collection' && r.collectionViewUrl

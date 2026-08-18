@@ -12,29 +12,33 @@ function jsonResponse(body) {
 }
 
 describe('availability/mb-url-rels-source', () => {
-  it('resolves release-group -> release -> url-rels links and a seed', async () => {
+  it('resolves release-group url-rels and a seed in one browse request', async () => {
+    const seen = [];
     const mbFetch = async (url) => {
-      if (url.includes('/release-group/')) {
+      seen.push(url);
+      if (url.includes('/release?release-group=')) {
         return jsonResponse({
           releases: [
             { id: 'rel-promo', status: 'Promotion' },
-            { id: 'rel-official', status: 'Official' },
-          ],
-        });
-      }
-      if (url.includes('/release/rel-official')) {
-        return jsonResponse({
-          barcode: '886443927087',
-          relations: [
             {
-              type: 'streaming',
-              url: { resource: 'https://music.apple.com/us/album/1' },
+              id: 'rel-official',
+              status: 'Official',
+              barcode: '886443927087',
+              relations: [
+                {
+                  type: 'streaming',
+                  url: { resource: 'https://music.apple.com/us/album/1' },
+                },
+                {
+                  type: 'purchase for download',
+                  url: { resource: 'https://play.qobuz.com/album/2' },
+                },
+                {
+                  type: 'discogs',
+                  url: { resource: 'https://discogs.com/x' },
+                },
+              ],
             },
-            {
-              type: 'purchase for download',
-              url: { resource: 'https://play.qobuz.com/album/2' },
-            },
-            { type: 'discogs', url: { resource: 'https://discogs.com/x' } },
           ],
         });
       }
@@ -53,6 +57,7 @@ describe('availability/mb-url-rels-source', () => {
       { service: 'itunes', url: 'https://music.apple.com/us/album/1' },
       { service: 'qobuz', url: 'https://play.qobuz.com/album/2' },
     ]);
+    assert.strictEqual(seen.length, 1);
   });
 
   it('returns empty for a non-MusicBrainz id', async () => {
@@ -69,14 +74,12 @@ describe('availability/mb-url-rels-source', () => {
     });
   });
 
-  it('treats a release-group 404 as a direct release id', async () => {
+  it('falls back to a direct release lookup when browse rejects a release id', async () => {
     const seen = [];
     const mbFetch = async (url) => {
       seen.push(url);
-      if (url.includes('/release-group/')) {
-        const err = new Error('not found');
-        err.status = 404;
-        throw err;
+      if (url.includes('/release?release-group=')) {
+        return { ok: false, status: 404 };
       }
       return jsonResponse({ relations: [] });
     };
@@ -86,6 +89,7 @@ describe('availability/mb-url-rels-source', () => {
     });
     const result = await source.getDirectLinks(MB_ID);
     assert.deepStrictEqual(result, { seedUrl: null, upc: null, links: [] });
+    assert.strictEqual(seen.length, 2);
     assert.ok(seen.some((u) => u.includes(`/release/${MB_ID}`)));
   });
 });

@@ -212,10 +212,11 @@ describe('realtime-sync module', () => {
     assert.deepStrictEqual(refreshCalls, ['list-1']);
   });
 
-  it('forwards album availability and taxonomy socket events', async () => {
+  it('forwards album availability, metadata, and taxonomy socket events', async () => {
     const fakeSocket = createFakeSocket();
     const availabilityEvents = [];
     const taxonomyEvents = [];
+    const metadataEvents = [];
     const availabilityPayload = {
       albumId: 'album-1',
       availability: ['spotify'],
@@ -225,17 +226,24 @@ describe('realtime-sync module', () => {
       albumId: 'album-1',
       taxonomyUpdatedAt: '2026-08-17T12:00:00.000Z',
     };
+    const metadataPayload = {
+      albumId: 'album-1',
+      patch: { country: 'Norway' },
+    };
     const sync = createRealtimeSync({
       ioFactory: () => fakeSocket,
       onAlbumAvailabilityUpdated: async (data) => availabilityEvents.push(data),
+      onAlbumMetadataUpdated: async (data) => metadataEvents.push(data),
       onAlbumTaxonomyUpdated: async (data) => taxonomyEvents.push(data),
     });
 
     sync.connect();
     await fakeSocket.trigger('album:availability-updated', availabilityPayload);
+    await fakeSocket.trigger('album:metadata-updated', metadataPayload);
     await fakeSocket.trigger('album:taxonomy-updated', taxonomyPayload);
 
     assert.deepStrictEqual(availabilityEvents, [availabilityPayload]);
+    assert.deepStrictEqual(metadataEvents, [metadataPayload]);
     assert.deepStrictEqual(taxonomyEvents, [taxonomyPayload]);
   });
 

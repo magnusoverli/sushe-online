@@ -14,7 +14,9 @@ const { normalizeForExternalApi } = require('../../utils/normalization');
 const { selectBestCandidate } = require('../../utils/entity-matching');
 
 const SEED_CONFIDENCE = { existing: 0.95, musicbrainz: 0.9 };
+const ITUNES_BASE_URL = 'https://music.apple.com/us/album/_';
 const EXISTING_SEED_SERVICES = ['spotify', 'tidal'];
+const ITUNES_SEED_TIMEOUT_MS = 2500;
 
 function clean(value) {
   return normalizeForExternalApi(value || '')
@@ -27,6 +29,7 @@ function createSeedProviders(deps = {}) {
   const fetchFn = deps.fetch || fetch;
   const logger = deps.logger || defaultLogger;
   const externalIdentityService = deps.externalIdentityService;
+  const itunesTimeoutMs = deps.itunesTimeoutMs ?? ITUNES_SEED_TIMEOUT_MS;
 
   async function existingMappingSeed(albumId) {
     if (!externalIdentityService || !albumId) return null;
@@ -60,9 +63,16 @@ function createSeedProviders(deps = {}) {
   async function itunesSeed(artist, album) {
     const term = `${clean(artist)} ${clean(album)}`.trim();
     const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&limit=5`;
-    const resp = await fetchFn(url);
-    if (!resp.ok) return null;
-    const data = await resp.json();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), itunesTimeoutMs);
+    let data;
+    try {
+      const resp = await fetchFn(url, { signal: controller.signal });
+      if (!resp.ok) return null;
+      data = await resp.json();
+    } finally {
+      clearTimeout(timeout);
+    }
     const candidates = data.results || [];
     const { best, isConfident } = selectBestCandidate({
       target: { artist, album },
@@ -78,6 +88,13 @@ function createSeedProviders(deps = {}) {
         platform: 'itunes',
         type: 'album',
         id: best.candidate.collectionId,
+      },
+      directLink: {
+        service: 'itunes',
+        url:
+          best.candidate.collectionViewUrl ||
+          `${ITUNES_BASE_URL}/${best.candidate.collectionId}`,
+        confidence: best.combined,
       },
     };
   }
@@ -112,7 +129,12 @@ function createSeedProviders(deps = {}) {
     return searchSeed(album.artist, album.album);
   }
 
-  return { acquireSeed };
+  async function acquireIndependentSeed(album) {
+    const existing = await existingMappingSeed(album.albumId);
+    return existing || searchSeed(album.artist, album.album);
+  }
+
+  return { acquireSeed, acquireIndependentSeed };
 }
 
 module.exports = { createSeedProviders };

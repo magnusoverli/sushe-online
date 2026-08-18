@@ -28,6 +28,7 @@ test('broadcast object should have all expected methods', () => {
     typeof service.broadcast.albumAvailabilityUpdated,
     'function'
   );
+  assert.strictEqual(typeof service.broadcast.albumMetadataUpdated, 'function');
   assert.strictEqual(typeof service.broadcast.albumTaxonomyUpdated, 'function');
   assert.strictEqual(typeof service.broadcast.forceLogoutAll, 'function');
 });
@@ -183,6 +184,12 @@ test('broadcast methods should accept correct parameters', () => {
   });
 
   assert.doesNotThrow(() => {
+    service.broadcast.albumMetadataUpdated('userABC', 'album-1', {
+      country: 'Norway',
+    });
+  });
+
+  assert.doesNotThrow(() => {
     service.broadcast.albumTaxonomyUpdated(
       'userABC',
       'album-1',
@@ -195,7 +202,7 @@ test('broadcast methods should accept correct parameters', () => {
   });
 
   // Each should have logged a warning since io is not initialized
-  assert.strictEqual(mockLogger.warn.mock.calls.length, 8);
+  assert.strictEqual(mockLogger.warn.mock.calls.length, 9);
 });
 
 // =============================================================================

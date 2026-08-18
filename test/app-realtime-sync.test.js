@@ -20,6 +20,7 @@ describe('app-realtime-sync module', () => {
       assert.strictEqual(typeof config.refreshListDataSilent, 'function');
       assert.strictEqual(typeof config.refreshListNav, 'function');
       assert.strictEqual(typeof config.onAlbumAvailabilityUpdated, 'function');
+      assert.strictEqual(typeof config.onAlbumMetadataUpdated, 'function');
       assert.strictEqual(typeof config.onAlbumTaxonomyUpdated, 'function');
       return { connect, disconnect };
     });
@@ -122,7 +123,7 @@ describe('app-realtime-sync module', () => {
     assert.strictEqual(refreshGroupsAndLists.mock.calls.length, 1);
   });
 
-  it('patches availability and taxonomy across loaded lists without list refetches', async () => {
+  it('patches album enrichments across loaded lists without list refetches', async () => {
     let realtimeConfig = null;
     const sharedAlbumOne = { album_id: 'album/1' };
     const sharedAlbumTwo = { album_id: 'album/1' };
@@ -180,6 +181,27 @@ describe('app-realtime-sync module', () => {
       lists['list-2']._data
     );
 
+    await realtimeConfig.onAlbumMetadataUpdated({
+      albumId: 'album/1',
+      metadataVersion: '2',
+      patch: {
+        country: 'Norway',
+        unsafe: 'ignored',
+      },
+    });
+    await realtimeConfig.onAlbumMetadataUpdated({
+      albumId: 'album/1',
+      metadataVersion: '1',
+      patch: {
+        country: 'Sweden',
+        tracks: [{ name: 'Opening' }],
+      },
+    });
+    assert.strictEqual(sharedAlbumOne.country, 'Norway');
+    assert.deepStrictEqual(sharedAlbumTwo.tracks, [{ name: 'Opening' }]);
+    assert.strictEqual(sharedAlbumOne.unsafe, undefined);
+    assert.strictEqual(displayAlbums.mock.calls.length, 3);
+
     await realtimeConfig.onAlbumTaxonomyUpdated({
       albumId: 'album/1',
       taxonomyUpdatedAt: '2026-08-17T12:00:00.000Z',
@@ -195,7 +217,7 @@ describe('app-realtime-sync module', () => {
       sharedAlbumOne.taxonomy_updated_at,
       taxonomyResponse.taxonomy_updated_at
     );
-    assert.strictEqual(displayAlbums.mock.calls.length, 2);
+    assert.strictEqual(displayAlbums.mock.calls.length, 4);
   });
 
   it('does not full-refetch when a taxonomy patch request fails', async () => {
@@ -234,6 +256,88 @@ describe('app-realtime-sync module', () => {
     );
     assert.strictEqual(displayAlbums.mock.calls.length, 0);
     assert.strictEqual(logger.warn.mock.calls.length, 1);
+  });
+
+  it('reapplies enrichment that arrives during an older list refresh', async () => {
+    let realtimeConfig = null;
+    let resolveRefresh;
+    const refreshed = new Promise((resolve) => {
+      resolveRefresh = resolve;
+    });
+    const setListData = mock.fn();
+
+    createAppRealtimeSync({
+      createRealtimeSync: (config) => {
+        realtimeConfig = config;
+        return { connect: () => {}, disconnect: () => {} };
+      },
+      getRealtimeSyncModuleInstance: () => null,
+      setRealtimeSyncModuleInstance: () => {},
+      getCurrentListId: () => 'list-1',
+      getLists: () => ({ 'list-1': { _data: [] } }),
+      getListData: () => [],
+      apiCall: () => refreshed,
+      updateAlbumSummaryInPlace: () => {},
+      wasRecentLocalSave: () => false,
+      setListData,
+      updateListNav: () => {},
+      displayAlbums: () => {},
+      refreshGroupsAndLists: () => {},
+      showToast: () => {},
+      logger: { log: () => {}, warn: () => {} },
+      win: null,
+    }).getRealtimeSyncModule();
+
+    const refreshPromise = realtimeConfig.refreshListData('list-1');
+    realtimeConfig.onAlbumMetadataUpdated({
+      albumId: 'album-1',
+      patch: { country: 'Norway' },
+    });
+    resolveRefresh([{ album_id: 'album-1', country: '' }]);
+    await refreshPromise;
+
+    assert.strictEqual(
+      setListData.mock.calls[0].arguments[1][0].country,
+      'Norway'
+    );
+  });
+
+  it('does not apply an old enrichment over a newer list response', async () => {
+    let realtimeConfig = null;
+    const setListData = mock.fn();
+
+    createAppRealtimeSync({
+      createRealtimeSync: (config) => {
+        realtimeConfig = config;
+        return { connect: () => {}, disconnect: () => {} };
+      },
+      getRealtimeSyncModuleInstance: () => null,
+      setRealtimeSyncModuleInstance: () => {},
+      getCurrentListId: () => 'list-1',
+      getLists: () => ({ 'list-1': { _data: [] } }),
+      getListData: () => [],
+      apiCall: async () => [{ album_id: 'album-1', country: 'Sweden' }],
+      updateAlbumSummaryInPlace: () => {},
+      wasRecentLocalSave: () => false,
+      setListData,
+      updateListNav: () => {},
+      displayAlbums: () => {},
+      refreshGroupsAndLists: () => {},
+      showToast: () => {},
+      logger: { log: () => {}, warn: () => {} },
+      win: null,
+    }).getRealtimeSyncModule();
+
+    realtimeConfig.onAlbumMetadataUpdated({
+      albumId: 'album-1',
+      patch: { country: 'Norway' },
+    });
+    await realtimeConfig.refreshListData('list-1');
+
+    assert.strictEqual(
+      setListData.mock.calls[0].arguments[1][0].country,
+      'Sweden'
+    );
   });
 
   it('ignores an older taxonomy response that resolves after a newer event', async () => {

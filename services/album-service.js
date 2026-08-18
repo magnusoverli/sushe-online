@@ -23,6 +23,11 @@ const { normalizeImageBuffer } = require('../utils/image-processing');
 const {
   invalidateResponseCacheForAlbumUsers,
 } = require('./album-cache-invalidation');
+const { publishAlbumMetadataUpdate } = require('./album-metadata-publisher');
+const {
+  publishAlbumAvailabilityUpdate,
+} = require('./album-availability-publisher');
+const { coverImageUrl } = require('./list/item-mapper');
 const { createAlbumCoverService } = require('./album-cover-service');
 const {
   createAlbumTaxonomyService,
@@ -39,6 +44,7 @@ const {
  * @param {Object} [deps.responseCache] - Response cache for list invalidation
  * @param {Object} [deps.coverCache] - Cover cache passed through to the cover service
  * @param {ReturnType<typeof createAlbumTaxonomyService>} [deps.albumTaxonomyService]
+ * @param {Object} [deps.sourceObservationService]
  * @param {Object} [deps.broadcast] - WebSocket broadcast helpers
  */
 // eslint-disable-next-line max-lines-per-function -- Cohesive service module with related album operations
@@ -55,6 +61,7 @@ function createAlbumService(deps = {}) {
   });
   const albumTaxonomyService =
     deps.albumTaxonomyService || createAlbumTaxonomyService({ db, logger });
+  const sourceObservationService = deps.sourceObservationService;
   const broadcast = deps.broadcast || require('../utils/websocket').broadcast;
 
   async function invalidateCachesForAlbumUsers(albumId) {
@@ -96,6 +103,44 @@ function createAlbumService(deps = {}) {
   async function notifyTaxonomyUpdated(albumId, taxonomyUpdatedAt) {
     await invalidateCachesForAlbumUsers(albumId);
     await broadcastTaxonomyUpdate(albumId, taxonomyUpdatedAt);
+  }
+
+  async function updateSourceObservation(albumId, sourceObservation, userId) {
+    if (!sourceObservationService) {
+      throw new Error('Album source observation service is not configured');
+    }
+
+    const applied = await db.withTransaction(async (client) => {
+      const membership = await client.query(
+        `SELECT li._id
+         FROM list_items li
+         JOIN lists l ON l._id = li.list_id
+         WHERE li.album_id = $1 AND l.user_id = $2
+         LIMIT 1
+         FOR SHARE OF li`,
+        [albumId, userId]
+      );
+      if (membership.rows.length === 0) {
+        throw new TransactionAbort(404, { error: 'Album not found' });
+      }
+      return sourceObservationService.apply(client, albumId, sourceObservation);
+    });
+
+    if (applied.result.taxonomyUpdatedAt) {
+      await notifyTaxonomyUpdated(albumId, applied.result.taxonomyUpdatedAt);
+    } else {
+      await invalidateCachesForAlbumUsers(albumId);
+    }
+    if (applied.result.providerHints?.length > 0) {
+      await publishAlbumAvailabilityUpdate({
+        db,
+        broadcast,
+        logger,
+        albumId,
+        operation: 'album-source-observation',
+      });
+    }
+    return applied;
   }
 
   function validateOptionalTextField(value, errorMessage) {
@@ -339,7 +384,30 @@ function createAlbumService(deps = {}) {
       coverImagePayload,
       userId
     );
-    await invalidateCachesForAlbumUsers(albumId);
+    if (responseCache || deps.broadcast) {
+      await publishAlbumMetadataUpdate({
+        db,
+        responseCache,
+        broadcast,
+        logger,
+        albumId,
+        patch: {
+          cover_image_url: coverImageUrl(albumId, result.coverImageUpdatedAt),
+          cover_thumb_url: coverImageUrl(
+            albumId,
+            result.coverThumbnailUpdatedAt || result.coverImageUpdatedAt,
+            { size: 'thumb' }
+          ),
+          cover_image_format: result.format,
+          cover_image_updated_at: result.coverImageUpdatedAt,
+          cover_thumbnail_format: result.thumbnailFormat,
+          cover_thumbnail_updated_at: result.coverThumbnailUpdatedAt,
+        },
+        operation: 'album-service-cover',
+      });
+    } else {
+      await invalidateCachesForAlbumUsers(albumId);
+    }
     return result;
   }
 
@@ -406,7 +474,17 @@ function createAlbumService(deps = {}) {
       throw new TransactionAbort(404, { error: 'Album not found' });
     }
 
-    await invalidateCachesForAlbumUsers(albumId);
+    if (responseCache || deps.broadcast) {
+      await publishAlbumMetadataUpdate({
+        db,
+        responseCache,
+        broadcast,
+        logger,
+        albumId,
+        patch: { country: trimmedCountry },
+        operation: 'album-service-country',
+      });
+    }
 
     logger.info('Album country updated', {
       userId,
@@ -501,6 +579,7 @@ function createAlbumService(deps = {}) {
     const timestamp = new Date();
     let successCount = 0;
     const albumIds = new Set();
+    const countryUpdates = new Map();
     const taxonomyUpdates = new Map();
 
     await db.withTransaction(async (client) => {
@@ -527,6 +606,9 @@ function createAlbumService(deps = {}) {
             partialUpdate.values
           );
           wasUpdated = result.rowCount > 0;
+          if (wasUpdated && country !== undefined) {
+            countryUpdates.set(albumId, countryFields[0]?.value ?? null);
+          }
         }
 
         if (genre_1 !== undefined || genre_2 !== undefined) {
@@ -568,7 +650,19 @@ function createAlbumService(deps = {}) {
     });
 
     for (const albumId of albumIds) {
-      await invalidateCachesForAlbumUsers(albumId);
+      if (countryUpdates.has(albumId) && (responseCache || deps.broadcast)) {
+        await publishAlbumMetadataUpdate({
+          db,
+          responseCache,
+          broadcast,
+          logger,
+          albumId,
+          patch: { country: countryUpdates.get(albumId) },
+          operation: 'album-service-batch-country',
+        });
+      } else {
+        await invalidateCachesForAlbumUsers(albumId);
+      }
     }
     for (const [albumId, taxonomyUpdatedAt] of taxonomyUpdates) {
       await broadcastTaxonomyUpdate(albumId, taxonomyUpdatedAt);
@@ -729,6 +823,7 @@ function createAlbumService(deps = {}) {
     resetGenres,
     getTaxonomy,
     notifyTaxonomyUpdated,
+    updateSourceObservation,
     batchUpdate,
     checkSimilar,
     markDistinct,

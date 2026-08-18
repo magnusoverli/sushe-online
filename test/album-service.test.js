@@ -37,6 +37,7 @@ describe('album-service', () => {
 
   it('updateCountry should update and invalidate caches for affected users', async () => {
     const responseCache = { invalidate: mock.fn() };
+    const albumMetadataUpdated = mock.fn();
     const pool = createMockPool([
       { rows: [{ album_id: 'a1' }], rowCount: 1 },
       { rows: [{ user_id: 'user-1' }], rowCount: 1 },
@@ -47,6 +48,7 @@ describe('album-service', () => {
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
       responseCache,
+      broadcast: { albumMetadataUpdated },
     });
 
     await service.updateCountry('a1', ' Norway ', 'user1');
@@ -65,6 +67,11 @@ describe('album-service', () => {
       responseCache.invalidate.mock.calls[0].arguments[0],
       ':user-1'
     );
+    assert.deepStrictEqual(albumMetadataUpdated.mock.calls[0].arguments, [
+      'user-1',
+      'a1',
+      { country: 'Norway' },
+    ]);
   });
 
   it('updateGenres should reject empty genre updates', async () => {
@@ -212,16 +219,21 @@ describe('album-service', () => {
   });
 
   it('batchUpdate should resolve two-letter country codes', async () => {
+    const responseCache = { invalidate: mock.fn() };
+    const albumMetadataUpdated = mock.fn();
     const pool = createMockPool([
       { rows: [], rowCount: 0 },
       { rows: [{ album_id: 'a1' }], rowCount: 1 },
       { rows: [], rowCount: 0 },
+      { rows: [{ user_id: 'user-1' }], rowCount: 1 },
     ]);
 
     const service = createAlbumService({
       db: pool,
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
+      responseCache,
+      broadcast: { albumMetadataUpdated },
     });
 
     const updated = await service.batchUpdate(
@@ -232,6 +244,11 @@ describe('album-service', () => {
     assert.strictEqual(updated, 1);
     assert.ok(pool.query.mock.calls[1].arguments[0].includes('country = $1'));
     assert.strictEqual(pool.query.mock.calls[1].arguments[1][0], 'Norway');
+    assert.deepStrictEqual(albumMetadataUpdated.mock.calls[0].arguments, [
+      'user-1',
+      'a1',
+      { country: 'Norway' },
+    ]);
   });
 
   it('batchUpdate applies genre fields as taxonomy overrides in its transaction', async () => {
@@ -346,6 +363,7 @@ describe('album-service', () => {
     const updatedAt = new Date('2026-05-11T10:20:34.794Z');
     const thumbnailUpdatedAt = new Date('2026-05-11T10:20:35.794Z');
     const responseCache = { invalidate: mock.fn() };
+    const albumMetadataUpdated = mock.fn();
     const pool = createMockPool([
       {
         rows: [
@@ -365,6 +383,7 @@ describe('album-service', () => {
       logger: createMockLogger(),
       upsertAlbumRecord: mock.fn(),
       responseCache,
+      broadcast: { albumMetadataUpdated },
     });
 
     const result = await service.updateCoverImage(
@@ -392,6 +411,122 @@ describe('album-service', () => {
       )
     );
     assert.strictEqual(responseCache.invalidate.mock.calls.length, 1);
+    assert.match(
+      albumMetadataUpdated.mock.calls[0].arguments[2].cover_image_url,
+      /\/api\/albums\/album-1\/cover\?v=/
+    );
+  });
+
+  it('updates a source observation only while the user still owns the album', async () => {
+    const apply = mock.fn(async () => ({
+      result: { albumId: 'album-1', status: 'applied' },
+      warnings: [],
+    }));
+    const pool = createMockPool([
+      { rows: [], rowCount: 0 },
+      { rows: [{ _id: 'item-1' }], rowCount: 1 },
+      { rows: [], rowCount: 0 },
+      { rows: [{ user_id: 'user-1' }], rowCount: 1 },
+    ]);
+    const responseCache = { invalidate: mock.fn() };
+    const service = createAlbumService({
+      db: pool,
+      logger: createMockLogger(),
+      upsertAlbumRecord: mock.fn(),
+      responseCache,
+      sourceObservationService: { apply },
+    });
+    const observation = { schemaVersion: 1 };
+
+    const result = await service.updateSourceObservation(
+      'album-1',
+      observation,
+      'user-1'
+    );
+
+    assert.strictEqual(result.result.status, 'applied');
+    assert.strictEqual(apply.mock.calls.length, 1);
+    assert.strictEqual(apply.mock.calls[0].arguments[1], 'album-1');
+    assert.strictEqual(apply.mock.calls[0].arguments[2], observation);
+    assert.strictEqual(responseCache.invalidate.mock.calls.length, 1);
+    assert.ok(
+      pool.query.mock.calls[1].arguments[0].includes('FOR SHARE OF li')
+    );
+  });
+
+  it('does not apply a delayed observation after list membership is removed', async () => {
+    const apply = mock.fn();
+    const pool = createMockPool([
+      { rows: [], rowCount: 0 },
+      { rows: [], rowCount: 0 },
+    ]);
+    const service = createAlbumService({
+      db: pool,
+      logger: createMockLogger(),
+      upsertAlbumRecord: mock.fn(),
+      sourceObservationService: { apply },
+    });
+
+    await assert.rejects(
+      () => service.updateSourceObservation('album-1', {}, 'user-1'),
+      (error) => error instanceof TransactionAbort && error.statusCode === 404
+    );
+    assert.strictEqual(apply.mock.calls.length, 0);
+  });
+
+  it('broadcasts availability added by a delayed source observation', async () => {
+    const apply = mock.fn(async () => ({
+      result: {
+        albumId: 'album-1',
+        status: 'applied',
+        providerHints: ['spotify'],
+      },
+      warnings: [],
+    }));
+    const pool = createMockPool([
+      { rows: [], rowCount: 0 },
+      { rows: [{ _id: 'item-1' }], rowCount: 1 },
+      { rows: [], rowCount: 0 },
+      { rows: [{ user_id: 'user-1' }], rowCount: 1 },
+      {
+        rows: [
+          {
+            user_id: 'user-1',
+            availability: ['spotify'],
+            availability_links: [
+              {
+                service: 'spotify',
+                url: 'https://open.spotify.com/album/1',
+              },
+            ],
+          },
+        ],
+        rowCount: 1,
+      },
+    ]);
+    const albumAvailabilityUpdated = mock.fn();
+    const service = createAlbumService({
+      db: pool,
+      logger: createMockLogger(),
+      upsertAlbumRecord: mock.fn(),
+      responseCache: { invalidate: mock.fn() },
+      sourceObservationService: { apply },
+      broadcast: { albumAvailabilityUpdated },
+    });
+
+    await service.updateSourceObservation('album-1', {}, 'user-1');
+
+    assert.deepStrictEqual(albumAvailabilityUpdated.mock.calls[0].arguments, [
+      'user-1',
+      'album-1',
+      ['spotify'],
+      [
+        {
+          service: 'spotify',
+          url: 'https://open.spotify.com/album/1',
+        },
+      ],
+    ]);
   });
 
   it('updateCoverImage should reject invalid cover payloads', async () => {

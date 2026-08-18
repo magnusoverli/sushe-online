@@ -29,6 +29,64 @@ export function formatPlaycountDisplay(playcount, status) {
   return { html: formatted, isNotFound: false, isEmpty: !formatted };
 }
 
+function formatTrackPickDuration(duration) {
+  if (typeof duration !== 'string') return '';
+  const match = duration.match(/^(\d+):(\d{2})$/);
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : duration;
+}
+
+function formatTrackPickDisplay(trackName, trackNumber) {
+  const match = trackName.match(/^(\d+)[.\s-]+\s*(.*)$/);
+  const displayName = match?.[2] || trackName;
+  const number = trackNumber || match?.[1] || null;
+  return number ? `${displayName} - #${number}` : displayName;
+}
+
+/**
+ * Build the selected-track display shared by initial rendering and in-place updates.
+ */
+export function processTrackPick(trackIdentifier, tracks, deps = {}) {
+  const { getTrackName, getTrackLength, formatTrackTime } = deps;
+
+  if (!trackIdentifier) {
+    return { display: '', class: 'text-gray-800 italic', duration: '' };
+  }
+
+  if (Array.isArray(tracks)) {
+    const trackIndex = tracks.findIndex(
+      (track) => getTrackName(track) === trackIdentifier
+    );
+    if (trackIndex >= 0) {
+      const trackMatch = tracks[trackIndex];
+      const trackName = getTrackName(trackMatch);
+      const trackNumber =
+        trackMatch?.position || trackMatch?.number || trackIndex + 1;
+      const duration = formatTrackPickDuration(
+        formatTrackTime(getTrackLength(trackMatch))
+      );
+      return {
+        display: formatTrackPickDisplay(trackName, trackNumber),
+        class: 'text-gray-300',
+        duration,
+      };
+    }
+  }
+
+  if (trackIdentifier.match(/^\d+$/)) {
+    return {
+      display: `Track ${trackIdentifier} - #${trackIdentifier}`,
+      class: 'text-gray-300',
+      duration: '',
+    };
+  }
+
+  return {
+    display: formatTrackPickDisplay(trackIdentifier),
+    class: 'text-gray-300',
+    duration: '',
+  };
+}
+
 export function createAlbumDataProcessor(deps = {}) {
   const {
     getCurrentList,
@@ -38,63 +96,6 @@ export function createAlbumDataProcessor(deps = {}) {
     formatTrackTime,
     getPlaycountCacheEntry,
   } = deps;
-
-  function processTrackPick(trackIdentifier, tracks) {
-    if (!trackIdentifier) {
-      return { display: '', class: 'text-gray-800 italic', duration: '' };
-    }
-
-    if (tracks && Array.isArray(tracks)) {
-      const trackMatch = tracks.find(
-        (track) => getTrackName(track) === trackIdentifier
-      );
-      if (trackMatch) {
-        const trackName = getTrackName(trackMatch);
-        const match = trackName.match(/^(\d+)[.\s-]?\s*(.*)$/);
-        let display;
-        if (match) {
-          const trackNum = match[1];
-          const displayName = match[2] || '';
-          display = displayName
-            ? `${trackNum}. ${displayName}`
-            : `Track ${trackNum}`;
-        } else {
-          display = trackName;
-        }
-        const length = getTrackLength(trackMatch);
-        const duration = formatTrackTime(length);
-        return { display, class: 'text-gray-300', duration };
-      }
-
-      if (trackIdentifier.match(/^\d+$/)) {
-        return {
-          display: `Track ${trackIdentifier}`,
-          class: 'text-gray-300',
-          duration: '',
-        };
-      }
-
-      return {
-        display: trackIdentifier,
-        class: 'text-gray-300',
-        duration: '',
-      };
-    }
-
-    if (trackIdentifier.match(/^\d+$/)) {
-      return {
-        display: `Track ${trackIdentifier}`,
-        class: 'text-gray-300',
-        duration: '',
-      };
-    }
-
-    return {
-      display: trackIdentifier,
-      class: 'text-gray-300',
-      duration: '',
-    };
-  }
 
   function processAlbumData(album, index) {
     const currentList = getCurrentList();
@@ -140,10 +141,18 @@ export function createAlbumDataProcessor(deps = {}) {
     const imageFormat = album.cover_image_format || 'PNG';
 
     const primaryTrack = album.primary_track || '';
-    const primaryData = processTrackPick(primaryTrack, album.tracks);
+    const primaryData = processTrackPick(primaryTrack, album.tracks, {
+      getTrackName,
+      getTrackLength,
+      formatTrackTime,
+    });
 
     const secondaryTrack = album.secondary_track || '';
-    const secondaryData = processTrackPick(secondaryTrack, album.tracks);
+    const secondaryData = processTrackPick(secondaryTrack, album.tracks, {
+      getTrackName,
+      getTrackLength,
+      formatTrackTime,
+    });
 
     const summary = album.summary || '';
     const summarySource = album.summary_source || album.summarySource || '';

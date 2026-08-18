@@ -108,6 +108,35 @@ describe('availability/spotify-source', () => {
     assert.ok(searchUrl.includes('market=US'));
   });
 
+  it('runs only the exact UPC query during the barcode follow-up', async () => {
+    const requested = [];
+    const source = createSpotifySource({
+      fetch: async (url) => {
+        requested.push(url);
+        if (url === 'https://accounts.spotify.com/api/token') {
+          return jsonResponse({ access_token: 'token', expires_in: 3600 });
+        }
+        return jsonResponse({ albums: { items: [] } });
+      },
+      logger: createMockLogger(),
+      env: {
+        SPOTIFY_CLIENT_ID: 'id',
+        SPOTIFY_CLIENT_SECRET: 'secret',
+      },
+    });
+
+    await source.getLinks({
+      artist: 'Daft Punk',
+      album: 'Random Access Memories',
+      upc: '886443927087',
+      upcOnly: true,
+    });
+
+    const searches = requested.filter((url) => url.includes('/v1/search'));
+    assert.strictEqual(searches.length, 1);
+    assert.ok(searches[0].includes('q=upc%3A886443927087'));
+  });
+
   it('rejects weak Spotify search matches', async () => {
     const fetch = mock.fn(async (url) => {
       if (url === 'https://accounts.spotify.com/api/token') {

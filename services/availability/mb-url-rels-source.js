@@ -1,11 +1,10 @@
 /**
  * MusicBrainz url-rels availability source.
  *
- * url-rels (streaming / purchase links) live at the RELEASE level, so a
- * release-group id is first resolved to a representative release. Returns the
- * recognized direct links, the release barcode (UPC) for exact catalog lookups,
- * plus a high-confidence streaming url that doubles as an Odesli seed. Reuses the
- * injected, rate-limited `mbFetch` (shared MB queue).
+ * url-rels (streaming / purchase links) live at the RELEASE level. The release
+ * browse endpoint returns a group's releases and url-rels together, avoiding a
+ * second rate-limited request in the common release-group path. Returns the
+ * recognized direct links, release barcode, and a high-confidence streaming url.
  */
 
 const defaultLogger = require('../../utils/logger');
@@ -31,21 +30,10 @@ function createMbUrlRelsSource(deps = {}) {
     return resp.json();
   }
 
-  async function resolveReleaseId(albumId) {
-    try {
-      const rg = await mbJson(
-        `${MB_BASE}/release-group/${albumId}?inc=releases&fmt=json`
-      );
-      const releases = rg.releases || [];
-      if (releases.length) {
-        const official = releases.find((r) => r.status === 'Official');
-        return (official || releases[0]).id;
-      }
-    } catch (err) {
-      // A 404 means the id is not a release-group — treat it as a release id.
-      if (err.status && err.status !== 404) throw err;
-    }
-    return albumId;
+  function selectRepresentativeRelease(releases) {
+    return (
+      releases.find((release) => release.status === 'Official') || releases[0]
+    );
   }
 
   /**
@@ -57,10 +45,17 @@ function createMbUrlRelsSource(deps = {}) {
       return { seedUrl: null, upc: null, links: [] };
     }
 
-    const releaseId = await resolveReleaseId(albumId);
-    const release = await mbJson(
-      `${MB_BASE}/release/${releaseId}?inc=url-rels&fmt=json`
-    );
+    let browseResult = { releases: [] };
+    try {
+      browseResult = await mbJson(
+        `${MB_BASE}/release?release-group=${albumId}&inc=url-rels&fmt=json&limit=100`
+      );
+    } catch (error) {
+      if (![400, 404].includes(error.status)) throw error;
+    }
+    const release =
+      selectRepresentativeRelease(browseResult.releases || []) ||
+      (await mbJson(`${MB_BASE}/release/${albumId}?inc=url-rels&fmt=json`));
     const relations = release.relations || [];
 
     const links = [];

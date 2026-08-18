@@ -65,7 +65,11 @@ describe('album-data module', () => {
         getListMetadata: () => ({ year: 2024, isMain: true }),
         getTrackName: (track) => track.name,
         getTrackLength: (track) => track.length,
-        formatTrackTime: (len) => (len ? '4:32' : ''),
+        formatTrackTime: (len) => {
+          if (len === 182000) return '3:02';
+          if (len === 269000) return '4:29';
+          return '';
+        },
         getPlaycountCacheEntry: () => ({ playcount: 1250, status: 'success' }),
       });
 
@@ -81,11 +85,14 @@ describe('album-data module', () => {
           genre_2: 'Genre 2',
           comments: 'Comment',
           comments_2: 'Comment 2',
-          primary_track: '1. The Leper Affinity',
-          secondary_track: '7',
+          primary_track: 'The Leper Affinity',
+          secondary_track: 'Bleak',
           tracks: [
-            { name: '1. The Leper Affinity', length: 272 },
-            { name: '2. Bleak', length: 548 },
+            { name: 'Prologue', length: 272 },
+            { name: 'The Leper Affinity', length: 182000 },
+            { name: 'Harvest', length: 548 },
+            { name: 'The Drapery Falls', length: 586 },
+            { name: 'Bleak', length: 269000 },
           ],
         },
         2
@@ -96,9 +103,10 @@ describe('album-data module', () => {
       assert.strictEqual(data.genre2, '');
       assert.strictEqual(data.comment, '');
       assert.strictEqual(data.comment2, '');
-      assert.strictEqual(data.primaryTrackDisplay, '1. The Leper Affinity');
-      assert.strictEqual(data.primaryTrackDuration, '4:32');
-      assert.strictEqual(data.secondaryTrackDisplay, 'Track 7');
+      assert.strictEqual(data.primaryTrackDisplay, 'The Leper Affinity - #2');
+      assert.strictEqual(data.primaryTrackDuration, '03:02');
+      assert.strictEqual(data.secondaryTrackDisplay, 'Bleak - #5');
+      assert.strictEqual(data.secondaryTrackDuration, '04:29');
       assert.strictEqual(data.playcountDisplay.html, '1.3K');
       assert.strictEqual(data.yearMismatch, true);
       assert.match(data.yearMismatchTooltip, /doesn't match list year/);

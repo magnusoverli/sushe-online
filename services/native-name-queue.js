@@ -22,6 +22,7 @@ const {
   resolveNativeAlbumName,
   isMusicbrainzId,
 } = require('./native-name-service');
+const { publishAlbumMetadataUpdate } = require('./album-metadata-publisher');
 
 const MB_RATE_LIMIT_MS = 1100; // MusicBrainz: ~1 request/second
 const NON_ASCII = /[^\x20-\x7E]/;
@@ -33,6 +34,9 @@ function createNativeNameQueue(deps = {}) {
   // MusicBrainz queue at low priority.
   const fetchFn = deps.fetch;
   const log = deps.logger || logger;
+  const resolveName = deps.resolveNativeAlbumName || resolveNativeAlbumName;
+  const responseCache = deps.responseCache;
+  const broadcast = deps.broadcast || require('../utils/websocket').broadcast;
   const rateLimitMs =
     deps.rateLimitMs === undefined ? MB_RATE_LIMIT_MS : deps.rateLimitMs;
   const db =
@@ -51,18 +55,29 @@ function createNativeNameQueue(deps = {}) {
 
     return queue.add(async () => {
       try {
-        const res = await resolveNativeAlbumName(
+        const res = await resolveName(
           { albumId, artist, album },
           { fetch: fetchFn, logger: log }
         );
 
         if (res.action === 'rewrite') {
           if (db) {
-            await db.raw(
+            const result = await db.raw(
               `UPDATE albums SET artist = $1, album = $2, updated_at = NOW() WHERE album_id = $3`,
               [res.artist, res.album, albumId],
               { name: 'native-name-rewrite' }
             );
+            if (result.rowCount > 0 && (responseCache || deps.broadcast)) {
+              await publishAlbumMetadataUpdate({
+                db,
+                responseCache,
+                broadcast,
+                logger: log,
+                albumId,
+                patch: { artist: res.artist, album: res.album },
+                operation: 'native-name-queue',
+              });
+            }
           }
           log.info('Restored native album spelling', {
             albumId,
@@ -104,9 +119,9 @@ function createNativeNameQueue(deps = {}) {
 // Singleton (initialized with db at startup)
 let nativeNameQueue = null;
 
-function initializeNativeNameQueue(db) {
+function initializeNativeNameQueue(db, options = {}) {
   if (!nativeNameQueue) {
-    nativeNameQueue = createNativeNameQueue({ db });
+    nativeNameQueue = createNativeNameQueue({ db, ...options });
     logger.info('Native name queue initialized');
   }
   return nativeNameQueue;

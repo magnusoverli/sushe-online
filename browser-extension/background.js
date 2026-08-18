@@ -12,6 +12,7 @@ importScripts(
   'album-presence-service.js',
   'sushe-tab-navigation.js',
   'album-api-service.js',
+  'album-add-enrichment.js',
   'album-add-service.js'
 );
 
@@ -181,9 +182,9 @@ async function saveLastUsedList(list) {
 }
 
 function notifyAlbumAddedToTab(tabId, album, list) {
-  if (!tabId) return;
+  if (!tabId) return Promise.resolve();
 
-  chrome.tabs
+  return chrome.tabs
     .sendMessage(tabId, {
       action: ACTIONS.ALBUM_ADDED_TO_LIST,
       album,
@@ -202,13 +203,15 @@ function notifyAlbumAddedToTab(tabId, album, list) {
 
 async function onAlbumAdded({ listId, listName, album, tabId }) {
   const list = findListById(listId) || { _id: listId, name: listName };
-  await saveLastUsedList(list);
-  await albumPresenceService.rememberAlbumInList(album, {
-    id: list._id,
-    name: list.name || listName || 'List',
-    year: list.year || null,
-  });
-  notifyAlbumAddedToTab(tabId, album, list);
+  await Promise.allSettled([
+    notifyAlbumAddedToTab(tabId, album, list),
+    saveLastUsedList(list),
+    albumPresenceService.rememberAlbumInList(album, {
+      id: list._id,
+      name: list.name || listName || 'List',
+      year: list.year || null,
+    }),
+  ]);
   await updateContextMenuWithLists();
 }
 

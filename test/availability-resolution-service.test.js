@@ -35,6 +35,46 @@ function build({ seed, odesli, mb, directSources }) {
 }
 
 describe('availability-resolution-service', () => {
+  it('starts independent seed expansion before MusicBrainz resolves', async () => {
+    let finishMusicbrainz;
+    let markExpansionStarted;
+    const musicbrainz = new Promise((resolve) => {
+      finishMusicbrainz = resolve;
+    });
+    const expansionStarted = new Promise((resolve) => {
+      markExpansionStarted = resolve;
+    });
+    const service = createAvailabilityResolutionService({
+      logger: createMockLogger(),
+      externalIdentityService: {
+        markAlbumAvailabilityResolved: async () => {},
+      },
+      seedProviders: {
+        acquireIndependentSeed: async () => ({
+          kind: 'itunes',
+          confidence: 0.95,
+          seed: { platform: 'itunes', type: 'album', id: '1' },
+        }),
+      },
+      odesliClient: {
+        fetchLinksBySeed: async () => {
+          markExpansionStarted();
+          return [{ platform: 'itunes', url: 'https://it/1' }];
+        },
+      },
+      mbUrlRelsSource: { getDirectLinks: () => musicbrainz },
+    });
+
+    const resolving = service.resolveAvailability(album, { persist: false });
+    await expansionStarted;
+    finishMusicbrainz({ seedUrl: null, upc: null, links: [] });
+
+    assert.deepStrictEqual(await resolving, {
+      action: 'resolved',
+      services: ['itunes'],
+    });
+  });
+
   it('merge unions sources and keeps higher confidence; applies floor', () => {
     const rows = mergeCandidates(
       buildCandidates({
@@ -229,6 +269,7 @@ describe('availability-resolution-service', () => {
       directSources: [
         {
           name: 'qobuz',
+          requiresUpc: true,
           getLinks: async ({ upc }) => ({
             links: upc
               ? [{ service: 'qobuz', url: 'https://qb/1', confidence: 0.97 }]
@@ -291,6 +332,75 @@ describe('availability-resolution-service', () => {
     });
   });
 
+  it('reruns UPC-capable sources after MusicBrainz supplies a barcode', async () => {
+    const observedUpcs = [];
+    const { service } = build({
+      seed: null,
+      odesli: [],
+      mb: { seedUrl: null, upc: '886443927087', links: [] },
+      directSources: [
+        {
+          name: 'spotify',
+          supportsUpc: true,
+          getLinks: async ({ upc, upcOnly }) => {
+            observedUpcs.push({ upc, upcOnly });
+            return {
+              links: upc
+                ? [
+                    {
+                      service: 'spotify',
+                      url: 'https://open.spotify.com/album/sp1',
+                      confidence: 0.97,
+                    },
+                  ]
+                : [],
+            };
+          },
+        },
+      ],
+    });
+
+    const result = await service.resolveAvailability(album);
+
+    assert.deepStrictEqual(observedUpcs, [
+      { upc: null, upcOnly: false },
+      { upc: '886443927087', upcOnly: true },
+    ]);
+    assert.deepStrictEqual(result.services, ['spotify']);
+  });
+
+  it('does not rerun a UPC-capable source after text matching succeeds', async () => {
+    const calls = [];
+    const { service } = build({
+      seed: null,
+      odesli: [],
+      mb: { seedUrl: null, upc: '886443927087', links: [] },
+      directSources: [
+        {
+          name: 'spotify',
+          supportsUpc: true,
+          getLinks: async ({ upc }) => {
+            calls.push(upc);
+            return {
+              links: [
+                {
+                  service: 'spotify',
+                  url: 'https://open.spotify.com/album/sp1',
+                  confidence: 0.97,
+                },
+              ],
+            };
+          },
+        },
+      ],
+    });
+
+    const result = await service.resolveAvailability(album);
+
+    assert.deepStrictEqual(calls, [null]);
+    assert.deepStrictEqual(result.services, ['spotify']);
+  });
+
   it('does not persist in dry-run mode', async () => {
     const { service, upsert, markResolved } = build({
       seed: { kind: 'existing', confidence: 0.95, seed: { url: 'x' } },
@@ -302,5 +412,54 @@ describe('availability-resolution-service', () => {
     assert.deepStrictEqual(result.services, ['bandcamp']);
     assert.strictEqual(upsert.mock.calls.length, 0);
     assert.strictEqual(markResolved.mock.calls.length, 0);
+  });
+
+  it('expands a prepared iTunes seed without waiting to retry MusicBrainz', async () => {
+    const expandedSeeds = [];
+    const upsert = mock.fn(async () => {});
+    const service = createAvailabilityResolutionService({
+      logger: createMockLogger(),
+      externalIdentityService: {
+        upsertAlbumServiceMapping: upsert,
+        markAlbumAvailabilityResolved: async () => {},
+      },
+      seedProviders: {
+        acquireIndependentSeed: async () => ({
+          kind: 'itunes',
+          confidence: 0.8,
+          seed: { platform: 'itunes', type: 'album', id: 'apple-1' },
+          directLink: {
+            service: 'itunes',
+            url: 'https://music.apple.com/us/album/record/1',
+            confidence: 0.8,
+          },
+        }),
+      },
+      odesliClient: {
+        fetchLinksBySeed: async (seed) => {
+          expandedSeeds.push(seed);
+          if (seed.url) {
+            throw Object.assign(new Error('unsupported seed'), { status: 400 });
+          }
+          return [{ platform: 'tidal', url: 'https://tidal.com/album/1' }];
+        },
+      },
+      mbUrlRelsSource: {
+        getDirectLinks: async () => ({
+          seedUrl: 'https://artist.bandcamp.com/album/record',
+          upc: null,
+          links: [],
+        }),
+      },
+      directSources: [],
+    });
+
+    const result = await service.resolveAvailability(album);
+
+    assert.deepStrictEqual(expandedSeeds, [
+      { platform: 'itunes', type: 'album', id: 'apple-1' },
+    ]);
+    assert.deepStrictEqual(result.services.sort(), ['itunes', 'tidal']);
+    assert.strictEqual(upsert.mock.calls.length, 2);
   });
 });

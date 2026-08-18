@@ -27,6 +27,7 @@ export function createRealtimeSync(deps = {}) {
     apiCall = async () => {},
     updateAlbumSummaryInPlace = async () => {},
     onAlbumAvailabilityUpdated = async () => {},
+    onAlbumMetadataUpdated = async () => {},
     onAlbumTaxonomyUpdated = async () => {},
     displayAlbums = () => {},
     ioFactory = io,
@@ -61,6 +62,7 @@ export function createRealtimeSync(deps = {}) {
     socket.on('list:main-changed', handleListMainChanged);
     socket.on('album:summary-updated', handleAlbumSummaryUpdated);
     socket.on('album:availability-updated', onAlbumAvailabilityUpdated);
+    socket.on('album:metadata-updated', onAlbumMetadataUpdated);
     socket.on('album:taxonomy-updated', onAlbumTaxonomyUpdated);
     socket.on('session:invalidated', handleSessionInvalidated);
   }

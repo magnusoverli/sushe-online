@@ -1,4 +1,4 @@
-const { describe, it, beforeEach } = require('node:test');
+const { describe, it, beforeEach, mock } = require('node:test');
 const assert = require('node:assert');
 
 describe('extension album payload compatibility', () => {
@@ -88,5 +88,31 @@ describe('extension album payload compatibility', () => {
     assert.strictEqual(payload.genre_1, '');
     assert.strictEqual(payload.genre_2, '');
     assert.strictEqual('sourceObservation' in payload, false);
+  });
+
+  it('sends delayed observations to the album endpoint', async () => {
+    const fetchWithTimeout = mock.fn(async () => ({ ok: true }));
+    const service = globalThis.AlbumApiService.createAlbumApiService({
+      constants: { API: { ALBUMS: '/api/albums' } },
+      fetchWithTimeout,
+      getAuthHeaders: () => ({ Authorization: 'Bearer token' }),
+    });
+    const observation = { schemaVersion: 1 };
+
+    await service.updateSourceObservation(
+      'https://sushe.test',
+      'album/1',
+      observation
+    );
+
+    assert.deepStrictEqual(fetchWithTimeout.mock.calls[0].arguments, [
+      'https://sushe.test/api/albums/album%2F1/source-observation',
+      {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer token' },
+        body: JSON.stringify({ sourceObservation: observation }),
+      },
+      15000,
+    ]);
   });
 });

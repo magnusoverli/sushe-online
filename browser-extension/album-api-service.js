@@ -158,6 +158,22 @@
       );
     }
 
+    async function updateSourceObservation(
+      apiBase,
+      albumId,
+      sourceObservation
+    ) {
+      return fetchWithTimeout(
+        `${apiBase}${API.ALBUMS}/${encodeURIComponent(albumId)}/source-observation`,
+        {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ sourceObservation }),
+        },
+        15000
+      );
+    }
+
     async function saveAlbum(apiBase, listId, newAlbum) {
       return fetchWithTimeout(
         `${apiBase}${API.LISTS}/${encodeURIComponent(listId)}/items`,
@@ -176,6 +192,7 @@
       saveAlbum,
       searchMusicBrainz,
       updateAlbumMetadata,
+      updateSourceObservation,
     };
   }
 

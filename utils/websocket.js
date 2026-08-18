@@ -141,6 +141,21 @@ function createBroadcast(getIO, logger) {
         albumId,
       });
     },
+    albumMetadataUpdated(userId, albumId, patch, metadataVersion) {
+      emitToUser(
+        'album:metadata-updated',
+        'WebSocket not initialized, cannot broadcast album:metadata-updated',
+        userId,
+        {
+          albumId,
+          patch,
+          ...(metadataVersion != null && {
+            metadataVersion: String(metadataVersion),
+          }),
+        }
+      );
+      logger.debug('Broadcast album:metadata-updated', { userId, albumId });
+    },
     albumTaxonomyUpdated(userId, albumId, taxonomyUpdatedAt) {
       emitToUser(
         'album:taxonomy-updated',

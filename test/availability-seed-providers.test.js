@@ -64,6 +64,8 @@ describe('availability/seed-providers', () => {
                 artistName: 'Metallica',
                 collectionName: '72 Seasons',
                 collectionId: 1655432387,
+                collectionViewUrl:
+                  'https://music.apple.com/us/album/72-seasons/1655432387',
               },
             ],
           }),
@@ -74,6 +76,11 @@ describe('availability/seed-providers', () => {
     const result = await providers.acquireSeed(album, null);
     assert.strictEqual(result.kind, 'itunes');
     assert.strictEqual(result.seed.id, 1655432387);
+    assert.deepStrictEqual(result.directLink, {
+      service: 'itunes',
+      url: 'https://music.apple.com/us/album/72-seasons/1655432387',
+      confidence: result.confidence,
+    });
   });
 
   it('rejects a low-confidence search match and yields no seed', async () => {
@@ -98,5 +105,38 @@ describe('availability/seed-providers', () => {
 
     const result = await providers.acquireSeed(album, null);
     assert.strictEqual(result, null);
+  });
+
+  it('bounds a stalled iTunes seed lookup', async () => {
+    const providers = createSeedProviders({
+      logger: createMockLogger(),
+      externalIdentityService: eis(null),
+      itunesTimeoutMs: 1,
+      fetch: async (_url, { signal }) =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    });
+
+    assert.strictEqual(await providers.acquireIndependentSeed(album), null);
+  });
+
+  it('keeps the timeout active while reading the iTunes response body', async () => {
+    const providers = createSeedProviders({
+      logger: createMockLogger(),
+      externalIdentityService: eis(null),
+      itunesTimeoutMs: 1,
+      fetch: async (_url, { signal }) => ({
+        ok: true,
+        json: () =>
+          new Promise((_resolve, reject) => {
+            signal.addEventListener('abort', () =>
+              reject(new Error('body aborted'))
+            );
+          }),
+      }),
+    });
+
+    assert.strictEqual(await providers.acquireIndependentSeed(album), null);
   });
 });

@@ -430,6 +430,47 @@ describe('TrackFetchQueue', () => {
       assert.strictEqual(tracksJson[0].length, 200000);
     });
 
+    it('should publish fetched tracks to affected users', async () => {
+      const mockFetch = createMockFetch({
+        deezerSearch: {
+          ok: true,
+          json: () => Promise.resolve({ data: [{ id: 12345 }] }),
+        },
+        deezerAlbum: {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              tracks: { data: [{ title: 'Track A', duration: 200 }] },
+            }),
+        },
+      });
+      const query = mock.fn(async (sql) =>
+        sql.includes('SELECT DISTINCT l.user_id')
+          ? { rows: [{ user_id: 'user-1' }], rowCount: 1 }
+          : { rows: [], rowCount: 1 }
+      );
+      const responseCache = { invalidate: mock.fn() };
+      const albumMetadataUpdated = mock.fn();
+      const queue = createTrackFetchQueue({
+        db: { raw: query },
+        fetch: mockFetch,
+        logger: mockLogger,
+        responseCache,
+        broadcast: { albumMetadataUpdated },
+      });
+
+      await queue.fetchAndStoreTracks('test-id', 'Artist Name', 'Album Name');
+
+      assert.deepStrictEqual(responseCache.invalidate.mock.calls[0].arguments, [
+        ':user-1',
+      ]);
+      assert.deepStrictEqual(albumMetadataUpdated.mock.calls[0].arguments, [
+        'user-1',
+        'test-id',
+        { tracks: [{ name: 'Track A', length: 200000 }] },
+      ]);
+    });
+
     it('should handle no tracks found from any source', async () => {
       const mockFetch = createMockFetch({
         deezerSearch: {

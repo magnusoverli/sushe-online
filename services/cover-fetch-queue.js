@@ -29,9 +29,8 @@ const {
   incQueueItemsProcessed,
   incQueueItemsFailed,
 } = require('../utils/metrics');
-const {
-  invalidateResponseCacheForAlbumUsers,
-} = require('./album-cache-invalidation');
+const { publishAlbumMetadataUpdate } = require('./album-metadata-publisher');
+const { coverImageUrl } = require('./list/item-mapper');
 
 // Per-provider timeout in milliseconds
 const PROVIDER_TIMEOUT_MS = 5000;
@@ -291,6 +290,7 @@ function createCoverProviders(fetchFn) {
  * @param {number} [deps.maxConcurrent] - Max concurrent fetches (default: 3)
  * @param {InstanceType<typeof import("./album-cover-cache").AlbumCoverCache>} [deps.coverCache] - RAM cover cache to invalidate after a fetch
  * @param {InstanceType<typeof import("../middleware/response-cache").ResponseCache>} [deps.responseCache] - Response cache to invalidate for affected users
+ * @param {Object} [deps.broadcast] - WebSocket broadcast helpers
  * @returns {Object} - CoverFetchQueue instance
  */
 function createCoverFetchQueue(deps = {}) {
@@ -299,6 +299,7 @@ function createCoverFetchQueue(deps = {}) {
   const fetchFn = deps.fetch || fetch;
   const coverCache = deps.coverCache;
   const responseCache = deps.responseCache;
+  const broadcast = deps.broadcast || require('../utils/websocket').broadcast;
   const coverProviders = createCoverProviders(fetchFn);
 
   /**
@@ -375,8 +376,9 @@ function createCoverFetchQueue(deps = {}) {
                  cover_thumbnail = $3,
                  cover_thumbnail_format = $4,
                  cover_thumbnail_updated_at = NOW(),
-                 updated_at = NOW()
-             WHERE album_id = $5`,
+                  updated_at = NOW()
+             WHERE album_id = $5
+             RETURNING cover_image_updated_at, cover_thumbnail_updated_at`,
             [
               processed.buffer,
               processed.format,
@@ -394,13 +396,31 @@ function createCoverFetchQueue(deps = {}) {
           if (coverCache && typeof coverCache.invalidateAlbum === 'function') {
             coverCache.invalidateAlbum(albumId);
           }
-          await invalidateResponseCacheForAlbumUsers({
-            db,
-            responseCache,
-            logger,
-            albumIds: albumId,
-            operation: 'cover-fetch-queue',
-          });
+          const timestamps = result.rows?.[0] || {};
+          const imageUpdatedAt =
+            timestamps.cover_image_updated_at || new Date().toISOString();
+          const thumbnailUpdatedAt =
+            timestamps.cover_thumbnail_updated_at || imageUpdatedAt;
+          if (responseCache || deps.broadcast) {
+            await publishAlbumMetadataUpdate({
+              db,
+              responseCache,
+              broadcast,
+              logger,
+              albumId,
+              patch: {
+                cover_image_url: coverImageUrl(albumId, imageUpdatedAt),
+                cover_thumb_url: coverImageUrl(albumId, thumbnailUpdatedAt, {
+                  size: 'thumb',
+                }),
+                cover_image_format: processed.format,
+                cover_image_updated_at: imageUpdatedAt,
+                cover_thumbnail_format: processed.thumbnailFormat,
+                cover_thumbnail_updated_at: thumbnailUpdatedAt,
+              },
+              operation: 'cover-fetch-queue',
+            });
+          }
 
           logger.info('Cover fetched successfully', {
             albumId,
@@ -453,6 +473,7 @@ let coverFetchQueue = null;
  * @param {Object} [options] - Extra queue dependencies
  * @param {InstanceType<typeof import("./album-cover-cache").AlbumCoverCache>} [options.coverCache] - RAM cover cache
  * @param {InstanceType<typeof import("../middleware/response-cache").ResponseCache>} [options.responseCache] - Response cache
+ * @param {Object} [options.broadcast] - WebSocket broadcast helpers
  */
 function initializeCoverFetchQueue(db, options = {}) {
   if (!coverFetchQueue) {

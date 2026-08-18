@@ -180,6 +180,7 @@ module.exports = (app, deps) => {
     coverCache,
     upsertAlbumRecord: helpers.upsertAlbumRecord,
     albumTaxonomyService,
+    sourceObservationService,
   });
 
   const externalIdentityService = createExternalIdentityService({
@@ -232,6 +233,7 @@ module.exports = (app, deps) => {
     listService,
     groupService,
     albumService,
+    sourceObservationService,
     recommendationService,
     playcountService,
     searchService,

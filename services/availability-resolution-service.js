@@ -12,12 +12,19 @@
 
 const defaultLogger = require('../utils/logger');
 const {
-  normalizeOdesliPlatform,
   AVAILABILITY_CONFIDENCE_FLOOR,
   isAvailabilityService,
 } = require('./availability/platforms');
+const {
+  MB_LINK_CONFIDENCE,
+  buildCandidates,
+} = require('./availability/candidates');
+const {
+  buildSeedCandidates,
+  expandSeedCandidates,
+  resolveSeedExpansionFallback,
+} = require('./availability/seed-expansion');
 
-const MB_LINK_CONFIDENCE = 0.9; // MusicBrainz url-rels are identity-confirmed
 const AVAILABILITY_RESOLUTION_VERSION = 2;
 
 function isTransientStatus(status) {
@@ -67,62 +74,6 @@ function mergeCandidates(candidates) {
   );
 }
 
-/**
- * Build the flat candidate list from every source contribution.
- *
- * @param {Object} params
- * @param {Array<{platform:string, url:string}>} params.odesliLinks
- * @param {string} params.seedKind
- * @param {number} params.seedConfidence
- * @param {Array<{service:string, url:string}>} params.mbLinks
- * @param {Array<{name:string, links:Array<{service:string, url:string,
- *   confidence:number, externalAlbumId?:string, externalArtist?:string,
- *   externalAlbum?:string}>}>} params.directContributions
- */
-function buildCandidates({
-  odesliLinks,
-  seedKind,
-  seedConfidence,
-  mbLinks,
-  directContributions,
-}) {
-  const candidates = [];
-
-  for (const link of odesliLinks) {
-    candidates.push({
-      service: normalizeOdesliPlatform(link.platform),
-      url: link.url,
-      confidence: seedConfidence,
-      strategy: `availability:${seedKind}`,
-    });
-  }
-
-  for (const link of mbLinks) {
-    candidates.push({
-      service: link.service,
-      url: link.url,
-      confidence: MB_LINK_CONFIDENCE,
-      strategy: 'availability:musicbrainz',
-    });
-  }
-
-  for (const contribution of directContributions) {
-    for (const link of contribution.links) {
-      candidates.push({
-        service: link.service,
-        url: link.url,
-        confidence: link.confidence,
-        strategy: `availability:${contribution.name}`,
-        externalAlbumId: link.externalAlbumId,
-        externalArtist: link.externalArtist,
-        externalAlbum: link.externalAlbum,
-      });
-    }
-  }
-
-  return candidates;
-}
-
 function createAvailabilityResolutionService(deps = {}) {
   const logger = deps.logger || defaultLogger;
   const externalIdentityService = deps.externalIdentityService;
@@ -149,12 +100,25 @@ function createAvailabilityResolutionService(deps = {}) {
    * self-protecting (returns {links:[]} on a miss or transport error), so the
    * gathered contributions are always usable.
    */
-  async function getDirectContributions(album, upc) {
-    if (!directSources.length) return [];
+  async function getDirectContributions(
+    album,
+    upc,
+    requiresUpc,
+    excludedNames = new Set()
+  ) {
+    const sources = directSources.filter(
+      (entry) =>
+        !excludedNames.has(entry.name) &&
+        (requiresUpc
+          ? entry.requiresUpc || entry.supportsUpc
+          : !entry.requiresUpc)
+    );
+    if (!sources.length) return [];
     const results = await Promise.all(
-      directSources.map(async (entry) => {
+      sources.map(async (entry) => {
         const { links } = await entry.getLinks({
           upc,
+          upcOnly: requiresUpc && entry.supportsUpc,
           artist: album.artist,
           album: album.album,
         });
@@ -172,14 +136,47 @@ function createAvailabilityResolutionService(deps = {}) {
    */
   async function resolveAvailability(album, options = {}) {
     const { persist = true } = options;
-    const mb = await getMusicbrainz(album.albumId);
-    const directContributions = await getDirectContributions(album, mb.upc);
-    const seedResult = await seedProviders.acquireSeed(album, mb.seedUrl);
+    const independentSeedPromise = seedProviders.acquireIndependentSeed
+      ? seedProviders.acquireIndependentSeed(album)
+      : seedProviders.acquireSeed(album, null);
+    const independentExpansionPromise = independentSeedPromise.then((seed) =>
+      expandSeedCandidates(odesliClient, seed ? [seed] : [])
+    );
+    const immediateDirectPromise = getDirectContributions(album, null, false);
+    const [mb, independentSeed, immediateDirect, independentExpansion] =
+      await Promise.all([
+        getMusicbrainz(album.albumId),
+        independentSeedPromise,
+        immediateDirectPromise,
+        independentExpansionPromise,
+      ]);
+    const seedCandidates = buildSeedCandidates(independentSeed, mb.seedUrl);
+    const { upcDirect, expansion } = await resolveSeedExpansionFallback({
+      odesliClient,
+      mbSeedUrl: mb.seedUrl,
+      initialExpansion: independentExpansion,
+      upcDirectPromise: mb.upc
+        ? getDirectContributions(
+            album,
+            mb.upc,
+            true,
+            new Set(immediateDirect.map((entry) => entry.name))
+          )
+        : Promise.resolve([]),
+    });
+    const directContributions = [...immediateDirect, ...upcDirect];
+    if (independentSeed?.directLink) {
+      directContributions.push({
+        name: 'itunes-search',
+        links: [independentSeed.directLink],
+      });
+    }
+    const seedResult = expansion.seedResult;
 
     const hasNonOdesliLinks =
       mb.links.length > 0 || directContributions.length > 0;
 
-    if (!seedResult && !hasNonOdesliLinks) {
+    if (seedCandidates.length === 0 && !hasNonOdesliLinks) {
       if (mb.transient) {
         return { action: 'skip', reason: 'musicbrainz-error', transient: true };
       }
@@ -192,33 +189,31 @@ function createAvailabilityResolutionService(deps = {}) {
       return { action: 'skip', reason: 'no-seed', transient: false };
     }
 
-    let odesliLinks = [];
-    if (seedResult) {
-      try {
-        odesliLinks = await odesliClient.fetchLinksBySeed(seedResult.seed);
-      } catch (err) {
-        if (!hasNonOdesliLinks) {
-          const transient = isTransientStatus(err.status);
-          if (persist && !transient) {
-            await externalIdentityService.markAlbumAvailabilityResolved(
-              album.albumId,
-              AVAILABILITY_RESOLUTION_VERSION
-            );
-          }
-          return {
-            action: 'skip',
-            reason: 'odesli-error',
-            transient,
-          };
-        }
-        logger.debug?.(
-          'Odesli expansion failed; using MusicBrainz / direct links only',
-          {
-            albumId: album.albumId,
-            error: err.message,
-          }
+    const odesliLinks = expansion.links;
+    if (expansion.errors.length > 0 && odesliLinks.length === 0) {
+      if (!hasNonOdesliLinks) {
+        const transient = expansion.errors.some((error) =>
+          isTransientStatus(error.status)
         );
+        if (persist && !transient) {
+          await externalIdentityService.markAlbumAvailabilityResolved(
+            album.albumId,
+            AVAILABILITY_RESOLUTION_VERSION
+          );
+        }
+        return {
+          action: 'skip',
+          reason: 'odesli-error',
+          transient,
+        };
       }
+      logger.debug?.(
+        'Odesli expansion failed; using MusicBrainz / direct links only',
+        {
+          albumId: album.albumId,
+          errors: expansion.errors.map((error) => error.message),
+        }
+      );
     }
 
     const rows = mergeCandidates(

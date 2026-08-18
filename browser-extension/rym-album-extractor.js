@@ -3,7 +3,7 @@
 (function () {
   const SCHEMA_VERSION = 1;
   const SOURCE = 'rateyourmusic';
-  const EXTRACTOR_VERSION = 'rym-extension/1.9.6';
+  const EXTRACTOR_VERSION = 'rym-extension/1.9.7';
   const primaryGenreSelectors = [
     '.release_pri_genres .genre',
     '.release_pri_genres a[href*="/genre/"]',

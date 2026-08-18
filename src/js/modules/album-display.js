@@ -36,6 +36,7 @@ import { detectUpdateType } from './album-display/incremental-update-detector.js
 import {
   createAlbumDataProcessor,
   formatPlaycount,
+  processTrackPick,
 } from './album-display/album-data.js';
 import { createPlaycountSync } from './album-display/playcount-sync.js';
 import { renderAvailabilityBadges } from './album-display/availability-badges.js';
@@ -224,66 +225,23 @@ export function createAlbumDisplay(deps = {}) {
 
     const primaryTrack = album.primary_track || '';
 
-    // Inline track display logic (avoids processTrackPick closure allocation)
-    let primaryTrackDisplay = 'Select Track';
-    let primaryTrackClass = 'text-gray-800 italic';
-    let primaryTrackDuration = '';
-
-    if (primaryTrack) {
-      primaryTrackClass = 'text-gray-300';
-      if (album.tracks && Array.isArray(album.tracks)) {
-        const trackMatch = album.tracks.find(
-          (t) => getTrackName(t) === primaryTrack
-        );
-        if (trackMatch) {
-          const trackName = getTrackName(trackMatch);
-          const match = trackName.match(/^(\d+)[.\s-]?\s*(.*)$/);
-          primaryTrackDisplay = match
-            ? match[2]
-              ? `${match[1]}. ${match[2]}`
-              : `Track ${match[1]}`
-            : trackName;
-          primaryTrackDuration = formatTrackTime(getTrackLength(trackMatch));
-        } else if (primaryTrack.match(/^\d+$/)) {
-          primaryTrackDisplay = `Track ${primaryTrack}`;
-        } else {
-          primaryTrackDisplay = primaryTrack;
-        }
-      } else if (primaryTrack.match(/^\d+$/)) {
-        primaryTrackDisplay = `Track ${primaryTrack}`;
-      } else {
-        primaryTrackDisplay = primaryTrack;
-      }
-    }
+    const primaryTrackData = processTrackPick(primaryTrack, album.tracks, {
+      getTrackName,
+      getTrackLength,
+      formatTrackTime,
+    });
+    const primaryTrackDisplay = primaryTrackData.display || 'Select Track';
+    const primaryTrackClass = primaryTrackData.class;
+    const primaryTrackDuration = primaryTrackData.duration;
 
     const secondaryTrack = album.secondary_track || '';
-    let secondaryTrackDisplay = '';
-    let secondaryTrackDuration = '';
-    if (secondaryTrack) {
-      if (album.tracks && Array.isArray(album.tracks)) {
-        const trackMatch = album.tracks.find(
-          (t) => getTrackName(t) === secondaryTrack
-        );
-        if (trackMatch) {
-          const trackName = getTrackName(trackMatch);
-          const match = trackName.match(/^(\d+)[.\s-]?\s*(.*)$/);
-          secondaryTrackDisplay = match
-            ? match[2]
-              ? `${match[1]}. ${match[2]}`
-              : `Track ${match[1]}`
-            : trackName;
-          secondaryTrackDuration = formatTrackTime(getTrackLength(trackMatch));
-        } else if (secondaryTrack.match(/^\d+$/)) {
-          secondaryTrackDisplay = `Track ${secondaryTrack}`;
-        } else {
-          secondaryTrackDisplay = secondaryTrack;
-        }
-      } else if (secondaryTrack.match(/^\d+$/)) {
-        secondaryTrackDisplay = `Track ${secondaryTrack}`;
-      } else {
-        secondaryTrackDisplay = secondaryTrack;
-      }
-    }
+    const secondaryTrackData = processTrackPick(secondaryTrack, album.tracks, {
+      getTrackName,
+      getTrackLength,
+      formatTrackTime,
+    });
+    const secondaryTrackDisplay = secondaryTrackData.display;
+    const secondaryTrackDuration = secondaryTrackData.duration;
 
     return {
       position,
@@ -320,6 +278,26 @@ export function createAlbumDisplay(deps = {}) {
       recommendedBy,
       recommendedAt,
     };
+  }
+
+  function updateTrackDuration(trackText, duration, field, className) {
+    const trackLine = trackText?.parentElement;
+    if (!trackLine) return;
+
+    const existingDuration = trackLine.querySelector(`[data-field="${field}"]`);
+    if (duration) {
+      if (existingDuration) {
+        existingDuration.textContent = `(${duration})`;
+      } else {
+        const durationSpan = document.createElement('span');
+        durationSpan.className = className;
+        durationSpan.dataset.field = field;
+        durationSpan.textContent = `(${duration})`;
+        trackLine.appendChild(durationSpan);
+      }
+    } else if (existingDuration) {
+      existingDuration.remove();
+    }
   }
 
   function reconcileAlbumBadges(row, cache, data, isMobile) {
@@ -476,9 +454,9 @@ export function createAlbumDisplay(deps = {}) {
         ${
           data.primaryTrackDisplay
             ? `<div class="flex items-center min-w-0 overflow-hidden w-full">
-            <span class="inline-block w-4 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Primary track">I</span>
+            <span class="inline-block w-5 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Primary track">I:</span>
             <span data-field="primary-track-text" class="album-cell-text ${data.primaryTrackClass} truncate hover:text-gray-100 flex-1 min-w-0" title="${data.primaryTrack || ''}">${data.primaryTrackDisplay}</span>
-            ${data.primaryTrackDuration ? `<span data-field="primary-track-duration" class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.primaryTrackDuration}</span>` : ''}
+            ${data.primaryTrackDuration ? `<span data-field="primary-track-duration" class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">(${data.primaryTrackDuration})</span>` : ''}
           </div>`
             : `<div class="flex items-center min-w-0">
             <span class="album-cell-text text-gray-800 italic hover:text-gray-100">Select Track</span>
@@ -487,9 +465,9 @@ export function createAlbumDisplay(deps = {}) {
         ${
           data.hasSecondaryTrack
             ? `<div class="flex items-center min-w-0 mt-1 overflow-hidden w-full">
-            <span class="inline-block w-4 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Secondary track">II</span>
+            <span class="inline-block w-5 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Secondary track">II:</span>
             <span data-field="secondary-track-text" class="album-cell-text ${data.secondaryTrackClass} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${data.secondaryTrack || ''}">${data.secondaryTrackDisplay}</span>
-            ${data.secondaryTrackDuration ? `<span data-field="secondary-track-duration" class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.secondaryTrackDuration}</span>` : ''}
+            ${data.secondaryTrackDuration ? `<span data-field="secondary-track-duration" class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">(${data.secondaryTrackDuration})</span>` : ''}
           </div>`
             : ''
         }
@@ -856,16 +834,16 @@ export function createAlbumDisplay(deps = {}) {
           <div class="flex items-center ${data.primaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}"
                data-track-play-btn="${data.primaryTrackDisplay ? 'true' : ''}"
                data-track-identifier="${data.primaryTrack || ''}">
-            <span class="text-[12px] text-green-400 truncate">
-              <span class="inline-block w-4 text-center mr-1 text-2xs font-semibold font-[Georgia,serif]">I</span><span data-field="track-mobile-text">${escapeHtml(data.primaryTrackDisplay || '')}</span>
+            <span class="text-[12px] text-green-400 flex min-w-0 w-full">
+              <span class="inline-block w-5 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif]">I:</span><span data-field="track-mobile-text" class="truncate flex-1 min-w-0">${escapeHtml(data.primaryTrackDisplay || '')}</span>${data.primaryTrackDuration ? `<span data-field="primary-track-mobile-duration" class="shrink-0 ml-1 tabular-nums">(${data.primaryTrackDuration})</span>` : ''}
             </span>
           </div>
           <!-- Secondary track (marker: 2) — always rendered for a consistent layout -->
           <div class="flex items-center ${data.secondaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}"
                data-track-play-btn="${data.secondaryTrackDisplay ? 'true' : ''}"
                data-track-identifier="${data.secondaryTrack || ''}">
-            <span class="text-[12px] text-green-400 truncate">
-              <span class="inline-block w-4 text-center mr-1 text-2xs font-semibold font-[Georgia,serif]">II</span><span data-field="secondary-track-mobile-text">${escapeHtml(data.secondaryTrackDisplay || '')}</span>
+            <span class="text-[12px] text-green-400 flex min-w-0 w-full">
+              <span class="inline-block w-5 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif]">II:</span><span data-field="secondary-track-mobile-text" class="truncate flex-1 min-w-0">${escapeHtml(data.secondaryTrackDisplay || '')}</span>${data.secondaryTrackDuration ? `<span data-field="secondary-track-mobile-duration" class="shrink-0 ml-1 tabular-nums">(${data.secondaryTrackDuration})</span>` : ''}
             </span>
           </div>
         </div>
@@ -1331,36 +1309,23 @@ export function createAlbumDisplay(deps = {}) {
             cache.trackSpan.className = `album-cell-text ${data.primaryTrackClass} truncate hover:text-gray-100 flex-1 min-w-0`;
             cache.trackSpan.title =
               data.primaryTrack || 'Click to select track';
-            // Update duration span (sibling of trackSpan)
-            const trackCell = cache.trackSpan.parentElement;
-            if (trackCell) {
-              const existingDuration = trackCell.querySelector(
-                '[data-field="primary-track-duration"]'
-              );
-              if (data.primaryTrackDuration) {
-                if (existingDuration) {
-                  existingDuration.textContent = data.primaryTrackDuration;
-                } else {
-                  const durationSpan = document.createElement('span');
-                  durationSpan.className =
-                    'text-xs text-gray-500 shrink-0 ml-2';
-                  durationSpan.dataset.field = 'primary-track-duration';
-                  durationSpan.textContent = data.primaryTrackDuration;
-                  trackCell.appendChild(durationSpan);
-                }
-              } else if (existingDuration) {
-                existingDuration.remove();
-              }
-            }
+            updateTrackDuration(
+              cache.trackSpan,
+              data.primaryTrackDuration,
+              'primary-track-duration',
+              'text-xs text-gray-500 shrink-0 ml-2 tabular-nums'
+            );
           }
 
           if (cache.secondaryTrackSpan) {
             cache.secondaryTrackSpan.textContent = data.secondaryTrackDisplay;
             cache.secondaryTrackSpan.title = data.secondaryTrack;
-          }
-          if (cache.secondaryTrackDuration) {
-            cache.secondaryTrackDuration.textContent =
-              data.secondaryTrackDuration || '';
+            updateTrackDuration(
+              cache.secondaryTrackSpan,
+              data.secondaryTrackDuration,
+              'secondary-track-duration',
+              'text-xs text-gray-500 shrink-0 ml-2 tabular-nums'
+            );
           }
         } else {
           // Mobile: use cached elements
@@ -1383,6 +1348,12 @@ export function createAlbumDisplay(deps = {}) {
                 ? data.primaryTrackDisplay
                 : '';
             trackMobile.textContent = trackDisplay;
+            updateTrackDuration(
+              trackMobile,
+              data.primaryTrackDuration,
+              'primary-track-mobile-duration',
+              'shrink-0 ml-1 tabular-nums'
+            );
 
             const trackPlayBtn = trackMobile.closest('[data-track-play-btn]');
             if (trackPlayBtn) {
@@ -1439,6 +1410,12 @@ export function createAlbumDisplay(deps = {}) {
           const secondaryTrackMobile = cache.secondaryTrackText;
           if (secondaryTrackMobile) {
             secondaryTrackMobile.textContent = data.secondaryTrackDisplay || '';
+            updateTrackDuration(
+              secondaryTrackMobile,
+              data.secondaryTrackDuration,
+              'secondary-track-mobile-duration',
+              'shrink-0 ml-1 tabular-nums'
+            );
 
             const secondaryPlayBtn = secondaryTrackMobile.closest(
               '[data-track-play-btn]'

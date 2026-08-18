@@ -81,4 +81,31 @@ describe('availability/itunes-source', () => {
       links: [],
     });
   });
+
+  it('times out while reading a stalled response body', async () => {
+    let requestSignal;
+    const source = createItunesSource({
+      fetch: async (_url, { signal }) => {
+        requestSignal = signal;
+        return {
+          ok: true,
+          json: () =>
+            new Promise((_resolve, reject) => {
+              signal.addEventListener(
+                'abort',
+                () => reject(new Error('aborted')),
+                { once: true }
+              );
+            }),
+        };
+      },
+      timeoutMs: 5,
+      logger: createMockLogger(),
+    });
+
+    assert.deepStrictEqual(await source.getLinks({ upc: '886443984059' }), {
+      links: [],
+    });
+    assert.strictEqual(requestSignal.aborted, true);
+  });
 });

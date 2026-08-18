@@ -14,6 +14,7 @@ const logger = require('../utils/logger');
 const { normalizeForExternalApi } = require('../utils/normalization');
 const { selectBestCandidate } = require('../utils/entity-matching');
 const { ensureDb } = require('../db/postgres');
+const { publishAlbumMetadataUpdate } = require('./album-metadata-publisher');
 
 /**
  * Pick the result whose album/artist best matches the request, falling back to
@@ -59,6 +60,8 @@ function sanitizeQuery(str = '') {
  * @param {Function} [deps.fetch] - Fetch function (for testing)
  * @param {number} [deps.maxConcurrent] - Max concurrent fetches (default: 2)
  * @param {Object} [deps.logger] - Logger instance (defaults to utils/logger)
+ * @param {InstanceType<typeof import("../middleware/response-cache").ResponseCache>} [deps.responseCache] - Response cache to invalidate for affected users
+ * @param {Object} [deps.broadcast] - WebSocket broadcast helpers
  * @returns {Object} - TrackFetchQueue instance
  */
 function createTrackFetchQueue(deps = {}) {
@@ -66,6 +69,8 @@ function createTrackFetchQueue(deps = {}) {
   const queue = new RequestQueue(maxConcurrent);
   const fetchFn = deps.fetch || fetch;
   const log = deps.logger || logger;
+  const responseCache = deps.responseCache;
+  const broadcast = deps.broadcast || require('../utils/websocket').broadcast;
   const db =
     deps.db !== undefined && deps.db !== null
       ? ensureDb(deps.db, 'track-fetch-queue')
@@ -254,6 +259,18 @@ function createTrackFetchQueue(deps = {}) {
       return;
     }
 
+    if (responseCache || deps.broadcast) {
+      await publishAlbumMetadataUpdate({
+        db,
+        responseCache,
+        broadcast,
+        logger: log,
+        albumId,
+        patch: { tracks: result.tracks },
+        operation: 'track-fetch-queue',
+      });
+    }
+
     log.info('Tracks fetched successfully', {
       albumId,
       artist,
@@ -290,9 +307,9 @@ let trackFetchQueue = null;
  * Initialize the singleton track fetch queue
  * @param {import('../db/types').DbFacade} db - Canonical datastore
  */
-function initializeTrackFetchQueue(db) {
+function initializeTrackFetchQueue(db, options = {}) {
   if (!trackFetchQueue) {
-    trackFetchQueue = createTrackFetchQueue({ db });
+    trackFetchQueue = createTrackFetchQueue({ db, ...options });
     logger.info('Track fetch queue initialized');
   }
   return trackFetchQueue;

@@ -363,6 +363,7 @@ describe('CoverFetchQueue', () => {
         return { rows: [], rowCount: 1 };
       });
       const responseCache = { invalidate: mock.fn() };
+      const albumMetadataUpdated = mock.fn();
       const mockFetch = createMockFetch({
         coverArtArchive: {
           ok: true,
@@ -374,6 +375,7 @@ describe('CoverFetchQueue', () => {
         db: { query, raw: query },
         fetch: mockFetch,
         responseCache,
+        broadcast: { albumMetadataUpdated },
       });
 
       await queue.fetchAndStoreCover(
@@ -385,6 +387,19 @@ describe('CoverFetchQueue', () => {
       assert.deepStrictEqual(
         responseCache.invalidate.mock.calls.map((call) => call.arguments[0]),
         [':user1']
+      );
+      assert.strictEqual(albumMetadataUpdated.mock.calls.length, 1);
+      assert.strictEqual(
+        albumMetadataUpdated.mock.calls[0].arguments[2].cover_image_format,
+        'JPEG'
+      );
+      assert.match(
+        albumMetadataUpdated.mock.calls[0].arguments[2].cover_image_url,
+        /^\/api\/albums\/12345678-1234-1234-1234-123456789abc\/cover\?v=\d+$/
+      );
+      assert.match(
+        albumMetadataUpdated.mock.calls[0].arguments[2].cover_thumb_url,
+        /[?&]size=thumb/
       );
     });
 

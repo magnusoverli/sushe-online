@@ -52,6 +52,7 @@
   };
 
   const API = {
+    ALBUMS: '/api/albums',
     LISTS: '/api/lists',
     LIST_ALBUM_PRESENCE: '/api/lists/presence',
     ALBUM_BATCH_UPDATE: '/api/albums/batch-update',

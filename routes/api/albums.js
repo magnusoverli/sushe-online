@@ -160,6 +160,24 @@ module.exports = (app, deps) => {
     )
   );
 
+  // Apply a delayed source observation without changing list membership
+  app.put(
+    '/api/albums/:albumId/source-observation',
+    ensureAuthAPI,
+    asyncHandler(async (req, res) => {
+      const applied = await albumService.updateSourceObservation(
+        req.params.albumId,
+        req.body.sourceObservation,
+        req.user._id
+      );
+      res.json({
+        success: applied.result.status === 'applied',
+        result: applied.result,
+        warnings: applied.warnings,
+      });
+    }, 'updating album source observation')
+  );
+
   // Get single album summary
   app.get(
     '/api/albums/:albumId/summary',

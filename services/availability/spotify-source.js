@@ -36,7 +36,8 @@ function bestArtistName(candidate, targetArtist) {
   return bestName;
 }
 
-function buildSearchQueries(artist, album, upc) {
+function buildSearchQueries(artist, album, upc, upcOnly = false) {
+  if (upcOnly) return upc ? [`upc:${upc}`] : [];
   const albumForms = generateQueryForms(album, { stripEditions: true }).slice(
     0,
     3
@@ -153,6 +154,7 @@ function createSpotifySource(deps = {}) {
     const artist = String(album.artist || '').trim();
     const albumName = String(album.album || '').trim();
     const upc = String(album.upc || '').trim();
+    const upcOnly = album.upcOnly === true;
     if (!artist || !albumName) return { links: [] };
 
     const accessToken = await getAccessToken();
@@ -160,7 +162,7 @@ function createSpotifySource(deps = {}) {
 
     try {
       const searchResults = await Promise.all(
-        buildSearchQueries(artist, albumName, upc).map((query) =>
+        buildSearchQueries(artist, albumName, upc, upcOnly).map((query) =>
           searchAlbums(query, accessToken)
         )
       );

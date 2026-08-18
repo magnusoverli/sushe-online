@@ -1,4 +1,5 @@
 import { createRealtimeSync as createRealtimeSyncDefault } from './realtime-sync.js';
+import { createRealtimeAlbumPatches } from './realtime-album-patches.js';
 
 /**
  * Realtime sync composition helpers for app.js.
@@ -23,6 +24,19 @@ export function createAppRealtimeSync(deps = {}) {
     win = typeof window !== 'undefined' ? window : null,
   } = deps;
   const taxonomyRequests = new Map();
+  const albumPatches = createRealtimeAlbumPatches();
+  const METADATA_PATCH_FIELDS = new Set([
+    'album',
+    'artist',
+    'country',
+    'cover_image_url',
+    'cover_image_format',
+    'cover_image_updated_at',
+    'cover_thumb_url',
+    'cover_thumbnail_format',
+    'cover_thumbnail_updated_at',
+    'tracks',
+  ]);
 
   function patchLoadedAlbumCopies(albumId, patch) {
     let currentListChanged = false;
@@ -48,12 +62,6 @@ export function createAppRealtimeSync(deps = {}) {
     }
   }
 
-  function hasLoadedAlbum(albumId) {
-    return Object.keys(getLists() || {}).some((listId) =>
-      getListData(listId)?.some((album) => album?.album_id === albumId)
-    );
-  }
-
   function handleAlbumAvailabilityUpdated(data) {
     if (
       typeof data?.albumId !== 'string' ||
@@ -67,16 +75,42 @@ export function createAppRealtimeSync(deps = {}) {
       return;
     }
 
-    patchLoadedAlbumCopies(data.albumId, {
+    const patch = {
       availability: data.availability,
       availability_links: data.availabilityLinks,
-    });
+    };
+    albumPatches.remember(data.albumId, patch);
+    patchLoadedAlbumCopies(data.albumId, patch);
+  }
+
+  function handleAlbumMetadataUpdated(data) {
+    if (
+      typeof data?.albumId !== 'string' ||
+      !data.patch ||
+      typeof data.patch !== 'object' ||
+      Array.isArray(data.patch)
+    ) {
+      logger.warn?.('[RealtimeSync] Ignoring invalid metadata update', data);
+      return;
+    }
+
+    const patch = Object.fromEntries(
+      Object.entries(data.patch).filter(([field]) =>
+        METADATA_PATCH_FIELDS.has(field)
+      )
+    );
+    if (Object.keys(patch).length === 0) return;
+    const acceptedPatch = albumPatches.remember(
+      data.albumId,
+      patch,
+      data.metadataVersion
+    );
+    if (Object.keys(acceptedPatch).length === 0) return;
+    patchLoadedAlbumCopies(data.albumId, acceptedPatch);
   }
 
   async function handleAlbumTaxonomyUpdated(data) {
-    if (typeof data?.albumId !== 'string' || !hasLoadedAlbum(data.albumId)) {
-      return;
-    }
+    if (typeof data?.albumId !== 'string') return;
 
     const eventTimestamp = Date.parse(data.taxonomyUpdatedAt || '');
     const previousRequest = taxonomyRequests.get(data.albumId);
@@ -112,13 +146,15 @@ export function createAppRealtimeSync(deps = {}) {
       ) {
         return;
       }
-      patchLoadedAlbumCopies(data.albumId, {
+      const patch = {
         taxonomy: taxonomy.taxonomy,
         genre_1: taxonomy.genre_1,
         genre_2: taxonomy.genre_2,
         taxonomy_updated_at:
           taxonomy.taxonomy_updated_at ?? data.taxonomyUpdatedAt ?? null,
-      });
+      };
+      albumPatches.remember(data.albumId, patch);
+      patchLoadedAlbumCopies(data.albumId, patch);
     } catch (error) {
       logger.warn?.('[RealtimeSync] Failed to apply taxonomy update', {
         albumId: data.albumId,
@@ -136,6 +172,7 @@ export function createAppRealtimeSync(deps = {}) {
         apiCall,
         updateAlbumSummaryInPlace,
         onAlbumAvailabilityUpdated: handleAlbumAvailabilityUpdated,
+        onAlbumMetadataUpdated: handleAlbumMetadataUpdated,
         onAlbumTaxonomyUpdated: handleAlbumTaxonomyUpdated,
         refreshListData: async (listId) => {
           if (wasRecentLocalSave(listId)) {
@@ -147,9 +184,11 @@ export function createAppRealtimeSync(deps = {}) {
           }
 
           const previousCount = getListData(listId)?.length;
+          const refreshGeneration = albumPatches.generation;
           const data = await apiCall(
             `/api/lists/${encodeURIComponent(listId)}`
           );
+          albumPatches.applyAfter(data, refreshGeneration);
           setListData(listId, data);
           if (previousCount !== data.length) {
             updateListNav();
@@ -167,9 +206,11 @@ export function createAppRealtimeSync(deps = {}) {
         },
         refreshListDataSilent: async (listId) => {
           const previousCount = getListData(listId)?.length;
+          const refreshGeneration = albumPatches.generation;
           const data = await apiCall(
             `/api/lists/${encodeURIComponent(listId)}`
           );
+          albumPatches.applyAfter(data, refreshGeneration);
           setListData(listId, data);
           if (previousCount !== data.length) {
             updateListNav();

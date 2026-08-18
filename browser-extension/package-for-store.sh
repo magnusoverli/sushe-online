@@ -28,6 +28,7 @@ echo "  ✓ context-menu-service.js"
 echo "  ✓ album-presence-service.js"
 echo "  ✓ sushe-tab-navigation.js"
 echo "  ✓ album-api-service.js"
+echo "  ✓ album-add-enrichment.js"
 echo "  ✓ album-add-service.js"
 echo "  ✓ rym-presence-badges.js"
 echo "  ✓ content-script.js"
@@ -53,6 +54,7 @@ zip -q "$OUTPUT_FILE" \
     album-presence-service.js \
     sushe-tab-navigation.js \
     album-api-service.js \
+    album-add-enrichment.js \
     album-add-service.js \
     rym-presence-badges.js \
     content-script.js \
