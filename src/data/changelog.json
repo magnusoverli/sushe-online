@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-08-18",
+    "category": "ui",
+    "description": "Fixed blurry background effect bleeding on mobile screens.",
+    "hash": "0247911283ef7e1a3fde76469d03821744cdd753",
+    "commitMessage": "Fix mobile backdrop blur bleed"
+  },
+  {
+    "date": "2026-08-18",
     "category": "feature",
     "description": "Album taxonomy now includes RYM release type, labels, and personnel credits.",
     "hash": "a744ae7381b965151a64eacb6bf2f98572b17f4b",
