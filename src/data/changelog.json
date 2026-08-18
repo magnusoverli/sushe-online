@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-08-18",
+    "category": "fix",
+    "description": "Fixed status bar appearance on iOS when installed as an app.",
+    "hash": "04fd0f1270822467e01a34778eccdddbe7ce9608",
+    "commitMessage": "Fix iOS PWA status bar blur"
+  },
+  {
+    "date": "2026-08-18",
     "category": "ui",
     "description": "Fixed blurry background effect bleeding on mobile screens.",
     "hash": "0247911283ef7e1a3fde76469d03821744cdd753",
