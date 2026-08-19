@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-08-19",
+    "category": "fix",
+    "description": "Fixed visual blur glitches on iOS when using the app.",
+    "hash": "9967a2f1975bc16f09f42afc4a6abed9c8243360",
+    "commitMessage": "Fix iOS PWA compositor blur bleed"
+  },
+  {
     "date": "2026-08-18",
     "category": "fix",
     "description": "Fixed status bar appearance on iOS when installed as an app.",
