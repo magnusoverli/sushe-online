@@ -1,9 +1,9 @@
 const { mobileAlbumSearchBarTemplate } = require('./mobile-album-search-bar');
 
 const headerComponent = (_user, activeSection = 'home') => `
-  <header class="z-50 border-b border-gray-700/50" style="background: linear-gradient(to top, rgba(43,49,71,0.5) 0%, rgba(9,13,23,0.5) 100%), linear-gradient(90deg, #2b3147 20%, #090d17 100%)">
-    <!-- Safe area fill: extends header gradient behind iOS status bar/notch -->
-    <div class="fixed top-0 left-0 right-0 z-50" style="height: env(safe-area-inset-top, 0px); background: linear-gradient(90deg, #2b3147 20%, #090d17 100%)"></div>
+  <header class="relative z-50 border-b border-gray-700/50" style="background: linear-gradient(to top, rgba(43,49,71,0.5) 0%, rgba(9,13,23,0.5) 100%), linear-gradient(90deg, #2b3147 20%, #090d17 100%)">
+    <!-- Fill the parent safe-area padding without creating a fixed compositor layer. -->
+    <div class="absolute bottom-full left-0 right-0 z-50" style="height: env(safe-area-inset-top, 0px); background: linear-gradient(90deg, #2b3147 20%, #090d17 100%)"></div>
     <div class="mobile-header-row relative flex items-center justify-between h-12 lg:h-14 px-3 lg:px-0">
       <!-- Mobile menu button -->
       <div class="mobile-header-left flex items-center gap-3 pl-1 lg:w-[14.5rem] lg:justify-center lg:gap-0 lg:pl-0">

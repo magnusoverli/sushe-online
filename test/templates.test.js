@@ -752,6 +752,16 @@ describe('templates utilities', () => {
       assert.ok(result.includes('confirmationModal'));
     });
 
+    it('should not paint the settings drawer before it is opened', () => {
+      const result = templates.spotifyTemplate({ username: 'test' });
+
+      assert.ok(
+        result.includes(
+          'id="settingsDrawer" class="settings-drawer" hidden aria-hidden="true"'
+        )
+      );
+    });
+
     it('should include lastSelectedList in window object', () => {
       const user = {
         username: 'test',
@@ -865,6 +875,14 @@ describe('templates utilities', () => {
 
       assert.ok(typeof result === 'string');
       assert.ok(result.includes('<header'));
+    });
+
+    it('should avoid fixed and sticky compositor layers in the mobile header', () => {
+      const result = templates.headerComponent({ username: 'test' });
+
+      assert.ok(result.includes('<header class="relative '));
+      assert.ok(result.includes('class="absolute bottom-full'));
+      assert.ok(!result.includes('class="fixed top-0'));
     });
 
     it('should include SuShe logo link', () => {

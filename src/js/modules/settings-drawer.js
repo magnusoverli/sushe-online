@@ -36,6 +36,8 @@ import { createSettingsAuditHandlers } from './settings-drawer/handlers/audit-ha
 import { createSettingsAdminHandlers } from './settings-drawer/handlers/admin-handlers.js';
 import { getCurrentListId } from './app-state.js';
 
+const DRAWER_CLOSE_FALLBACK_MS = 350;
+
 /**
  * Create settings drawer utilities with injected dependencies
  * @param {Object} deps - Dependencies
@@ -51,12 +53,26 @@ export function createSettingsDrawer(deps = {}) {
   const apiCall =
     deps.apiCall || (() => Promise.reject(new Error('apiCall not provided')));
   const refreshLockedYearStatus = deps.refreshLockedYearStatus;
+  const setTimeoutFn = deps.setTimeout || globalThis.setTimeout;
+  const clearTimeoutFn = deps.clearTimeout || globalThis.clearTimeout;
 
   let currentCategory = 'account';
   const categoryData = {};
   const categoryLoadPromises = {};
   const categoryScrollPositions = {};
   let isOpen = false;
+  let closeTimer = null;
+
+  function finishClose(drawer) {
+    if (isOpen) return;
+
+    if (closeTimer !== null) {
+      clearTimeoutFn(closeTimer);
+      closeTimer = null;
+    }
+
+    drawer.hidden = true;
+  }
 
   const {
     loadAccountData,
@@ -339,6 +355,15 @@ export function createSettingsDrawer(deps = {}) {
     const drawer = document.getElementById('settingsDrawer');
     if (!drawer) return;
 
+    if (closeTimer !== null) {
+      clearTimeoutFn(closeTimer);
+      closeTimer = null;
+    }
+
+    drawer.hidden = false;
+    drawer.setAttribute('aria-hidden', 'false');
+    // Paint the translated closed state before starting the slide-in transition.
+    drawer.getBoundingClientRect();
     drawer.classList.add('open');
     document.body.style.overflow = 'hidden';
     isOpen = true;
@@ -389,8 +414,16 @@ export function createSettingsDrawer(deps = {}) {
     if (!drawer) return;
 
     drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
     isOpen = false;
+    if (closeTimer !== null) {
+      clearTimeoutFn(closeTimer);
+    }
+    closeTimer = setTimeoutFn(
+      () => finishClose(drawer),
+      DRAWER_CLOSE_FALLBACK_MS
+    );
 
     // Restore FAB visibility
     const fab = document.getElementById('addAlbumFAB');
@@ -746,14 +779,19 @@ export function createSettingsDrawer(deps = {}) {
       );
 
       // Reset transform on transition end (when drawer closes normally)
-      panel.addEventListener('transitionend', () => {
-        if (!isOpen) {
+      panel.addEventListener('transitionend', (event) => {
+        if (
+          !isOpen &&
+          event.target === panel &&
+          event.propertyName === 'transform'
+        ) {
           panel.style.transform = '';
           const backdrop = drawer.querySelector('.settings-drawer-backdrop');
           if (backdrop) {
             backdrop.style.opacity = '';
           }
           resetSwipeFeedback();
+          finishClose(drawer);
         }
       });
     }

@@ -725,7 +725,7 @@ function createSpotifyComponents(deps) {
   // Component: Settings Drawer
   const settingsDrawerComponent = (user) => `
   <!-- Settings Drawer -->
-  <div id="settingsDrawer" class="settings-drawer">
+  <div id="settingsDrawer" class="settings-drawer" hidden aria-hidden="true">
     <!-- Backdrop -->
     <div class="settings-drawer-backdrop"></div>
     

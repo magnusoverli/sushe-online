@@ -243,20 +243,6 @@
   border-radius: 0.375rem;
 }
 
-/* Lock the app header to the top on mobile so it can NEVER be scrolled out of
-   view. The mobile layout (.app-layout) can let the document scroll a little
-   (its min-height:100vh exceeds the 100dvh visual viewport, and the iOS
-   keyboard can shift it); pinning the header means even a stray document scroll
-   leaves it in place. Desktop never scrolls the document, so this is scoped to
-   mobile to leave the desktop header untouched. */
-@media (max-width: 1023px) {
-  .app-layout > header {
-    position: sticky;
-    top: 0;
-    z-index: var(--z-sticky-header);
-  }
-}
-
 /* ── Mobile album search ───────────────────────────────────────────────────
    On mobile the real header enters search mode and #mobileAlbumSearchBar takes
    over the row in normal flow. The results fill a full-width panel pinned just
@@ -1226,7 +1212,7 @@ input[list]::-webkit-list-button {
 /* Toast notifications */
 .toast {
   position: fixed;
-  top: 5rem;
+  top: calc(5rem + env(safe-area-inset-top, 0px));
   right: 1rem;
   background-color: #1f2937;
   color: white;
@@ -1236,7 +1222,7 @@ input[list]::-webkit-list-button {
   transform: translateX(100%);
   opacity: 0;
   transition: all 0.3s ease;
-  z-index: 10003;
+  z-index: var(--z-toast, 10050);
 }
 
 .toast.show {
