@@ -200,6 +200,7 @@ function createListService(deps = {}) {
     findListByIdOrThrow,
     findOrCreateYearGroup,
     findOrCreateUncategorizedGroup,
+    acquireYearLocks,
     validateMainListNotLocked,
     logger: log,
   });
@@ -243,13 +244,14 @@ function createListService(deps = {}) {
 
   async function createList(
     userId,
-    { name, groupId: requestGroupId, year, albums: rawAlbums }
+    { name, groupId: requestGroupId, year, albums: rawAlbums, isMain = false }
   ) {
     return writeOperations.createList(userId, {
       name,
       groupId: requestGroupId,
       year,
       albums: rawAlbums,
+      isMain,
     });
   }
 

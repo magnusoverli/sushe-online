@@ -4,6 +4,7 @@ import { getPositionBadgeColor } from './position-badge.js';
 import { desktopPlaycountSpan, mobilePlaycountSpan } from './playcount-view.js';
 import { renderTaxonomyTrigger } from './taxonomy-details.js';
 export {
+  getDisplayCoverSources,
   getCoverLoadMode,
   renderCoverImage,
   renderDesktopCoverCell,
@@ -37,24 +38,23 @@ export function renderRecommendationBadge(data, { mobile = false } = {}) {
   </div>`;
 }
 
-export function renderDisqualificationBadge(data, { mobile = false } = {}) {
+export function renderDisqualificationBadge(data) {
   if (!data.isDisqualified) return '';
 
   const reason = data.disqualificationReason || '';
   const accessibleText = reason
     ? `Disqualified from ranking: ${reason}`
     : 'Disqualified from ranking';
-  const reasonHtml =
-    !mobile && reason
-      ? `<span class="font-normal text-red-300 truncate max-w-48">${escapeHtml(reason)}</span>`
-      : '';
-
   return `<span data-disqualification-badge role="note"
     class="inline-flex items-center gap-1 text-[10px] leading-4 font-semibold text-red-300 border border-red-800 bg-red-950/60 rounded-sm px-1"
     title="${escapeHtml(accessibleText)}" aria-label="${escapeHtml(accessibleText)}">
     <i class="fas fa-ban text-[9px]" aria-hidden="true"></i>
-    <span>Disqualified</span>${reasonHtml}
+    <span>Disqualified</span>
   </span>`;
+}
+
+export function renderMobileDisqualificationSlot(data) {
+  return `<span data-disqualification-slot class="mobile-disqualification-slot">${renderDisqualificationBadge(data)}</span>`;
 }
 
 export function renderMobileTaxonomyBadge(data) {
@@ -92,17 +92,23 @@ export function renderDesktopAlbumCell(data, options = {}) {
     : '';
   const releaseDateHtml =
     data.releaseDate || options.alwaysShowReleaseDate
-      ? `<div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${escapeHtml(data.yearMismatchTooltip || '')}"` : ''}>${escapeHtml(data.releaseDate || '')}</div>`
+      ? `<div class="text-xs release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${escapeHtml(data.yearMismatchTooltip || '')}"` : ''}>${escapeHtml(data.releaseDate || '')}</div>`
+      : '';
+  const metadataHtml =
+    releaseDateHtml || data.isDisqualified || options.alwaysShowReleaseDate
+      ? `<div class="album-meta-row flex items-center gap-2 mt-0.5 min-w-0">
+          ${releaseDateHtml}
+          <span data-disqualification-slot class="inline-flex min-w-0">${renderDisqualificationBadge(data)}</span>
+        </div>`
       : '';
 
   return `<div class="${options.cellClass || 'album-cell flex flex-col justify-start'}">
     <div class="flex items-center gap-2 min-w-0">
       <span class="album-name font-semibold text-gray-200 truncate"${titleAttr}>${escapeHtml(data.albumName)}</span>
-      <span data-disqualification-slot class="inline-flex min-w-0">${renderDisqualificationBadge(data)}</span>
       ${playcountHtml}
       <div data-desktop-album-badges data-badge-state="${escapeHtml(options.badgeState || '')}" class="album-badge-strip">${badgesHtml}</div>
     </div>
-    ${releaseDateHtml}
+    ${metadataHtml}
     ${availabilityHtml}
     ${options.includeTaxonomy ? `<div class="album-taxonomy-slot" data-taxonomy-slot>${taxonomyHtml}</div>` : ''}
   </div>`;
@@ -186,7 +192,7 @@ export function renderMobileTitleRow(data, options = {}) {
 
   return `<div data-mobile-title-row class="${options.wrapperClass || 'flex items-center relative'}"${paddingStyle}>
     <h3 class="${titleClass}"${titleStyleAttr}>
-      <i class="${iconClass}"></i><span data-disqualification-slot class="inline-flex align-middle mr-1">${renderDisqualificationBadge(data, { mobile: true })}</span><span data-field="album-mobile-title"${titleSpanClass} title="${escapeHtml(data.albumName)}">${escapeHtml(data.albumName)}</span>
+      <i class="${iconClass}"></i><span data-field="album-mobile-title"${titleSpanClass} title="${escapeHtml(data.albumName)}">${escapeHtml(data.albumName)}</span>
     </h3>
     <div data-mobile-album-badges data-badge-state="${escapeHtml(options.badgeState || '')}" class="${badgeClass}" style="${badgeStyle}">${badgesHtml}</div>
   </div>`;

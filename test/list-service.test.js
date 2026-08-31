@@ -773,6 +773,62 @@ describe('list-service management operations', () => {
 });
 
 describe('list-service write operations', () => {
+  it('createList atomically assigns a yearly main list', async () => {
+    let insertParams;
+    let demotedPreviousMain = false;
+    const client = {
+      query: mock.fn(async (sql, params) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return { rows: [], rowCount: 0 };
+        }
+        if (sql.includes('pg_advisory_xact_lock')) {
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes('SELECT locked FROM master_lists')) {
+          return { rows: [{ locked: false }] };
+        }
+        if (sql.startsWith('SELECT 1 FROM lists WHERE user_id = $1')) {
+          return { rows: [] };
+        }
+        if (sql.includes('SELECT COALESCE(MAX(sort_order), -1) + 1')) {
+          return { rows: [{ next_order: 2 }] };
+        }
+        if (sql.includes('UPDATE lists SET is_main = FALSE')) {
+          demotedPreviousMain = true;
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.startsWith('INSERT INTO lists')) {
+          insertParams = params;
+          return { rows: [], rowCount: 1 };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+      release: mock.fn(),
+    };
+    const pool = {
+      query: mock.fn(async (sql) => {
+        throw new Error(`Unexpected pool query: ${sql}`);
+      }),
+      connect: mock.fn(async () => client),
+    };
+    const deps = createServiceDeps(pool);
+    deps.helpers.findOrCreateYearGroup = mock.fn(async () => ({
+      groupId: 42,
+      year: 2018,
+    }));
+    const service = createListService(deps);
+
+    const result = await service.createList('user1', {
+      name: 'Imported 2018',
+      year: 2018,
+      isMain: true,
+    });
+
+    assert.strictEqual(demotedPreviousMain, true);
+    assert.strictEqual(insertParams[5], true);
+    assert.strictEqual(result.isMain, true);
+  });
+
   it('createList should create an uncategorized list without albums', async () => {
     const client = {
       query: mock.fn(async (sql) => {

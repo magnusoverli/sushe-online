@@ -8,6 +8,10 @@ const {
   createHistoricalImportCanonicalResolver,
   reconcileNewCanonicalAlbums,
 } = require('./historical-list-import-canonical');
+const {
+  createImportOne,
+  commitSequentially,
+} = require('./historical-list-import-commit');
 const MAX_IMPORTS = 25;
 class HistoricalImportError extends Error {
   constructor(status, message, details = {}) {
@@ -17,7 +21,6 @@ class HistoricalImportError extends Error {
     this.details = details;
   }
 }
-
 function hashImports(imports) {
   const stable = imports.map((entry) => ({
     targetUserId: entry.targetUserId,
@@ -80,75 +83,13 @@ function markBatchDuplicates(imports) {
     }
   }
 }
-function createImportOne({ listService, invalidateListCaches, logger }) {
-  return async (entry, adminUser, previewHash) => {
-    try {
-      const created = await listService.createList(entry.targetUserId, {
-        name: entry.listName,
-        year: entry.year,
-        albums: entry.albums,
-      });
-      invalidateListCaches(entry.targetUserId, null, { groups: true });
-      logger.info('Admin imported historical list', {
-        adminUserId: adminUser?._id,
-        targetUserId: entry.targetUserId,
-        listId: created.listId,
-        listName: entry.listName,
-        year: entry.year,
-        albumCount: entry.albumCount,
-        previewHash,
-      });
-      return {
-        clientId: entry.clientId,
-        status: 'imported',
-        listId: created.listId,
-      };
-    } catch (error) {
-      logger.error('Historical list import failed', {
-        adminUserId: adminUser?._id,
-        targetUserId: entry.targetUserId,
-        listName: entry.listName,
-        year: entry.year,
-        error: error.message,
-      });
-      return {
-        clientId: entry.clientId,
-        status: 'failed',
-        error: error.userFacingMessage || error.message || 'Import failed',
-      };
-    }
-  };
-}
-async function commitSequentially({
-  rawImports,
-  users,
-  normalizeImport,
-  importOne,
-  adminUser,
-  previewHash,
-}) {
-  const results = [];
-  for (const rawEntry of rawImports) {
-    // Resolve after each committed list so later files reuse canonical albums
-    // created earlier in this same batch.
-    const entry = await normalizeImport(rawEntry, users);
-    if (entry.errors.length > 0) {
-      results.push({
-        clientId: entry.clientId,
-        status: 'failed',
-        error: entry.errors.join('; '),
-      });
-      continue;
-    }
-    results.push(await importOne(entry, adminUser, previewHash));
-  }
-  return results;
-}
 function createHistoricalListImportService(deps = {}) {
   const db = ensureDb(deps.db, 'historical-list-import-service');
   const listService = deps.listService;
   const logger = deps.logger || require('../utils/logger');
   const invalidateListCaches = deps.invalidateListCaches || (() => {});
+  const triggerAggregateListRecompute =
+    deps.triggerAggregateListRecompute || (() => {});
 
   if (!listService || typeof listService.createList !== 'function') {
     throw new Error('historical-list-import-service requires deps.listService');
@@ -156,6 +97,7 @@ function createHistoricalListImportService(deps = {}) {
   const importOne = createImportOne({
     listService,
     invalidateListCaches,
+    triggerAggregateListRecompute,
     logger,
   });
   const { applyCanonicalMatches } = createHistoricalImportCanonicalResolver(db);

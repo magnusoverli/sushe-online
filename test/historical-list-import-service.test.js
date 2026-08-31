@@ -40,6 +40,7 @@ function createHarness(options = {}) {
     createList: mock.fn(async () => ({ listId: 'created-list' })),
   };
   const invalidateListCaches = mock.fn();
+  const triggerAggregateListRecompute = mock.fn();
   const raw = mock.fn(async (sql) => {
     if (sql.includes('FROM users')) {
       return {
@@ -68,6 +69,7 @@ function createHarness(options = {}) {
     db: { raw },
     listService,
     invalidateListCaches,
+    triggerAggregateListRecompute,
     logger: createMockLogger(),
   });
   const body = {
@@ -80,7 +82,14 @@ function createHarness(options = {}) {
       },
     ],
   };
-  return { service, body, raw, listService, invalidateListCaches };
+  return {
+    service,
+    body,
+    raw,
+    listService,
+    invalidateListCaches,
+    triggerAggregateListRecompute,
+  };
 }
 
 describe('historical-list-import-service', () => {
@@ -92,7 +101,16 @@ describe('historical-list-import-service', () => {
     assert.strictEqual(preview.canCommit, true);
     assert.strictEqual(preview.imports[0].existingCanonicalCount, 1);
     assert.strictEqual(preview.imports[0].newCanonicalCount, 1);
-    assert.match(preview.imports[0].warnings[0], /source album\/list item ID/);
+    assert.ok(
+      preview.imports[0].warnings.some((warning) =>
+        /source album\/list item ID/.test(warning)
+      )
+    );
+    assert.ok(
+      preview.imports[0].warnings.some((warning) =>
+        warning.includes('missing release date')
+      )
+    );
     assert.ok(
       preview.imports[0].warnings.some((warning) =>
         warning.includes('will be enriched')
@@ -107,8 +125,13 @@ describe('historical-list-import-service', () => {
   });
 
   it('commits through listService with target canonical IDs and local fields only', async () => {
-    const { service, body, listService, invalidateListCaches } =
-      createHarness();
+    const {
+      service,
+      body,
+      listService,
+      invalidateListCaches,
+      triggerAggregateListRecompute,
+    } = createHarness();
     const preview = await service.preview(body);
 
     const result = await service.commit(
@@ -122,6 +145,7 @@ describe('historical-list-import-service', () => {
       listService.createList.mock.calls[0].arguments;
     assert.strictEqual(targetUserId, 'user-1');
     assert.strictEqual(createPayload.year, 2018);
+    assert.strictEqual(createPayload.isMain, true);
     assert.deepStrictEqual(createPayload.albums[0], {
       artist: 'Existing Artist',
       album: 'Existing Album',
@@ -137,12 +161,42 @@ describe('historical-list-import-service', () => {
     assert.strictEqual(createPayload.albums[1].album_id, undefined);
     assert.strictEqual(createPayload.albums[1].primary_track, 'Opening Track');
     assert.strictEqual(createPayload.albums[1].is_disqualified, true);
+    assert.strictEqual(createPayload.albums[1].release_date, '2018');
     assert.strictEqual(createPayload.albums[1].genre_2, 'Experimental');
     assert.strictEqual(
       createPayload.albums[1].disqualification_reason,
       'Released before the eligible year'
     );
     assert.strictEqual(invalidateListCaches.mock.calls.length, 1);
+    assert.strictEqual(
+      triggerAggregateListRecompute.mock.calls[0].arguments[0],
+      2018
+    );
+  });
+
+  it('preserves an explicit release year instead of the list-year default', async () => {
+    const { service, body, listService } = createHarness({ albumRows: [] });
+    body.imports[0].payload.albums = [
+      {
+        position: 1,
+        artist: 'Prior Year Artist',
+        album: 'Prior Year Album',
+        release_date: '2017',
+        is_disqualified: true,
+        disqualification_reason: 'Released before the eligible year',
+      },
+    ];
+    const preview = await service.preview(body);
+
+    await service.commit(
+      { ...body, previewHash: preview.previewHash },
+      { _id: 'admin-1' }
+    );
+
+    assert.strictEqual(
+      listService.createList.mock.calls[0].arguments[1].albums[0].release_date,
+      '2017'
+    );
   });
 
   it('blocks files without a year or with duplicate ranked albums', async () => {

@@ -53,8 +53,10 @@ import {
   renderDesktopCoverCell,
   renderDesktopGenreCell,
   renderDisqualificationBadge,
+  getDisplayCoverSources,
   renderMobileArtistRow,
   renderMobileCoverSection,
+  renderMobileDisqualificationSlot,
   renderMobileGenreRow,
   renderMobileTaxonomyBadge,
   renderMobilePlaycountRow,
@@ -873,7 +875,7 @@ export function createAlbumDisplay(deps = {}) {
              four gaps visually equal. The live-update twin (mobile branch of the
              release-date className reset, ~line 1310) MUST keep these same
              classes or the asymmetry returns on the next in-place update. -->
-        ${renderMobileCoverSection(data, index, { includeAvailabilityLinks: true })}
+        ${renderMobileCoverSection(data, index, { includeAvailabilityLinks: true, coverExtraHtml: renderMobileDisqualificationSlot(data) })}
         
         <!-- INFO SECTION -->
         <div class="flex-1 min-w-0 pl-0.5 pr-1 flex flex-col justify-evenly h-[130px] leading-[18px]">
@@ -1258,9 +1260,10 @@ export function createAlbumDisplay(deps = {}) {
         // Get cached element references (creates cache if missing)
         const cache = getCachedElements(row, isMobile);
 
+        const displayCover = getDisplayCoverSources(data);
         const coverImage = updateCoverInPlace(cache.coverMedia, {
-          src: data.coverThumbUrl,
-          fullSrc: data.coverImageUrl,
+          src: displayCover.src,
+          fullSrc: displayCover.fullSrc,
           alt: data.albumName,
         });
         if (!isMobile) attachDesktopCoverPreview(coverImage);

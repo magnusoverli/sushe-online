@@ -32,6 +32,7 @@ function createListWriteOperations(deps = {}) {
     findListByIdOrThrow,
     findOrCreateYearGroup,
     findOrCreateUncategorizedGroup,
+    acquireYearLocks,
     validateMainListNotLocked,
     logger,
   } = deps;
@@ -51,13 +52,16 @@ function createListWriteOperations(deps = {}) {
   if (typeof findOrCreateUncategorizedGroup !== 'function') {
     throw new Error('findOrCreateUncategorizedGroup is required');
   }
+  if (typeof acquireYearLocks !== 'function') {
+    throw new Error('acquireYearLocks is required');
+  }
   if (typeof validateMainListNotLocked !== 'function') {
     throw new Error('validateMainListNotLocked is required');
   }
 
   async function createList(
     userId,
-    { name, groupId: requestGroupId, year, albums: rawAlbums }
+    { name, groupId: requestGroupId, year, albums: rawAlbums, isMain = false }
   ) {
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       throw new TransactionAbort(400, { error: 'List name is required' });
@@ -92,6 +96,21 @@ function createListWriteOperations(deps = {}) {
         groupIdInternal = await findOrCreateUncategorizedGroup(client, userId);
       }
 
+      if (isMain && !resultYear) {
+        throw new TransactionAbort(400, {
+          error: 'A main list must be assigned to a year',
+        });
+      }
+      if (isMain) {
+        await acquireYearLocks(client, [resultYear]);
+        await validateMainListNotLocked(
+          client,
+          resultYear,
+          true,
+          'create main list'
+        );
+      }
+
       await managementOperations.checkDuplicateListName(
         client,
         userId,
@@ -108,15 +127,29 @@ function createListWriteOperations(deps = {}) {
         [groupIdInternal]
       );
 
+      if (isMain) {
+        await client.query(
+          `UPDATE lists SET is_main = FALSE, updated_at = NOW()
+           WHERE user_id = $1
+             AND id IN (
+               SELECT l.id FROM lists l
+               LEFT JOIN list_groups g ON l.group_id = g.id
+               WHERE l.user_id = $1 AND (l.year = $2 OR g.year = $2)
+             )`,
+          [userId, resultYear]
+        );
+      }
+
       await client.query(
         `INSERT INTO lists (_id, user_id, name, year, group_id, is_main, sort_order, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, FALSE, $6, $7, $8)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           listId,
           userId,
           trimmedName,
           resultYear,
           groupIdInternal,
+          isMain,
           maxListOrder.rows[0].next_order,
           timestamp,
           timestamp,
@@ -140,6 +173,7 @@ function createListWriteOperations(deps = {}) {
       listId,
       listName: trimmedName,
       year: listYear,
+      isMain,
       albumCount: rawAlbums?.length || 0,
     });
 
@@ -151,6 +185,7 @@ function createListWriteOperations(deps = {}) {
       listId,
       name: trimmedName,
       year: listYear,
+      isMain,
       groupId: requestGroupId || null,
       count: rawAlbums?.length || 0,
       sourceObservationResults: observationResult.sourceObservationResults,

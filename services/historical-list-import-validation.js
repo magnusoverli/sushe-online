@@ -111,7 +111,7 @@ function normalizeAlbum(item, index, state) {
   };
 }
 
-function normalizeAlbums(rawAlbums, errors, warnings) {
+function normalizeAlbums(rawAlbums, errors, warnings, defaultReleaseYear) {
   if (!Array.isArray(rawAlbums)) {
     errors.push('albums must be an array');
     return [];
@@ -132,6 +132,18 @@ function normalizeAlbums(rawAlbums, errors, warnings) {
       errors.push('Album positions must be consecutive and start at 1');
     }
   });
+
+  if (Number.isInteger(defaultReleaseYear)) {
+    const inferred = albums.filter((item) => !item.release_date);
+    inferred.forEach((item) => {
+      item.release_date = String(defaultReleaseYear);
+    });
+    if (inferred.length > 0) {
+      warnings.push(
+        `${inferred.length} missing release date${inferred.length === 1 ? '' : 's'} will use list year ${defaultReleaseYear} when canonical metadata is absent`
+      );
+    }
+  }
 
   const ignoredSourceIds = albums.filter((item) => item.hasSourceId).length;
   if (ignoredSourceIds > 0) {
@@ -205,7 +217,12 @@ function validateImportEntry(entry, users) {
     errors.push(yearResult.error);
   }
 
-  const albums = normalizeAlbums(envelope.albums, errors, warnings);
+  const albums = normalizeAlbums(
+    envelope.albums,
+    errors,
+    warnings,
+    yearResult.valid ? yearResult.value : null
+  );
   return {
     clientId,
     fileName,

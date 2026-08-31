@@ -9,6 +9,7 @@ module.exports = (app, deps) => {
     db,
     listService,
     invalidateListCaches,
+    triggerAggregateListRecompute,
     ensureAuthAPI,
     ensureAdmin,
     csrfProtection,
@@ -18,6 +19,7 @@ module.exports = (app, deps) => {
     db,
     listService,
     invalidateListCaches,
+    triggerAggregateListRecompute,
     logger,
   });
   const middleware = [ensureAuthAPI, ensureAdmin];

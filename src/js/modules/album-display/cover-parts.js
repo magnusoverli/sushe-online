@@ -4,6 +4,7 @@ import { renderAvailabilityBadges } from './availability-badges.js';
 
 const INITIAL_DESKTOP_COVER_COUNT = 16;
 const INITIAL_MOBILE_COVER_COUNT = 8;
+export const DISQUALIFIED_COVER_SRC = '/shame-go-t.gif';
 
 const COVER_PLACEHOLDER_SVG = `<div class="album-cover-placeholder rounded-sm bg-gray-800 shadow-lg">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
@@ -26,6 +27,18 @@ function getCoverSrc(data) {
   }
 
   return data.coverThumbUrl || null;
+}
+
+export function getDisplayCoverSources(data) {
+  if (data.isDisqualified) {
+    return {
+      src: DISQUALIFIED_COVER_SRC,
+      fullSrc: DISQUALIFIED_COVER_SRC,
+    };
+  }
+
+  const src = getCoverSrc(data);
+  return { src, fullSrc: data.coverImageUrl || src };
 }
 
 export function renderCoverImage({ src, fullSrc, alt, className, loadMode }) {
@@ -67,19 +80,21 @@ export function renderCoverImage({ src, fullSrc, alt, className, loadMode }) {
 }
 
 export function renderDesktopCoverCell(data, index, options = {}) {
-  const coverImageSrc = getCoverSrc(data);
-  const loadMode = options.loadMode || getCoverLoadMode(index, false);
+  const cover = getDisplayCoverSources(data);
+  const loadMode = data.isDisqualified
+    ? 'initial'
+    : options.loadMode || getCoverLoadMode(index, false);
   const placeholderHtml = options.placeholderHtml || COVER_PLACEHOLDER_SVG;
   const badgesHtml = options.badgesHtml || '';
 
   return `<div class="${options.cellClass || 'cover-cell flex items-center'}">
     <div class="album-cover-container">
       ${
-        coverImageSrc
+        cover.src
           ? `<div class="w-full h-full" data-cover-media data-cover-image-class="${escapeHtml(options.imageClassName || 'album-cover rounded-sm shadow-lg')}">${renderCoverImage(
               {
-                src: coverImageSrc,
-                fullSrc: data.coverImageUrl || coverImageSrc,
+                src: cover.src,
+                fullSrc: cover.fullSrc,
                 alt: data.albumName,
                 className:
                   options.imageClassName || 'album-cover rounded-sm shadow-lg',
@@ -94,8 +109,10 @@ export function renderDesktopCoverCell(data, index, options = {}) {
 }
 
 export function renderMobileCoverSection(data, index, options = {}) {
-  const coverSrc = getCoverSrc(data);
-  const loadMode = options.loadMode || getCoverLoadMode(index, true);
+  const cover = getDisplayCoverSources(data);
+  const loadMode = data.isDisqualified
+    ? 'initial'
+    : options.loadMode || getCoverLoadMode(index, true);
   const coverExtraHtml = options.coverExtraHtml || '';
   const placeholderHtml =
     options.placeholderHtml ||
@@ -115,14 +132,14 @@ export function renderMobileCoverSection(data, index, options = {}) {
     : dateHtml;
 
   return `<div class="${options.wrapperClass || 'h-full shrink-0 w-[88px] flex flex-col items-center justify-evenly pl-0.5'}">
-    <div class="${options.coverClass || `mobile-album-cover relative w-20 h-20 flex items-center justify-center ${!coverSrc ? 'bg-gray-800 rounded-lg' : ''}`}">
+    <div class="${options.coverClass || `mobile-album-cover relative w-20 h-20 flex items-center justify-center ${!cover.src ? 'bg-gray-800 rounded-lg' : ''}`}">
       ${coverExtraHtml}
       ${
-        coverSrc
+        cover.src
           ? `<div class="w-full h-full" data-cover-media data-cover-image-class="${escapeHtml(options.imageClassName || 'w-full h-full rounded-lg object-cover')}">${renderCoverImage(
               {
-                src: coverSrc,
-                fullSrc: data.coverImageUrl || coverSrc,
+                src: cover.src,
+                fullSrc: cover.fullSrc,
                 alt: data.albumName,
                 className:
                   options.imageClassName ||

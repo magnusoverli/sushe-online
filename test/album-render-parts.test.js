@@ -110,6 +110,37 @@ describe('album render parts', () => {
     assert.match(html, /No genre/);
   });
 
+  it('uses the shame GIF only as the display cover for disqualified albums', async () => {
+    const {
+      getDisplayCoverSources,
+      renderDesktopCoverCell,
+      renderMobileCoverSection,
+    } = await import('../src/js/modules/album-display/render-parts.js');
+    const album = {
+      albumName: 'Disqualified Album',
+      coverThumbUrl: '/api/albums/album-1/cover?size=thumb',
+      coverImageUrl: '/api/albums/album-1/cover',
+      isDisqualified: true,
+      availability: [],
+    };
+
+    const desktop = renderDesktopCoverCell(album, 30);
+    const mobile = renderMobileCoverSection(album, 30);
+
+    assert.match(desktop, /src="\/shame-go-t\.gif"/);
+    assert.match(desktop, /data-full-src="\/shame-go-t\.gif"/);
+    assert.doesNotMatch(desktop, /api\/albums\/album-1\/cover/);
+    assert.match(mobile, /src="\/shame-go-t\.gif"/);
+    assert.strictEqual(getDisplayCoverSources(album).src, '/shame-go-t.gif');
+    assert.deepStrictEqual(
+      getDisplayCoverSources({ ...album, isDisqualified: false }),
+      {
+        src: '/api/albums/album-1/cover?size=thumb',
+        fullSrc: '/api/albums/album-1/cover',
+      }
+    );
+  });
+
   it('integrates taxonomy triggers and provider links without inline details', async () => {
     const {
       renderDesktopAlbumCell,
@@ -155,9 +186,12 @@ describe('album render parts', () => {
     assert.doesNotMatch(mobileBadge, /<dt>|album-taxonomy-panel/);
   });
 
-  it('renders escaped disqualification labels for desktop and mobile', async () => {
-    const { renderDesktopAlbumCell, renderMobileTitleRow } =
-      await import('../src/js/modules/album-display/render-parts.js');
+  it('renders compact disqualification labels away from title badges', async () => {
+    const {
+      renderDesktopAlbumCell,
+      renderMobileDisqualificationSlot,
+      renderMobileTitleRow,
+    } = await import('../src/js/modules/album-display/render-parts.js');
     const album = {
       albumName: 'Excluded Album',
       availability: [],
@@ -169,14 +203,21 @@ describe('album render parts', () => {
       includePlaycount: false,
       includeAvailability: false,
     });
-    const mobile = renderMobileTitleRow(album);
+    const mobileTitle = renderMobileTitleRow(album);
+    const mobile = renderMobileDisqualificationSlot(album);
 
     assert.match(desktop, /Disqualified/);
     assert.match(desktop, /&lt;review &amp; reject&gt;/);
     assert.match(desktop, /aria-label="Disqualified from ranking:/);
+    assert.match(desktop, /album-meta-row[\s\S]*data-disqualification-slot/);
+    assert.doesNotMatch(
+      desktop,
+      /<span>Disqualified<\/span><span[^>]*>.*review/
+    );
     assert.doesNotMatch(desktop, /<review & reject>/);
+    assert.doesNotMatch(mobileTitle, /data-disqualification-slot/);
     assert.match(mobile, /Disqualified/);
+    assert.match(mobile, /mobile-disqualification-slot/);
     assert.match(mobile, /title="Disqualified from ranking:/);
-    assert.doesNotMatch(mobile, /font-normal text-red-300 truncate/);
   });
 });

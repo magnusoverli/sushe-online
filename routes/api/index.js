@@ -299,6 +299,7 @@ module.exports = (app, deps) => {
     groupService,
     listService,
     invalidateListCaches: helpers.invalidateListCaches,
+    triggerAggregateListRecompute: helpers.triggerAggregateListRecompute,
     recommendationService,
   };
 };

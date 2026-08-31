@@ -2762,6 +2762,19 @@
   min-height: 18px;
 }
 
+.mobile-disqualification-slot {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  z-index: 10;
+  display: inline-flex;
+  max-width: calc(100% - 8px);
+}
+
+.mobile-disqualification-slot:empty {
+  display: none;
+}
+
 .summary-badge {
   position: static;
   width: 18px;
