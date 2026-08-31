@@ -46,11 +46,13 @@ import {
   renderTaxonomyTrigger,
 } from './album-display/taxonomy-details.js';
 import { createModal, destroyModalForElement } from './modal-factory.js';
+import { canManageListItemDisqualification } from './list-item-disqualification.js';
 import {
   renderDesktopAlbumCell,
   renderDesktopArtistCell,
   renderDesktopCoverCell,
   renderDesktopGenreCell,
+  renderDisqualificationBadge,
   renderMobileArtistRow,
   renderMobileCoverSection,
   renderMobileGenreRow,
@@ -223,6 +225,8 @@ export function createAlbumDisplay(deps = {}) {
     const summarySource = album.summary_source || album.summarySource || '';
     const recommendedBy = album.recommended_by || null;
     const recommendedAt = album.recommended_at || null;
+    const isDisqualified = album.is_disqualified === true;
+    const disqualificationReason = album.disqualification_reason || '';
 
     const primaryTrack = album.primary_track || '';
 
@@ -278,6 +282,8 @@ export function createAlbumDisplay(deps = {}) {
       summarySource,
       recommendedBy,
       recommendedAt,
+      isDisqualified,
+      disqualificationReason,
     };
   }
 
@@ -353,6 +359,14 @@ export function createAlbumDisplay(deps = {}) {
     if (badgeHtml) {
       cache.badgeContainer.insertAdjacentHTML('beforeend', badgeHtml);
       initSummaryTooltips(cache.badgeContainer);
+    }
+  }
+
+  function reconcileDisqualificationBadge(cache, data, isMobile) {
+    if (!cache.disqualificationSlot) return;
+    const html = renderDisqualificationBadge(data, { mobile: isMobile });
+    if (cache.disqualificationSlot.innerHTML !== html) {
+      cache.disqualificationSlot.innerHTML = html;
     }
   }
 
@@ -713,6 +727,26 @@ export function createAlbumDisplay(deps = {}) {
         reidentifyOption.classList.toggle('hidden', !isAdmin);
       if (regenerateSummaryOption)
         regenerateSummaryOption.classList.toggle('hidden', !isAdmin);
+
+      const listMeta = getListMetadata(getCurrentList());
+      const disqualificationOption = document.getElementById(
+        'disqualifyAlbumOption'
+      );
+      const disqualificationText = document.getElementById(
+        'disqualifyAlbumText'
+      );
+      const canManageDisqualification =
+        !isViewingRecommendations?.() &&
+        canManageListItemDisqualification(listMeta, window.currentUser || {});
+      disqualificationOption?.classList.toggle(
+        'hidden',
+        !canManageDisqualification
+      );
+      if (disqualificationText) {
+        disqualificationText.textContent = album.is_disqualified
+          ? 'Restore ranking eligibility'
+          : 'Disqualify from ranking';
+      }
 
       // Show/hide recommend option based on whether current list is year-based
       // and not currently viewing recommendations
@@ -1231,6 +1265,7 @@ export function createAlbumDisplay(deps = {}) {
         });
         if (!isMobile) attachDesktopCoverPreview(coverImage);
         reconcileAlbumBadges(row, cache, data, isMobile);
+        reconcileDisqualificationBadge(cache, data, isMobile);
 
         // Update position number (only for main lists where position is not null)
         if (cache.position && data.position !== null) {

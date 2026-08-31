@@ -159,6 +159,8 @@ export function createAlbumDataProcessor(deps = {}) {
 
     const recommendedBy = album.recommended_by || null;
     const recommendedAt = album.recommended_at || null;
+    const isDisqualified = album.is_disqualified === true;
+    const disqualificationReason = album.disqualification_reason || '';
 
     const availability = Array.isArray(album.availability)
       ? album.availability
@@ -215,6 +217,8 @@ export function createAlbumDataProcessor(deps = {}) {
       availability,
       recommendedBy,
       recommendedAt,
+      isDisqualified,
+      disqualificationReason,
     };
   }
 

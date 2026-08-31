@@ -36,6 +36,8 @@ function mapSingleListRowToItem(row) {
     rymCanonicalUrl: asNullable(row.rym_canonical_url),
     primaryTrack: row.primary_track || null,
     secondaryTrack: row.secondary_track || null,
+    isDisqualified: row.is_disqualified === true,
+    disqualificationReason: asNullable(row.disqualification_reason),
     comments: row.comments || '',
     comments2: row.comments_2 || '',
     tracks: row.tracks || null,

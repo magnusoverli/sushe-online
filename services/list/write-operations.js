@@ -5,6 +5,21 @@ const {
 } = require('../../db/advisory-locks');
 const { prepareExplicitCovers } = require('./cover-preparation');
 
+function preserveDisqualificationState(albums, existingItems) {
+  const byItemId = new Map(existingItems.map((item) => [item._id, item]));
+  const byAlbumId = new Map(existingItems.map((item) => [item.album_id, item]));
+  return albums.map((album) => {
+    if (Object.hasOwn(album, 'is_disqualified')) return album;
+    const existing = byItemId.get(album._id) || byAlbumId.get(album.album_id);
+    if (!existing) return album;
+    return {
+      ...album,
+      is_disqualified: existing.is_disqualified === true,
+      disqualification_reason: existing.disqualification_reason || null,
+    };
+  });
+}
+
 // eslint-disable-next-line max-lines-per-function -- Coordinates list creation and item mutations around one transactional dependency set
 function createListWriteOperations(deps = {}) {
   const {
@@ -165,6 +180,17 @@ function createListWriteOperations(deps = {}) {
         'modify list items'
       );
 
+      const existingResult = await client.query(
+        `SELECT _id, album_id, is_disqualified, disqualification_reason
+         FROM list_items
+         WHERE list_id = $1`,
+        [list._id]
+      );
+      const albums = preserveDisqualificationState(
+        rawAlbums,
+        existingResult.rows
+      );
+
       await client.query('DELETE FROM list_items WHERE list_id = $1', [
         list._id,
       ]);
@@ -172,7 +198,7 @@ function createListWriteOperations(deps = {}) {
       observationResult = await itemOperations.insertListItems(
         client,
         list._id,
-        rawAlbums,
+        albums,
         timestamp
       );
 
@@ -313,4 +339,5 @@ function createListWriteOperations(deps = {}) {
 
 module.exports = {
   createListWriteOperations,
+  preserveDisqualificationState,
 };

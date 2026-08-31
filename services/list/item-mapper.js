@@ -49,6 +49,8 @@ function mapListRowToItem(row, recommendationMap = null) {
     track_pick: row.primary_track || '',
     primary_track: row.primary_track || null,
     secondary_track: row.secondary_track || null,
+    is_disqualified: row.is_disqualified === true,
+    disqualification_reason: asNullable(row.disqualification_reason),
     comments: row.comments || '',
     comments_2: row.comments_2 || '',
     tracks: row.tracks || null,
@@ -88,7 +90,8 @@ function serializeCoverImage(coverImage) {
     : coverImage;
 }
 
-function getExportPoints(index, getPointsForPosition) {
+function getExportPoints(index, getPointsForPosition, isDisqualified = false) {
+  if (isDisqualified) return 0;
   return getPointsForPosition ? getPointsForPosition(index + 1) : null;
 }
 
@@ -118,6 +121,8 @@ function mapAlbumDataItemToResponse(item, options = {}) {
     track_pick: item.primaryTrack || '',
     primary_track: item.primaryTrack || null,
     secondary_track: item.secondaryTrack || null,
+    is_disqualified: item.isDisqualified === true,
+    disqualification_reason: asNullable(item.disqualificationReason),
     comments: item.comments,
     comments_2: item.comments2 || '',
     tracks: item.tracks,
@@ -142,7 +147,7 @@ function mapAlbumDataItemToResponse(item, options = {}) {
       ...base,
       cover_image: serializeCoverImage(item.coverImage),
       rank: index + 1,
-      points: getExportPoints(index, getPointsForPosition),
+      points: getExportPoints(index, getPointsForPosition, item.isDisqualified),
     };
   }
 

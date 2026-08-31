@@ -85,6 +85,7 @@ function buildAlbumMap(items, userMap) {
   const albumMap = new Map();
 
   for (const item of items) {
+    if (item.is_disqualified === true) continue;
     // Always use normalized key to prevent duplicates from different sources
     // This ensures "Radiohead - OK Computer" is grouped together regardless of
     // whether it came from MusicBrainz, Spotify, Tidal, or manual entry
@@ -315,6 +316,7 @@ async function fetchListItemsForLists(db, listIds) {
       li.list_id,
       li.position,
       li.album_id,
+      li.is_disqualified,
       a.artist,
       a.album,
       a.release_date,
@@ -327,7 +329,9 @@ async function fetchListItemsForLists(db, listIds) {
     FROM list_items li
     JOIN lists l ON li.list_id = l._id
     LEFT JOIN albums a ON li.album_id = a.album_id
-    WHERE li.list_id = ANY($1) AND li.position <= 40
+    WHERE li.list_id = ANY($1)
+      AND li.position <= 40
+      AND COALESCE(li.is_disqualified, FALSE) = FALSE
     ORDER BY li.position
   `,
     [listIds]

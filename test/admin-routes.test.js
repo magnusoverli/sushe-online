@@ -340,6 +340,7 @@ function createTestApp(options = {}) {
   // Create deps object
   const deps = {
     ensureAuth,
+    ensureAuthAPI: ensureAuth,
     ensureAdmin,
     userService: mockUserService,
     users: mockUsers,
@@ -380,6 +381,8 @@ function createTestApp(options = {}) {
     },
     pool: mockPool,
     duplicateService: mockDuplicateService,
+    listService: { createList: mock.fn(async () => ({ listId: 'list-1' })) },
+    invalidateListCaches: mock.fn(),
     invalidateUserCache: mockInvalidateUserCache,
   };
 

@@ -482,6 +482,22 @@ export function createSettingsAdminRenderer() {
           </div>
         </div>
 
+        <!-- Historical List Import -->
+        <div class="settings-group">
+          <h3 class="settings-group-title">Historical List Import</h3>
+          <div class="settings-group-content">
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Import Historical Lists</label>
+                <p class="settings-description">Preview and import list JSON files for registered users</p>
+              </div>
+              <div class="settings-row-control">
+                <button id="historicalListImportBtn" class="settings-button">Choose Files</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- User Management -->
         ${
           users.length > 0

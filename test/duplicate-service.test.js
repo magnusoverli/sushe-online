@@ -420,6 +420,8 @@ describe('duplicate-service', () => {
                 comments_2: null,
                 primary_track: 'Track A',
                 secondary_track: null,
+                is_disqualified: false,
+                disqualification_reason: null,
                 created_at: new Date('2020-01-01T00:00:00Z'),
               },
               {
@@ -431,6 +433,8 @@ describe('duplicate-service', () => {
                 comments_2: 'Extra',
                 primary_track: 'Track B',
                 secondary_track: null,
+                is_disqualified: true,
+                disqualification_reason: 'Released too early',
                 created_at: new Date('2020-01-02T00:00:00Z'),
               },
             ],
@@ -439,7 +443,7 @@ describe('duplicate-service', () => {
 
         if (
           sql.includes('UPDATE list_items') &&
-          sql.includes('WHERE _id = $7')
+          sql.includes('WHERE _id = $9')
         ) {
           updates.push({ sql, params });
           return { rows: [], rowCount: 1 };

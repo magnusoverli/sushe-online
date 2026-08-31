@@ -87,6 +87,8 @@ describe('album-data module', () => {
           comments_2: 'Comment 2',
           primary_track: 'The Leper Affinity',
           secondary_track: 'Bleak',
+          is_disqualified: true,
+          disqualification_reason: 'Duplicate release',
           tracks: [
             { name: 'Prologue', length: 272 },
             { name: 'The Leper Affinity', length: 182000 },
@@ -110,6 +112,8 @@ describe('album-data module', () => {
       assert.strictEqual(data.playcountDisplay.html, '1.3K');
       assert.strictEqual(data.yearMismatch, true);
       assert.match(data.yearMismatchTooltip, /doesn't match list year/);
+      assert.strictEqual(data.isDisqualified, true);
+      assert.strictEqual(data.disqualificationReason, 'Duplicate release');
     });
 
     it('handles missing values and non-main lists with safe defaults', () => {
@@ -132,6 +136,8 @@ describe('album-data module', () => {
       assert.strictEqual(data.playcountDisplay.isEmpty, true);
       assert.strictEqual(data.yearMismatch, false);
       assert.strictEqual(data.yearMismatchTooltip, '');
+      assert.strictEqual(data.isDisqualified, false);
+      assert.strictEqual(data.disqualificationReason, '');
     });
   });
 });

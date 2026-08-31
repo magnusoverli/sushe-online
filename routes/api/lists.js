@@ -373,6 +373,38 @@ module.exports = (app, deps) => {
     }, 'updating comment 2')
   );
 
+  app.patch(
+    '/api/lists/:id/items/:itemId/disqualification',
+    ensureAuthAPI,
+    asyncHandler(async (req, res) => {
+      const { id, itemId } = req.params;
+      const { disqualified, reason = null } = req.body;
+      const result = await listService.updateItemDisqualification(
+        id,
+        req.user._id,
+        itemId,
+        disqualified,
+        reason
+      );
+
+      invalidateListCaches(req.user._id, id);
+      if (result.list.year) {
+        triggerAggregateListRecompute(result.list.year);
+      }
+      const broadcast = req.app.locals.broadcast;
+      if (broadcast) {
+        broadcast.listUpdated(req.user._id, result.list._id, {
+          excludeSocketId: req.headers['x-socket-id'],
+        });
+      }
+      res.json({
+        success: true,
+        is_disqualified: result.is_disqualified,
+        disqualification_reason: result.disqualification_reason,
+      });
+    }, 'updating ranking eligibility')
+  );
+
   // Incremental list update (add/remove/update items without full rebuild)
   app.patch(
     '/api/lists/:id/items',

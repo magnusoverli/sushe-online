@@ -18,6 +18,7 @@ import { groupListsByYear } from '../utils/list-grouping.js';
 import { createContextSubmenuController } from '../utils/context-submenu-controller.js';
 import { hideAllContextMenus as hideAllMenusBase } from './context-menu.js';
 import { createAlbumSummaryRegenerate } from './album-summary-regenerate.js';
+import { updateListItemDisqualification } from './list-item-disqualification.js';
 
 /**
  * Create the album context menu module
@@ -47,6 +48,9 @@ export function createAlbumContextMenu(deps = {}) {
     getMobileUIModule,
     getLockedYears = async () => [],
     isYearLockedSync = () => false,
+    setListData,
+    displayAlbums,
+    showDisqualificationReasonModal,
     createContextSubmenuController:
       makeContextSubmenuController = createContextSubmenuController,
   } = deps;
@@ -227,6 +231,43 @@ export function createAlbumContextMenu(deps = {}) {
     if (!contextMenu || !removeOption || !editOption) return;
 
     initializeAlbumSubmenuController();
+
+    const disqualificationOption = document.getElementById(
+      'disqualifyAlbumOption'
+    );
+    if (disqualificationOption) {
+      disqualificationOption.onclick = async () => {
+        contextMenu.classList.add('hidden');
+        const albums = getListData(getCurrentListId());
+        const context = getContextAlbumSelection();
+        const verified = verifyAlbumAtIndex(
+          albums,
+          context.index,
+          context.albumId,
+          findAlbumByIdentity
+        );
+        clearContextAlbumSelection();
+        if (!verified?.album) {
+          showToast(
+            'Album not found - it may have been moved or removed',
+            'error'
+          );
+          return;
+        }
+
+        await updateListItemDisqualification(
+          {
+            apiCall,
+            getListData,
+            setListData,
+            displayAlbums,
+            showDisqualificationReasonModal,
+            showToast,
+          },
+          { listId: getCurrentListId(), album: verified.album }
+        );
+      };
+    }
 
     // Handle edit option click
     editOption.onclick = () => {

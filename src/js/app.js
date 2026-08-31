@@ -16,6 +16,7 @@ import {
   showReasoningModal,
   hideReasoningModal,
   showViewReasoningModal,
+  showDisqualificationReasonModal,
 } from './modules/modals.js';
 import { positionContextMenu } from './modules/context-menu.js';
 import { escapeHtml, escapeHtmlAttr } from './modules/html-utils.js';
@@ -410,6 +411,9 @@ const getAlbumContextMenuModule = createLazyModule(() =>
     getLockedYears,
     isYearLockedSync,
     createContextSubmenuController,
+    setListData,
+    displayAlbums,
+    showDisqualificationReasonModal,
   })
 );
 // Wrapper functions for album context menu module
@@ -585,6 +589,7 @@ const getMobileUIModule = createLazyModule(() =>
     getCurrentUser: () => window.currentUser || {},
     getLockedYears,
     isYearLockedSync,
+    showDisqualificationReasonModal,
   })
 );
 

@@ -428,9 +428,17 @@ export async function downloadListAsPDF(listId) {
 
     for (let i = 0; i < albums.length; i++) {
       const album = albums[i];
+      const disqualificationLabel = getDisqualificationPDFLabel(album);
+      const disqualificationLines = disqualificationLabel
+        ? doc.splitTextToSize(disqualificationLabel, textWidth)
+        : [];
+      const itemRowHeight = Math.max(
+        rowHeight,
+        18 + disqualificationLines.length * 4
+      );
 
       // Check if we need a new page
-      if (yPos + rowHeight > pageHeight - margin) {
+      if (yPos + itemRowHeight > pageHeight - margin) {
         doc.addPage();
         yPos = margin;
       }
@@ -505,8 +513,16 @@ export async function downloadListAsPDF(listId) {
         textY += 4;
       }
 
+      if (disqualificationLabel) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(185, 28, 28);
+        doc.text(disqualificationLines, textStartX, textY);
+        doc.setTextColor(0);
+      }
+
       // Move to next row
-      yPos += rowHeight;
+      yPos += itemRowHeight;
 
       // Add subtle separator line (except for last item)
       if (i < albums.length - 1) {
@@ -548,6 +564,96 @@ function escapeCSVField(value) {
   return str;
 }
 
+export function getExportPoints(album) {
+  return album.is_disqualified === true ? 0 : (album.points ?? '');
+}
+
+export function getDisqualificationPDFLabel(album) {
+  if (album.is_disqualified !== true) return '';
+  return album.disqualification_reason
+    ? `DISQUALIFIED - ${album.disqualification_reason}`
+    : 'DISQUALIFIED';
+}
+
+export function buildListCSV(albums) {
+  const headers = [
+    'rank',
+    'artist',
+    'album',
+    'album_id',
+    'release_date',
+    'country',
+    'genre_1',
+    'genre_2',
+    'primary_track',
+    'secondary_track',
+    'comments',
+    'comments_2',
+    'tracks',
+    'points',
+    'is_disqualified',
+    'disqualification_reason',
+    'cover_image_format',
+    'rym_numeric_id',
+    'rym_canonical_url',
+    'availability_links_json',
+    'rym_primary_genres_json',
+    'rym_secondary_genres_json',
+    'rym_descriptors_json',
+    'rym_languages_json',
+    'rym_scenes_json',
+    'rym_movements_json',
+    'rym_taxonomy_provenance_json',
+    'manual_genre_overrides_json',
+    'taxonomy_updated_at',
+  ];
+  const rows = [headers.map(escapeCSVField).join(',')];
+
+  for (const album of albums) {
+    let tracksValue = '';
+    if (album.tracks) {
+      tracksValue = Array.isArray(album.tracks)
+        ? JSON.stringify(album.tracks)
+        : String(album.tracks);
+    }
+    const taxonomyFields = getTaxonomyCSVFields(album);
+    const row = [
+      album.rank ?? '',
+      album.artist || '',
+      album.album || '',
+      album.album_id || '',
+      album.release_date || '',
+      album.country || '',
+      album.genre_1 || '',
+      album.genre_2 || '',
+      album.primary_track || '',
+      album.secondary_track || '',
+      album.comments || '',
+      album.comments_2 || '',
+      tracksValue,
+      getExportPoints(album),
+      album.is_disqualified === true,
+      album.disqualification_reason ?? '',
+      album.cover_image_format || '',
+      album.rym_numeric_id || '',
+      album.rym_canonical_url || '',
+      JSON.stringify(album.availability_links || []),
+      taxonomyFields.rym_primary_genres_json,
+      taxonomyFields.rym_secondary_genres_json,
+      taxonomyFields.rym_descriptors_json,
+      taxonomyFields.rym_languages_json,
+      taxonomyFields.rym_scenes_json,
+      taxonomyFields.rym_movements_json,
+      taxonomyFields.rym_taxonomy_provenance_json,
+      taxonomyFields.manual_genre_overrides_json,
+      taxonomyFields.taxonomy_updated_at,
+    ];
+    rows.push(row.map(escapeCSVField).join(','));
+  }
+
+  return rows.join('\n');
+}
+
 /**
  * Download list as CSV file with all album data
  * @param {string} listId - ID of the list to export
@@ -567,88 +673,7 @@ export async function downloadListAsCSV(listId) {
     // Export data structure: { _metadata: {...}, albums: [...] }
     const albums = exportData.albums || [];
 
-    // CSV column headers
-    const headers = [
-      'rank',
-      'artist',
-      'album',
-      'album_id',
-      'release_date',
-      'country',
-      'genre_1',
-      'genre_2',
-      'primary_track',
-      'secondary_track',
-      'comments',
-      'comments_2',
-      'tracks',
-      'points',
-      'cover_image_format',
-      'rym_numeric_id',
-      'rym_canonical_url',
-      'availability_links_json',
-      'rym_primary_genres_json',
-      'rym_secondary_genres_json',
-      'rym_descriptors_json',
-      'rym_languages_json',
-      'rym_scenes_json',
-      'rym_movements_json',
-      'rym_taxonomy_provenance_json',
-      'manual_genre_overrides_json',
-      'taxonomy_updated_at',
-    ];
-
-    // Build CSV rows
-    const rows = [headers.map(escapeCSVField).join(',')];
-
-    for (const album of albums) {
-      // Serialize tracks array as JSON string if it exists
-      let tracksValue = '';
-      if (album.tracks) {
-        if (Array.isArray(album.tracks)) {
-          tracksValue = JSON.stringify(album.tracks);
-        } else {
-          tracksValue = String(album.tracks);
-        }
-      }
-
-      const taxonomyFields = getTaxonomyCSVFields(album);
-
-      const row = [
-        album.rank || '',
-        album.artist || '',
-        album.album || '',
-        album.album_id || '',
-        album.release_date || '',
-        album.country || '',
-        album.genre_1 || '',
-        album.genre_2 || '',
-        album.primary_track || '',
-        album.secondary_track || '',
-        album.comments || '',
-        album.comments_2 || '',
-        tracksValue,
-        album.points || '',
-        album.cover_image_format || '',
-        album.rym_numeric_id || '',
-        album.rym_canonical_url || '',
-        JSON.stringify(album.availability_links || []),
-        taxonomyFields.rym_primary_genres_json,
-        taxonomyFields.rym_secondary_genres_json,
-        taxonomyFields.rym_descriptors_json,
-        taxonomyFields.rym_languages_json,
-        taxonomyFields.rym_scenes_json,
-        taxonomyFields.rym_movements_json,
-        taxonomyFields.rym_taxonomy_provenance_json,
-        taxonomyFields.manual_genre_overrides_json,
-        taxonomyFields.taxonomy_updated_at,
-      ];
-
-      rows.push(row.map(escapeCSVField).join(','));
-    }
-
-    // Create CSV content
-    const csvContent = rows.join('\n');
+    const csvContent = buildListCSV(albums);
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     downloadBlob(blob, `${listName}.csv`);
 

@@ -154,4 +154,29 @@ describe('album render parts', () => {
     assert.match(mobileBadge, /taxonomy-trigger-mobile/);
     assert.doesNotMatch(mobileBadge, /<dt>|album-taxonomy-panel/);
   });
+
+  it('renders escaped disqualification labels for desktop and mobile', async () => {
+    const { renderDesktopAlbumCell, renderMobileTitleRow } =
+      await import('../src/js/modules/album-display/render-parts.js');
+    const album = {
+      albumName: 'Excluded Album',
+      availability: [],
+      isDisqualified: true,
+      disqualificationReason: '<review & reject>',
+    };
+
+    const desktop = renderDesktopAlbumCell(album, {
+      includePlaycount: false,
+      includeAvailability: false,
+    });
+    const mobile = renderMobileTitleRow(album);
+
+    assert.match(desktop, /Disqualified/);
+    assert.match(desktop, /&lt;review &amp; reject&gt;/);
+    assert.match(desktop, /aria-label="Disqualified from ranking:/);
+    assert.doesNotMatch(desktop, /<review & reject>/);
+    assert.match(mobile, /Disqualified/);
+    assert.match(mobile, /title="Disqualified from ranking:/);
+    assert.doesNotMatch(mobile, /font-normal text-red-300 truncate/);
+  });
 });

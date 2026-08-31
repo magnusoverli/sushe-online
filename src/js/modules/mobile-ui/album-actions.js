@@ -1,6 +1,10 @@
 import { buildAlbumActionMenuHtml } from './album-actions-menu-template.js';
 import { createMobileListSelectionActions } from './album-actions-list-selection.js';
 import { createAlbumSummaryRegenerate } from '../album-summary-regenerate.js';
+import {
+  canManageListItemDisqualification,
+  updateListItemDisqualification,
+} from '../list-item-disqualification.js';
 export function createMobileAlbumActions(deps = {}) {
   const {
     createActionSheet,
@@ -21,6 +25,10 @@ export function createMobileAlbumActions(deps = {}) {
     onEditAlbum,
     onPlayAlbum,
     onRemoveAlbum,
+    setListData,
+    displayAlbums,
+    showDisqualificationReasonModal,
+    getCurrentUser = () => window.currentUser || {},
   } = deps;
 
   // Shared with the desktop context menu, so the flow and its modal exist once.
@@ -94,6 +102,9 @@ export function createMobileAlbumActions(deps = {}) {
       ? isViewingRecommendations()
       : false;
     const showRecommend = isYearBased && !viewingRecs;
+    const showDisqualificationAction =
+      !viewingRecs &&
+      canManageListItemDisqualification(listMeta, getCurrentUser());
 
     const { sheet: actionSheet, close } = createActionSheet({
       contentHtml: buildAlbumActionMenuHtml({
@@ -104,6 +115,7 @@ export function createMobileAlbumActions(deps = {}) {
         showRecommend,
         hasLastfm,
         isAdmin: window.currentUser?.role === 'admin',
+        showDisqualificationAction,
       }),
     });
 
@@ -118,6 +130,9 @@ export function createMobileAlbumActions(deps = {}) {
     const deviceList = actionSheet.querySelector('[data-device-list]');
     const moveBtn = actionSheet.querySelector('[data-action="move"]');
     const removeBtn = actionSheet.querySelector('[data-action="remove"]');
+    const disqualificationBtn = actionSheet.querySelector(
+      '[data-action="disqualification"]'
+    );
 
     let isPlayExpanded = false;
     let devicesLoaded = false;
@@ -255,6 +270,25 @@ export function createMobileAlbumActions(deps = {}) {
         if (year && recommendAlbum) {
           recommendAlbum(album, year);
         }
+      });
+    }
+
+    if (disqualificationBtn) {
+      disqualificationBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+        await updateListItemDisqualification(
+          {
+            apiCall,
+            getListData,
+            setListData,
+            displayAlbums,
+            showDisqualificationReasonModal,
+            showToast,
+          },
+          { listId: currentList, album }
+        );
       });
     }
 

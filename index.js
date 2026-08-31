@@ -316,8 +316,8 @@ const deps = {
 // Application routes
 authRoutes(app, deps);
 oauthRoutes(app, deps);
-adminRoutes(app, deps);
 const apiServices = apiRoutes(app, deps);
+adminRoutes(app, { ...deps, ...apiServices });
 preferencesRoutes(app, deps);
 const { aggregateList } = aggregateListRoutes(app, deps);
 

@@ -91,6 +91,7 @@ function createSpotifyComponents(deps) {
     ${menuItem({ id: 'playAlbumOption', icon: 'fa-play', label: 'Play Album', hasSubmenu: true })}
     ${menuItem({ id: 'moveAlbumOption', icon: 'fa-arrow-right', label: 'Move to List', hasSubmenu: true })}
     ${menuItem({ id: 'copyAlbumOption', icon: 'fa-copy', label: 'Copy to List', hasSubmenu: true })}
+    ${menuItem({ id: 'disqualifyAlbumOption', icon: 'fa-ban', label: '<span id="disqualifyAlbumText">Disqualify from ranking</span>', hoverColor: 'hover:text-red-400', hidden: true, iconColor: 'text-red-400' })}
     ${menuItem({ id: 'recommendAlbumOption', icon: 'fa-thumbs-up', label: 'Recommend', hoverColor: 'hover:text-blue-400', hidden: true, iconColor: 'text-blue-400' })}
     <!-- Last.fm Discovery Options (shown only when connected) -->
     <div id="lastfmMenuDivider" class="hidden context-menu-divider"></div>
@@ -669,6 +670,26 @@ function createSpotifyComponents(deps) {
     `,
     });
 
+  const disqualificationReasonModalComponent = () =>
+    modalShell({
+      id: 'disqualificationReasonModal',
+      title: 'Disqualify from ranking',
+      body: `
+        <p id="disqualificationAlbumName" class="text-sm text-gray-300 mb-4"></p>
+        <label class="block text-gray-400 text-sm font-medium mb-2" for="disqualificationReason">
+          Reason <span class="text-gray-500 font-normal">(optional)</span>
+        </label>
+        <textarea id="disqualificationReason" rows="3" maxlength="1000"
+          class="form-input-modal rounded-lg resize-none"
+          placeholder="Why should this item be excluded?"></textarea>
+        <p class="text-gray-500 text-xs mt-2">The reason will be visible with the list item.</p>
+      `,
+      footer: `
+        <button id="disqualificationReasonCancelBtn" class="btn-modal-cancel">Cancel</button>
+        <button id="disqualificationReasonSubmitBtn" class="btn-danger">Disqualify</button>
+      `,
+    });
+
   // Component: View Reasoning Modal (read-only, small)
   const viewReasoningModalComponent = () => `
   <div id="viewReasoningModal" class="hidden fixed inset-0 modal-overlay z-50 flex items-center justify-center p-4 safe-area-modal">
@@ -883,6 +904,7 @@ function createSpotifyComponents(deps) {
     ${serviceSelectModalComponent()}
     ${confirmationModalComponent()}
     ${recommendReasoningModalComponent()}
+    ${disqualificationReasonModalComponent()}
     ${viewReasoningModalComponent()}
     ${listSetupWizardComponent()}
     ${releaseSelectionModalComponent()}

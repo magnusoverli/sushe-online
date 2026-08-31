@@ -185,6 +185,47 @@ describe('aggregate-list', () => {
       assert.strictEqual(albumB.voterCount, 1);
     });
 
+    it('should exclude disqualified albums without shifting later positions', async () => {
+      const pool = createMockPool([
+        {
+          rows: [{ list_id: 'list1', user_id: 'user1', username: 'ronny' }],
+        },
+        {
+          rows: [
+            {
+              list_id: 'list1',
+              user_id: 'user1',
+              position: 21,
+              album_id: 'disqualified',
+              artist: 'Blacklisted',
+              album: 'No One Deserves to Be Here More Than Me',
+              is_disqualified: true,
+            },
+            {
+              list_id: 'list1',
+              user_id: 'user1',
+              position: 22,
+              album_id: 'eligible',
+              artist: 'Red Sparowes',
+              album: 'The Fear Is Excruciating, but Therein Lies the Answer',
+              is_disqualified: false,
+            },
+          ],
+        },
+      ]);
+      const aggregateList = createAggregateList({
+        db: pool,
+        logger: createMockLogger(),
+      });
+
+      const result = await aggregateList.aggregateForYear(2010);
+
+      assert.strictEqual(result.data.albums.length, 1);
+      assert.strictEqual(result.data.albums[0].albumId, 'eligible');
+      assert.strictEqual(result.data.albums[0].totalPoints, 19);
+      assert.match(pool.query.mock.calls[1].arguments[0], /is_disqualified/);
+    });
+
     it('should use highestPosition as tiebreaker when points are equal', async () => {
       const pool = createMockPool([
         {

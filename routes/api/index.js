@@ -298,6 +298,7 @@ module.exports = (app, deps) => {
     coverCache,
     groupService,
     listService,
+    invalidateListCaches: helpers.invalidateListCaches,
     recommendationService,
   };
 };

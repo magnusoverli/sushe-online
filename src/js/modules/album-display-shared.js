@@ -58,7 +58,7 @@ export function albumMutableFingerprint(album) {
   const inlineCoverFingerprint = album.cover_image
     ? `${album.cover_image_format || ''}:${album.cover_image.length}`
     : '';
-  return `${album._id || ''}|${album.artist || ''}|${album.album || ''}|${album.release_date || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}|${album.primary_track || ''}|${album.secondary_track || ''}|${availabilityFingerprint(album.availability)}|${jsonFingerprint(album.availability_links)}|${jsonFingerprint(album.taxonomy)}|${album.cover_thumb_url || ''}|${album.cover_image_url || ''}|${album.cover_thumbnail_updated_at || ''}|${album.cover_image_updated_at || ''}|${inlineCoverFingerprint}|${album.summary || ''}|${album.summary_source || album.summarySource || ''}|${album.recommended_by || ''}|${album.recommended_at || ''}|${tracksFingerprint(album.tracks)}`;
+  return `${album._id || ''}|${album.artist || ''}|${album.album || ''}|${album.release_date || ''}|${album.country || ''}|${album.genre_1 || ''}|${album.genre_2 || ''}|${album.comments || ''}|${album.comments_2 || ''}|${album.primary_track || ''}|${album.secondary_track || ''}|${availabilityFingerprint(album.availability)}|${jsonFingerprint(album.availability_links)}|${jsonFingerprint(album.taxonomy)}|${album.cover_thumb_url || ''}|${album.cover_image_url || ''}|${album.cover_thumbnail_updated_at || ''}|${album.cover_image_updated_at || ''}|${inlineCoverFingerprint}|${album.summary || ''}|${album.summary_source || album.summarySource || ''}|${album.recommended_by || ''}|${album.recommended_at || ''}|${album.is_disqualified === true ? '1' : '0'}|${album.disqualification_reason || ''}|${tracksFingerprint(album.tracks)}`;
 }
 
 function renderCoverPlaceholder(parent) {
@@ -235,6 +235,7 @@ export function createAlbumDisplayShared(deps = {}) {
       trackCell: row.querySelector('.track-cell'),
       coverMedia: row.querySelector('[data-cover-media]'),
       badgeContainer: row.querySelector('[data-desktop-album-badges]'),
+      disqualificationSlot: row.querySelector('[data-disqualification-slot]'),
       availabilityHtml: cacheAvailabilityHtml(row),
     };
 
@@ -286,6 +287,7 @@ export function createAlbumDisplayShared(deps = {}) {
       ),
       coverMedia: card.querySelector('[data-cover-media]'),
       badgeContainer: card.querySelector('[data-mobile-album-badges]'),
+      disqualificationSlot: card.querySelector('[data-disqualification-slot]'),
       availabilityHtml: cacheAvailabilityHtml(card),
     };
 

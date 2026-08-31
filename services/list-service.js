@@ -9,6 +9,7 @@ const {
 } = require('../db/repositories/list-items-repository');
 const { buildPartialUpdate } = require('../utils/query-builder');
 const { createItemComments } = require('./list/item-comments');
+const { createItemDisqualification } = require('./list/item-disqualification');
 const { createListFetchers } = require('./list/fetchers');
 const { createListItemOperations } = require('./list/item-operations');
 const { createListPresence } = require('./list/presence');
@@ -153,6 +154,11 @@ function createListService(deps = {}) {
     TransactionAbort,
     findListByIdOrThrow,
     logger: log,
+  });
+  const { updateItemDisqualification } = createItemDisqualification({
+    db,
+    TransactionAbort,
+    findListByIdOrThrow,
   });
 
   const itemOperations = createListItemOperations({
@@ -391,6 +397,7 @@ function createListService(deps = {}) {
     reorderItems,
     updateItemComment,
     updateItemComment2,
+    updateItemDisqualification,
     incrementalUpdate,
     toggleMainStatus,
     deleteList,

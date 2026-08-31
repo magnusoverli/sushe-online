@@ -46,6 +46,8 @@ describe('settings admin renderer', () => {
     assert.match(html, /id="configureTelegramBtn"/);
     assert.match(html, /Database Management/);
     assert.match(html, /Catalog Cleanup/);
+    assert.match(html, /Historical List Import/);
+    assert.match(html, /id="historicalListImportBtn"/);
   });
 
   it('renders aggregate and user controls from populated admin data', () => {
@@ -98,6 +100,9 @@ describe('settings admin renderer', () => {
     assert.match(html, /aggregate-revoke-confirm/);
     assert.match(html, /Manage Contributors/);
     assert.match(html, /User Management/);
+    assert.ok(
+      html.indexOf('Historical List Import') < html.indexOf('User Management')
+    );
     assert.match(html, /\(You\)/);
     assert.match(html, /Grant Admin/);
     assert.match(html, /Connected to Test Group/);

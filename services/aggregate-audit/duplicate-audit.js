@@ -69,6 +69,7 @@ async function findDuplicates(ctx, year) {
     WHERE l.year = $1
       AND l.is_main = TRUE
       AND li.position <= 40
+      AND COALESCE(li.is_disqualified, FALSE) = FALSE
       AND l.user_id IN (SELECT user_id FROM aggregate_list_contributors WHERE year = $1)
     ORDER BY li.position
   `,
@@ -155,6 +156,7 @@ async function diagnoseNormalization(ctx, year) {
     WHERE l.year = $1
       AND l.is_main = TRUE
       AND li.position <= 40
+      AND COALESCE(li.is_disqualified, FALSE) = FALSE
       AND l.user_id IN (SELECT user_id FROM aggregate_list_contributors WHERE year = $1)
     ORDER BY li.position
   `,

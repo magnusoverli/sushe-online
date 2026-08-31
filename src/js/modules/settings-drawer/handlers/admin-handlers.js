@@ -36,6 +36,7 @@ export function createSettingsAdminHandlers(deps = {}) {
     handleRevokeAdmin,
     handleViewUserLists,
     handleDeleteUser,
+    handleHistoricalListImport,
     handleConfirmAggregateReveal,
     handleRevokeAggregateConfirm,
     handleResetAggregateReveal,
@@ -115,6 +116,16 @@ export function createSettingsAdminHandlers(deps = {}) {
   }
 
   function attachAdminHandlers() {
+    const historicalListImportBtn = doc.getElementById(
+      'historicalListImportBtn'
+    );
+    if (historicalListImportBtn) {
+      historicalListImportBtn.addEventListener(
+        'click',
+        handleHistoricalListImport
+      );
+    }
+
     doc.querySelectorAll('.admin-event-action').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const eventId = btn.dataset.eventId;

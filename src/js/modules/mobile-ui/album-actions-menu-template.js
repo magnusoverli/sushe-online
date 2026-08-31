@@ -8,6 +8,7 @@ export function buildAlbumActionMenuHtml({
   showRecommend,
   hasLastfm,
   isAdmin = false,
+  showDisqualificationAction = false,
 }) {
   return `
 
@@ -67,6 +68,17 @@ export function buildAlbumActionMenuHtml({
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
             <i class="fas fa-copy mr-3 text-gray-400"></i>Copy to List...
           </button>
+
+          ${
+            showDisqualificationAction
+              ? `
+          <button data-action="disqualification"
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
+            <i class="fas fa-ban mr-3 text-red-400"></i>${album.is_disqualified ? 'Restore ranking eligibility' : 'Disqualify from ranking'}
+          </button>
+          `
+              : ''
+          }
 
           ${
             showRecommend

@@ -28,6 +28,7 @@ import { createSettingsAlbumSummaryActions } from './settings-drawer/handlers/al
 import { createSettingsAlbumImageActions } from './settings-drawer/handlers/album-image-actions.js';
 import { createSettingsAvailabilityActions } from './settings-drawer/handlers/availability-actions.js';
 import { createSettingsAdminUserActions } from './settings-drawer/handlers/admin-user-actions.js';
+import { createSettingsAdminHistoricalImportActions } from './settings-drawer/handlers/admin-historical-import-actions.js';
 import { createSettingsAggregateActions } from './settings-drawer/handlers/aggregate-actions.js';
 import { createSettingsContributorManagerActions } from './settings-drawer/handlers/contributor-manager-actions.js';
 import { createSettingsRecommenderManagerActions } from './settings-drawer/handlers/recommender-manager-actions.js';
@@ -220,6 +221,14 @@ export function createSettingsDrawer(deps = {}) {
     createSettingsModalBase,
   });
 
+  const { handleHistoricalListImport } =
+    createSettingsAdminHistoricalImportActions({
+      apiCall,
+      showToast,
+      categoryData,
+      createSettingsModalBase,
+    });
+
   let albumSummaryPollInterval = null;
 
   const {
@@ -328,6 +337,7 @@ export function createSettingsDrawer(deps = {}) {
     handleRevokeAdmin,
     handleViewUserLists,
     handleDeleteUser,
+    handleHistoricalListImport,
     handleConfirmAggregateReveal,
     handleRevokeAggregateConfirm,
     handleResetAggregateReveal,

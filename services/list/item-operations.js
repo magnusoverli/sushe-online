@@ -11,6 +11,8 @@ function buildBatchInsertPayload(itemsToInsert, listId, timestamp) {
     comments2: [],
     primaryTracks: [],
     secondaryTracks: [],
+    disqualified: [],
+    disqualificationReasons: [],
     createdAts: [],
     updatedAts: [],
   };
@@ -24,6 +26,13 @@ function buildBatchInsertPayload(itemsToInsert, listId, timestamp) {
     payload.comments2.push(item.comments_2);
     payload.primaryTracks.push(item.primary_track);
     payload.secondaryTracks.push(item.secondary_track);
+    payload.disqualified.push(item.is_disqualified === true);
+    payload.disqualificationReasons.push(
+      item.is_disqualified === true &&
+        typeof item.disqualification_reason === 'string'
+        ? item.disqualification_reason.trim().slice(0, 1000) || null
+        : null
+    );
     payload.createdAts.push(timestamp);
     payload.updatedAts.push(timestamp);
   }
@@ -81,6 +90,11 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
       comments_2: album.comments_2 || null,
       primary_track: album.primary_track || null,
       secondary_track: album.secondary_track || null,
+      is_disqualified: album.is_disqualified === true,
+      disqualification_reason:
+        album.is_disqualified === true
+          ? album.disqualification_reason || null
+          : null,
     };
   });
 
@@ -88,12 +102,14 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
   await client.query(
     `INSERT INTO list_items (
       _id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track,
+      is_disqualified, disqualification_reason,
       created_at, updated_at
     )
     SELECT * FROM UNNEST(
       $1::text[], $2::text[], $3::text[], $4::int[], $5::text[], $6::text[],
-      $7::text[], $8::text[], $9::timestamptz[], $10::timestamptz[]
-    ) AS t(_id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track, created_at, updated_at)`,
+      $7::text[], $8::text[], $9::boolean[], $10::text[], $11::timestamptz[], $12::timestamptz[]
+    ) AS t(_id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track,
+      is_disqualified, disqualification_reason, created_at, updated_at)`,
     [
       payload.itemIds,
       payload.listIds,
@@ -103,6 +119,8 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
       payload.comments2,
       payload.primaryTracks,
       payload.secondaryTracks,
+      payload.disqualified,
+      payload.disqualificationReasons,
       payload.createdAts,
       payload.updatedAts,
     ]
@@ -185,6 +203,11 @@ function mapItemToInsertRecord(
       comments_2: item.comments_2 || null,
       primary_track: item.primary_track || null,
       secondary_track: item.secondary_track || null,
+      is_disqualified: item.is_disqualified === true,
+      disqualification_reason:
+        item.is_disqualified === true
+          ? item.disqualification_reason || null
+          : null,
     },
     addedItem: {
       album_id: upsertResult.albumId,
@@ -273,12 +296,14 @@ async function processAdditions(ctx, client, list, added, timestamp) {
   await client.query(
     `INSERT INTO list_items (
       _id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track,
+      is_disqualified, disqualification_reason,
       created_at, updated_at
     )
     SELECT * FROM UNNEST(
       $1::text[], $2::text[], $3::text[], $4::int[], $5::text[], $6::text[],
-      $7::text[], $8::text[], $9::timestamptz[], $10::timestamptz[]
-    ) AS t(_id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track, created_at, updated_at)`,
+      $7::text[], $8::text[], $9::boolean[], $10::text[], $11::timestamptz[], $12::timestamptz[]
+    ) AS t(_id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track,
+      is_disqualified, disqualification_reason, created_at, updated_at)`,
     [
       payload.itemIds,
       payload.listIds,
@@ -288,6 +313,8 @@ async function processAdditions(ctx, client, list, added, timestamp) {
       payload.comments2,
       payload.primaryTracks,
       payload.secondaryTracks,
+      payload.disqualified,
+      payload.disqualificationReasons,
       payload.createdAts,
       payload.updatedAts,
     ]

@@ -135,6 +135,21 @@ describe('album-display incremental update detector', () => {
     assert.strictEqual(result, 'FIELD_UPDATE');
   });
 
+  it('detects disqualification changes as an incremental field update', () => {
+    const oldAlbums = [makeAlbum(1)];
+    const newAlbums = [
+      makeAlbum(1, {
+        is_disqualified: true,
+        disqualification_reason: 'Outside the eligibility window',
+      }),
+    ];
+
+    assert.strictEqual(
+      detectUpdateType(oldAlbums.map(albumMutableFingerprint), newAlbums),
+      'FIELD_UPDATE'
+    );
+  });
+
   it('returns SINGLE_ADD for one album appended to a 50-album list', () => {
     const oldAlbums = Array.from({ length: 50 }, (_, i) => makeAlbum(i));
     const oldFingerprints = oldAlbums.map(albumMutableFingerprint);

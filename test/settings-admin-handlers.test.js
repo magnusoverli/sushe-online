@@ -51,6 +51,7 @@ function buildDeps(overrides = {}) {
     toasts: [],
     api: [],
     adminEventAction: [],
+    historicalImports: 0,
     summaryLoads: 0,
     imageLoads: 0,
     intervals: [],
@@ -88,6 +89,9 @@ function buildDeps(overrides = {}) {
     handleRevokeAdmin: async () => {},
     handleViewUserLists: async () => {},
     handleDeleteUser: async () => {},
+    handleHistoricalListImport: () => {
+      calls.historicalImports += 1;
+    },
     handleConfirmAggregateReveal: async () => {},
     handleRevokeAggregateConfirm: async () => {},
     handleResetAggregateReveal: async () => {},
@@ -162,6 +166,20 @@ describe('settings admin handlers', () => {
     assert.deepStrictEqual(calls.adminEventAction, [
       ['e1', 'approve', { id: 'e1', type: 'review' }],
     ]);
+  });
+
+  it('wires the historical import button', () => {
+    const historicalListImportBtn = createElement();
+    const doc = createDocument({
+      ids: { historicalListImportBtn },
+    });
+    const { deps, calls } = buildDeps({ doc });
+
+    const { attachAdminHandlers } = createSettingsAdminHandlers(deps);
+    attachAdminHandlers();
+    historicalListImportBtn.listeners.click();
+
+    assert.strictEqual(calls.historicalImports, 1);
   });
 
   it('does not call regenerate API when confirmation is rejected', async () => {

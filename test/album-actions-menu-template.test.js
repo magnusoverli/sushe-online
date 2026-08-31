@@ -76,3 +76,28 @@ describe('buildAlbumActionMenuHtml — admin gating', () => {
     assert.ok(!html.includes('regenerate-summary'));
   });
 });
+
+describe('buildAlbumActionMenuHtml — disqualification action', () => {
+  it('uses the current eligibility state and owner gate', async () => {
+    const { buildAlbumActionMenuHtml } =
+      await import('../src/js/modules/mobile-ui/album-actions-menu-template.js');
+    const args = {
+      album: { album: 'Album', artist: 'Artist', is_disqualified: true },
+      hasAnyService: false,
+      showSpotifyConnect: false,
+      primaryServiceName: '',
+      showRecommend: false,
+      hasLastfm: false,
+    };
+
+    const ownerHtml = buildAlbumActionMenuHtml({
+      ...args,
+      showDisqualificationAction: true,
+    });
+    const readOnlyHtml = buildAlbumActionMenuHtml(args);
+
+    assert.match(ownerHtml, /data-action="disqualification"/);
+    assert.match(ownerHtml, /Restore ranking eligibility/);
+    assert.doesNotMatch(readOnlyHtml, /data-action="disqualification"/);
+  });
+});

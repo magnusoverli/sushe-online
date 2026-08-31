@@ -250,6 +250,42 @@ export function hideReasoningModal() {
   }
 }
 
+export function showDisqualificationReasonModal(album) {
+  const modal = document.getElementById('disqualificationReasonModal');
+  const albumName = document.getElementById('disqualificationAlbumName');
+  const textarea = document.getElementById('disqualificationReason');
+  const submitBtn = document.getElementById('disqualificationReasonSubmitBtn');
+  const cancelBtn = document.getElementById('disqualificationReasonCancelBtn');
+
+  if (!modal || !textarea || !submitBtn || !cancelBtn) {
+    return Promise.resolve({ cancelled: true, reason: null });
+  }
+
+  albumName.textContent = `${album?.album || 'Unknown Album'} by ${album?.artist || 'Unknown Artist'}`;
+  textarea.value = album?.disqualification_reason || '';
+
+  return new Promise((resolve) => {
+    const modalController = createModal({
+      element: modal,
+      backdrop: modal,
+      closeButton: cancelBtn,
+      label: 'Disqualify album from ranking',
+      onClose: () => resolve({ cancelled: true, reason: null }),
+    });
+
+    modalController.addListener(submitBtn, 'click', () => {
+      resolve({
+        cancelled: false,
+        reason: textarea.value.trim() || null,
+      });
+      modalController.close();
+    });
+
+    modalController.open();
+    setTimeout(() => textarea.focus(), 100);
+  });
+}
+
 /**
  * Show a read-only modal displaying recommendation reasoning
  *

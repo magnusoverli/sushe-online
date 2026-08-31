@@ -14,6 +14,8 @@ const { ensureDb } = require('../postgres');
  * @property {string|null} album_id
  * @property {string|null} primary_track
  * @property {string|null} secondary_track
+ * @property {boolean} is_disqualified
+ * @property {string|null} disqualification_reason
  * @property {string|null} artist
  * @property {string|null} album
  * @property {string|null} release_date
@@ -43,6 +45,8 @@ const { ensureDb } = require('../postgres');
  * @property {string} genre2
  * @property {string|null} primaryTrack
  * @property {string|null} secondaryTrack
+ * @property {boolean} isDisqualified
+ * @property {string|null} disqualificationReason
  * @property {string} comments
  * @property {string} comments2
  * @property {Object[]|null} tracks
@@ -77,6 +81,8 @@ function mapAlbumDataRow(row) {
     genre2: row.genre_2 || '',
     primaryTrack: row.primary_track || null,
     secondaryTrack: row.secondary_track || null,
+    isDisqualified: row.is_disqualified === true,
+    disqualificationReason: row.disqualification_reason || null,
     comments: row.comments || '',
     comments2: row.comments_2 || '',
     tracks: row.tracks || null,
@@ -148,6 +154,8 @@ function createListItemsRepository(deps = {}) {
          li.album_id,
          li.primary_track,
          li.secondary_track,
+         li.is_disqualified,
+         li.disqualification_reason,
          a.artist,
          a.album,
          a.release_date,

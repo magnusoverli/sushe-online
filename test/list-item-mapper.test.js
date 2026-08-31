@@ -66,6 +66,8 @@ test('mapListRowToItem maps row fields and recommendation metadata', () => {
     track_pick: 'Track A',
     primary_track: 'Track A',
     secondary_track: 'Track B',
+    is_disqualified: false,
+    disqualification_reason: null,
     comments: 'Great',
     comments_2: 'Second',
     tracks: ['Track A', 'Track B'],
@@ -171,4 +173,27 @@ test('mapAlbumDataItemToResponse maps export payload with base64 image and point
   assert.strictEqual(result.track_pick, '');
   assert.strictEqual(result.primary_track, null);
   assert.strictEqual(result.secondary_track, null);
+});
+
+test('mapAlbumDataItemToResponse exports zero points for a disqualified item', () => {
+  const result = mapAlbumDataItemToResponse(
+    {
+      _id: 'item-dq',
+      artist: 'Blacklisted',
+      album: 'No one deserves to be here more than me',
+      albumId: 'album-dq',
+      isDisqualified: true,
+      disqualificationReason: 'Released in 2009',
+    },
+    {
+      isExport: true,
+      index: 20,
+      getPointsForPosition: () => 20,
+    }
+  );
+
+  assert.strictEqual(result.rank, 21);
+  assert.strictEqual(result.points, 0);
+  assert.strictEqual(result.is_disqualified, true);
+  assert.strictEqual(result.disqualification_reason, 'Released in 2009');
 });

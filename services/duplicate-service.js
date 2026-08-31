@@ -1170,7 +1170,8 @@ function createDuplicateService(deps = {}) {
   async function resolveListItemCollisions(client, keepAlbumId, deleteAlbumId) {
     const rowsResult = await client.query(
       `SELECT _id, list_id, album_id, position, comments, comments_2,
-              primary_track, secondary_track, created_at
+               primary_track, secondary_track, is_disqualified,
+               disqualification_reason, created_at
        FROM list_items
        WHERE album_id = $1 OR album_id = $2
        ORDER BY list_id, position ASC, created_at ASC`,
@@ -1213,6 +1214,12 @@ function createDuplicateService(deps = {}) {
       const mergedComments = mergeTextField(sortedRows, 'comments');
       const mergedComments2 = mergeTextField(sortedRows, 'comments_2');
       const mergedTracks = mergeTrackSelections(sortedRows);
+      const isDisqualified = sortedRows.some(
+        (row) => row.is_disqualified === true
+      );
+      const disqualificationReason = isDisqualified
+        ? mergeTextField(sortedRows, 'disqualification_reason')
+        : null;
 
       await client.query(
         `UPDATE list_items
@@ -1220,10 +1227,12 @@ function createDuplicateService(deps = {}) {
              position = $2,
              comments = $3,
              comments_2 = $4,
-             primary_track = $5,
-             secondary_track = $6,
-             updated_at = NOW()
-         WHERE _id = $7`,
+              primary_track = $5,
+              secondary_track = $6,
+              is_disqualified = $7,
+              disqualification_reason = $8,
+              updated_at = NOW()
+          WHERE _id = $9`,
         [
           keepAlbumId,
           mergedPosition,
@@ -1231,6 +1240,8 @@ function createDuplicateService(deps = {}) {
           mergedComments2,
           mergedTracks.primaryTrack,
           mergedTracks.secondaryTrack,
+          isDisqualified,
+          disqualificationReason,
           baseRow._id,
         ]
       );

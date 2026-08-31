@@ -69,6 +69,7 @@ export function buildListMetadataEntries(fetchedLists) {
   Object.keys(fetchedLists).forEach((listId) => {
     const meta = fetchedLists[listId];
     newLists[listId] = {
+      ...meta,
       _id: listId,
       name: meta.name || 'Unknown',
       year: meta.year || null,

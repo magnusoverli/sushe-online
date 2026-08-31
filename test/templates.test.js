@@ -833,6 +833,8 @@ describe('templates utilities', () => {
       const result = templates.spotifyTemplate(user);
 
       assert.ok(result.includes('id="removeAlbumOption"'));
+      assert.ok(result.includes('id="disqualifyAlbumOption"'));
+      assert.ok(result.includes('id="disqualificationReasonModal"'));
       assert.doesNotMatch(
         result,
         /id="removeAlbumOption"[\s\S]*?<\/button>\s*<\/button>/

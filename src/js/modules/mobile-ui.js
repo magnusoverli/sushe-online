@@ -96,6 +96,7 @@ export function createMobileUI(deps = {}) {
     openRenameCategoryModal,
     getCurrentUser = () => window.currentUser || {},
     attachEmojiAutocomplete = () => () => {},
+    showDisqualificationReasonModal,
   } = deps;
   const trackPickService = createTrackPickService({ apiCall });
   const findAlbumByIdentity = createAlbumIdentityFinder({
@@ -166,6 +167,10 @@ export function createMobileUI(deps = {}) {
     onEditAlbum: showMobileEditFormSafe,
     onPlayAlbum: playAlbumSafe,
     onRemoveAlbum: removeAlbumSafe,
+    setListData,
+    displayAlbums,
+    showDisqualificationReasonModal,
+    getCurrentUser,
   });
 
   const { showMobileListMenu, showMobileCategoryMenu } = createMobileListMenus({
