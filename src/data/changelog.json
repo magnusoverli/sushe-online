@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-08-31",
+    "category": "feature",
+    "description": "Added support for importing historical lists and disqualifications.",
+    "hash": "cdf5265c569793928090608123b7ed294f21a3f8",
+    "commitMessage": "Add historical list imports and disqualification"
+  },
+  {
+    "date": "2026-08-31",
     "category": "fix",
     "description": "Fixed Last.fm album play counts not syncing correctly.",
     "hash": "ca9f23bc2a42ef2957ecf32c039cb8f4fbcdf923",
