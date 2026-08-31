@@ -240,6 +240,39 @@ export function createSettingsAggregateActions(deps = {}) {
     }
   }
 
+  async function handleToggleUserListVisibility(year, isCurrentlyVisible) {
+    const revealed = !isCurrentlyVisible;
+    const action = revealed ? 'Reveal' : 'Hide';
+    const confirmed = await showConfirmation(
+      `${action} User Lists for ${year}`,
+      `${action} community user lists for ${year}?`,
+      'This only changes whether individual user lists can be browsed. It does not create or reveal an aggregate list.',
+      `${action} User Lists`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await apiCall(`/api/admin/user-list-visibility/${year}`, {
+        method: 'PUT',
+        body: JSON.stringify({ revealed }),
+      });
+      showToast(
+        `User lists for ${year} are now ${revealed ? 'visible' : 'hidden'}`,
+        'success'
+      );
+      categoryData.admin = null;
+      await loadCategoryData('admin');
+    } catch (error) {
+      console.error('Error updating user list visibility:', error);
+      const errorMsg =
+        error.data?.error ||
+        error.message ||
+        'Failed to update user list visibility';
+      showToast(errorMsg, 'error');
+    }
+  }
+
   async function updateSingleYearLockStatus(year, newLockStatus) {
     const lockButton = doc.querySelector(
       `.aggregate-toggle-lock[data-year="${year}"]`
@@ -626,6 +659,7 @@ export function createSettingsAggregateActions(deps = {}) {
     handleResetAggregateReveal,
     handleToggleYearLock,
     handleToggleRecommendationLock,
+    handleToggleUserListVisibility,
     handleRecomputeAggregateList,
     handleAuditAggregateList,
   };

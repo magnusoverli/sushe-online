@@ -88,8 +88,6 @@ function createHistoricalListImportService(deps = {}) {
   const listService = deps.listService;
   const logger = deps.logger || require('../utils/logger');
   const invalidateListCaches = deps.invalidateListCaches || (() => {});
-  const triggerAggregateListRecompute =
-    deps.triggerAggregateListRecompute || (() => {});
 
   if (!listService || typeof listService.createList !== 'function') {
     throw new Error('historical-list-import-service requires deps.listService');
@@ -97,7 +95,6 @@ function createHistoricalListImportService(deps = {}) {
   const importOne = createImportOne({
     listService,
     invalidateListCaches,
-    triggerAggregateListRecompute,
     logger,
   });
   const { applyCanonicalMatches } = createHistoricalImportCanonicalResolver(db);

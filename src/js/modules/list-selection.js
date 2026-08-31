@@ -43,6 +43,7 @@ export function createListSelection(deps = {}) {
     prefetchPlaycountsForRender,
     fetchAndDisplayPlaycounts,
     wasRecentLocalSave,
+    clearCommunitySelection,
     showToast,
   } = deps;
   const { preloadInitialCoverImages, preloadInitialPlaycounts } =
@@ -117,6 +118,7 @@ export function createListSelection(deps = {}) {
     try {
       const previousListId = getCurrentListId();
 
+      clearCommunitySelection?.();
       setCurrentListId(listId);
       setCurrentRecommendationsYear(null);
 

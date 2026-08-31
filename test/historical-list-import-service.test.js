@@ -40,7 +40,6 @@ function createHarness(options = {}) {
     createList: mock.fn(async () => ({ listId: 'created-list' })),
   };
   const invalidateListCaches = mock.fn();
-  const triggerAggregateListRecompute = mock.fn();
   const raw = mock.fn(async (sql) => {
     if (sql.includes('FROM users')) {
       return {
@@ -69,7 +68,6 @@ function createHarness(options = {}) {
     db: { raw },
     listService,
     invalidateListCaches,
-    triggerAggregateListRecompute,
     logger: createMockLogger(),
   });
   const body = {
@@ -88,7 +86,6 @@ function createHarness(options = {}) {
     raw,
     listService,
     invalidateListCaches,
-    triggerAggregateListRecompute,
   };
 }
 
@@ -124,14 +121,9 @@ describe('historical-list-import-service', () => {
     assert.match(preview.previewHash, /^[a-f0-9]{64}$/);
   });
 
-  it('commits through listService with target canonical IDs and local fields only', async () => {
-    const {
-      service,
-      body,
-      listService,
-      invalidateListCaches,
-      triggerAggregateListRecompute,
-    } = createHarness();
+  it('commits and invalidates caches without needing an aggregate trigger', async () => {
+    const { service, body, listService, invalidateListCaches } =
+      createHarness();
     const preview = await service.preview(body);
 
     const result = await service.commit(
@@ -168,10 +160,11 @@ describe('historical-list-import-service', () => {
       'Released before the eligible year'
     );
     assert.strictEqual(invalidateListCaches.mock.calls.length, 1);
-    assert.strictEqual(
-      triggerAggregateListRecompute.mock.calls[0].arguments[0],
-      2018
-    );
+    assert.deepStrictEqual(invalidateListCaches.mock.calls[0].arguments, [
+      'user-1',
+      null,
+      { groups: true },
+    ]);
   });
 
   it('preserves an explicit release year instead of the list-year default', async () => {

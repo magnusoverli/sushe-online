@@ -319,6 +319,42 @@ describe('settings aggregate actions', () => {
     assert.deepStrictEqual(managerCalls, [2023]);
   });
 
+  it('updates user-list visibility without creating an aggregate', async () => {
+    const confirmations = [];
+    const apiCalls = [];
+    const loads = [];
+    const categoryData = { admin: { aggregateLists: [{ year: 2025 }] } };
+    const actions = createSettingsAggregateActions({
+      showConfirmation: async (...args) => {
+        confirmations.push(args);
+        return true;
+      },
+      apiCall: async (...args) => {
+        apiCalls.push(args);
+        return { success: true };
+      },
+      showToast() {},
+      categoryData,
+      loadCategoryData: async (category) => loads.push(category),
+      doc: { querySelector: () => null },
+    });
+
+    await actions.handleToggleUserListVisibility(2025, false);
+
+    assert.match(
+      confirmations[0][2],
+      /does not create or reveal an aggregate/i
+    );
+    assert.deepStrictEqual(apiCalls, [
+      [
+        '/api/admin/user-list-visibility/2025',
+        { method: 'PUT', body: JSON.stringify({ revealed: true }) },
+      ],
+    ]);
+    assert.strictEqual(categoryData.admin, null);
+    assert.deepStrictEqual(loads, ['admin']);
+  });
+
   it('recomputes aggregate list and refreshes stats grid content', async () => {
     const toasts = [];
     const status = {

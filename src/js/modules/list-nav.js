@@ -9,6 +9,7 @@
 
 import { buildListMenuConfig } from './list-menu-shared.js';
 import { loadSortable } from './sortable-loader.js';
+import { createCommunityListNav } from './community-list-nav.js';
 
 /**
  * Factory function to create the list navigation module with injected dependencies
@@ -34,6 +35,8 @@ import { loadSortable } from './sortable-loader.js';
  * @param {Function} deps.showMobileCategoryMenu - Show mobile category menu action sheet
  * @param {Function} deps.selectRecommendations - Select recommendations for a year
  * @param {Function} deps.getCurrentRecommendationsYear - Get active recommendations year
+ * @param {Function} deps.selectCommunityList - Select a read-only community list
+ * @param {Function} deps.getActiveCommunityListId - Get the active community list ID
  * @returns {Object} List navigation module API
  */
 export function createListNav(deps = {}) {
@@ -58,7 +61,18 @@ export function createListNav(deps = {}) {
     showMobileCategoryMenu,
     selectRecommendations,
     getCurrentRecommendationsYear,
+    selectCommunityList,
+    getActiveCommunityListId = () => null,
   } = deps;
+
+  const communityListNav = createCommunityListNav({
+    apiCall,
+    getCurrentUser,
+    getActiveCommunityListId,
+    selectCommunityList,
+    toggleMobileLists,
+    updateListNav: () => updateListNav(),
+  });
 
   // Track sortable instances for cleanup
   let groupsSortable = null;
@@ -73,11 +87,17 @@ export function createListNav(deps = {}) {
   function isListActive(listId) {
     const activeRecommendationsYear = getActiveRecommendationsYear();
 
-    return getCurrentList() === listId && !activeRecommendationsYear;
+    return (
+      getCurrentList() === listId &&
+      !activeRecommendationsYear &&
+      !getActiveCommunityListId()
+    );
   }
 
   function isRecommendationsActive(year) {
-    return getActiveRecommendationsYear() === year;
+    return (
+      getActiveRecommendationsYear() === year && !getActiveCommunityListId()
+    );
   }
 
   // ============ EXPAND STATE MANAGEMENT ============
@@ -789,6 +809,8 @@ export function createListNav(deps = {}) {
       const section = createGroupSection(orphanedGroup, isMobile, container);
       container.appendChild(section);
     }
+
+    communityListNav.appendCommunityRoot(container, isMobile);
   }
 
   /**
@@ -931,6 +953,9 @@ export function createListNav(deps = {}) {
         '.group-lists, .category-menu-btn, [data-category-menu-btn], .no-drag', // Exclude list items and menu buttons
       preventOnFilter: false,
       ...mobileOptions,
+      onMove(evt) {
+        return !evt.related?.closest?.('[data-community-root-shell]');
+      },
       onStart: function (evt) {
         // Mobile haptic feedback
         if (isMobile && navigator.vibrate) {
@@ -1131,7 +1156,8 @@ export function createListNav(deps = {}) {
    */
   function updateListNavActiveState(
     activeListId,
-    activeRecommendationsYear = null
+    activeRecommendationsYear = null,
+    activeCommunityListId = getActiveCommunityListId()
   ) {
     const nav = document.getElementById('listNav');
     const mobileNav = document.getElementById('mobileListNav');
@@ -1145,7 +1171,10 @@ export function createListNav(deps = {}) {
         const listId = button.dataset.listId;
         if (!listId) return;
 
-        const isActive = listId === activeListId && !activeRecommendationsYear;
+        const isActive =
+          listId === activeListId &&
+          !activeRecommendationsYear &&
+          !activeCommunityListId;
 
         // Toggle active class - background is handled by ::before pseudo-element in CSS
         if (isActive) {
@@ -1161,7 +1190,8 @@ export function createListNav(deps = {}) {
       );
       recommendationsButtons.forEach((button) => {
         const year = parseInt(button.dataset.recommendationsYear, 10);
-        const isActive = activeRecommendationsYear === year;
+        const isActive =
+          activeRecommendationsYear === year && !activeCommunityListId;
 
         if (isActive) {
           button.classList.add('active');
@@ -1169,6 +1199,8 @@ export function createListNav(deps = {}) {
           button.classList.remove('active');
         }
       });
+
+      communityListNav.updateActiveState(container, activeCommunityListId);
     };
 
     updateActiveState(nav);

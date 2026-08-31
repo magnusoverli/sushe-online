@@ -34,6 +34,7 @@ const registerReidentifyRoutes = require('./reidentify');
 const registerBootstrapRoutes = require('./bootstrap');
 const registerCatalogCleanupRoutes = require('./catalog-cleanup');
 const registerHistoricalListImportRoutes = require('./historical-list-import');
+const registerUserListVisibilityRoutes = require('./user-list-visibility');
 
 module.exports = (app, deps) => {
   // Register standalone modules (no interdependencies)
@@ -48,6 +49,7 @@ module.exports = (app, deps) => {
   registerReidentifyRoutes(app, deps);
   registerCatalogCleanupRoutes(app, deps);
   registerHistoricalListImportRoutes(app, deps);
+  registerUserListVisibilityRoutes(app, deps);
 
   // Register events first - it returns the adminEventService
   const { adminEventService } = registerEventRoutes(app, deps);

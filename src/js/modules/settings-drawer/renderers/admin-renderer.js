@@ -164,7 +164,6 @@ export function createSettingsAdminRenderer() {
                   } else if (confirmCount > 0) {
                     statusBadge = `<span class="px-2 py-1 bg-yellow-900/50 text-yellow-400 text-xs rounded-sm border border-yellow-600/30">${confirmCount}/${required} Confirmations</span>`;
                   }
-
                   let confirmationsHtml = '';
                   if (confirmations.length > 0) {
                     confirmationsHtml = `
@@ -181,7 +180,6 @@ export function createSettingsAdminRenderer() {
                     </div>
                   `;
                   }
-
                   let statsHtml = '';
                   if (!isRevealed && stats) {
                     statsHtml = `
@@ -205,7 +203,6 @@ export function createSettingsAdminRenderer() {
                     </div>
                   `;
                   }
-
                   let actionsHtml = '';
 
                   const isLocked = status.locked || false;
@@ -218,6 +215,12 @@ export function createSettingsAdminRenderer() {
                   actionsHtml += `
                   <button class="settings-button recommendation-toggle-lock" data-year="${year}" data-locked="${isRecLocked}">
                     <i class="fas fa-thumbs-up mr-2 text-blue-400"></i><i class="fas fa-${isRecLocked ? 'unlock' : 'lock'} mr-1"></i>${isRecLocked ? 'Unlock' : 'Lock'} Recommendations
+                  </button>`;
+
+                  const userListsVisible = item.userListsVisible === true;
+                  actionsHtml += `
+                  <button class="settings-button community-list-visibility" data-year="${year}" data-revealed="${userListsVisible}">
+                    <i class="fas fa-users mr-2"></i>${userListsVisible ? 'Hide' : 'Reveal'} user lists
                   </button>`;
 
                   if (isRecLocked) {

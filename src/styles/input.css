@@ -832,6 +832,21 @@
   border-radius: 4px;
 }
 
+.community-root {
+  background-color: rgba(75, 85, 99, 0.08);
+}
+
+.community-list-btn.active {
+  background-color: rgba(75, 85, 99, 0.55);
+  color: #fff;
+}
+
+@media (hover: hover) {
+  .community-root button:hover {
+    background-color: rgba(75, 85, 99, 0.25);
+  }
+}
+
 /* Spacing from category border */
 .group-header-wrapper {
   margin-left: -2px;

@@ -1,9 +1,4 @@
-function createImportOne({
-  listService,
-  invalidateListCaches,
-  triggerAggregateListRecompute,
-  logger,
-}) {
+function createImportOne({ listService, invalidateListCaches, logger }) {
   return async (entry, adminUser, previewHash) => {
     try {
       const created = await listService.createList(entry.targetUserId, {
@@ -13,7 +8,6 @@ function createImportOne({
         isMain: true,
       });
       invalidateListCaches(entry.targetUserId, null, { groups: true });
-      triggerAggregateListRecompute(entry.year);
       logger.info('Admin imported historical list', {
         adminUserId: adminUser?._id,
         targetUserId: entry.targetUserId,

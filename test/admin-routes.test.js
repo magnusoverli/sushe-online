@@ -896,20 +896,18 @@ describe('GET /api/admin/bootstrap', () => {
         sql.includes('FROM master_lists') &&
         sql.includes('WHERE year = ANY($1::int[])')
       ) {
+        return { rows: [] };
+      }
+
+      if (sql.includes('FROM user_list_year_visibility')) {
         return {
           rows: [
             {
               year: 2024,
-              revealed: false,
-              revealed_at: null,
-              computed_at: new Date(),
-              locked: false,
-              stats: {
-                participantCount: 3,
-                totalAlbums: 20,
-                albumsWith3PlusVoters: 4,
-                albumsWith2Voters: 6,
-              },
+              revealed: true,
+              revealed_at: new Date(),
+              revealed_by: 'admin-123',
+              updated_at: new Date(),
             },
           ],
         };
@@ -989,6 +987,8 @@ describe('GET /api/admin/bootstrap', () => {
     assert.strictEqual(response.body.events.pending.length, 1);
     assert.strictEqual(response.body.aggregateLists.length, 1);
     assert.strictEqual(response.body.aggregateLists[0].year, 2024);
+    assert.strictEqual(response.body.aggregateLists[0].status.exists, false);
+    assert.strictEqual(response.body.aggregateLists[0].userListsVisible, true);
     assert.strictEqual(response.body.aggregateLists[0].recStatus.locked, true);
     assert.strictEqual(response.body.summaryStats.stats.withSummary, 12);
     assert.strictEqual(response.body.imageStats.stats.withImage, 18);

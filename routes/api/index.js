@@ -61,6 +61,9 @@ const {
   createAlbumSearchService,
 } = require('../../services/search/album-search-service');
 const {
+  createCommunityListService,
+} = require('../../services/community-list-service');
+const {
   createServiceAuthMiddleware,
 } = require('../../middleware/service-auth');
 const {
@@ -200,6 +203,7 @@ module.exports = (app, deps) => {
 
   // Create album search service (cross-list substring search)
   const searchService = createAlbumSearchService({ db, logger });
+  const communityListService = createCommunityListService({ db });
 
   // Shared dependencies for all route modules
   const sharedDeps = {
@@ -237,6 +241,7 @@ module.exports = (app, deps) => {
     recommendationService,
     playcountService,
     searchService,
+    communityListService,
     externalIdentityService,
     coverCache,
     authService,
@@ -291,6 +296,7 @@ module.exports = (app, deps) => {
   require('./telegram')(app, sharedDeps);
   require('./user')(app, sharedDeps);
   require('./recommendations')(app, sharedDeps);
+  require('./community')(app, sharedDeps);
 
   logger.info('API routes initialized (modular structure)');
   return {
@@ -299,7 +305,6 @@ module.exports = (app, deps) => {
     groupService,
     listService,
     invalidateListCaches: helpers.invalidateListCaches,
-    triggerAggregateListRecompute: helpers.triggerAggregateListRecompute,
     recommendationService,
   };
 };

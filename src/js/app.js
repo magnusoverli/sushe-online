@@ -74,6 +74,7 @@ import { createAlbumFlash } from './modules/album-search-flash.js';
 import { createMobileAlbumSearch } from './modules/mobile-album-search.js';
 import { createEmojiAutocomplete } from './modules/emoji-autocomplete.js';
 import { createNowPlayingRowHighlight } from './modules/now-playing-row-highlight.js';
+import { createCommunityViewer } from './modules/community-viewer.js';
 
 // Centralized state store
 import {
@@ -152,6 +153,28 @@ function setPendingImportFilenameValue(filename) {
 
 const { showLoadingSpinner, updateHeaderTitle, isTextTruncated } =
   createAppShellUi();
+
+const communityViewer = createCommunityViewer({
+  apiCall,
+  setCurrentListId,
+  getCurrentListId,
+  setCurrentRecommendationsYear,
+  getRealtimeSyncModuleInstance,
+  updateListNavActiveState,
+  updateHeaderTitle,
+  showLoadingSpinner,
+  showToast,
+  doc: document,
+});
+
+function getActiveCommunityListId() {
+  return communityViewer.getActiveCommunityListId();
+}
+
+export function selectCommunityList(listId, summary) {
+  clearYearLockUI();
+  return communityViewer.selectCommunityList(listId, summary);
+}
 
 const {
   convertFlashToToast,
@@ -664,6 +687,8 @@ const getListNavModule = createLazyModule(() =>
     showMobileCategoryMenu,
     selectRecommendations,
     getCurrentRecommendationsYear,
+    selectCommunityList,
+    getActiveCommunityListId,
   })
 );
 
@@ -678,11 +703,13 @@ function collapseGroupsForActiveList() {
 
 function updateListNavActiveState(
   activeListId,
-  activeRecommendationsYear = null
+  activeRecommendationsYear = null,
+  activeCommunityListId = getActiveCommunityListId()
 ) {
   return getListNavModule().updateListNavActiveState(
     activeListId,
-    activeRecommendationsYear
+    activeRecommendationsYear,
+    activeCommunityListId
   );
 }
 
@@ -881,6 +908,7 @@ const getListSelectionModule = createLazyModule(() =>
     prefetchPlaycountsForRender,
     fetchAndDisplayPlaycounts,
     wasRecentLocalSave,
+    clearCommunitySelection: communityViewer.clearSelection,
     showToast,
     logger: console,
   })
@@ -903,6 +931,7 @@ const appAlbumNavigation = createAppAlbumNavigation({
 export function selectRecommendations(year) {
   // Clear any stale lock indicator from a previously viewed locked main list
   clearYearLockUI();
+  communityViewer.clearSelection();
   return getRecommendationsModule().selectRecommendations(year);
 }
 
