@@ -19,13 +19,16 @@
 const { ensureDb } = require('../db/postgres');
 const {
   getAlbumInfo: getLastfmAlbumInfo,
+  getTopAlbumsPaginated: getLastfmTopAlbumsPaginated,
   searchAlbums: searchLastfmAlbums,
   normalizeForLastfm,
 } = require('../utils/lastfm-auth');
 const { normalizeAlbumKey } = require('../utils/fuzzy-match');
 const { canonicalAlbumKey } = require('../utils/playcount-key');
 const {
+  externalMatchKey,
   generateQueryForms,
+  nameSimilarity,
   selectBestCandidate,
 } = require('../utils/entity-matching');
 const { runInBatches } = require('../utils/batch');
@@ -131,6 +134,87 @@ async function invalidateUserPlaycounts(db, log, userId) {
 // ============================================
 // SINGLE-ALBUM FETCH
 // ============================================
+
+function prepareUserAlbums(userAlbums) {
+  return (userAlbums || []).map((candidate) => {
+    const artistName = candidate.artist?.name || candidate.artist || '';
+    return {
+      ...candidate,
+      artistName,
+      artistMatchKey: externalMatchKey(artistName),
+      albumMatchKey: externalMatchKey(candidate.name),
+    };
+  });
+}
+
+async function loadLastfmUserAlbums(log, lastfmUsername) {
+  try {
+    const userAlbums = prepareUserAlbums(
+      await getLastfmTopAlbumsPaginated(
+        lastfmUsername,
+        process.env.LASTFM_API_KEY
+      )
+    );
+    log.debug('Loaded Last.fm user album library', {
+      lastfmUsername,
+      albumCount: userAlbums.length,
+    });
+    return userAlbums;
+  } catch (err) {
+    log.warn('Failed to load Last.fm user album library; using album lookup', {
+      lastfmUsername,
+      error: err.message,
+    });
+    return null;
+  }
+}
+
+function findUserAlbumMatch(album, userAlbums) {
+  const artistMatchKey = externalMatchKey(album.artist);
+  const albumMatchKey = externalMatchKey(album.album);
+  const candidates = (userAlbums || []).filter((candidate) => {
+    const candidateArtistKey =
+      candidate.artistMatchKey ||
+      externalMatchKey(candidate.artist?.name || candidate.artist || '');
+    const candidateAlbumKey =
+      candidate.albumMatchKey || externalMatchKey(candidate.name);
+    return (
+      candidateArtistKey === artistMatchKey ||
+      candidateAlbumKey === albumMatchKey
+    );
+  });
+  const { best, isConfident } = selectBestCandidate({
+    target: { artist: album.artist, album: album.album },
+    candidates,
+    getArtist: (candidate) =>
+      candidate.artistName || candidate.artist?.name || candidate.artist,
+    getAlbum: (candidate) => candidate.name,
+    thresholds: {
+      minAlbum: 0.8,
+      minCombined: 0.85,
+      minArtist: 0.7,
+      strongAlbum: 0.95,
+      strongAlbumArtistFloor: 0.5,
+    },
+  });
+
+  if (!best || !isConfident) return null;
+
+  // Avoid accepting a high combined score when one side is materially wrong.
+  if (
+    nameSimilarity(
+      album.artist,
+      best.candidate.artistName ||
+        best.candidate.artist?.name ||
+        best.candidate.artist
+    ) < 0.7 ||
+    nameSimilarity(album.album, best.candidate.name) < 0.8
+  ) {
+    return null;
+  }
+
+  return best.candidate;
+}
 
 async function getLastfmArtistCandidates(db, log, album) {
   const canonicalArtist = album?.artist;
@@ -247,12 +331,34 @@ async function discoverArtistByAlbumSearch(log, album, lastfmUsername) {
  * Refresh playcount for a single album.
  * @returns {Promise<{playcount: number|null, status: string}|null>} Result or null on failure
  */
-async function refreshAlbumPlaycount(db, log, userId, lastfmUsername, album) {
+async function refreshAlbumPlaycount(
+  db,
+  log,
+  userId,
+  lastfmUsername,
+  album,
+  context = {}
+) {
   try {
     const datastore = /** @type {import('../db/types').DbFacade} */ (
       ensureDb(db, 'playcount-engine.refreshAlbumPlaycount')
     );
     const albumId = album.album_id || album.albumId || null;
+    const userAlbumMatch = findUserAlbumMatch(album, context.userAlbums);
+
+    if (userAlbumMatch) {
+      const playcount = parseInt(userAlbumMatch.playcount || 0, 10);
+      await upsertPlaycount(datastore, userId, album, playcount, 'success');
+      log.debug('Matched album in Last.fm user library', {
+        requestedArtist: album.artist,
+        requestedAlbum: album.album,
+        matchedArtist: userAlbumMatch.artistName,
+        matchedAlbum: userAlbumMatch.name,
+        playcount,
+      });
+      return { playcount, status: 'success' };
+    }
+
     const artistCandidates = await getLastfmArtistCandidates(
       datastore,
       log,
@@ -437,6 +543,11 @@ async function refreshAlbumsBatched(
   refreshFn = refreshAlbumPlaycount
 ) {
   const results = {};
+  let userAlbums = null;
+
+  if (refreshFn === refreshAlbumPlaycount) {
+    userAlbums = await loadLastfmUserAlbums(log, lastfmUsername);
+  }
 
   await runInBatches(
     albums,
@@ -453,7 +564,8 @@ async function refreshAlbumsBatched(
         log,
         userId,
         lastfmUsername,
-        album
+        album,
+        { userAlbums }
       );
 
       if (result !== null) {
@@ -493,6 +605,8 @@ module.exports = {
   upsertPlaycountError,
   invalidateUserPlaycounts,
   getLastfmArtistCandidates,
+  findUserAlbumMatch,
+  loadLastfmUserAlbums,
   refreshAlbumPlaycount,
   refreshAlbumsBatched,
   claimAlbumsForRefresh,

@@ -304,6 +304,7 @@ async function getAlbumInfoWithVariants(
   const fallbackArtist = normalizeForExternalApi(artist);
   const fetchExact = (a, b) =>
     fetchAlbumInfoExact(fetchFn, log, a, b, username, apiKey);
+  let zeroPlaycountMatch = null;
 
   // Primary: find album variants via artist.getTopAlbums and sum playcounts.
   // Try each artist spelling form until one yields matches.
@@ -323,7 +324,12 @@ async function getAlbumInfoWithVariants(
         artistAlbums,
         log
       );
-      if (combined) return combined;
+      if (combined) {
+        if (!username || parseInt(combined.userplaycount || 0) > 0) {
+          return combined;
+        }
+        zeroPlaycountMatch ||= combined;
+      }
     }
   }
 
@@ -362,6 +368,8 @@ async function getAlbumInfoWithVariants(
   const fallbackData = await fetchExact(fallbackArtist, strippedAlbum);
   if (!fallbackData.error && fallbackData.album) return fallbackData.album;
 
+  if (zeroPlaycountMatch) return zeroPlaycountMatch;
+
   log.debug('Last.fm album not found', { artist, album });
   return { userplaycount: '0', playcount: '0', listeners: '0', notFound: true };
 }
@@ -374,7 +382,8 @@ function createCoreUserDataMethods(fetchFn, log, env, lastfmGet) {
     username,
     period = 'overall',
     limit = 50,
-    apiKey
+    apiKey,
+    page = 1
   ) {
     const data = await lastfmGet({
       method: 'user.getTopAlbums',
@@ -382,11 +391,45 @@ function createCoreUserDataMethods(fetchFn, log, env, lastfmGet) {
         user: username,
         period,
         limit: String(limit),
+        page: String(page),
         api_key: apiKey,
       },
       withRetry: true,
     });
     return data.topalbums?.album || [];
+  }
+
+  async function getTopAlbumsPaginated(username, apiKey) {
+    const limit = 1000;
+    const firstData = await lastfmGet({
+      method: 'user.getTopAlbums',
+      params: {
+        user: username,
+        period: 'overall',
+        limit: String(limit),
+        page: '1',
+        api_key: apiKey,
+      },
+      withRetry: true,
+    });
+    const albums = [...(firstData.topalbums?.album || [])];
+    const totalPages = parseInt(
+      firstData.topalbums?.['@attr']?.totalPages || '1',
+      10
+    );
+
+    for (let page = 2; page <= totalPages; page++) {
+      const pageAlbums = await getTopAlbums(
+        username,
+        'overall',
+        limit,
+        apiKey,
+        page
+      );
+      albums.push(...pageAlbums);
+    }
+
+    return albums;
   }
 
   async function getAlbumInfo(artist, album, username, apiKey) {
@@ -479,6 +522,7 @@ function createCoreUserDataMethods(fetchFn, log, env, lastfmGet) {
 
   return {
     getTopAlbums,
+    getTopAlbumsPaginated,
     getAlbumInfo,
     getRecentTracks,
     getTopArtists,
@@ -952,6 +996,7 @@ function createLastfmAuth(deps = {}) {
     getSession,
     // User data methods
     getTopAlbums: userData.getTopAlbums,
+    getTopAlbumsPaginated: userData.getTopAlbumsPaginated,
     getTopArtists: userData.getTopArtists,
     getTopTags: userData.getTopTags,
     getUserInfo: userData.getUserInfo,
@@ -988,6 +1033,7 @@ module.exports = {
   getSession: defaultInstance.getSession,
   // User data
   getTopAlbums: defaultInstance.getTopAlbums,
+  getTopAlbumsPaginated: defaultInstance.getTopAlbumsPaginated,
   getTopArtists: defaultInstance.getTopArtists,
   getTopTags: defaultInstance.getTopTags,
   getUserInfo: defaultInstance.getUserInfo,

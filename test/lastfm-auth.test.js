@@ -266,6 +266,35 @@ test('getTopAlbums should return empty array when no albums', async () => {
   assert.deepStrictEqual(albums, []);
 });
 
+test('getTopAlbumsPaginated should fetch every page of the user library', async () => {
+  const requestedPages = [];
+  const mockFetch = async (url) => {
+    const page = new URL(url).searchParams.get('page');
+    requestedPages.push(page);
+    return {
+      json: async () => ({
+        topalbums: {
+          album: [{ name: `Album ${page}` }],
+          '@attr': { totalPages: '3' },
+        },
+      }),
+    };
+  };
+
+  const { getTopAlbumsPaginated } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const albums = await getTopAlbumsPaginated('testuser', 'apikey');
+
+  assert.deepStrictEqual(requestedPages, ['1', '2', '3']);
+  assert.deepStrictEqual(
+    albums.map((album) => album.name),
+    ['Album 1', 'Album 2', 'Album 3']
+  );
+});
+
 // =============================================================================
 // getAlbumInfo tests
 // =============================================================================
@@ -470,6 +499,54 @@ test('getAlbumInfo matches "&" vs "And" album-title variants (Speglas regression
   );
 
   assert.strictEqual(info.userplaycount, '37');
+});
+
+test('getAlbumInfo tries an ASCII artist alias after a native-name zero playcount', async () => {
+  const requestedArtists = [];
+  const mockFetch = async (url) => {
+    const params = new URL(url).searchParams;
+    const artist = params.get('artist');
+    requestedArtists.push(artist);
+
+    if (params.get('method') === 'artist.getTopAlbums') {
+      return {
+        json: async () => ({
+          topalbums: {
+            album: [{ name: "Infinitude's Passage" }],
+            '@attr': { artist },
+          },
+        }),
+      };
+    }
+
+    return {
+      json: async () => ({
+        album: {
+          name: "Infinitude's Passage",
+          artist,
+          userplaycount: artist === 'Aenigmatum' ? '18' : '0',
+          playcount: '4184',
+          listeners: '425',
+        },
+      }),
+    };
+  };
+
+  const { getAlbumInfo } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const info = await getAlbumInfo(
+    'Ænigmatum',
+    "Infinitude's Passage",
+    'magnus_overli',
+    'apikey'
+  );
+
+  assert.strictEqual(info.userplaycount, '18');
+  assert.ok(requestedArtists.includes('Ænigmatum'));
+  assert.ok(requestedArtists.includes('Aenigmatum'));
 });
 
 // =============================================================================

@@ -27,6 +27,7 @@ const {
 const {
   refreshAlbumPlaycount,
   invalidateUserPlaycounts,
+  loadLastfmUserAlbums,
 } = require('./playcount-engine');
 
 // ============================================
@@ -103,7 +104,12 @@ async function getUserAlbums(db, userId) {
  * Sync all playcounts for a single user.
  * @returns {Promise<Object>} Sync result { userId, success, synced, failed, duration }
  */
-async function syncUserPlaycounts(db, log, user) {
+async function syncUserPlaycounts(
+  db,
+  log,
+  user,
+  loadUserAlbums = loadLastfmUserAlbums
+) {
   const userId = user._id;
   const lastfmUsername = user.lastfm_username;
   const startTime = Date.now();
@@ -121,6 +127,8 @@ async function syncUserPlaycounts(db, log, user) {
     return { userId, success: true, synced: 0, failed: 0, duration: 0 };
   }
 
+  const userAlbums = await loadUserAlbums(log, lastfmUsername);
+
   const outcomes = await runInBatches(
     albums,
     { batchSize: BATCH_SIZE, delayMs: BATCH_DELAY_MS },
@@ -130,7 +138,8 @@ async function syncUserPlaycounts(db, log, user) {
         log,
         userId,
         lastfmUsername,
-        album
+        album,
+        { userAlbums }
       );
       return result !== null;
     }
@@ -171,6 +180,7 @@ function createPlaycountSyncService(deps = {}) {
 
   const syncIntervalMs = deps.syncIntervalMs || SYNC_INTERVAL_MS;
   const staleThresholdMs = deps.staleThresholdMs || BACKGROUND_SYNC_STALE_MS;
+  const loadUserAlbums = deps.loadLastfmUserAlbums || loadLastfmUserAlbums;
   let syncInterval = null;
   let isRunning = false;
 
@@ -327,7 +337,8 @@ function createPlaycountSyncService(deps = {}) {
     isStarted,
     isSyncing,
     runSyncCycle,
-    syncUserPlaycounts: (user) => syncUserPlaycounts(db, log, user),
+    syncUserPlaycounts: (user) =>
+      syncUserPlaycounts(db, log, user, loadUserAlbums),
     getUsersNeedingSync: (limit) =>
       getUsersNeedingSync(db, staleThresholdMs, limit),
     getUserAlbums: (userId) => getUserAlbums(db, userId),
