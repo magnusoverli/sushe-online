@@ -173,6 +173,7 @@ async function syncUserPlaycounts(
  * @param {Object} [deps.logger]
  * @param {number} [deps.syncIntervalMs]
  * @param {number} [deps.staleThresholdMs]
+ * @param {(logger: Object, username: string) => Promise<Array<Object>|null>} [deps.loadLastfmUserAlbums]
  */
 function createPlaycountSyncService(deps = {}) {
   const log = deps.logger || logger;
