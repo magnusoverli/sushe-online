@@ -129,14 +129,17 @@ export function createListNav(deps = {}) {
   }
 
   /**
-   * Initialize default expand state when no user preference exists yet.
+   * Initialize expand state for the list selected during startup.
    * Only the group containing the active list is expanded; all others are collapsed.
-   * If the user already has saved expand state (from previous toggles), this is a no-op —
-   * their preferences are fully respected across page refreshes.
    * @param {Array} groups - Array of group objects with lists
    * @param {Array} orphaned - Array of orphaned list objects
+   * @param {string|null} preferredActiveListId - Authoritative startup list ID
    */
-  function initializeExpandStateForActiveList(groups, orphaned) {
+  function initializeExpandStateForActiveList(
+    groups,
+    orphaned,
+    preferredActiveListId = null
+  ) {
     // On every page load, collapse all groups except the one containing the
     // active list.  User manual toggles during the session are saved by
     // toggleGroupSection and take effect immediately, but on the next page
@@ -147,6 +150,7 @@ export function createListNav(deps = {}) {
     // getCurrentList() may not be set yet during initial render, so fall back
     // to the same sources that loadLists() uses to pick the target list.
     const activeListId =
+      preferredActiveListId ||
       getCurrentList() ||
       localStorage.getItem('lastSelectedList') ||
       window.lastSelectedList;
@@ -170,6 +174,10 @@ export function createListNav(deps = {}) {
         activeGroupKey = 'orphaned';
       }
     }
+
+    // Cached startup metadata may not contain the real groups yet. Do not mark
+    // expansion initialized until the active list can be placed definitively.
+    if (!activeGroupKey) return false;
 
     // Build state: only active group expanded, all others collapsed.
     // Setting all groups explicitly ensures toggleGroupSection updates work correctly.
@@ -816,7 +824,17 @@ export function createListNav(deps = {}) {
   /**
    * Update sidebar navigation with year tree view
    */
-  function updateListNav() {
+  function updateListNav(initialActiveListId = null) {
+    if (initialActiveListId && getGroups && getSortedGroups) {
+      const { groups: groupsWithLists, orphaned } = groupListsByGroup();
+      hasInitializedExpandState = initializeExpandStateForActiveList(
+        groupsWithLists,
+        orphaned,
+        initialActiveListId
+      );
+      communityListNav.collapseRoot();
+    }
+
     const nav = document.getElementById('listNav');
     const mobileNav = document.getElementById('mobileListNav');
 

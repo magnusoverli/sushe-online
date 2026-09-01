@@ -317,6 +317,58 @@ describe('List Navigation Module - Unit Tests', () => {
   });
 
   describe('Year expand state management', () => {
+    it('expands only the group containing the startup list', async () => {
+      const previousDocument = global.document;
+      const previousLocalStorage = global.localStorage;
+      const values = new Map([
+        ['groupExpandState', JSON.stringify({ groupA: true, groupB: true })],
+        ['communityRootExpanded:user-1', 'true'],
+      ]);
+      global.document = { getElementById: () => null };
+      global.localStorage = {
+        get length() {
+          return values.size;
+        },
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, value),
+        removeItem: (key) => values.delete(key),
+        key: (index) => Array.from(values.keys())[index] || null,
+      };
+
+      try {
+        const { createListNav } = await import('../src/js/modules/list-nav.js');
+        const metadata = {
+          listA: { name: 'List A', groupId: 'groupA' },
+          listB: { name: 'List B', groupId: 'groupB' },
+        };
+        const groups = {
+          groupA: { _id: 'groupA', name: 'Group A' },
+          groupB: { _id: 'groupB', name: 'Group B' },
+        };
+        const listNav = createListNav({
+          getLists: () => ({ listA: {}, listB: {} }),
+          getListMetadata: (listId) => metadata[listId],
+          getGroups: () => groups,
+          getSortedGroups: () => Object.values(groups),
+          getCurrentList: () => null,
+          getCurrentUser: () => ({ _id: 'user-1' }),
+        });
+
+        listNav.updateListNav('listB');
+
+        assert.deepStrictEqual(JSON.parse(values.get('groupExpandState')), {
+          groupA: false,
+          groupB: true,
+        });
+        assert.strictEqual(values.get('communityRootExpanded:user-1'), 'false');
+      } finally {
+        if (previousDocument === undefined) delete global.document;
+        else global.document = previousDocument;
+        if (previousLocalStorage === undefined) delete global.localStorage;
+        else global.localStorage = previousLocalStorage;
+      }
+    });
+
     it('should default to expanded when state is undefined', () => {
       const expandState = {};
       const year = '2023';

@@ -127,7 +127,11 @@ export function createAppListOperations(deps = {}) {
         }
       });
 
-      updateListNav();
+      if (targetListId) {
+        updateListNav(targetListId);
+      } else {
+        updateListNav();
+      }
 
       if (targetListId) {
         try {

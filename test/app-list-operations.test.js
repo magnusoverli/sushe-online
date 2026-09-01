@@ -241,6 +241,7 @@ describe('app-list-operations module', () => {
     ]);
     assert.strictEqual(updateGroupsFromServer.mock.calls.length, 1);
     assert.strictEqual(updateListNav.mock.calls.length, 1);
+    assert.deepStrictEqual(updateListNav.mock.calls[0].arguments, ['list-1']);
     assert.strictEqual(setListData.mock.calls.length, 1);
     assert.deepStrictEqual(setListData.mock.calls[0].arguments, [
       'list-1',

@@ -695,8 +695,8 @@ const getListNavModule = createLazyModule(() =>
 );
 
 // Wrapper functions for list navigation module
-function updateListNav() {
-  return getListNavModule().updateListNav();
+function updateListNav(initialActiveListId = null) {
+  return getListNavModule().updateListNav(initialActiveListId);
 }
 
 function collapseGroupsForActiveList() {

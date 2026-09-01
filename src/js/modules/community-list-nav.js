@@ -135,6 +135,10 @@ export function createCommunityListNav(deps = {}) {
     }
   }
 
+  function collapseRoot() {
+    setRootExpanded(false);
+  }
+
   function getUserExpandState() {
     try {
       const parsed = JSON.parse(storage?.getItem(userStorageKey()) || '{}');
@@ -242,6 +246,7 @@ export function createCommunityListNav(deps = {}) {
 
   return {
     appendCommunityRoot,
+    collapseRoot,
     updateActiveState,
   };
 }
