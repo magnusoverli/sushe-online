@@ -110,6 +110,14 @@ test('generateNameVariations should deduplicate', () => {
 
 const { createMockLogger, createMockPool, asMockDb } = require('./helpers');
 
+const testSummaryConfig = { getConfig: async () => ({}) };
+const emptySummaryFetcher = async () => ({
+  summary: null,
+  source: null,
+  found: false,
+  reason: 'no_results',
+});
+
 test('createAlbumSummaryService should throw without db', () => {
   assert.throws(() => {
     createAlbumSummaryService({ logger: createMockLogger() });
@@ -283,6 +291,7 @@ test('startBatchFetch should freeze batch scope to snapshot start time', async (
 
 test('startBatchFetch should not loop when album_id is null', async () => {
   let pageCalls = 0;
+  const fetchedAlbums = [];
 
   const mockPool = asMockDb({
     query: async (query, params = []) => {
@@ -325,6 +334,11 @@ test('startBatchFetch should not loop when album_id is null', async () => {
   const service = createAlbumSummaryService({
     db: mockPool,
     logger: createMockLogger(),
+    summaryConfig: testSummaryConfig,
+    fetchAlbumSummary: async (artist, album) => {
+      fetchedAlbums.push([artist, album]);
+      return emptySummaryFetcher();
+    },
   });
 
   await service.startBatchFetch();
@@ -339,6 +353,7 @@ test('startBatchFetch should not loop when album_id is null', async () => {
   assert.strictEqual(status.total, 2);
   assert.strictEqual(status.processed, 2);
   assert.strictEqual(pageCalls, 2);
+  assert.deepStrictEqual(fetchedAlbums, [['Artist', 'Album']]);
 });
 
 test('fetchAndStoreSummary should return error for missing album', async () => {
@@ -499,7 +514,7 @@ test('SUMMARY_SOURCES should have claude', () => {
 });
 
 // =============================================================================
-// fetchAlbumSummary tests (uses Claude API)
+// fetchAlbumSummary input validation
 // =============================================================================
 
 test('fetchAlbumSummary should return not found for empty input', async () => {
@@ -507,19 +522,6 @@ test('fetchAlbumSummary should return not found for empty input', async () => {
   assert.strictEqual(result.found, false);
   assert.strictEqual(result.summary, null);
   assert.strictEqual(result.source, null);
-});
-
-test('fetchAlbumSummary should include source in result', async () => {
-  // This tests the structure of the result
-  // Note: This will fail if Claude API key is not set, but that's OK for test structure validation
-  const result = await fetchAlbumSummary(
-    'NonExistentArtist12345',
-    'NonExistentAlbum12345'
-  );
-
-  assert.ok('summary' in result);
-  assert.ok('source' in result);
-  assert.ok('found' in result);
 });
 
 // =============================================================================
@@ -557,9 +559,6 @@ test('getStats should return source breakdown', async () => {
 // keepExistingOnEmpty — single-album regeneration must not destroy a summary
 // =============================================================================
 
-// With no ANTHROPIC_API_KEY in the test environment the Claude call yields no
-// summary, which is exactly the "regeneration produced nothing" case.
-
 test('keepExistingOnEmpty leaves a stored summary alone when the fetch is empty', async () => {
   const statements = [];
   const mockPool = asMockDb({
@@ -577,6 +576,8 @@ test('keepExistingOnEmpty leaves a stored summary alone when the fetch is empty'
   const service = createAlbumSummaryService({
     db: mockPool,
     logger: createMockLogger(),
+    summaryConfig: testSummaryConfig,
+    fetchAlbumSummary: emptySummaryFetcher,
   });
 
   const result = await service.fetchAndStoreSummary('keep1', {
@@ -617,6 +618,8 @@ test('without keepExistingOnEmpty an empty fetch still clears the summary', asyn
   const service = createAlbumSummaryService({
     db: mockPool,
     logger: createMockLogger(),
+    summaryConfig: testSummaryConfig,
+    fetchAlbumSummary: emptySummaryFetcher,
   });
 
   await service.fetchAndStoreSummary('clear1', {
