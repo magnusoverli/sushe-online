@@ -29,6 +29,8 @@ export function createMobileAlbumActions(deps = {}) {
     displayAlbums,
     showDisqualificationReasonModal,
     getCurrentUser = () => window.currentUser || {},
+    isYearLockedSync = () => false,
+    refreshLockedYearStatus = () => {},
   } = deps;
 
   // Shared with the desktop context menu, so the flow and its modal exist once.
@@ -104,7 +106,11 @@ export function createMobileAlbumActions(deps = {}) {
     const showRecommend = isYearBased && !viewingRecs;
     const showDisqualificationAction =
       !viewingRecs &&
-      canManageListItemDisqualification(listMeta, getCurrentUser());
+      canManageListItemDisqualification(
+        listMeta,
+        getCurrentUser(),
+        isYearLockedSync
+      );
 
     const { sheet: actionSheet, close } = createActionSheet({
       contentHtml: buildAlbumActionMenuHtml({
@@ -286,6 +292,7 @@ export function createMobileAlbumActions(deps = {}) {
             displayAlbums,
             showDisqualificationReasonModal,
             showToast,
+            refreshLockedYearStatus,
           },
           { listId: currentList, album }
         );

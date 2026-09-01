@@ -34,6 +34,77 @@ function createHarness({ updateRows = [{}] } = {}) {
 }
 
 describe('list item disqualification', () => {
+  it('withholds management for locked main lists but not non-main lists', async () => {
+    const { canManageListItemDisqualification } =
+      await import('../src/js/modules/list-item-disqualification.js');
+    const currentUser = { _id: 'user-1' };
+    const isYearLocked = (year) => year === 2010;
+
+    assert.strictEqual(
+      canManageListItemDisqualification(
+        { ownerId: 'user-1', year: 2010, isMain: true },
+        currentUser,
+        isYearLocked
+      ),
+      false
+    );
+    assert.strictEqual(
+      canManageListItemDisqualification(
+        { ownerId: 'user-1', year: 2010, isMain: false },
+        currentUser,
+        isYearLocked
+      ),
+      true
+    );
+  });
+
+  it('handles a stale YEAR_LOCKED response without changing local state', async () => {
+    const { updateListItemDisqualification } =
+      await import('../src/js/modules/list-item-disqualification.js');
+    const toasts = [];
+    let lockRefreshes = 0;
+    let localUpdates = 0;
+
+    const updated = await updateListItemDisqualification(
+      {
+        apiCall: async () => {
+          throw {
+            code: 'YEAR_LOCKED',
+            error:
+              'Cannot change ranking eligibility: Main list for year 2010 is locked',
+            year: 2010,
+          };
+        },
+        getListData: () => [{ _id: 'item-21' }],
+        setListData: () => {
+          localUpdates += 1;
+        },
+        displayAlbums: () => {
+          localUpdates += 1;
+        },
+        showDisqualificationReasonModal: async () => ({
+          cancelled: false,
+          reason: null,
+        }),
+        showToast: (...args) => toasts.push(args),
+        refreshLockedYearStatus: async () => {
+          lockRefreshes += 1;
+        },
+      },
+      { listId: 'list-1', album: { _id: 'item-21' } }
+    );
+
+    assert.strictEqual(updated, false);
+    assert.strictEqual(localUpdates, 0);
+    assert.strictEqual(lockRefreshes, 1);
+    assert.deepStrictEqual(toasts, [
+      [
+        'Cannot change ranking eligibility: Main list for year 2010 is locked',
+        'info',
+      ],
+    ]);
+  });
+
   it('preserves state when an older client replaces a full list', () => {
     const albums = preserveDisqualificationState(
       [{ _id: 'item-21', album_id: 'album-21', artist: 'A', album: 'B' }],

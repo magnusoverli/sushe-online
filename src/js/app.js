@@ -439,6 +439,7 @@ const getAlbumContextMenuModule = createLazyModule(() =>
     setListData,
     displayAlbums,
     showDisqualificationReasonModal,
+    refreshLockedYearStatus: () => refreshLockedYearStatus(),
   })
 );
 // Wrapper functions for album context menu module
@@ -615,6 +616,7 @@ const getMobileUIModule = createLazyModule(() =>
     getLockedYears,
     isYearLockedSync,
     showDisqualificationReasonModal,
+    refreshLockedYearStatus: () => refreshLockedYearStatus(),
   })
 );
 

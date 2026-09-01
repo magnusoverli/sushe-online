@@ -1,4 +1,8 @@
-export function canManageListItemDisqualification(listMeta, currentUser = {}) {
+export function canManageListItemDisqualification(
+  listMeta,
+  currentUser = {},
+  isYearLocked = () => false
+) {
   if (!listMeta) return false;
   if (
     listMeta.isAggregate === true ||
@@ -11,6 +15,10 @@ export function canManageListItemDisqualification(listMeta, currentUser = {}) {
   ) {
     return false;
   }
+
+  const listYear = listMeta.year ?? listMeta.groupYear ?? listMeta.group_year;
+  const isMain = listMeta.isMain === true || listMeta.is_main === true;
+  if (isMain && isYearLocked(listYear)) return false;
 
   const ownerId =
     listMeta.ownerId ||
@@ -28,6 +36,7 @@ export async function updateListItemDisqualification(
     displayAlbums,
     showDisqualificationReasonModal,
     showToast,
+    refreshLockedYearStatus = () => {},
   },
   { listId, album }
 ) {
@@ -74,6 +83,14 @@ export async function updateListItemDisqualification(
     );
     return true;
   } catch (error) {
+    if (error?.code === 'YEAR_LOCKED') {
+      showToast(
+        error.error || error.message || `Year ${error.year} is locked.`,
+        'info'
+      );
+      await refreshLockedYearStatus();
+      return false;
+    }
     console.error('Error updating ranking eligibility:', error);
     showToast('Error updating ranking eligibility', 'error');
     return false;

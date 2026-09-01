@@ -97,6 +97,7 @@ export function createMobileUI(deps = {}) {
     getCurrentUser = () => window.currentUser || {},
     attachEmojiAutocomplete = () => () => {},
     showDisqualificationReasonModal,
+    refreshLockedYearStatus = () => {},
   } = deps;
   const trackPickService = createTrackPickService({ apiCall });
   const findAlbumByIdentity = createAlbumIdentityFinder({
@@ -164,6 +165,7 @@ export function createMobileUI(deps = {}) {
     showCopyConfirmation,
     getLockedYears: deps.getLockedYears,
     isYearLockedSync: deps.isYearLockedSync,
+    refreshLockedYearStatus,
     onEditAlbum: showMobileEditFormSafe,
     onPlayAlbum: playAlbumSafe,
     onRemoveAlbum: removeAlbumSafe,

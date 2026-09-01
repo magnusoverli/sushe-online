@@ -300,6 +300,60 @@ describe('Year Locking Feature', () => {
 
       assert.ok(res.body.success || !res.body.error);
     });
+
+    it('should block disqualifying an item in a locked main list', async () => {
+      const agent = request.agent(app);
+      await loginAs(agent, regularUser);
+      const createRes = await agent.post('/api/lists').send({
+        name: 'Locked Main Disqualification Test',
+        year: testYear,
+        data: [{ artist: 'Test Artist', album: 'Test Album', position: 1 }],
+      });
+      const listId = createRes.body._id;
+      await agent.post(`/api/lists/${listId}/main`).send({ isMain: true });
+      const itemResult = await pool.query(
+        'SELECT _id FROM list_items WHERE list_id = $1',
+        [listId]
+      );
+      const itemId = itemResult.rows[0]._id;
+      await lockYear(pool, testYear);
+
+      const response = await agent
+        .patch(`/api/lists/${listId}/items/${itemId}/disqualification`)
+        .send({ disqualified: true, reason: 'Wrong release year' })
+        .expect(403);
+
+      assert.strictEqual(response.body.code, 'YEAR_LOCKED');
+      const state = await pool.query(
+        'SELECT is_disqualified FROM list_items WHERE _id = $1',
+        [itemId]
+      );
+      assert.strictEqual(state.rows[0].is_disqualified, false);
+    });
+
+    it('should allow disqualifying an item in a non-main list for a locked year', async () => {
+      const agent = request.agent(app);
+      await loginAs(agent, regularUser);
+      const createRes = await agent.post('/api/lists').send({
+        name: 'Locked Non-Main Disqualification Test',
+        year: testYear,
+        data: [{ artist: 'Test Artist', album: 'Test Album', position: 1 }],
+      });
+      const listId = createRes.body._id;
+      const itemResult = await pool.query(
+        'SELECT _id FROM list_items WHERE list_id = $1',
+        [listId]
+      );
+      const itemId = itemResult.rows[0]._id;
+      await lockYear(pool, testYear);
+
+      const response = await agent
+        .patch(`/api/lists/${listId}/items/${itemId}/disqualification`)
+        .send({ disqualified: true, reason: 'Wrong release year' })
+        .expect(200);
+
+      assert.strictEqual(response.body.is_disqualified, true);
+    });
   });
 
   describe('Main List Deletion Prevention', () => {

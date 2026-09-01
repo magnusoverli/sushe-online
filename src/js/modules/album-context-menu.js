@@ -51,6 +51,7 @@ export function createAlbumContextMenu(deps = {}) {
     setListData,
     displayAlbums,
     showDisqualificationReasonModal,
+    refreshLockedYearStatus = () => {},
     createContextSubmenuController:
       makeContextSubmenuController = createContextSubmenuController,
   } = deps;
@@ -263,6 +264,7 @@ export function createAlbumContextMenu(deps = {}) {
             displayAlbums,
             showDisqualificationReasonModal,
             showToast,
+            refreshLockedYearStatus,
           },
           { listId: getCurrentListId(), album: verified.album }
         );

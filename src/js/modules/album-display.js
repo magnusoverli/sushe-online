@@ -14,7 +14,12 @@ import {
   extractYearFromDate,
 } from './date-utils.js';
 import { escapeHtmlAttr as escapeHtml } from './html-utils.js';
-import { isListLocked, showYearLockUI, clearYearLockUI } from './year-lock.js';
+import {
+  isListLocked,
+  isYearLockedSync,
+  showYearLockUI,
+  clearYearLockUI,
+} from './year-lock.js';
 import {
   positionContextMenu,
   hideAllContextMenus as hideAllMenusBase,
@@ -740,7 +745,11 @@ export function createAlbumDisplay(deps = {}) {
       );
       const canManageDisqualification =
         !isViewingRecommendations?.() &&
-        canManageListItemDisqualification(listMeta, window.currentUser || {});
+        canManageListItemDisqualification(
+          listMeta,
+          window.currentUser || {},
+          isYearLockedSync
+        );
       disqualificationOption?.classList.toggle(
         'hidden',
         !canManageDisqualification
