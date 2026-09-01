@@ -4,6 +4,10 @@ import {
   renderMobileCoverSection,
 } from './album-display/cover-parts.js';
 import {
+  attachMobileCoverPlayback,
+  createAlbumDisplayShared,
+} from './album-display-shared.js';
+import {
   renderDesktopAlbumCell,
   renderDesktopArtistCell,
   renderDesktopGenreCell,
@@ -13,6 +17,15 @@ import {
   renderMobilePositionBadge,
   renderMobileTitleRow,
 } from './album-display/render-parts.js';
+
+const { loadCoverImages: initializeCommunityCovers } = createAlbumDisplayShared(
+  {
+    computeGridTemplate: () => '',
+    getVisibleColumns: () => [],
+    getToggleableColumns: () => [],
+    isColumnVisible: () => true,
+  }
+);
 
 function normalizeItem(item = {}) {
   return {
@@ -77,7 +90,7 @@ function renderDesktopItem(item, index) {
 
 function renderMobileItem(item, index) {
   const position = item.position ?? index + 1;
-  return `<article class="community-album-card album-card album-row relative h-[130px] bg-gray-900">
+  return `<article class="community-album-card album-card album-row relative h-[130px] bg-gray-900" data-community-item-index="${index}">
     ${renderMobilePositionBadge(position)}
     <div class="flex items-stretch h-full">
       ${renderMobileCoverSection(item, index, {
@@ -125,6 +138,23 @@ export function renderCommunityList(detail = {}) {
   </div>`;
 }
 
+export function playCommunityAlbum(item, playAlbumByMetadata, showToast) {
+  if (!item?.artist || !item?.album) {
+    showToast?.('Could not find album data', 'error');
+    return false;
+  }
+  if (typeof playAlbumByMetadata !== 'function') {
+    showToast?.('Play album is unavailable', 'error');
+    return false;
+  }
+
+  playAlbumByMetadata(item.artist, item.album, {
+    albumId: item.albumId,
+    releaseDate: item.releaseDate,
+  });
+  return true;
+}
+
 export function createCommunityViewer(deps = {}) {
   const doc = deps.doc || (typeof document !== 'undefined' ? document : null);
   const {
@@ -137,6 +167,7 @@ export function createCommunityViewer(deps = {}) {
     updateHeaderTitle,
     showLoadingSpinner,
     showToast,
+    playAlbumByMetadata,
   } = deps;
 
   let activeCommunityListId = null;
@@ -155,6 +186,17 @@ export function createCommunityViewer(deps = {}) {
   function updateCommunityHeader(title) {
     updateHeaderTitle(title);
     doc?.getElementById('headerAddAlbumBtn')?.classList.add('hidden');
+  }
+
+  function attachPlaybackHandlers(container, items) {
+    container
+      ?.querySelectorAll('[data-community-item-index]')
+      .forEach((card) => {
+        const item = items[Number(card.dataset.communityItemIndex)];
+        attachMobileCoverPlayback(card, () =>
+          playCommunityAlbum(item, playAlbumByMetadata, showToast)
+        );
+      });
   }
 
   async function selectCommunityList(listId, summary = {}) {
@@ -201,7 +243,14 @@ export function createCommunityViewer(deps = {}) {
       updateCommunityHeader(
         `${username} · ${detail.year || summary.year || ''} · ${detail.name || summary.name || ''}`
       );
-      if (container) container.innerHTML = renderCommunityList(detail);
+      if (container) {
+        container.innerHTML = renderCommunityList(detail);
+        initializeCommunityCovers(container);
+        attachPlaybackHandlers(
+          container,
+          Array.isArray(detail.items) ? detail.items : []
+        );
+      }
     } catch (error) {
       if (error?.name === 'AbortError' || controller.signal.aborted) return;
       if (container && activeCommunityListId === listId) {

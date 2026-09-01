@@ -29,6 +29,7 @@ import {
   setAllColumns,
 } from './column-config.js';
 import {
+  attachMobileCoverPlayback,
   createAlbumDisplayShared,
   PLACEHOLDER_GIF,
 } from './album-display-shared.js';
@@ -969,31 +970,8 @@ export function createAlbumDisplay(deps = {}) {
     const contentDiv = card.querySelector('.flex-1.min-w-0');
     if (contentDiv) attachLinkPreview(contentDiv, comment);
 
-    // Tap album cover to play album in preferred music service
-    const coverTapTarget = card.querySelector('.mobile-album-cover');
-    if (coverTapTarget && album) {
-      coverTapTarget.style.cursor = 'pointer';
-      coverTapTarget.addEventListener(
-        'touchstart',
-        (e) => {
-          e.stopPropagation();
-        },
-        { passive: true }
-      );
-
-      coverTapTarget.addEventListener(
-        'touchend',
-        (e) => {
-          e.stopPropagation();
-        },
-        { passive: true }
-      );
-
-      coverTapTarget.addEventListener('click', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        playAlbumFromMobileCover(album);
-      });
+    if (album) {
+      attachMobileCoverPlayback(card, () => playAlbumFromMobileCover(album));
     }
 
     attachMobileBadgeHandlers(card);

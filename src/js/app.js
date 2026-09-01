@@ -164,6 +164,8 @@ const communityViewer = createCommunityViewer({
   updateHeaderTitle,
   showLoadingSpinner,
   showToast,
+  playAlbumByMetadata: (artist, album, options) =>
+    getPlaybackModule().playAlbumByMetadata(artist, album, options),
   doc: document,
 });
 

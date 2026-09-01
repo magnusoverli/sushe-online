@@ -160,7 +160,28 @@ describe('community list frontend', () => {
     const headerAddButton = {
       classList: { add: (value) => calls.push(['headerClassAdd', value]) },
     };
-    const container = { innerHTML: '' };
+    const coverListeners = {};
+    const cover = {
+      style: {},
+      setAttribute() {},
+      addEventListener(event, handler) {
+        coverListeners[event] = handler;
+      },
+    };
+    const communityCard = {
+      dataset: { communityItemIndex: '0' },
+      querySelector(selector) {
+        return selector === '.mobile-album-cover' ? cover : null;
+      },
+    };
+    const container = {
+      innerHTML: '',
+      querySelectorAll(selector) {
+        return selector === '[data-community-item-index]'
+          ? [communityCard]
+          : [];
+      },
+    };
     const realtime = {
       unsubscribeFromList: (id) => calls.push(['unsubscribe', id]),
       subscribeToList() {
@@ -210,6 +231,7 @@ describe('community list frontend', () => {
       updateHeaderTitle: (title) => calls.push(['header', title]),
       showLoadingSpinner: () => calls.push(['loading']),
       showToast: (...args) => calls.push(['toast', ...args]),
+      playAlbumByMetadata: (...args) => calls.push(['playAlbum', ...args]),
     });
 
     await viewer.selectCommunityList('community-1', {
@@ -244,6 +266,17 @@ describe('community list frontend', () => {
         (call) => call[0] === 'apiCall' && call[1] === '/api/user/last-list'
       ),
       false
+    );
+
+    coverListeners.click({ preventDefault() {}, stopPropagation() {} });
+    assert.deepStrictEqual(
+      calls.find((call) => call[0] === 'playAlbum'),
+      [
+        'playAlbum',
+        'Artist',
+        'Album',
+        { albumId: 'album-1', releaseDate: '2025-01-02' },
+      ]
     );
   });
 

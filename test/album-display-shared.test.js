@@ -14,11 +14,64 @@ function createCell() {
 }
 
 describe('album-display-shared module', () => {
+  let attachMobileCoverPlayback;
   let createAlbumDisplayShared;
 
   beforeEach(async () => {
     const module = await import('../src/js/modules/album-display-shared.js');
+    attachMobileCoverPlayback = module.attachMobileCoverPlayback;
     createAlbumDisplayShared = module.createAlbumDisplayShared;
+  });
+
+  it('attaches reusable mobile cover playback interactions', () => {
+    const handlers = {};
+    const attributes = {};
+    const cover = {
+      style: {},
+      setAttribute(name, value) {
+        attributes[name] = value;
+      },
+      addEventListener(event, handler) {
+        handlers[event] = handler;
+      },
+    };
+    const onPlay = () => {
+      onPlay.calls += 1;
+    };
+    onPlay.calls = 0;
+
+    const attached = attachMobileCoverPlayback(
+      {
+        querySelector: (selector) =>
+          selector === '.mobile-album-cover' ? cover : null,
+      },
+      onPlay
+    );
+
+    assert.strictEqual(attached, true);
+    assert.strictEqual(cover.style.cursor, 'pointer');
+    assert.deepStrictEqual(attributes, { role: 'button', tabindex: '0' });
+
+    let prevented = false;
+    let stopped = false;
+    handlers.click({
+      preventDefault: () => {
+        prevented = true;
+      },
+      stopPropagation: () => {
+        stopped = true;
+      },
+    });
+    assert.strictEqual(onPlay.calls, 1);
+    assert.strictEqual(prevented, true);
+    assert.strictEqual(stopped, true);
+
+    handlers.keydown({
+      key: 'Enter',
+      preventDefault() {},
+      stopPropagation() {},
+    });
+    assert.strictEqual(onPlay.calls, 2);
   });
 
   it('applies in-place visibility updates to header, rows, and cells', () => {

@@ -5,6 +5,32 @@
 export const PLACEHOLDER_GIF =
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
+export function attachMobileCoverPlayback(card, onPlay) {
+  const cover = card?.querySelector?.('.mobile-album-cover');
+  if (!cover || typeof onPlay !== 'function') return false;
+
+  cover.style.cursor = 'pointer';
+  cover.setAttribute?.('role', 'button');
+  cover.setAttribute?.('tabindex', '0');
+
+  const stopPropagation = (event) => event.stopPropagation();
+  cover.addEventListener('touchstart', stopPropagation, { passive: true });
+  cover.addEventListener('touchend', stopPropagation, { passive: true });
+  cover.addEventListener('click', (event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    onPlay();
+  });
+  cover.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.stopPropagation();
+    event.preventDefault();
+    onPlay();
+  });
+
+  return true;
+}
+
 const COVER_RETRY_DELAY_MS = 2500;
 const MAX_COVER_RETRIES = 2;
 // Cap how many off-screen covers fetch at once so opening a large list does not
