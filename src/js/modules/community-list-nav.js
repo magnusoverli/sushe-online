@@ -105,6 +105,7 @@ export function createCommunityListNav(deps = {}) {
   let status = 'idle';
   let summaries = [];
   let loadPromise = null;
+  let loadGeneration = 0;
 
   function getStorageScope() {
     const user = getCurrentUser() || {};
@@ -159,20 +160,33 @@ export function createCommunityListNav(deps = {}) {
 
   function ensureSummaries() {
     if (status === 'loaded' || loadPromise) return loadPromise;
+    const generation = ++loadGeneration;
     status = 'loading';
     loadPromise = apiCall('/api/community/main-lists')
       .then((response) => {
+        if (generation !== loadGeneration) return;
         summaries = Array.isArray(response?.lists) ? response.lists : [];
         status = 'loaded';
       })
       .catch(() => {
+        if (generation !== loadGeneration) return;
         status = 'error';
       })
       .finally(() => {
+        if (generation !== loadGeneration) return;
         loadPromise = null;
         updateListNav();
       });
     return loadPromise;
+  }
+
+  function refreshSummaries() {
+    loadGeneration += 1;
+    loadPromise = null;
+    summaries = [];
+    status = 'idle';
+    updateListNav();
+    return isRootExpanded() ? ensureSummaries() : Promise.resolve();
   }
 
   function appendCommunityRoot(container, isMobile) {
@@ -197,8 +211,13 @@ export function createCommunityListNav(deps = {}) {
     root.addEventListener('click', (event) => {
       const rootToggle = event.target.closest('[data-community-root-toggle]');
       if (rootToggle) {
-        setRootExpanded(!isRootExpanded());
-        updateListNav();
+        const expanding = !isRootExpanded();
+        setRootExpanded(expanding);
+        if (expanding) {
+          void refreshSummaries();
+        } else {
+          updateListNav();
+        }
         return;
       }
 
@@ -247,6 +266,7 @@ export function createCommunityListNav(deps = {}) {
   return {
     appendCommunityRoot,
     collapseRoot,
+    refreshSummaries,
     updateActiveState,
   };
 }

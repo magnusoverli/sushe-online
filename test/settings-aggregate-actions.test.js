@@ -323,6 +323,7 @@ describe('settings aggregate actions', () => {
     const confirmations = [];
     const apiCalls = [];
     const loads = [];
+    let communityRefreshes = 0;
     const categoryData = { admin: { aggregateLists: [{ year: 2025 }] } };
     const actions = createSettingsAggregateActions({
       showConfirmation: async (...args) => {
@@ -336,6 +337,9 @@ describe('settings aggregate actions', () => {
       showToast() {},
       categoryData,
       loadCategoryData: async (category) => loads.push(category),
+      refreshCommunityLists: async () => {
+        communityRefreshes += 1;
+      },
       doc: { querySelector: () => null },
     });
 
@@ -353,6 +357,7 @@ describe('settings aggregate actions', () => {
     ]);
     assert.strictEqual(categoryData.admin, null);
     assert.deepStrictEqual(loads, ['admin']);
+    assert.strictEqual(communityRefreshes, 1);
   });
 
   it('recomputes aggregate list and refreshes stats grid content', async () => {

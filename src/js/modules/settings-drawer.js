@@ -54,6 +54,7 @@ export function createSettingsDrawer(deps = {}) {
   const apiCall =
     deps.apiCall || (() => Promise.reject(new Error('apiCall not provided')));
   const refreshLockedYearStatus = deps.refreshLockedYearStatus;
+  const refreshCommunityLists = deps.refreshCommunityLists;
   const setTimeoutFn = deps.setTimeout || globalThis.setTimeout;
   const clearTimeoutFn = deps.clearTimeout || globalThis.clearTimeout;
 
@@ -309,6 +310,7 @@ export function createSettingsDrawer(deps = {}) {
     handleShowRecommenderManager,
     createSettingsModalBase,
     refreshLockedYearStatus,
+    refreshCommunityLists,
   });
 
   const { attachAdminHandlers } = createSettingsAdminHandlers({

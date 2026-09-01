@@ -1245,11 +1245,16 @@ export function createListNav(deps = {}) {
     }
   }
 
+  function refreshCommunityLists() {
+    return communityListNav.refreshSummaries();
+  }
+
   // Return public API
   return {
     updateListNav,
     updateListNavActiveState,
     collapseGroupsForActiveList,
+    refreshCommunityLists,
     createListButtonHTML,
     createRecommendationsButtonHTML,
     createListButton,

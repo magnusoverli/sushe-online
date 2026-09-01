@@ -71,6 +71,7 @@ describe('community list frontend', () => {
     const selected = [];
     let mobileToggles = 0;
     let rerenders = 0;
+    let responseYear = 2025;
     const createdRoots = [];
     const doc = {
       createElement() {
@@ -108,8 +109,8 @@ describe('community list frontend', () => {
           lists: [
             {
               id: 'community-1',
-              name: 'Best of 2025',
-              year: 2025,
+              name: `Best of ${responseYear}`,
+              year: responseYear,
               itemCount: 10,
               owner: { username: 'bob' },
             },
@@ -149,6 +150,17 @@ describe('community list frontend', () => {
     assert.strictEqual(selected[0][1].owner.username, 'bob');
     assert.strictEqual(mobileToggles, 1);
     assert.deepStrictEqual(apiCalls, ['/api/community/main-lists']);
+
+    responseYear = 2010;
+    await nav.refreshSummaries();
+    assert.deepStrictEqual(apiCalls, [
+      '/api/community/main-lists',
+      '/api/community/main-lists',
+    ]);
+    assert.strictEqual(rerenders, 3);
+
+    nav.appendCommunityRoot(container, true);
+    assert.match(createdRoots[2].innerHTML, /Best of 2010/);
   });
 
   it('selects into isolated read-only state without persistence or realtime subscribe', async () => {

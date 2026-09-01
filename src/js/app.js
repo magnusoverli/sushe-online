@@ -703,6 +703,10 @@ function collapseGroupsForActiveList() {
   return getListNavModule().collapseGroupsForActiveList();
 }
 
+function refreshCommunityLists() {
+  return getListNavModule().refreshCommunityLists();
+}
+
 function updateListNavActiveState(
   activeListId,
   activeRecommendationsYear = null,
@@ -980,6 +984,7 @@ function initializeSettingsDrawer() {
             showConfirmation,
             apiCall,
             refreshLockedYearStatus,
+            refreshCommunityLists,
           });
           settingsDrawer.initialize();
           return settingsDrawer;

@@ -18,6 +18,7 @@ export function createSettingsAggregateActions(deps = {}) {
     handleShowRecommenderManager,
     createSettingsModalBase,
     refreshLockedYearStatus,
+    refreshCommunityLists,
   } = deps;
 
   async function handleConfirmAggregateReveal(year) {
@@ -262,7 +263,7 @@ export function createSettingsAggregateActions(deps = {}) {
         'success'
       );
       categoryData.admin = null;
-      await loadCategoryData('admin');
+      await Promise.all([loadCategoryData('admin'), refreshCommunityLists?.()]);
     } catch (error) {
       console.error('Error updating user list visibility:', error);
       const errorMsg =
