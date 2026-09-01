@@ -100,7 +100,6 @@ function buildDeps(overrides = {}) {
     handleShowContributorManager: async () => {},
     handleToggleYearLock: async () => {},
     handleToggleRecommendationLock: async () => {},
-    handleToggleUserListVisibility: async () => {},
     handleShowRecommenderManager: async () => {},
     handleFetchAlbumSummaries: async () => {},
     handleStopAlbumSummaries: async () => {},
@@ -181,26 +180,6 @@ describe('settings admin handlers', () => {
     historicalListImportBtn.listeners.click();
 
     assert.strictEqual(calls.historicalImports, 1);
-  });
-
-  it('wires user-list visibility controls', async () => {
-    const calls = [];
-    const button = createElement({
-      dataset: { year: '2025', revealed: 'true' },
-    });
-    const doc = createDocument({
-      selectors: { '.community-list-visibility': [button] },
-    });
-    const { deps } = buildDeps({
-      doc,
-      handleToggleUserListVisibility: async (...args) => calls.push(args),
-    });
-
-    const { attachAdminHandlers } = createSettingsAdminHandlers(deps);
-    attachAdminHandlers();
-    await button.listeners.click();
-
-    assert.deepStrictEqual(calls, [[2025, true]]);
   });
 
   it('does not call regenerate API when confirmation is rejected', async () => {

@@ -13,15 +13,11 @@ const {
 } = require('../../services/admin-bootstrap-service');
 const { createAggregateList } = require('../../services/aggregate-list');
 const { createTelegramNotifier } = require('../../services/telegram');
-const {
-  createCommunityListService,
-} = require('../../services/community-list-service');
 
 function buildAggregateLists({
   years,
   statusByYear,
   recByYear,
-  visibilityByYear,
   createDefaultAggregateStatus,
 }) {
   return years.map((year) => {
@@ -31,7 +27,6 @@ function buildAggregateLists({
 
     return {
       year,
-      userListsVisible: visibilityByYear.get(year)?.revealed === true,
       status: statusForResponse,
       stats: status.exists ? status.rawStats || null : null,
       recStatus: recByYear.get(year) || {
@@ -51,7 +46,6 @@ module.exports = (app, deps) => {
   const adminEventService = createAdminEventService({ db, logger });
   const adminBootstrapService = createAdminBootstrapService({ db });
   const aggregateListService = createAggregateList({ db, logger });
-  const communityListService = createCommunityListService({ db });
 
   app.get('/api/admin/bootstrap', ensureAuth, ensureAdmin, async (req, res) => {
     try {
@@ -82,14 +76,12 @@ module.exports = (app, deps) => {
       const [
         statusByYear,
         recByYear,
-        visibilityByYear,
         summaryStats,
         imageStats,
         availabilityStatsData,
       ] = await Promise.all([
         adminBootstrapService.getAggregateStatuses(years),
         adminBootstrapService.getRecommendationStatuses(years, req.user._id),
-        communityListService.getVisibilityForYears(years),
         albumSummaryService ? albumSummaryService.getStats() : null,
         imageRefetchService ? imageRefetchService.getStats() : null,
         availabilityResolutionService
@@ -118,7 +110,6 @@ module.exports = (app, deps) => {
         years,
         statusByYear,
         recByYear,
-        visibilityByYear,
         createDefaultAggregateStatus:
           adminBootstrapService.createDefaultAggregateStatus,
       });

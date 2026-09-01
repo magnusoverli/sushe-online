@@ -72,7 +72,6 @@ describe('settings admin renderer', () => {
             albumsWith2Voters: 4,
           },
           recStatus: { locked: false },
-          userListsVisible: false,
         },
       ],
       users: [
@@ -100,8 +99,7 @@ describe('settings admin renderer', () => {
     assert.match(html, /1\/2 Confirmations/);
     assert.match(html, /aggregate-revoke-confirm/);
     assert.match(html, /Manage Contributors/);
-    assert.match(html, /community-list-visibility/);
-    assert.match(html, /Reveal user lists/);
+    assert.doesNotMatch(html, /community-list-visibility|Reveal user lists/);
     assert.match(html, /User Management/);
     assert.ok(
       html.indexOf('Historical List Import') < html.indexOf('User Management')

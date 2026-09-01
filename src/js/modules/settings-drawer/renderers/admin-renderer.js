@@ -217,12 +217,6 @@ export function createSettingsAdminRenderer() {
                     <i class="fas fa-thumbs-up mr-2 text-blue-400"></i><i class="fas fa-${isRecLocked ? 'unlock' : 'lock'} mr-1"></i>${isRecLocked ? 'Unlock' : 'Lock'} Recommendations
                   </button>`;
 
-                  const userListsVisible = item.userListsVisible === true;
-                  actionsHtml += `
-                  <button class="settings-button community-list-visibility" data-year="${year}" data-revealed="${userListsVisible}">
-                    <i class="fas fa-users mr-2"></i>${userListsVisible ? 'Hide' : 'Reveal'} user lists
-                  </button>`;
-
                   if (isRecLocked) {
                     actionsHtml += `<button class="settings-button opacity-50 cursor-not-allowed" disabled data-year="${year}" title="Unlock recommendations to manage recommenders">
                     <i class="fas fa-thumbs-up mr-2 text-blue-400"></i><i class="fas fa-user-check mr-1"></i>Manage Recommenders

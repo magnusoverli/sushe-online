@@ -319,21 +319,13 @@ describe('settings aggregate actions', () => {
     assert.deepStrictEqual(managerCalls, [2023]);
   });
 
-  it('updates user-list visibility without creating an aggregate', async () => {
-    const confirmations = [];
-    const apiCalls = [];
+  it('refreshes community lists when aggregate confirmation reveals the year', async () => {
+    const categoryData = { admin: { stale: true } };
     const loads = [];
     let communityRefreshes = 0;
-    const categoryData = { admin: { aggregateLists: [{ year: 2025 }] } };
     const actions = createSettingsAggregateActions({
-      showConfirmation: async (...args) => {
-        confirmations.push(args);
-        return true;
-      },
-      apiCall: async (...args) => {
-        apiCalls.push(args);
-        return { success: true };
-      },
+      showConfirmation: async () => true,
+      apiCall: async () => ({ success: true, revealed: true }),
       showToast() {},
       categoryData,
       loadCategoryData: async (category) => loads.push(category),
@@ -343,18 +335,8 @@ describe('settings aggregate actions', () => {
       doc: { querySelector: () => null },
     });
 
-    await actions.handleToggleUserListVisibility(2025, false);
+    await actions.handleConfirmAggregateReveal(2025);
 
-    assert.match(
-      confirmations[0][2],
-      /does not create or reveal an aggregate/i
-    );
-    assert.deepStrictEqual(apiCalls, [
-      [
-        '/api/admin/user-list-visibility/2025',
-        { method: 'PUT', body: JSON.stringify({ revealed: true }) },
-      ],
-    ]);
     assert.strictEqual(categoryData.admin, null);
     assert.deepStrictEqual(loads, ['admin']);
     assert.strictEqual(communityRefreshes, 1);

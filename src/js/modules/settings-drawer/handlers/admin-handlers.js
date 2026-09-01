@@ -45,7 +45,6 @@ export function createSettingsAdminHandlers(deps = {}) {
     handleShowContributorManager,
     handleToggleYearLock,
     handleToggleRecommendationLock,
-    handleToggleUserListVisibility,
     handleShowRecommenderManager,
     handleFetchAlbumSummaries,
     handleStopAlbumSummaries,
@@ -312,14 +311,6 @@ export function createSettingsAdminHandlers(deps = {}) {
         const year = parseInt(btn.dataset.year, 10);
         const isCurrentlyLocked = btn.dataset.locked === 'true';
         await handleToggleRecommendationLock(year, isCurrentlyLocked);
-      });
-    });
-
-    doc.querySelectorAll('.community-list-visibility').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const year = parseInt(btn.dataset.year, 10);
-        const isCurrentlyVisible = btn.dataset.revealed === 'true';
-        await handleToggleUserListVisibility(year, isCurrentlyVisible);
       });
     });
 

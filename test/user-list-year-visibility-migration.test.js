@@ -1,6 +1,7 @@
 const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
 const migration = require('../db/migrations/migrations/077_add_user_list_year_visibility');
+const unifiedRevealMigration = require('../db/migrations/migrations/078_unify_year_reveal');
 
 describe('077 user-list year visibility migration', () => {
   it('creates independent visibility and backfills only revealed aggregate years', async () => {
@@ -28,5 +29,18 @@ describe('077 user-list year visibility migration', () => {
     const sql = pool.query.mock.calls[0].arguments[0];
     assert.match(sql, /DROP TABLE IF EXISTS user_list_year_visibility/);
     assert.doesNotMatch(sql, /master_lists/);
+  });
+});
+
+describe('078 unified year reveal migration', () => {
+  it('removes only the redundant user-list visibility table', async () => {
+    const pool = { query: mock.fn(async () => ({ rows: [] })) };
+
+    await unifiedRevealMigration.up(pool);
+
+    const sql = pool.query.mock.calls[0].arguments[0];
+    assert.match(sql, /DROP TABLE IF EXISTS user_list_year_visibility/);
+    assert.doesNotMatch(sql, /master_lists/);
+    assert.strictEqual(unifiedRevealMigration.irreversible, true);
   });
 });

@@ -1,70 +1,9 @@
 const { ensureDb } = require('../db/postgres');
 const { coverImageUrl: defaultCoverImageUrl } = require('./list/item-mapper');
 
-function mapVisibility(row) {
-  return {
-    year: row.year,
-    revealed: row.revealed === true,
-    revealedAt: row.revealed_at || null,
-    revealedBy: row.revealed_by || null,
-    updatedAt: row.updated_at || null,
-  };
-}
-
 function createCommunityListService(deps = {}) {
   const db = ensureDb(deps.db, 'community-list-service');
   const coverImageUrl = deps.coverImageUrl || defaultCoverImageUrl;
-
-  async function getVisibilityForYears(years) {
-    if (!Array.isArray(years) || years.length === 0) return new Map();
-    const uniqueYears = [...new Set(years)];
-    const result = await db.raw(
-      `SELECT year, revealed, revealed_at, revealed_by, updated_at
-       FROM user_list_year_visibility
-       WHERE year = ANY($1::int[])`,
-      [uniqueYears],
-      { name: 'community-list-year-visibility', retryable: true }
-    );
-    const visibilityByYear = new Map(
-      result.rows.map((row) => [row.year, mapVisibility(row)])
-    );
-    for (const year of uniqueYears) {
-      if (!visibilityByYear.has(year)) {
-        visibilityByYear.set(year, {
-          year,
-          revealed: false,
-          revealedAt: null,
-          revealedBy: null,
-          updatedAt: null,
-        });
-      }
-    }
-    return visibilityByYear;
-  }
-
-  async function setYearVisibility(year, revealed, adminId) {
-    const result = await db.raw(
-      `INSERT INTO user_list_year_visibility (
-         year, revealed, revealed_at, revealed_by, updated_at
-       )
-       VALUES (
-         $1,
-         $2,
-         CASE WHEN $2 THEN NOW() ELSE NULL END,
-         CASE WHEN $2 THEN $3 ELSE NULL END,
-         NOW()
-       )
-       ON CONFLICT (year) DO UPDATE
-       SET revealed = EXCLUDED.revealed,
-           revealed_at = EXCLUDED.revealed_at,
-           revealed_by = EXCLUDED.revealed_by,
-           updated_at = NOW()
-       RETURNING year, revealed, revealed_at, revealed_by, updated_at`,
-      [year, revealed, adminId],
-      { name: 'community-list-set-year-visibility' }
-    );
-    return mapVisibility(result.rows[0]);
-  }
 
   async function getMainListSummaries(viewerId) {
     const result = await db.raw(
@@ -75,8 +14,8 @@ function createCommunityListService(deps = {}) {
               COUNT(li._id)::int AS item_count
        FROM lists l
        JOIN users u ON u._id = l.user_id
-       JOIN user_list_year_visibility visibility
-         ON visibility.year = l.year AND visibility.revealed = TRUE
+       JOIN master_lists aggregate
+         ON aggregate.year = l.year AND aggregate.revealed = TRUE
        LEFT JOIN list_items li ON li.list_id = l._id
        WHERE l.is_main = TRUE
          AND l.user_id <> $1
@@ -118,11 +57,11 @@ function createCommunityListService(deps = {}) {
 
   async function getMainListDetail(listId, viewerId) {
     const result = await db.raw(
-      `WITH visibility AS (
+      `WITH revealed_years AS (
          SELECT year
-         FROM user_list_year_visibility
-         WHERE revealed = TRUE
-       )
+          FROM master_lists
+          WHERE revealed = TRUE
+        )
        SELECT l._id AS list_id,
               l.name,
               l.year,
@@ -140,7 +79,7 @@ function createCommunityListService(deps = {}) {
                a.cover_image_updated_at,
               a.cover_thumbnail_updated_at
        FROM lists l
-       JOIN visibility ON visibility.year = l.year
+       JOIN revealed_years ON revealed_years.year = l.year
        JOIN users u ON u._id = l.user_id
        LEFT JOIN list_items li ON li.list_id = l._id
        LEFT JOIN albums a ON a.album_id = li.album_id
@@ -166,8 +105,6 @@ function createCommunityListService(deps = {}) {
   }
 
   return {
-    getVisibilityForYears,
-    setYearVisibility,
     getMainListSummaries,
     getMainListDetail,
   };

@@ -5,64 +5,7 @@ const {
 } = require('../services/community-list-service');
 
 describe('community-list-service', () => {
-  it('returns explicit visibility status for every requested year', async () => {
-    const raw = mock.fn(async () => ({
-      rows: [
-        {
-          year: 2024,
-          revealed: true,
-          revealed_at: '2025-01-01T00:00:00.000Z',
-          revealed_by: 'admin-1',
-          updated_at: '2025-01-01T00:00:00.000Z',
-        },
-      ],
-    }));
-    const service = createCommunityListService({ db: { raw } });
-
-    const result = await service.getVisibilityForYears([2024, 2023]);
-
-    assert.strictEqual(result.get(2024).revealed, true);
-    assert.deepStrictEqual(result.get(2023), {
-      year: 2023,
-      revealed: false,
-      revealedAt: null,
-      revealedBy: null,
-      updatedAt: null,
-    });
-  });
-
-  it('toggles only independent visibility and records the admin for reveals', async () => {
-    const raw = mock.fn(async (sql, params) => ({
-      rows: [
-        {
-          year: params[0],
-          revealed: params[1],
-          revealed_at: params[1] ? '2025-01-01T00:00:00.000Z' : null,
-          revealed_by: params[1] ? params[2] : null,
-          updated_at: '2025-01-01T00:00:00.000Z',
-        },
-      ],
-    }));
-    const service = createCommunityListService({ db: { raw } });
-
-    const visible = await service.setYearVisibility(2024, true, 'admin-1');
-    const hidden = await service.setYearVisibility(2024, false, 'admin-1');
-
-    assert.strictEqual(visible.revealedBy, 'admin-1');
-    assert.strictEqual(hidden.revealed, false);
-    for (const call of raw.mock.calls) {
-      const [sql, params] = call.arguments;
-      assert.match(sql, /user_list_year_visibility/);
-      assert.doesNotMatch(sql, /master_lists/);
-      assert.deepStrictEqual(params, [
-        2024,
-        call === raw.mock.calls[0],
-        'admin-1',
-      ]);
-    }
-  });
-
-  it('lists approved users main lists for revealed years without contributor filtering', async () => {
+  it('lists approved users main lists only for revealed aggregate years', async () => {
     const raw = mock.fn(async () => ({
       rows: [
         {
@@ -81,15 +24,15 @@ describe('community-list-service', () => {
     const [sql, params] = raw.mock.calls[0].arguments;
 
     assert.deepStrictEqual(params, ['viewer-1']);
-    assert.match(sql, /JOIN user_list_year_visibility/);
-    assert.match(sql, /visibility\.revealed = TRUE/);
+    assert.match(sql, /JOIN master_lists aggregate/);
+    assert.match(sql, /aggregate\.revealed = TRUE/);
     assert.match(sql, /l\.is_main = TRUE/);
     assert.match(sql, /l\.user_id <> \$1/);
     assert.match(sql, /u\.approval_status = 'approved'/);
     assert.match(sql, /ORDER BY u\.username ASC, l\.year DESC/);
     assert.doesNotMatch(
       sql,
-      /aggregate_list_contributors|master_lists|COALESCE/
+      /aggregate_list_contributors|user_list_year_visibility|COALESCE/
     );
     assert.deepStrictEqual(result, [
       {
@@ -147,7 +90,9 @@ describe('community-list-service', () => {
 
     assert.deepStrictEqual(params, ['list-1', 'viewer-1']);
     assert.strictEqual((sql.match(/WITH\s+/g) || []).length, 1);
-    assert.match(sql, /JOIN visibility ON visibility\.year = l\.year/);
+    assert.match(sql, /FROM master_lists/);
+    assert.match(sql, /JOIN revealed_years ON revealed_years\.year = l\.year/);
+    assert.doesNotMatch(sql, /user_list_year_visibility/);
     assert.match(sql, /l\.user_id <> \$2/);
     assert.match(sql, /l\.is_main = TRUE/);
     assert.match(sql, /u\.approval_status = 'approved'/);

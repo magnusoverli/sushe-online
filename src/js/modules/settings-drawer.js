@@ -297,7 +297,6 @@ export function createSettingsDrawer(deps = {}) {
     handleResetAggregateReveal,
     handleToggleYearLock,
     handleToggleRecommendationLock,
-    handleToggleUserListVisibility,
     handleRecomputeAggregateList,
     handleAuditAggregateList,
   } = createSettingsAggregateActions({
@@ -349,7 +348,6 @@ export function createSettingsDrawer(deps = {}) {
     handleShowContributorManager,
     handleToggleYearLock,
     handleToggleRecommendationLock,
-    handleToggleUserListVisibility,
     handleShowRecommenderManager,
     handleFetchAlbumSummaries,
     handleStopAlbumSummaries,

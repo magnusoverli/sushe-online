@@ -47,7 +47,10 @@ export function createSettingsAggregateActions(deps = {}) {
         }
 
         categoryData.admin = null;
-        await loadCategoryData('admin');
+        await Promise.all([
+          loadCategoryData('admin'),
+          response.revealed ? refreshCommunityLists?.() : Promise.resolve(),
+        ]);
       }
     } catch (error) {
       console.error('Error confirming aggregate reveal:', error);
@@ -237,39 +240,6 @@ export function createSettingsAggregateActions(deps = {}) {
         error.data?.error ||
         error.message ||
         `Failed to ${action} recommendations`;
-      showToast(errorMsg, 'error');
-    }
-  }
-
-  async function handleToggleUserListVisibility(year, isCurrentlyVisible) {
-    const revealed = !isCurrentlyVisible;
-    const action = revealed ? 'Reveal' : 'Hide';
-    const confirmed = await showConfirmation(
-      `${action} User Lists for ${year}`,
-      `${action} community user lists for ${year}?`,
-      'This only changes whether individual user lists can be browsed. It does not create or reveal an aggregate list.',
-      `${action} User Lists`
-    );
-
-    if (!confirmed) return;
-
-    try {
-      await apiCall(`/api/admin/user-list-visibility/${year}`, {
-        method: 'PUT',
-        body: JSON.stringify({ revealed }),
-      });
-      showToast(
-        `User lists for ${year} are now ${revealed ? 'visible' : 'hidden'}`,
-        'success'
-      );
-      categoryData.admin = null;
-      await Promise.all([loadCategoryData('admin'), refreshCommunityLists?.()]);
-    } catch (error) {
-      console.error('Error updating user list visibility:', error);
-      const errorMsg =
-        error.data?.error ||
-        error.message ||
-        'Failed to update user list visibility';
       showToast(errorMsg, 'error');
     }
   }
@@ -660,7 +630,6 @@ export function createSettingsAggregateActions(deps = {}) {
     handleResetAggregateReveal,
     handleToggleYearLock,
     handleToggleRecommendationLock,
-    handleToggleUserListVisibility,
     handleRecomputeAggregateList,
     handleAuditAggregateList,
   };
