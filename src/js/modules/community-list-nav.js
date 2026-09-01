@@ -28,6 +28,7 @@ export function renderCommunityRootHtml({
   expanded,
   status,
   users,
+  userExpandState,
   activeListId,
 }) {
   const chevron = expanded ? 'fa-chevron-down' : 'fa-chevron-right';
@@ -44,21 +45,37 @@ export function renderCommunityRootHtml({
     content =
       '<p class="px-2.5 py-2 text-sm text-gray-500">No user lists are available.</p>';
   } else if (expanded) {
-    const listItems = users
-      .flatMap(({ username, lists }) =>
-        lists.map((list) => {
-          const active = activeListId === list.id ? ' active' : '';
-          const label = `${username} · ${list.year} · ${list.name}`;
-          return `<li>
-            <button type="button" data-community-list-id="${escapeHtml(list.id)}" class="community-list-btn sidebar-leaf${active} text-gray-300" title="${escapeHtml(label)}">
-              <span class="sidebar-label">${escapeHtml(label)}</span>
-              <span class="sidebar-count" title="${escapeHtml(list.itemCount ?? 0)} albums">${escapeHtml(list.itemCount ?? 0)}</span>
-            </button>
-          </li>`;
-        })
-      )
+    content = users
+      .map(({ username, lists }, index) => {
+        const userExpanded = userExpandState[username] === true;
+        const userChevron = userExpanded
+          ? 'fa-chevron-down'
+          : 'fa-chevron-right';
+        const contentId = `community-user-lists-${index}`;
+        const listItems = userExpanded
+          ? lists
+              .map((list) => {
+                const active = activeListId === list.id ? ' active' : '';
+                const label = `${list.year} · ${list.name}`;
+                return `<li>
+                  <button type="button" data-community-list-id="${escapeHtml(list.id)}" class="community-list-btn sidebar-leaf${active} text-gray-300" title="${escapeHtml(`${username} · ${label}`)}">
+                    <span class="sidebar-label">${escapeHtml(label)}</span>
+                  </button>
+                </li>`;
+              })
+              .join('')
+          : '';
+
+        return `<div class="community-user" data-community-user="${escapeHtml(username)}">
+          <button type="button" data-community-user-toggle="${escapeHtml(username)}" class="community-user-toggle sidebar-leaf text-gray-200" aria-expanded="${userExpanded}" aria-controls="${contentId}">
+            <i class="fas ${userChevron} fa-fw mr-1.5 text-xs" aria-hidden="true"></i>
+            <i class="fas fa-user mr-1.5 text-xs text-gray-400" aria-hidden="true"></i>
+            <span class="sidebar-label">${escapeHtml(username)}</span>
+          </button>
+          ${userExpanded ? `<ul id="${contentId}" class="community-user-lists sidebar-nested">${listItems}</ul>` : ''}
+        </div>`;
+      })
       .join('');
-    content = `<ul class="sidebar-nested">${listItems}</ul>`;
   }
 
   return `<div class="community-root sidebar-section-divider" data-community-root>
@@ -98,6 +115,10 @@ export function createCommunityListNav(deps = {}) {
     return `communityRootExpanded:${getStorageScope()}`;
   }
 
+  function userStorageKey() {
+    return `communityUserExpandState:${getStorageScope()}`;
+  }
+
   function isRootExpanded() {
     try {
       return storage?.getItem(rootStorageKey()) === 'true';
@@ -116,6 +137,26 @@ export function createCommunityListNav(deps = {}) {
 
   function collapseRoot() {
     setRootExpanded(false);
+  }
+
+  function getUserExpandState() {
+    try {
+      const parsed = JSON.parse(storage?.getItem(userStorageKey()) || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed
+        : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  function setUserExpanded(username, expanded) {
+    const state = { ...getUserExpandState(), [username]: expanded };
+    try {
+      storage?.setItem(userStorageKey(), JSON.stringify(state));
+    } catch (_error) {
+      // Expansion persistence is optional.
+    }
   }
 
   function ensureSummaries() {
@@ -163,8 +204,8 @@ export function createCommunityListNav(deps = {}) {
       expanded,
       status,
       users,
+      userExpandState: getUserExpandState(),
       activeListId: getActiveCommunityListId(),
-      isMobile,
     });
 
     root.addEventListener('click', (event) => {
@@ -182,6 +223,14 @@ export function createCommunityListNav(deps = {}) {
 
       if (event.target.closest('[data-community-retry]')) {
         status = 'idle';
+        updateListNav();
+        return;
+      }
+
+      const userToggle = event.target.closest('[data-community-user-toggle]');
+      if (userToggle) {
+        const username = userToggle.dataset.communityUserToggle;
+        setUserExpanded(username, getUserExpandState()[username] !== true);
         updateListNav();
         return;
       }

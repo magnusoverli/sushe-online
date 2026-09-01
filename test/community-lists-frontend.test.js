@@ -26,7 +26,7 @@ describe('community list frontend', () => {
     );
   });
 
-  it('renders escaped, non-sortable community navigation without menus or stars', async () => {
+  it('renders escaped expandable users with every revealed year and no album counts', async () => {
     const { renderCommunityRootHtml } =
       await import('../src/js/modules/community-list-nav.js');
     const username = 'b<o"b';
@@ -36,18 +36,19 @@ describe('community list frontend', () => {
       users: [
         {
           username,
-          lists: [
-            {
-              id: 'list"<1',
-              name: '<img src=x onerror=alert(1)>',
-              year: 2025,
-              itemCount: 4,
-            },
-          ],
+          lists: [2014, 2013, 2012, 2011, 2010].map((year) => ({
+            id: year === 2014 ? 'list"<1' : `list-${year}`,
+            name:
+              year === 2014
+                ? '<img src=x onerror=alert(1)>'
+                : `Årslisten ${year}`,
+            year,
+            itemCount: 4,
+          })),
         },
       ],
+      userExpandState: { [username]: true },
       activeListId: 'list"<1',
-      isMobile: false,
     });
 
     assert.match(html, /User lists/);
@@ -57,12 +58,19 @@ describe('community list frontend', () => {
     assert.match(html, /community-list-btn[^"\n]*active/);
     assert.match(html, /sidebar-group-header/);
     assert.match(html, /community-list-btn sidebar-leaf/);
-    assert.match(html, /sidebar-count[^>]*>4</);
-    assert.match(html, /b&lt;o&quot;b · 2025 · &lt;img/);
+    assert.match(html, /data-community-user-toggle="b&lt;o&quot;b"/);
+    assert.match(html, /aria-expanded="true"/);
+    assert.strictEqual(
+      (html.match(/data-community-list-id=/g) || []).length,
+      5
+    );
+    for (const year of [2014, 2013, 2012, 2011, 2010]) {
+      assert.match(html, new RegExp(`${year} ·`));
+    }
     assert.doesNotMatch(html, /group-section/);
     assert.doesNotMatch(
       html,
-      /data-list-menu-btn|data-community-user-toggle|fa-star|fa-list/
+      /data-list-menu-btn|fa-star|fa-list|sidebar-count/
     );
   });
 
@@ -143,8 +151,29 @@ describe('community list frontend', () => {
     assert.strictEqual(rerenders, 1);
 
     nav.appendCommunityRoot(container, true);
-    assert.match(createdRoots[1].innerHTML, /Best of 2025/);
+    assert.match(createdRoots[1].innerHTML, />bob</);
+    assert.match(createdRoots[1].innerHTML, />zoe</);
+    assert.doesNotMatch(createdRoots[1].innerHTML, /Best of 2025/);
+
     await createdRoots[1].listeners.click({
+      target: {
+        closest(selector) {
+          if (selector === '[data-community-user-toggle]') {
+            return { dataset: { communityUserToggle: 'bob' } };
+          }
+          return null;
+        },
+      },
+    });
+    assert.strictEqual(
+      values.get('communityUserExpandState:viewer-1'),
+      JSON.stringify({ bob: true })
+    );
+
+    nav.appendCommunityRoot(container, true);
+    assert.match(createdRoots[2].innerHTML, /Best of 2025/);
+    assert.doesNotMatch(createdRoots[2].innerHTML, /Zoe&#39;s 2025/);
+    await createdRoots[2].listeners.click({
       target: {
         closest(selector) {
           if (selector === '[data-community-list-id]') {
@@ -167,12 +196,12 @@ describe('community list frontend', () => {
       '/api/community/main-lists',
       '/api/community/main-lists',
     ]);
-    assert.strictEqual(rerenders, 3);
+    assert.strictEqual(rerenders, 4);
 
     nav.appendCommunityRoot(container, true);
-    assert.match(createdRoots[2].innerHTML, /Best of 2010/);
-    assert.match(createdRoots[2].innerHTML, /bob · 2010 · Best of 2010/);
-    assert.match(createdRoots[2].innerHTML, /zoe · 2010 · Zoe&#39;s 2010/);
+    assert.match(createdRoots[3].innerHTML, /2010 · Best of 2010/);
+    assert.doesNotMatch(createdRoots[3].innerHTML, /Zoe&#39;s 2010/);
+    assert.doesNotMatch(createdRoots[3].innerHTML, /sidebar-count/);
   });
 
   it('selects into isolated read-only state without persistence or realtime subscribe', async () => {
