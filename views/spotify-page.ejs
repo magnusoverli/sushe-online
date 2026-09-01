@@ -31,6 +31,8 @@
     :root {
       <%- generateAccentCssVars(user) %>
       --sidebar-transition-duration: 200ms;
+      --sidebar-width: 15rem;
+      --sidebar-collapsed-width: 3rem;
     }
     
     /* Apply accent color to text and borders only, not buttons */
@@ -52,7 +54,7 @@
     
     @media (min-width: 1024px) {
       .main-content {
-        grid-template-columns: 14.5rem 1fr; /* Desktop: 232px sidebar */
+        grid-template-columns: var(--sidebar-width) 1fr;
       }
     }
     
@@ -76,7 +78,7 @@
     
     @media (min-width: 1024px) {
       .sidebar {
-        width: 15rem;
+        width: var(--sidebar-width);
         overflow: visible;
         border-right: 1px solid #1f2937; /* Restore border on desktop */
       }
@@ -173,8 +175,8 @@
   </script>
   <style>
     /* When collapsed state is known before paint, apply immediately without transitions */
-    .sidebar-is-collapsed .sidebar { width: 3rem !important; }
-    .sidebar-is-collapsed .main-content { grid-template-columns: 3rem 1fr !important; }
+    .sidebar-is-collapsed .sidebar { width: var(--sidebar-collapsed-width) !important; }
+    .sidebar-is-collapsed .main-content { grid-template-columns: var(--sidebar-collapsed-width) 1fr !important; }
     .sidebar-is-collapsed .sidebar nav { opacity: 0; visibility: hidden; }
     .sidebar-is-collapsed .sidebar .sidebar-action-btn { opacity: 0; visibility: hidden; width: 0; padding: 0; }
     .sidebar-is-collapsed .sidebar .sidebar-actions-container { padding: 0; border-color: transparent; }
@@ -204,7 +206,7 @@
       
       <nav class="flex-1 overflow-y-auto p-2 flex flex-col min-h-0">
         <div class="flex-1 overflow-y-auto">
-          <ul id="listNav" class="space-y-0.5 pr-2">
+          <ul id="listNav" class="space-y-px pr-1">
             <!-- Lists will be populated here -->
           </ul>
         </div>
@@ -392,7 +394,7 @@
         
         <!-- Lists -->
         <div class="flex-1 overflow-y-auto p-2">
-          <ul id="mobileListNav" class="space-y-0.5">
+          <ul id="mobileListNav" class="space-y-px">
             <!-- Mobile list items will be populated here -->
           </ul>
         </div>

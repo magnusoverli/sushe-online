@@ -735,7 +735,7 @@
 }
 
 /* Mobile sidebar drag feedback */
-@media (max-width: 1024px) {
+@media (max-width: 1023px) {
   /* Group section being dragged */
   .group-section.sortable-chosen,
   .group-section.sidebar-dragging {
@@ -819,6 +819,93 @@
   opacity: 1;
 }
 
+/* Shared sidebar density and interaction primitives. */
+.sidebar-group-header,
+.sidebar-leaf {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-align: left;
+}
+
+.sidebar-group-header {
+  min-height: 1.875rem;
+  padding: 0 0.625rem;
+  font-weight: 700;
+}
+
+.sidebar-leaf {
+  min-height: 2rem;
+  padding: 0 0.625rem;
+}
+
+.sidebar-nested {
+  padding-left: 1rem;
+}
+
+.sidebar-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-count {
+  min-width: 1.5rem;
+  margin-left: 0.375rem;
+  color: #9ca3af;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  border-radius: 0.25rem;
+  color: #9ca3af;
+}
+
+.sidebar-group-header:focus-visible,
+.sidebar-leaf:focus-visible,
+.sidebar-menu-trigger:focus-visible {
+  outline: 2px solid var(--accent-color, #dc2626);
+  outline-offset: -2px;
+}
+
+.sidebar-section-divider {
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid #374151;
+}
+
+@media (max-width: 1023px) {
+  .sidebar-group-header,
+  .sidebar-leaf {
+    min-height: 2.5rem;
+  }
+
+  .sidebar-menu-trigger {
+    width: 2.75rem;
+    height: 2.75rem;
+    flex-basis: 2.75rem;
+  }
+
+  .sidebar-nested {
+    padding-left: 1.125rem;
+  }
+}
+
 /* Sidebar group types - subtle visual distinction */
 .group-section.year-group {
   background-color: rgba(34, 197, 94, 0.05); /* green-500 at 5% */
@@ -849,15 +936,12 @@
 
 /* Spacing from category border */
 .group-header-wrapper {
-  margin-left: -2px;
-  margin-top: 4px;
-  margin-right: 6px;
-  margin-bottom: 2px;
+  margin: 1px 2px 0;
 }
 
 .group-lists {
-  margin-right: 6px;
-  margin-bottom: 2px;
+  margin-right: 2px;
+  margin-bottom: 1px;
   overflow: hidden;
   transition:
     max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1),

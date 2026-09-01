@@ -212,6 +212,7 @@ export function createListNav(deps = {}) {
     if (section) {
       const listsContainer = section.querySelector('.group-lists');
       const chevron = section.querySelector('.group-chevron');
+      const header = section.querySelector('.group-header-btn');
       if (listsContainer) {
         if (isExpanded) {
           // Collapsing: set max-height to current height first, then collapse
@@ -240,6 +241,7 @@ export function createListNav(deps = {}) {
         chevron.classList.toggle('fa-chevron-right', isExpanded);
         chevron.classList.toggle('fa-chevron-down', !isExpanded);
       }
+      header?.setAttribute('aria-expanded', String(!isExpanded));
     }
   }
 
@@ -306,34 +308,16 @@ export function createListNav(deps = {}) {
    * @param {string} groupId - Group ID for menu button
    * @returns {string} HTML string
    */
-  function createGroupHeaderHTML(
-    name,
-    isExpanded,
-    isYearGroup,
-    isMobile = false,
-    groupId = '',
-    showMenu = false
-  ) {
+  function createGroupHeaderHTML(name, isExpanded, isYearGroup) {
     const chevronClass = isExpanded ? 'fa-chevron-down' : 'fa-chevron-right';
     const iconClass = isYearGroup ? 'fa-calendar-alt' : 'fa-folder';
 
-    // For mobile: show menu button (menu accessed via click)
-    // For desktop: no right-side element (menu accessed via right-click)
-    // The menu is hidden for auto-managed sections (see hasGroupMenu).
-    const rightSide =
-      isMobile && showMenu
-        ? `<button data-category-menu-btn="${groupId}" class="p-1 text-gray-400 active:text-gray-200 no-drag shrink-0 category-menu-btn" aria-label="Category options">
-          <i class="fas fa-ellipsis-v text-xs"></i>
-        </button>`
-        : '';
-
     return `
       <div class="flex items-center flex-1 min-w-0">
-        <i class="fas ${chevronClass} fa-fw mr-2 text-xs group-chevron shrink-0"></i>
-        <i class="fas ${iconClass} mr-2 text-xs text-gray-300 shrink-0"></i>
-        <span class="truncate">${name}</span>
+        <i class="fas ${chevronClass} fa-fw mr-1.5 text-xs group-chevron shrink-0" aria-hidden="true"></i>
+        <i class="fas ${iconClass} mr-1.5 text-xs text-gray-300 shrink-0" aria-hidden="true"></i>
+        <span class="sidebar-label">${name}</span>
       </div>
-      ${rightSide}
     `;
   }
 
@@ -345,14 +329,13 @@ export function createListNav(deps = {}) {
    * @returns {string} HTML string
    */
   function createRecommendationsButtonHTML(year, isActive, isMobile) {
-    const paddingClass = isMobile ? 'py-2.5' : 'py-2';
     const widthClass = isMobile ? 'flex-1' : 'w-full';
     const activeClass = isActive ? 'active' : '';
 
     return `
-      <button data-recommendations-year="${year}" class="recommendations-btn ${widthClass} text-left px-3 ${paddingClass} rounded-sm text-sm transition duration-200 text-gray-300 ${activeClass} flex items-center">
-        <i class="fas fa-thumbs-up mr-2 shrink-0 text-blue-400"></i>
-        <span class="truncate flex-1">Recommendations</span>
+      <button data-recommendations-year="${year}" class="recommendations-btn sidebar-leaf ${widthClass} transition-colors duration-200 text-gray-300 ${activeClass}">
+        <i class="fas fa-thumbs-up mr-1.5 shrink-0 text-blue-400" aria-hidden="true"></i>
+        <span class="sidebar-label">Recommendations</span>
       </button>
     `;
   }
@@ -375,7 +358,6 @@ export function createListNav(deps = {}) {
     isMobile,
     albumCount = 0
   ) {
-    const paddingClass = isMobile ? 'py-2.5' : 'py-2';
     const widthClass = isMobile ? 'flex-1' : 'w-full';
     const activeClass = isActive ? 'active' : '';
     const mainBadge = isMain
@@ -384,18 +366,18 @@ export function createListNav(deps = {}) {
 
     // Use data-list-id for the ID, keep data-list-name for display/logging purposes
     const buttonHTML = `
-      <button data-list-id="${listId}" data-list-name="${listName}" class="sidebar-list-btn ${widthClass} text-left px-3 ${paddingClass} rounded-sm text-sm transition duration-200 text-gray-300 ${activeClass} flex items-center">
-        <i class="fas fa-list mr-2 shrink-0"></i>
-        <span class="truncate flex-1">${listName} (${albumCount})</span>
+      <button data-list-id="${listId}" data-list-name="${listName}" class="sidebar-list-btn sidebar-leaf ${widthClass} transition-colors duration-200 text-gray-300 ${activeClass}">
+        <span class="sidebar-label">${listName}</span>
         ${mainBadge}
+        <span class="sidebar-count" title="${albumCount} albums">${albumCount}</span>
       </button>
     `;
 
     if (isMobile) {
       return `
         ${buttonHTML}
-        <button data-list-menu-btn="${listId}" data-list-menu-name="${listName}" class="p-1.5 text-gray-400 active:text-gray-200 no-drag shrink-0" aria-label="List options">
-          <i class="fas fa-ellipsis-v"></i>
+        <button data-list-menu-btn="${listId}" data-list-menu-name="${listName}" class="sidebar-menu-trigger no-drag" aria-label="List options">
+          <i class="fas fa-ellipsis-v" aria-hidden="true"></i>
         </button>
       `;
     }
@@ -421,7 +403,7 @@ export function createListNav(deps = {}) {
     const li = document.createElement('li');
 
     if (isMobile) {
-      li.className = 'flex items-center';
+      li.className = 'sidebar-leaf-row flex items-center';
     }
     li.innerHTML = createListButtonHTML(
       listId,
@@ -568,6 +550,7 @@ export function createListNav(deps = {}) {
     // so renaming or deleting them via the menu is meaningless. Hide the menu.
     const isUncategorized = !isYearGroup && name === 'Uncategorized';
     const hasGroupMenu = Boolean(_id) && _id !== 'orphaned' && !isUncategorized;
+    const listsId = `sidebar-group-lists-${stateKey}`;
 
     const section = document.createElement('div');
     section.className = `group-section ${isYearGroup ? 'year-group' : 'collection-group'}`;
@@ -576,18 +559,14 @@ export function createListNav(deps = {}) {
 
     // Group header - use div wrapper for proper layout with menu button
     const headerWrapper = document.createElement('div');
-    headerWrapper.className = 'group-header-wrapper flex items-center';
+    headerWrapper.className = 'group-header-wrapper flex items-center min-w-0';
 
     const header = document.createElement('button');
-    header.className = `group-header-btn flex-1 text-left px-3 py-1.5 rounded-sm text-sm transition duration-200 text-white flex items-center justify-between font-bold`;
-    header.innerHTML = createGroupHeaderHTML(
-      name,
-      isExpanded,
-      isYearGroup,
-      isMobile,
-      _id || '',
-      hasGroupMenu
-    );
+    header.className =
+      'group-header-btn sidebar-group-header flex-1 transition-colors duration-200 text-white justify-between';
+    header.setAttribute('aria-expanded', String(isExpanded));
+    header.setAttribute('aria-controls', listsId);
+    header.innerHTML = createGroupHeaderHTML(name, isExpanded, isYearGroup);
 
     // Click handler for expand/collapse (not on the menu button)
     header.onclick = (e) => {
@@ -612,24 +591,25 @@ export function createListNav(deps = {}) {
 
     headerWrapper.appendChild(header);
 
-    // Mobile: attach click handler to menu button (hidden for managed sections)
+    // Mobile category options are a sibling of the expansion button so both
+    // controls retain valid semantics and independent touch targets.
     if (isMobile && hasGroupMenu) {
-      // Use event delegation - attach handler after appending to section
-      setTimeout(() => {
-        const menuBtn = header.querySelector(
-          `[data-category-menu-btn="${_id}"]`
-        );
-        if (menuBtn) {
-          attachCategoryMenuButton(menuBtn, _id, name, isYearGroup);
-        }
-      }, 0);
+      const menuButton = document.createElement('button');
+      menuButton.className = 'sidebar-menu-trigger category-menu-btn no-drag';
+      menuButton.dataset.categoryMenuBtn = _id;
+      menuButton.setAttribute('aria-label', `${name} options`);
+      menuButton.innerHTML =
+        '<i class="fas fa-ellipsis-v text-xs" aria-hidden="true"></i>';
+      attachCategoryMenuButton(menuButton, _id, name, isYearGroup);
+      headerWrapper.appendChild(menuButton);
     }
 
     section.appendChild(headerWrapper);
 
     // Lists container
     const listsContainer = document.createElement('ul');
-    listsContainer.className = `group-lists pl-[19px] ${isExpanded ? '' : 'collapsed'}`;
+    listsContainer.id = listsId;
+    listsContainer.className = `group-lists sidebar-nested ${isExpanded ? '' : 'collapsed'}`;
     if (isYearGroup) {
       listsContainer.classList.add('year-lists');
     }
@@ -663,7 +643,7 @@ export function createListNav(deps = {}) {
 
     const li = document.createElement('li');
     if (isMobile) {
-      li.className = 'flex items-center';
+      li.className = 'sidebar-leaf-row flex items-center';
     }
     li.innerHTML = createRecommendationsButtonHTML(year, isActive, isMobile);
 

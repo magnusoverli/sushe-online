@@ -36,8 +36,15 @@ function createFakeButton(dataset = {}) {
 
 function createFakeListItem() {
   const children = new Map();
+  const appended = [];
+  const attributes = new Map();
+  const classList = createClassList();
   return {
     className: '',
+    classList,
+    children: appended,
+    dataset: {},
+    style: {},
     _innerHTML: '',
     set innerHTML(value) {
       this._innerHTML = value;
@@ -66,6 +73,17 @@ function createFakeListItem() {
     querySelector(selector) {
       return children.get(selector) || null;
     },
+    appendChild(child) {
+      appended.push(child);
+      return child;
+    },
+    setAttribute(name, value) {
+      attributes.set(name, String(value));
+    },
+    getAttribute(name) {
+      return attributes.get(name) || null;
+    },
+    addEventListener() {},
   };
 }
 
@@ -226,10 +244,71 @@ describe('List Navigation Module - Unit Tests', () => {
 
       assert.strictEqual(chevronClass, 'fa-chevron-right');
     });
+
+    it('renders category expansion and mobile options as sibling controls', async () => {
+      const previousLocalStorage = global.localStorage;
+      const previousWindow = global.window;
+      global.localStorage = {
+        getItem: () => null,
+        setItem() {},
+      };
+      global.window = { lastSelectedList: null };
+
+      try {
+        await withFakeDocument(async () => {
+          const { createListNav } =
+            await import('../src/js/modules/list-nav.js');
+          const group = {
+            _id: 'group-1',
+            name: '2025',
+            year: 2025,
+            isYearGroup: true,
+          };
+          const listNav = createListNav({
+            getLists: () => ({ 'list-1': {} }),
+            getListMetadata: () => ({
+              name: 'Main list',
+              groupId: 'group-1',
+              count: 20,
+            }),
+            getGroups: () => ({ 'group-1': group }),
+            getSortedGroups: () => [group],
+            getCurrentList: () => 'list-1',
+            getCurrentUser: () => ({ _id: 'user-1' }),
+          });
+          const container = createFakeListItem();
+
+          listNav.renderListItems(container, true);
+
+          const section = container.children[0];
+          const headerWrapper = section.children[0];
+          const header = headerWrapper.children[0];
+          const menu = headerWrapper.children[1];
+          const lists = section.children[1];
+          assert.strictEqual(headerWrapper.children.length, 2);
+          assert.match(header.className, /sidebar-group-header/);
+          assert.strictEqual(header.getAttribute('aria-expanded'), 'true');
+          assert.strictEqual(
+            header.getAttribute('aria-controls'),
+            'sidebar-group-lists-group-1'
+          );
+          assert.doesNotMatch(header.innerHTML, /data-category-menu-btn/);
+          assert.match(menu.className, /sidebar-menu-trigger/);
+          assert.strictEqual(menu.dataset.categoryMenuBtn, 'group-1');
+          assert.strictEqual(lists.id, 'sidebar-group-lists-group-1');
+          assert.match(lists.className, /sidebar-nested/);
+        });
+      } finally {
+        if (previousLocalStorage === undefined) delete global.localStorage;
+        else global.localStorage = previousLocalStorage;
+        if (previousWindow === undefined) delete global.window;
+        else global.window = previousWindow;
+      }
+    });
   });
 
   describe('createListButtonHTML logic', () => {
-    it('should show the album count after the list name', async () => {
+    it('shows the album count as compact right-aligned metadata', async () => {
       const { createListNav } = await import('../src/js/modules/list-nav.js');
       const listNav = createListNav();
 
@@ -242,7 +321,9 @@ describe('List Navigation Module - Unit Tests', () => {
         42
       );
 
-      assert.ok(html.includes('Favorites (42)'));
+      assert.match(html, /sidebar-label">Favorites</);
+      assert.match(html, /sidebar-count[^>]*>42</);
+      assert.doesNotMatch(html, /Favorites \(42\)|fa-list/);
     });
 
     it('should default a missing album count to zero', async () => {
@@ -257,7 +338,8 @@ describe('List Navigation Module - Unit Tests', () => {
         false
       );
 
-      assert.ok(html.includes('Empty List (0)'));
+      assert.match(html, /sidebar-label">Empty List</);
+      assert.match(html, /sidebar-count[^>]*>0</);
     });
 
     it('should include active class when list is active', () => {
@@ -291,28 +373,31 @@ describe('List Navigation Module - Unit Tests', () => {
       assert.strictEqual(mainBadge, '');
     });
 
-    it('should use mobile padding class for mobile', () => {
-      const isMobile = true;
-      const paddingClass = isMobile ? 'py-3' : 'py-2';
-      assert.strictEqual(paddingClass, 'py-3');
-    });
+    it('uses shared density classes and a mobile-sized menu trigger', async () => {
+      const { createListNav } = await import('../src/js/modules/list-nav.js');
+      const listNav = createListNav();
+      const mobileHtml = listNav.createListButtonHTML(
+        'list-1',
+        'Test List',
+        false,
+        false,
+        true,
+        3
+      );
+      const desktopHtml = listNav.createListButtonHTML(
+        'list-1',
+        'Test List',
+        false,
+        false,
+        false,
+        3
+      );
 
-    it('should use desktop padding class for desktop', () => {
-      const isMobile = false;
-      const paddingClass = isMobile ? 'py-3' : 'py-2';
-      assert.strictEqual(paddingClass, 'py-2');
-    });
-
-    it('should include menu button for mobile', () => {
-      const isMobile = true;
-      const listName = 'Test List';
-
-      // Mobile template includes menu button
-      const mobileExtras = isMobile
-        ? `<button data-list-menu-btn="${listName}"></button>`
-        : '';
-
-      assert.ok(mobileExtras.includes('data-list-menu-btn'));
+      assert.match(mobileHtml, /sidebar-list-btn sidebar-leaf/);
+      assert.match(mobileHtml, /sidebar-menu-trigger/);
+      assert.doesNotMatch(mobileHtml, /py-2|py-2\.5/);
+      assert.match(desktopHtml, /sidebar-list-btn sidebar-leaf/);
+      assert.doesNotMatch(desktopHtml, /data-list-menu-btn/);
     });
   });
 
@@ -455,8 +540,10 @@ describe('List Navigation Module - Unit Tests', () => {
         const desktopItem = listNav.createListButton('list-1', false);
         const mobileItem = listNav.createListButton('list-1', true);
 
-        assert.ok(desktopItem.innerHTML.includes('List One (7)'));
-        assert.ok(mobileItem.innerHTML.includes('List One (7)'));
+        assert.match(desktopItem.innerHTML, /sidebar-label">List One</);
+        assert.match(desktopItem.innerHTML, /sidebar-count[^>]*>7</);
+        assert.match(mobileItem.innerHTML, /sidebar-label">List One</);
+        assert.match(mobileItem.innerHTML, /sidebar-count[^>]*>7</);
       });
     });
 

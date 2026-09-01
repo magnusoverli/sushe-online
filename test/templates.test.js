@@ -710,6 +710,17 @@ describe('templates utilities', () => {
       assert.ok(result.includes('Lists'));
     });
 
+    it('uses one width token for the desktop sidebar grid', () => {
+      const result = templates.spotifyTemplate({ username: 'test' });
+
+      assert.ok(result.includes('--sidebar-width: 15rem'));
+      assert.ok(
+        result.includes('grid-template-columns: var(--sidebar-width) 1fr')
+      );
+      assert.ok(result.includes('lg:w-60'));
+      assert.ok(!result.includes('14.5rem'));
+    });
+
     it('should include create list button', () => {
       const user = { username: 'test' };
       const result = templates.spotifyTemplate(user);

@@ -46,7 +46,6 @@ describe('community list frontend', () => {
           ],
         },
       ],
-      userExpandState: { [username]: true },
       activeListId: 'list"<1',
       isMobile: false,
     });
@@ -55,18 +54,22 @@ describe('community list frontend', () => {
     assert.match(html, /b&lt;o&quot;b/);
     assert.match(html, /list&quot;&lt;1/);
     assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
-    assert.match(html, /community-list-btn active/);
+    assert.match(html, /community-list-btn[^"\n]*active/);
+    assert.match(html, /sidebar-group-header/);
+    assert.match(html, /community-list-btn sidebar-leaf/);
+    assert.match(html, /sidebar-count[^>]*>4</);
+    assert.match(html, /b&lt;o&quot;b · 2025 · &lt;img/);
     assert.doesNotMatch(html, /group-section/);
-    assert.doesNotMatch(html, /data-list-menu-btn|fa-star/);
+    assert.doesNotMatch(
+      html,
+      /data-list-menu-btn|data-community-user-toggle|fa-star|fa-list/
+    );
   });
 
   it('lazy-loads summaries once and selects a community leaf on mobile', async () => {
     const { createCommunityListNav } =
       await import('../src/js/modules/community-list-nav.js');
-    const values = new Map([
-      ['communityRootExpanded:viewer-1', 'true'],
-      ['communityUserExpandState:viewer-1', JSON.stringify({ bob: true })],
-    ]);
+    const values = new Map([['communityRootExpanded:viewer-1', 'true']]);
     const apiCalls = [];
     const selected = [];
     let mobileToggles = 0;
@@ -113,6 +116,13 @@ describe('community list frontend', () => {
               year: responseYear,
               itemCount: 10,
               owner: { username: 'bob' },
+            },
+            {
+              id: 'community-2',
+              name: `Zoe's ${responseYear}`,
+              year: responseYear,
+              itemCount: 8,
+              owner: { username: 'zoe' },
             },
           ],
         };
@@ -161,6 +171,8 @@ describe('community list frontend', () => {
 
     nav.appendCommunityRoot(container, true);
     assert.match(createdRoots[2].innerHTML, /Best of 2010/);
+    assert.match(createdRoots[2].innerHTML, /bob · 2010 · Best of 2010/);
+    assert.match(createdRoots[2].innerHTML, /zoe · 2010 · Zoe&#39;s 2010/);
   });
 
   it('selects into isolated read-only state without persistence or realtime subscribe', async () => {

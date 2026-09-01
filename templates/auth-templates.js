@@ -6,7 +6,7 @@ const headerComponent = (_user, activeSection = 'home') => `
     <div class="absolute bottom-full left-0 right-0 z-50" style="height: env(safe-area-inset-top, 0px); background: linear-gradient(90deg, #2b3147 20%, #090d17 100%)"></div>
     <div class="mobile-header-row relative flex items-center justify-between h-12 lg:h-14 px-3 lg:px-0">
       <!-- Mobile menu button -->
-      <div class="mobile-header-left flex items-center gap-3 pl-1 lg:w-[14.5rem] lg:justify-center lg:gap-0 lg:pl-0">
+      <div class="mobile-header-left flex items-center gap-3 pl-1 lg:w-60 lg:justify-center lg:gap-0 lg:pl-0">
         ${
           activeSection === 'home'
             ? `
