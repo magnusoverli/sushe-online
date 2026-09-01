@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-09-01",
+    "category": "feature",
+    "description": "Added read-only community user lists for browsing others' picks.",
+    "hash": "91e37ec8f2bb7dd6679fa9a705e92b6d0c643f0f",
+    "commitMessage": "Add read-only community user lists"
+  },
+  {
     "date": "2026-08-31",
     "category": "feature",
     "description": "Added support for importing historical lists and disqualifications.",
