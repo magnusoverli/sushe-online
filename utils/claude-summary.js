@@ -56,7 +56,8 @@ function buildPrompt(artist, album, targetSentences, targetMaxChars) {
     // producing comma-spliced paragraphs that say more than was wanted.
     lengthGuidance =
       ` Aim for roughly ${targetSentences * 30} words, across about ` +
-      `${targetSentences} short sentences.`;
+      `${targetSentences} short sentences, plus one further sentence where ` +
+      `the rule on the artist's associations below applies.`;
   }
 
   return `Search for information about the album "${album}" by ${artist}, then write an encyclopedia entry for it.${lengthGuidance}
@@ -65,7 +66,13 @@ Write it as a reference entry about the album — the way a music encyclopedia d
 
 Cover the essentials: release year, the artist and where they are from, the album's musical character, and how it was received or why it matters. Add anything beyond that only when it is genuinely notable.
 
-Keep it economical. Write short, self-contained sentences rather than stacking clauses. Do not quote reviewers, and name at most one or two comparable artists — a list of them tells the reader little. Note ideological associations (political, religious, or social) only where they are documented and genuinely notable.
+Where the sources document extremist, hateful, or seriously criminal associations — for the artist, or for a member of the act — give them the entry's final sentence. Neo-Nazi, fascist, white-nationalist and white-supremacist affiliations belong here, as do racist, antisemitic, Islamophobic, homophobic, transphobic and misogynistic statements, involvement in extremist political, religious, occult or nationalist movements, terrorism or political violence, and convictions for violent or sexual crimes.
+
+Write that sentence about the artist and the fact, not about the reception: state that the artist holds the view or committed the act, rather than that it colours how the record is heard. Name the ideology, affiliation, statement, group or conviction, with the year where it is known. "Controversial figure", "polarising views", "a troubled past" and similar softenings tell a reader who does not already know the history nothing at all, so do not reach for them. Stay factual and verifiable — the aim is to inform the reader plainly, not to editorialise.
+
+Where the sources document nothing of the kind, write nothing of the kind: no note that none was found, no assurance that the artist is uncontroversial, no hedge. Most artists warrant no such sentence, and its absence is the correct output for them.
+
+Keep it economical. Write short, self-contained sentences rather than stacking clauses. Do not quote reviewers, and name at most one or two comparable artists — a list of them tells the reader little.
 
 Omit anything the sources do not support. Never write that something was not found, was unavailable, has no reviews yet, or was absent from the search results — simply leave it out and write about what is known. Do not mention sources, searching, or what the results contained.
 

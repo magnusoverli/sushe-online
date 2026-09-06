@@ -1730,3 +1730,48 @@ test('tells the model to be economical rather than exhaustive', async () => {
   assert.match(prompt, /Do not quote reviewers/);
   assert.match(prompt, /at most one or two comparable artists/);
 });
+
+test("asks for a dedicated final sentence on an artist's documented associations", async () => {
+  // Folded into a list of "cover these elements", the rule produced a reception
+  // clause — "his views continue to shape how the project is received" — rather
+  // than a statement of what the views are.
+  const prompt = await sentPrompt();
+
+  assert.match(
+    prompt,
+    /extremist, hateful, or seriously criminal associations/
+  );
+  assert.match(prompt, /the entry's final sentence/);
+  assert.match(prompt, /neo-Nazi/i);
+  assert.match(prompt, /convictions for violent or sexual crimes/);
+});
+
+test('bans the euphemisms that leave an uninformed reader none the wiser', async () => {
+  const prompt = await sentPrompt();
+
+  assert.match(prompt, /Controversial figure/);
+  assert.match(prompt, /polarising views/);
+  assert.match(
+    prompt,
+    /Name the ideology, affiliation, statement, group or conviction/
+  );
+});
+
+test('an artist with nothing documented gets no sentence at all', async () => {
+  // The point of the rule is awareness, not a per-album clean bill of health:
+  // "no known controversies" would spend tokens on every unproblematic artist.
+  const prompt = await sentPrompt();
+
+  assert.match(prompt, /write nothing of the kind/);
+  assert.match(prompt, /no note that none was found/);
+});
+
+test('the word budget leaves room for the associations sentence', async () => {
+  const prompt = await sentPrompt({ CLAUDE_SUMMARY_SENTENCES: '5' });
+
+  assert.match(prompt, /about 5 short sentences/);
+  assert.match(
+    prompt,
+    /one further sentence where the rule on the artist's associations/
+  );
+});
