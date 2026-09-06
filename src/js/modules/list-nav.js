@@ -8,6 +8,7 @@
  */
 
 import { buildListMenuConfig } from './list-menu-shared.js';
+import { escapeHtml } from './html-utils.js';
 import { loadSortable } from './sortable-loader.js';
 import { createCommunityListNav } from './community-list-nav.js';
 
@@ -316,7 +317,7 @@ export function createListNav(deps = {}) {
       <div class="flex items-center flex-1 min-w-0">
         <i class="fas ${chevronClass} fa-fw mr-1.5 text-xs group-chevron shrink-0" aria-hidden="true"></i>
         <i class="fas ${iconClass} mr-1.5 text-xs text-gray-300 shrink-0" aria-hidden="true"></i>
-        <span class="sidebar-label">${name}</span>
+        <span class="sidebar-label">${escapeHtml(name)}</span>
       </div>
     `;
   }
@@ -364,10 +365,16 @@ export function createListNav(deps = {}) {
       ? '<i class="fas fa-star text-yellow-500 ml-1 shrink-0 text-xs" title="Main list"></i>'
       : '';
 
+    // List and group names are free text, so every interpolation of one is
+    // escaped: unescaped, a name carrying a quote breaks out of the attribute
+    // the menu handlers read back, and one carrying a tag rewrites the row.
+    const safeListId = escapeHtml(listId);
+    const safeListName = escapeHtml(listName);
+
     // Use data-list-id for the ID, keep data-list-name for display/logging purposes
     const buttonHTML = `
-      <button data-list-id="${listId}" data-list-name="${listName}" class="sidebar-list-btn sidebar-leaf ${widthClass} transition-colors duration-200 text-gray-300 ${activeClass}">
-        <span class="sidebar-label">${listName}</span>
+      <button data-list-id="${safeListId}" data-list-name="${safeListName}" class="sidebar-list-btn sidebar-leaf ${widthClass} transition-colors duration-200 text-gray-300 ${activeClass}">
+        <span class="sidebar-label">${safeListName}</span>
         ${mainBadge}
         <span class="sidebar-count" title="${albumCount} albums">${albumCount}</span>
       </button>
@@ -376,7 +383,7 @@ export function createListNav(deps = {}) {
     if (isMobile) {
       return `
         ${buttonHTML}
-        <button data-list-menu-btn="${listId}" data-list-menu-name="${listName}" class="sidebar-menu-trigger no-drag" aria-label="List options">
+        <button data-list-menu-btn="${safeListId}" data-list-menu-name="${safeListName}" class="sidebar-menu-trigger no-drag" aria-label="List options">
           <i class="fas fa-ellipsis-v" aria-hidden="true"></i>
         </button>
       `;
@@ -1235,6 +1242,7 @@ export function createListNav(deps = {}) {
     updateListNavActiveState,
     collapseGroupsForActiveList,
     refreshCommunityLists,
+    createGroupHeaderHTML,
     createListButtonHTML,
     createRecommendationsButtonHTML,
     createListButton,

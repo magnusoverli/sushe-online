@@ -55,6 +55,8 @@ import { applyCoverUpdate } from '../utils/album-api.js';
  * @param {Function} deps.isViewingRecommendations - Check if currently viewing recommendations
  * @param {Function} deps.recommendAlbum - Shared recommendation flow (reasoning modal + API)
  * @param {Function} deps.openRenameCategoryModal - Open category rename modal
+ * @param {Function} deps.setCurrentList - Set the selected list (cleared on delete)
+ * @param {Function} deps.clearSnapshotFromStorage - Clear local list snapshot cache
  * @param {Function} deps.getCurrentUser - Get authenticated frontend user
  * @returns {Object} Mobile UI module API
  */
@@ -94,6 +96,8 @@ export function createMobileUI(deps = {}) {
     isViewingRecommendations,
     recommendAlbum,
     openRenameCategoryModal,
+    setCurrentList,
+    clearSnapshotFromStorage,
     getCurrentUser = () => window.currentUser || {},
     attachEmojiAutocomplete = () => () => {},
     showDisqualificationReasonModal,
@@ -106,6 +110,17 @@ export function createMobileUI(deps = {}) {
   });
   const listMenuActions = createListMenuActions({
     getListData,
+    getLists,
+    getListMetadata,
+    getCurrentList,
+    setCurrentList,
+    selectList,
+    apiCall,
+    showConfirmation,
+    showToast,
+    refreshGroupsAndLists,
+    updateListNav,
+    clearSnapshotFromStorage,
     updatePlaylist,
     downloadListAsJSON,
     downloadListAsPDF,
@@ -177,7 +192,6 @@ export function createMobileUI(deps = {}) {
 
   const { showMobileListMenu, showMobileCategoryMenu } = createMobileListMenus({
     createActionSheet,
-    getCurrentList,
     getLists,
     getListMetadata,
     getSortedGroups,
@@ -185,7 +199,6 @@ export function createMobileUI(deps = {}) {
     listMenuActions,
     showConfirmation,
     apiCall,
-    selectList,
     refreshGroupsAndLists,
     updateListNav,
     showToast,

@@ -12,10 +12,8 @@ import {
   hideAllContextMenus as hideAllMenusBase,
 } from './context-menu.js';
 import { getDeviceIcon } from '../utils/device-icons.js';
-import {
-  buildListMenuConfig,
-  createListMenuActions,
-} from './list-menu-shared.js';
+import { escapeHtml } from './html-utils.js';
+import { createListMenuActions } from './list-menu-shared.js';
 
 /**
  * Factory function to create the context menus module with injected dependencies
@@ -41,7 +39,6 @@ import {
  * @param {Function} deps.getSortedGroups - Get groups sorted by sort_order
  * @param {Function} deps.refreshGroupsAndLists - Refresh groups and lists after changes
  * @param {Function} deps.clearSnapshotFromStorage - Clear local list snapshot cache
- * @param {Function} deps.getCurrentUser - Get authenticated frontend user
  * @returns {Object} Context menus module API
  */
 export function createContextMenus(deps = {}) {
@@ -67,11 +64,21 @@ export function createContextMenus(deps = {}) {
     refreshGroupsAndLists,
     toggleMainStatus,
     clearSnapshotFromStorage,
-    getCurrentUser = () => window.currentUser || {},
   } = deps;
 
   const listMenuActions = createListMenuActions({
     getListData,
+    getLists,
+    getListMetadata,
+    getCurrentList,
+    setCurrentList,
+    selectList,
+    apiCall,
+    showConfirmation,
+    showToast,
+    refreshGroupsAndLists,
+    updateListNav,
+    clearSnapshotFromStorage,
     updatePlaylist,
     downloadListAsJSON,
     downloadListAsPDF,
@@ -97,19 +104,6 @@ export function createContextMenus(deps = {}) {
   }
 
   // getDeviceIcon is imported from utils/device-icons.js (shared module)
-
-  /**
-   * Get configuration for list context menu
-   * @param {string} listName - List name
-   * @returns {Object} Menu configuration
-   */
-  function getListMenuConfig(listName) {
-    return buildListMenuConfig({
-      listMeta: getListMetadata(listName),
-      groups: getSortedGroups ? getSortedGroups() : [],
-      currentUser: getCurrentUser(),
-    });
-  }
 
   /**
    * Show download list submenu for desktop
@@ -202,7 +196,6 @@ export function createContextMenus(deps = {}) {
    * Initialize list context menu (right-click menu for lists)
    */
   function initializeContextMenu() {
-    const lists = getLists();
     const contextMenu = document.getElementById('contextMenu');
     const downloadOption = document.getElementById('downloadListOption');
     const renameOption = document.getElementById('renameListOption');
@@ -233,6 +226,7 @@ export function createContextMenus(deps = {}) {
     renameOption.onclick = () => {
       const currentContextList = getContextList();
       contextMenu.classList.add('hidden');
+      setContextList(null);
 
       if (!currentContextList) return;
 
@@ -265,76 +259,12 @@ export function createContextMenus(deps = {}) {
     // Handle delete option click
     deleteOption.onclick = async () => {
       const currentContextList = getContextList();
-      const currentList = getCurrentList();
       contextMenu.classList.add('hidden');
+      setContextList(null);
 
       if (!currentContextList) return;
 
-      // Get list name from metadata for display
-      const listMeta = getListMetadata(currentContextList);
-      const listName = listMeta?.name || currentContextList;
-
-      // Confirm deletion using custom modal
-      const confirmed = await showConfirmation(
-        'Delete List',
-        `Are you sure you want to delete the list "${listName}"?`,
-        'This action cannot be undone.',
-        'Delete'
-      );
-
-      if (confirmed) {
-        try {
-          await apiCall(
-            `/api/lists/${encodeURIComponent(currentContextList)}`,
-            {
-              method: 'DELETE',
-            }
-          );
-
-          delete lists[currentContextList];
-
-          // Clean up snapshot from localStorage and memory
-          if (typeof clearSnapshotFromStorage === 'function') {
-            clearSnapshotFromStorage(currentContextList);
-          }
-
-          if (currentList === currentContextList) {
-            const remainingLists = Object.keys(lists);
-            if (remainingLists.length > 0) {
-              // Select the first list in the sidebar
-              selectList(remainingLists[0]);
-            } else {
-              // No lists remain - show empty state
-              setCurrentList(null);
-
-              const headerAddAlbumBtn =
-                document.getElementById('headerAddAlbumBtn');
-
-              if (headerAddAlbumBtn) headerAddAlbumBtn.classList.add('hidden');
-
-              document.getElementById('albumContainer').innerHTML = `
-                <div class="text-center text-gray-500 mt-20">
-                  <p class="text-xl mb-2">No list selected</p>
-                  <p class="text-sm">Create or import a list to get started</p>
-                </div>
-              `;
-            }
-          }
-
-          // Refresh groups and lists to update sidebar (groups may have been auto-deleted)
-          if (refreshGroupsAndLists) {
-            await refreshGroupsAndLists();
-          } else {
-            updateListNav();
-          }
-
-          showToast(`List "${listName}" deleted`);
-        } catch (_error) {
-          showToast('Error deleting list', 'error');
-        }
-      }
-
-      setContextList(null);
+      await listMenuActions.deleteList(currentContextList);
     };
 
     // Get submenu elements
@@ -498,15 +428,21 @@ export function createContextMenus(deps = {}) {
           ? 'opacity-50 cursor-not-allowed'
           : 'hover:bg-gray-700 cursor-pointer';
 
+        // Collection names are free text, so they are escaped for both the
+        // attribute and the label. A name carrying a quote would otherwise
+        // close data-group-name early and the move would report the wrong
+        // destination; a name carrying a tag would rewrite the submenu.
+        const safeName = escapeHtml(collection.name);
+
         html += `
           <button 
             class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white transition-colors whitespace-nowrap ${disabledClass}"
-            data-group-id="${collection._id}"
-            data-group-name="${collection.name}"
+            data-group-id="${escapeHtml(collection._id)}"
+            data-group-name="${safeName}"
             ${isCurrentGroup ? 'disabled' : ''}
           >
             <i class="fas fa-folder mr-2 w-4 text-center text-gray-500"></i>
-            ${collection.name}
+            ${safeName}
             ${checkmark}
           </button>
         `;
@@ -547,11 +483,11 @@ export function createContextMenus(deps = {}) {
 
   /**
    * Move a list to a different collection
-   * @param {string} listName - Name of the list to move
+   * @param {string} listId - ID of the list to move
    * @param {string} groupId - Target group ID
    * @param {string} groupName - Target group name (for toast message)
    */
-  async function moveListToCollection(listName, groupId, groupName) {
+  async function moveListToCollection(listId, groupId, groupName) {
     const contextMenu = document.getElementById('contextMenu');
     const moveListSubmenu = document.getElementById('moveListSubmenu');
 
@@ -559,8 +495,11 @@ export function createContextMenus(deps = {}) {
     if (contextMenu) contextMenu.classList.add('hidden');
     if (moveListSubmenu) moveListSubmenu.classList.add('hidden');
 
+    // The caller passes an opaque list id; the toast has to name the list.
+    const listName = getListMetadata(listId)?.name || listId;
+
     try {
-      await apiCall(`/api/lists/${encodeURIComponent(listName)}/move`, {
+      await apiCall(`/api/lists/${encodeURIComponent(listId)}/move`, {
         method: 'POST',
         body: JSON.stringify({ groupId }),
       });
@@ -586,7 +525,6 @@ export function createContextMenus(deps = {}) {
     positionContextMenu,
     hideAllContextMenus,
     getDeviceIcon,
-    getListMenuConfig,
     showDownloadListSubmenu,
     initializeContextMenu,
   };

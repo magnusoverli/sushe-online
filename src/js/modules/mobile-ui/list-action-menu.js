@@ -1,27 +1,17 @@
 import { buildListMenuConfig } from '../list-menu-shared.js';
+import { escapeHtml } from '../html-utils.js';
 
 export function createMobileListActionMenu(deps = {}) {
   const {
-    doc = typeof document !== 'undefined' ? document : null,
     createActionSheet,
-    getCurrentList,
-    getLists,
     getListMetadata,
     getSortedGroups,
     getCurrentUser,
     listMenuActions,
-    showConfirmation,
-    apiCall,
-    selectList,
-    refreshGroupsAndLists,
-    updateListNav,
-    showToast,
     showMobileCollectionPicker,
   } = deps;
 
   return function showMobileListMenu(listId) {
-    const currentList = getCurrentList();
-    const lists = getLists();
     const listMeta = getListMetadata(listId);
     const listName = listMeta?.name || listId;
     const menuConfig = buildListMenuConfig({
@@ -32,7 +22,7 @@ export function createMobileListActionMenu(deps = {}) {
 
     const { sheet: actionSheet, close } = createActionSheet({
       contentHtml: `
-          <h3 class="font-semibold text-white mb-4">${listName}</h3>
+          <h3 class="font-semibold text-white mb-4">${escapeHtml(listName)}</h3>
           
           <div class="download-section">
             <button data-action="download-toggle"
@@ -222,53 +212,7 @@ export function createMobileListActionMenu(deps = {}) {
       event.stopPropagation();
       close();
 
-      const confirmed = await showConfirmation(
-        'Delete List',
-        `Are you sure you want to delete the list "${listName}"?`,
-        'This action cannot be undone.',
-        'Delete'
-      );
-
-      if (confirmed) {
-        try {
-          await apiCall(`/api/lists/${encodeURIComponent(listId)}`, {
-            method: 'DELETE',
-          });
-
-          delete lists[listId];
-
-          if (currentList === listId) {
-            const remainingLists = Object.keys(lists);
-            if (remainingLists.length > 0) {
-              selectList(remainingLists[0]);
-            } else {
-              const headerAddAlbumBtn =
-                doc?.getElementById('headerAddAlbumBtn');
-              if (headerAddAlbumBtn) headerAddAlbumBtn.classList.add('hidden');
-
-              const albumContainer = doc?.getElementById('albumContainer');
-              if (albumContainer) {
-                albumContainer.innerHTML = `
-                  <div class="text-center text-gray-500 mt-20">
-                    <p class="text-xl mb-2">No list selected</p>
-                    <p class="text-sm">Create or import a list to get started</p>
-                  </div>
-                `;
-              }
-            }
-          }
-
-          if (refreshGroupsAndLists) {
-            await refreshGroupsAndLists();
-          } else {
-            updateListNav();
-          }
-
-          showToast(`List "${listName}" deleted`);
-        } catch (_error) {
-          showToast('Error deleting list', 'error');
-        }
-      }
+      await listMenuActions.deleteList(listId);
     });
   };
 }

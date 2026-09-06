@@ -618,7 +618,16 @@ export function createListCrud(deps = {}) {
     const cancelBtn = document.getElementById('cancelRenameBtn');
     const confirmBtn = document.getElementById('confirmRenameBtn');
 
-    if (!modal) return;
+    // The name input is written to on open and read on save, so it is as
+    // required as the modal itself. The year field and its error line are
+    // optional and guarded individually below.
+    if (!modal || !nameInput || !confirmBtn) return;
+
+    // Idempotent: openRenameModal calls this if bootstrap has not, and a
+    // second createModal on the same element would double up its backdrop and
+    // Escape listeners. Tearing the old controller down is not the way out —
+    // createModal's destroy() removes the element from the DOM.
+    if (renameListController) return;
 
     // Backdrop, Escape, close button, scroll lock and focus trap via the shared
     // controller (opened from openRenameModal); the form resets on close.
@@ -769,22 +778,33 @@ export function createListCrud(deps = {}) {
   }
 
   /**
-   * Open the edit list details modal (formerly rename modal)
+   * Open the edit list details modal (formerly rename modal).
+   *
+   * The element ids here are a contract with renameListModalComponent() in
+   * templates/spotify-components.js. "Pivot to list IDs" (1bfdf74) renamed the
+   * `currentListName` lookup to `currentListIdName` without renaming the
+   * element, and because the heading was part of the early-return guard the
+   * whole editor stopped opening — silently, from both the desktop context
+   * menu and the mobile action sheet. The guard now covers only what the
+   * editor cannot work without.
    */
   function openRenameModal(listId) {
     const modal = document.getElementById('renameListModal');
-    const currentNameSpan = document.getElementById('currentListIdName');
     const nameInput = document.getElementById('newListNameInput');
+    const currentNameSpan = document.getElementById('currentListName');
     const yearInput = document.getElementById('editListYear');
     const yearError = document.getElementById('editYearError');
 
-    if (!modal || !currentNameSpan || !nameInput) return;
+    if (!modal || !nameInput) return;
 
     // Get metadata to display the list name
     const meta = getListMetadata(listId);
     const listName = meta?.name || listId;
 
-    currentNameSpan.textContent = listName;
+    // Decorative heading — absent markup must not cost the user the editor.
+    if (currentNameSpan) {
+      currentNameSpan.textContent = listName;
+    }
     nameInput.value = listName;
 
     // Store the list ID for the save handler
@@ -797,7 +817,14 @@ export function createListCrud(deps = {}) {
       yearError.classList.add('hidden');
     }
 
-    if (renameListController) renameListController.open();
+    // Self-heal if the modal was never wired (bootstrap skipped, or the
+    // markup arrived after it ran) rather than populating a modal that then
+    // never shows.
+    if (!renameListController) {
+      initializeRenameList();
+    }
+    if (!renameListController) return;
+    renameListController.open();
 
     // Select all text in the input for easy editing (the controller has already
     // moved focus into it).

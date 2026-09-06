@@ -1,4 +1,5 @@
 import { deleteCollection } from '../../utils/delete-collection.js';
+import { escapeHtml } from '../html-utils.js';
 
 export function createMobileCategoryMenu(deps = {}) {
   const {
@@ -20,7 +21,7 @@ export function createMobileCategoryMenu(deps = {}) {
 
     const { sheet: actionSheet, close } = createActionSheet({
       contentHtml: `
-          <h3 class="font-semibold text-white mb-4">${groupName}</h3>
+          <h3 class="font-semibold text-white mb-4">${escapeHtml(groupName)}</h3>
           
           ${
             !isYearGroup

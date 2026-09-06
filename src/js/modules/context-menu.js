@@ -59,26 +59,51 @@ export function positionContextMenu(menu, x, y) {
   });
 }
 
-// All known menu/submenu element IDs that should be hidden
+/**
+ * Every context menu and submenu rendered by contextMenusComponent().
+ *
+ * This list is the contract: a menu missing from it is never closed by the
+ * document-click handler, so it survives its own parent and hangs over the
+ * page until something else happens to hide it. Both `moveListSubmenu` and
+ * `categoryContextMenu` were missing and did exactly that.
+ *
+ * test/context-menu-dom-contract.test.js renders the template and fails if a
+ * menu is added there without being added here.
+ */
 const MENU_IDS = [
+  // List context menu (sidebar right-click) and its submenus
   'contextMenu',
+  'downloadListSubmenu',
+  'moveListSubmenu',
+  // Category context menu (sidebar group right-click)
+  'categoryContextMenu',
+  // Album context menu and its two-level submenus
   'albumContextMenu',
   'albumMoveSubmenu',
+  'albumMoveListsSubmenu',
   'albumCopySubmenu',
+  'albumCopyListsSubmenu',
   'playAlbumSubmenu',
-  'downloadListSubmenu',
+  // Recommendation context menu and its submenus
   'recommendationContextMenu',
   'recommendationAddSubmenu',
   'recommendationAddListsSubmenu',
 ];
 
-// Option elements that receive highlights when their submenu is open
+/**
+ * Options that take a highlight while their submenu is open.
+ *
+ * These must be un-highlighted alongside the hide, or the row stays lit under
+ * a menu that is no longer there. Year rows inside a submenu are not listed:
+ * they are rebuilt with the submenu's innerHTML and cannot outlive it.
+ */
 const OPTION_IDS = [
+  'downloadListOption',
+  'moveListOption',
   'moveAlbumOption',
   'copyAlbumOption',
   'playAlbumOption',
   'playRecommendationOption',
-  'downloadListOption',
   'addToListOption',
 ];
 

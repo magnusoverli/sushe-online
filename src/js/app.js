@@ -547,7 +547,6 @@ const getContextMenusModule = createLazyModule(() =>
     setCurrentList: (listName) => {
       setCurrentListId(listName);
     },
-    getCurrentUser: () => window.currentUser || {},
     toggleMainStatus,
     getSortedGroups,
     refreshGroupsAndLists,
@@ -612,6 +611,10 @@ const getMobileUIModule = createLazyModule(() =>
     recommendAlbum: (...args) =>
       getRecommendationsModule().recommendAlbum(...args),
     openRenameCategoryModal,
+    setCurrentList: (listId) => {
+      setCurrentListId(listId);
+    },
+    clearSnapshotFromStorage,
     getCurrentUser: () => window.currentUser || {},
     getLockedYears,
     isYearLockedSync,

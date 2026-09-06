@@ -46,7 +46,6 @@ describe('context-menus module', () => {
       assert.strictEqual(typeof module.positionContextMenu, 'function');
       assert.strictEqual(typeof module.hideAllContextMenus, 'function');
       assert.strictEqual(typeof module.getDeviceIcon, 'function');
-      assert.strictEqual(typeof module.getListMenuConfig, 'function');
       assert.strictEqual(typeof module.showDownloadListSubmenu, 'function');
       assert.strictEqual(typeof module.initializeContextMenu, 'function');
     });
@@ -102,106 +101,6 @@ describe('context-menus module', () => {
         module.getDeviceIcon('SMARTPHONE'),
         'fas fa-mobile-alt'
       );
-    });
-  });
-
-  describe('getListMenuConfig', () => {
-    let createContextMenus;
-
-    beforeEach(async () => {
-      const module = await import('../src/js/modules/context-menus.js');
-      createContextMenus = module.createContextMenus;
-    });
-
-    it('should return correct config for list with year', () => {
-      // Mock window.currentUser
-      global.window = {
-        currentUser: {
-          spotifyAuth: true,
-          tidalAuth: false,
-          musicService: 'spotify',
-        },
-      };
-
-      const mockDeps = {
-        getListMetadata: mock.fn(() => ({
-          year: 2024,
-          isMain: false,
-        })),
-      };
-
-      const module = createContextMenus(mockDeps);
-      const config = module.getListMenuConfig('My List');
-
-      assert.strictEqual(config.hasYear, true);
-      assert.strictEqual(config.isMain, false);
-      assert.strictEqual(config.mainToggleText, 'Set as Main');
-      assert.strictEqual(config.musicServiceText, 'Send to Spotify');
-      assert.strictEqual(config.hasSpotify, true);
-      assert.strictEqual(config.hasTidal, false);
-    });
-
-    it('should return correct config for main list', () => {
-      global.window = {
-        currentUser: {
-          spotifyAuth: false,
-          tidalAuth: true,
-          musicService: 'tidal',
-        },
-      };
-
-      const mockDeps = {
-        getListMetadata: mock.fn(() => ({
-          year: 2023,
-          isMain: true,
-        })),
-      };
-
-      const module = createContextMenus(mockDeps);
-      const config = module.getListMenuConfig('Main List');
-
-      assert.strictEqual(config.isMain, true);
-      assert.strictEqual(config.mainToggleText, 'Remove Main Status');
-      assert.strictEqual(config.musicServiceText, 'Send to Tidal');
-    });
-
-    it('should handle list without year', () => {
-      global.window = {
-        currentUser: {},
-      };
-
-      const mockDeps = {
-        getListMetadata: mock.fn(() => ({
-          year: null,
-          isMain: false,
-        })),
-      };
-
-      const module = createContextMenus(mockDeps);
-      const config = module.getListMenuConfig('No Year List');
-
-      assert.strictEqual(config.hasYear, false);
-      assert.strictEqual(config.musicServiceText, 'Send to Music Service');
-    });
-
-    it('should handle no connected services', () => {
-      global.window = {
-        currentUser: {
-          spotifyAuth: false,
-          tidalAuth: false,
-        },
-      };
-
-      const mockDeps = {
-        getListMetadata: mock.fn(() => ({})),
-      };
-
-      const module = createContextMenus(mockDeps);
-      const config = module.getListMenuConfig('Test');
-
-      assert.strictEqual(config.hasSpotify, false);
-      assert.strictEqual(config.hasTidal, false);
-      assert.strictEqual(config.musicServiceText, 'Send to Music Service');
     });
   });
 

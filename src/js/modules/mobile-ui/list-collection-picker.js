@@ -1,3 +1,5 @@
+import { escapeHtml } from '../html-utils.js';
+
 export function createMobileCollectionPicker(deps = {}) {
   const {
     createActionSheet,
@@ -10,8 +12,10 @@ export function createMobileCollectionPicker(deps = {}) {
     logger = console,
   } = deps;
 
-  return function showMobileCollectionPicker(listName) {
-    const listMeta = getListMetadata(listName);
+  return function showMobileCollectionPicker(listId) {
+    const listMeta = getListMetadata(listId);
+    // The argument is an opaque list id; everything the user reads is the name.
+    const listName = listMeta?.name || listId;
     const currentGroupId = listMeta?.groupId;
 
     const groups = getSortedGroups ? getSortedGroups() : [];
@@ -32,14 +36,18 @@ export function createMobileCollectionPicker(deps = {}) {
           : '';
         const disabledClass = isCurrentGroup ? 'opacity-50' : '';
 
+        // Collection names are free text: escaped for the attribute the click
+        // handler reads back, and for the label.
+        const safeName = escapeHtml(collection.name);
+
         collectionsHtml += `
           <button data-action="select-collection" 
-                  data-group-id="${collection._id}"
-                  data-group-name="${collection.name}"
+                  data-group-id="${escapeHtml(collection._id)}"
+                  data-group-name="${safeName}"
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm flex items-center justify-between ${disabledClass}"
                   ${isCurrentGroup ? 'disabled' : ''}>
             <span>
-              <i class="fas fa-folder mr-3 text-gray-400"></i>${collection.name}
+              <i class="fas fa-folder mr-3 text-gray-400"></i>${safeName}
             </span>
             ${checkmark}
           </button>
@@ -49,7 +57,7 @@ export function createMobileCollectionPicker(deps = {}) {
 
     const { sheet: actionSheet, close } = createActionSheet({
       contentHtml: `
-          <h3 class="font-semibold text-white mb-2">Move "${listName}"</h3>
+          <h3 class="font-semibold text-white mb-2">Move "${escapeHtml(listName)}"</h3>
           <p class="text-sm text-gray-500 mb-4">Select a collection</p>
           
           ${collectionsHtml}
@@ -74,7 +82,7 @@ export function createMobileCollectionPicker(deps = {}) {
           close();
 
           try {
-            await apiCall(`/api/lists/${encodeURIComponent(listName)}/move`, {
+            await apiCall(`/api/lists/${encodeURIComponent(listId)}/move`, {
               method: 'POST',
               body: JSON.stringify({ groupId }),
             });

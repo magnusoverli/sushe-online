@@ -50,6 +50,45 @@ describe('list-menu-shared module', () => {
     assert.strictEqual(config.isInCollection, true);
   });
 
+  it('offers to remove main status from a list that already has it', () => {
+    const config = buildListMenuConfig({
+      listMeta: { year: 2023, isMain: true },
+      groups: [],
+      currentUser: {
+        spotifyAuth: false,
+        tidalAuth: true,
+        musicService: 'tidal',
+      },
+    });
+
+    assert.strictEqual(config.isMain, true);
+    assert.strictEqual(config.mainToggleText, 'Remove Main Status');
+    assert.strictEqual(config.musicServiceText, 'Send to Tidal');
+  });
+
+  it('hides the main toggle for a list with no year', () => {
+    const config = buildListMenuConfig({
+      listMeta: { year: null, isMain: false },
+      groups: [],
+      currentUser: {},
+    });
+
+    assert.strictEqual(config.hasYear, false);
+    assert.strictEqual(config.musicServiceText, 'Send to Music Service');
+  });
+
+  it('names no service when neither is connected', () => {
+    const config = buildListMenuConfig({
+      listMeta: {},
+      groups: [],
+      currentUser: { spotifyAuth: false, tidalAuth: false },
+    });
+
+    assert.strictEqual(config.hasSpotify, false);
+    assert.strictEqual(config.hasTidal, false);
+    assert.strictEqual(config.musicServiceText, 'Send to Music Service');
+  });
+
   it('routes rename, toggle, and downloads through shared actions', async () => {
     const calls = [];
     const actions = createListMenuActions({

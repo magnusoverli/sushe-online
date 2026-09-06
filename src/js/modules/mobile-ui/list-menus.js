@@ -4,9 +4,7 @@ import { createMobileCategoryMenu } from './category-menu.js';
 
 export function createMobileListMenus(deps = {}) {
   const {
-    doc = typeof document !== 'undefined' ? document : null,
     createActionSheet,
-    getCurrentList,
     getLists,
     getListMetadata,
     getSortedGroups,
@@ -14,7 +12,6 @@ export function createMobileListMenus(deps = {}) {
     listMenuActions,
     showConfirmation,
     apiCall,
-    selectList,
     refreshGroupsAndLists,
     updateListNav,
     showToast,
@@ -34,20 +31,11 @@ export function createMobileListMenus(deps = {}) {
   });
 
   const showMobileListMenu = createMobileListActionMenu({
-    doc,
     createActionSheet,
-    getCurrentList,
-    getLists,
     getListMetadata,
     getSortedGroups,
     getCurrentUser,
     listMenuActions,
-    showConfirmation,
-    apiCall,
-    selectList,
-    refreshGroupsAndLists,
-    updateListNav,
-    showToast,
     showMobileCollectionPicker,
   });
 

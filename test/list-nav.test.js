@@ -308,6 +308,26 @@ describe('List Navigation Module - Unit Tests', () => {
   });
 
   describe('createListButtonHTML logic', () => {
+    it('escapes list names into the sidebar row', async () => {
+      // Names are free text and reach both an attribute the menu handlers read
+      // back and the visible label.
+      const { createListNav } = await import('../src/js/modules/list-nav.js');
+      const listNav = createListNav();
+
+      const html = listNav.createListButtonHTML(
+        'list-1',
+        'Rock "n" <img src=x onerror=alert(1)>',
+        false,
+        false,
+        true,
+        3
+      );
+
+      assert.ok(!html.includes('<img'), 'a list name is not markup');
+      assert.match(html, /data-list-name="Rock &quot;n&quot; &lt;img/);
+      assert.match(html, /data-list-menu-name="Rock &quot;n&quot; &lt;img/);
+    });
+
     it('shows the album count as compact right-aligned metadata', async () => {
       const { createListNav } = await import('../src/js/modules/list-nav.js');
       const listNav = createListNav();
@@ -863,6 +883,20 @@ describe('List Navigation Module - Unit Tests', () => {
   });
 
   describe('createGroupHeaderHTML logic', () => {
+    it('escapes group names into the section header', async () => {
+      const { createListNav } = await import('../src/js/modules/list-nav.js');
+      const listNav = createListNav();
+
+      const html = listNav.createGroupHeaderHTML(
+        '<script>alert(1)</script>',
+        true,
+        false
+      );
+
+      assert.ok(!html.includes('<script>'));
+      assert.match(html, /sidebar-label">&lt;script&gt;/);
+    });
+
     it('should use calendar icon for year groups', () => {
       const isYearGroup = true;
       const iconClass = isYearGroup ? 'fa-calendar-alt' : 'fa-folder';
