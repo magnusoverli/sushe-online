@@ -1,6 +1,48 @@
 [
   {
     "date": "2026-09-01",
+    "category": "fix",
+    "description": "Disqualification option hidden for locked main lists.",
+    "hash": "2b3f966b8f1654d37b0a47e1603d042e63151aae",
+    "commitMessage": "Hide disqualification for locked main lists"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "fix",
+    "description": "Restored expandable user list groups in the sidebar.",
+    "hash": "87c0c700d08ad853378ec81722d26c8acb8bf2c5",
+    "commitMessage": "Restore expandable user list groups"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "ui",
+    "description": "Sidebar is more compact with user lists now visible.",
+    "hash": "06adeec26bf701b03429a442e9d4a4ff7565038b",
+    "commitMessage": "Compact sidebar and expose user lists"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "fix",
+    "description": "User lists refresh automatically after visibility changes.",
+    "hash": "ee262e9cb8b2a33ec65ea91cc44c5f6aea5e039d",
+    "commitMessage": "Refresh user lists after visibility changes"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "ui",
+    "description": "Inactive sidebar groups now collapse automatically on startup.",
+    "hash": "ce5b6e12d58194419dd53f3be1bfb1b2f59033a9",
+    "commitMessage": "Collapse inactive sidebar groups on startup"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "feature",
+    "description": "Mobile cover playback now works for user lists too.",
+    "hash": "def8a10738a31c92f0aa621502cc3591ed491973",
+    "commitMessage": "Reuse mobile cover playback for user lists"
+  },
+  {
+    "date": "2026-09-01",
     "category": "feature",
     "description": "Added read-only community user lists for browsing others' picks.",
     "hash": "91e37ec8f2bb7dd6679fa9a705e92b6d0c643f0f",
