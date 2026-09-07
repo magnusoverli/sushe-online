@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-09-07",
+    "category": "feature",
+    "description": "Shared list layouts now apply consistently across owned and revealed lists.",
+    "hash": "c4c78947da14857fcc53f893b30a98b50a2b0e8b",
+    "commitMessage": "Share list layouts between owned and revealed user lists\n\n- Reuse desktop rows, headers, and mobile cards with read-only defaults\n- Preserve community data and isolated selection state\n- Guard sorting, playcounts, and rendering across view changes\n- Add layout and read-only interaction regression coverage"
+  },
+  {
+    "date": "2026-09-07",
     "category": "fix",
     "description": "Fixed album additions and sped up music search and covers.",
     "hash": "3371db802a3c0b116279330c90eb4dffe3a15029",
