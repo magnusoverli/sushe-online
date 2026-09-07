@@ -7,7 +7,7 @@
  * @module sorting
  */
 
-import { loadSortable } from './sortable-loader.js';
+import { loadSortable as defaultLoadSortable } from './sortable-loader.js';
 
 /**
  * Factory function to create the sorting module with injected dependencies
@@ -19,6 +19,7 @@ import { loadSortable } from './sortable-loader.js';
  * @param {Function} deps.saveReorder - Lightweight reorder function (only album IDs)
  * @param {Function} deps.updatePositionNumbers - Update position numbers in UI
  * @param {Function} deps.showToast - Show toast notification
+ * @param {Function} deps.loadSortable - Load the SortableJS constructor
  * @returns {Object} Sorting module API
  */
 export function createSorting(deps = {}) {
@@ -29,7 +30,9 @@ export function createSorting(deps = {}) {
     saveReorder,
     updatePositionNumbers,
     showToast,
+    loadSortable = defaultLoadSortable,
   } = deps;
+  const initializationTokens = new WeakMap();
 
   // Debounce state for rapid reorders (prevents API spam during quick successive drags)
   let reorderDebounceTimeout = null;
@@ -75,19 +78,42 @@ export function createSorting(deps = {}) {
    * @param {boolean} isMobile - Whether this is mobile view
    */
   function initializeUnifiedSorting(container, isMobile) {
-    loadSortable()
-      .then(() => initializeUnifiedSortingAfterLoad(container, isMobile))
+    destroySorting(container);
+    const listId = getCurrentList();
+    const token = {};
+    initializationTokens.set(container, token);
+    const isCurrent = () =>
+      initializationTokens.get(container) === token &&
+      Boolean(listId) &&
+      getCurrentList() === listId &&
+      !container.closest('[data-read-only="true"]') &&
+      !container.querySelector('[data-read-only="true"]');
+
+    return loadSortable()
+      .then((Sortable) => {
+        if (!isCurrent()) return;
+        initializeUnifiedSortingAfterLoad(
+          container,
+          isMobile,
+          Sortable,
+          listId,
+          token,
+          isCurrent
+        );
+      })
       .catch((error) => {
         console.error('SortableJS not loaded', error);
       });
   }
 
-  function initializeUnifiedSortingAfterLoad(container, isMobile) {
-    // Clean up any existing sortable instance
-    if (container._sortable) {
-      container._sortable.destroy();
-    }
-
+  function initializeUnifiedSortingAfterLoad(
+    container,
+    isMobile,
+    Sortable,
+    listId,
+    token,
+    isCurrent
+  ) {
     // Find the sortable container
     const sortableContainer = isMobile
       ? container.querySelector('.mobile-album-list') || container
@@ -103,6 +129,16 @@ export function createSorting(deps = {}) {
     // The sortable container (.album-rows-container) is a child of the scrollable element (#albumContainer)
     const scrollElement =
       sortableContainer.closest('.overflow-y-auto') || sortableContainer;
+
+    let draggedItem = null;
+    let cleanupTouch = () => {};
+    token.cleanup = () => {
+      cleanupTouch();
+      if (!draggedItem) return;
+      if (isMobile) draggedItem.classList.remove('dragging-mobile');
+      else document.body.classList.remove('desktop-dragging');
+      draggedItem = null;
+    };
 
     // Configure SortableJS options
     const sortableOptions = {
@@ -133,6 +169,8 @@ export function createSorting(deps = {}) {
 
       // Enhanced event handlers
       onStart: function (evt) {
+        if (!isCurrent()) return;
+        draggedItem = evt.item;
         // Visual feedback
         if (!isMobile) {
           document.body.classList.add('desktop-dragging');
@@ -147,6 +185,8 @@ export function createSorting(deps = {}) {
         }
       },
       onEnd: async function (evt) {
+        if (!isCurrent()) return;
+        draggedItem = null;
         // Clean up visual feedback
         if (!isMobile) {
           document.body.classList.remove('desktop-dragging');
@@ -159,16 +199,17 @@ export function createSorting(deps = {}) {
 
         if (oldIndex !== newIndex) {
           let list = null;
+          let appliedOrder = null;
           try {
             // Update the data
-            const currentList = getCurrentList();
-            list = getListData(currentList);
+            list = getListData(listId);
             if (!list) {
               console.error('List data not found');
               return;
             }
             const [movedItem] = list.splice(oldIndex, 1);
             list.splice(newIndex, 0, movedItem);
+            appliedOrder = [...list];
 
             // Immediate optimistic UI update
             updatePositionNumbers(sortableContainer, isMobile);
@@ -177,22 +218,27 @@ export function createSorting(deps = {}) {
             // This prevents "payload too large" errors for lists with many albums
             // Debounced to prevent API spam during rapid successive drags
             if (saveReorder) {
-              await debouncedSaveReorder(currentList, list);
+              await debouncedSaveReorder(listId, list);
             } else {
               // Fallback to full save if reorder function not available
-              debouncedSaveList(currentList, list);
+              debouncedSaveList(listId, list);
             }
           } catch (error) {
             console.error('Error saving reorder:', error);
-            if (showToast) {
-              showToast('Error saving changes', 'error');
-            }
-            // Revert the data change too, or the next save would persist
-            // the order the user just saw fail
-            if (list) {
+            // Roll back the captured owner's cache even after navigation, but
+            // never undo newer edits or touch the replacement view's DOM.
+            const unchanged =
+              list &&
+              appliedOrder &&
+              list.length === appliedOrder.length &&
+              list.every((item, index) => item === appliedOrder[index]);
+            if (unchanged) {
               const [movedItem] = list.splice(newIndex, 1);
               list.splice(oldIndex, 0, movedItem);
             }
+            if (!isCurrent() || !unchanged || getListData(listId) !== list)
+              return;
+            showToast?.('Error saving changes', 'error');
             // Put the dragged element itself back at its original index;
             // sibling indices have shifted, so compute the reference from
             // the list without the dragged element
@@ -221,6 +267,7 @@ export function createSorting(deps = {}) {
       let touchState = null;
 
       const onTouchStart = (e) => {
+        if (!isCurrent()) return;
         const wrapper = e.target.closest('.album-card-wrapper');
         if (!wrapper || e.target.closest('button, .no-drag')) return;
 
@@ -230,7 +277,7 @@ export function createSorting(deps = {}) {
       };
 
       const onTouchMove = (e) => {
-        if (!touchState) return;
+        if (!isCurrent() || !touchState) return;
 
         const elapsed = Date.now() - touchState.startTime;
 
@@ -254,6 +301,16 @@ export function createSorting(deps = {}) {
       sortableContainer.addEventListener('touchend', onTouchEnd, {
         passive: true,
       });
+      sortableContainer.addEventListener('touchcancel', onTouchEnd, {
+        passive: true,
+      });
+      cleanupTouch = () => {
+        touchState = null;
+        sortableContainer.removeEventListener('touchstart', onTouchStart);
+        sortableContainer.removeEventListener('touchmove', onTouchMove);
+        sortableContainer.removeEventListener('touchend', onTouchEnd);
+        sortableContainer.removeEventListener('touchcancel', onTouchEnd);
+      };
     }
   }
 
@@ -262,6 +319,10 @@ export function createSorting(deps = {}) {
    * @param {HTMLElement} container - Container element
    */
   function destroySorting(container) {
+    const token = initializationTokens.get(container);
+    // Invalidate before destroy, which may itself dispatch drag callbacks.
+    initializationTokens.delete(container);
+    token?.cleanup?.();
     if (container._sortable) {
       container._sortable.destroy();
       container._sortable = null;

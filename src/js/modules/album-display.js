@@ -54,20 +54,14 @@ import {
 import { createModal, destroyModalForElement } from './modal-factory.js';
 import { canManageListItemDisqualification } from './list-item-disqualification.js';
 import {
-  renderDesktopAlbumCell,
-  renderDesktopArtistCell,
-  renderDesktopCoverCell,
-  renderDesktopGenreCell,
+  renderDesktopAlbumRow,
+  renderDesktopAlbumHeader,
+} from './album-display/desktop-layout.js';
+import { renderMobileAlbumCard } from './album-display/mobile-layout.js';
+import {
   renderDisqualificationBadge,
   getDisplayCoverSources,
-  renderMobileArtistRow,
-  renderMobileCoverSection,
-  renderMobileDisqualificationSlot,
-  renderMobileGenreRow,
   renderMobileTaxonomyBadge,
-  renderMobilePlaycountRow,
-  renderMobilePositionBadge,
-  renderMobileTitleRow,
   renderRecommendationBadge,
   renderSummaryBadge,
 } from './album-display/render-parts.js';
@@ -142,6 +136,7 @@ export function createAlbumDisplay(deps = {}) {
     getListData,
     getListMetadata,
     getCurrentList,
+    isCommunityView = () => false,
     saveList,
     showToast,
     apiCall,
@@ -170,6 +165,8 @@ export function createAlbumDisplay(deps = {}) {
     formatTrackTime,
     reapplyNowPlayingHighlight = () => {},
   } = deps;
+  let ownedViewActive = false;
+  let cleanupColumnControls = () => {};
 
   const playcountSync = createPlaycountSync({
     apiCall,
@@ -479,73 +476,22 @@ export function createAlbumDisplay(deps = {}) {
    */
   function createDesktopAlbumRow(data, index) {
     const row = document.createElement('div');
-    row.className = 'album-row album-grid gap-4 py-2';
     row.dataset.index = index;
     const badgeHtml = `${renderRecommendationBadge(data)}${renderSummaryBadge(data)}`;
     const badgeState = `${data.recommendedBy || ''}|${data.recommendedAt || ''}|${data.summary || ''}|${data.summarySource || ''}|${data.albumName}|${data.artist}`;
-
-    // Build cell HTML map — each column produces its own cell
-    const cellMap = {
-      position:
-        data.position !== null
-          ? `<div class="position-cell flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>`
-          : '<div class="position-cell"></div>',
-      cover: renderDesktopCoverCell(data, index),
-      album: renderDesktopAlbumCell(data, {
-        alwaysShowReleaseDate: true,
-        badgesHtml: badgeHtml,
-        badgeState,
-        includeAvailabilityLinks: true,
-        includeTaxonomy: true,
-      }),
-      artist: renderDesktopArtistCell(data),
-      country: `<div class="flex items-center country-cell">
-        <span class="album-cell-text ${data.countryClass} truncate cursor-pointer hover:text-gray-100">${data.countryDisplay}</span>
-      </div>`,
-      genre_1: renderDesktopGenreCell(data, 1),
-      genre_2: renderDesktopGenreCell(data, 2),
-      track: `<div class="flex flex-col justify-start track-cell min-w-0 cursor-pointer overflow-hidden">
-        ${
-          data.primaryTrackDisplay
-            ? `<div class="flex items-center min-w-0 overflow-hidden w-full">
-            <span class="inline-block w-5 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Primary track">I:</span>
-            <span data-field="primary-track-text" class="album-cell-text ${data.primaryTrackClass} truncate hover:text-gray-100 flex-1 min-w-0" title="${data.primaryTrack || ''}">${data.primaryTrackDisplay}</span>
-            ${data.primaryTrackDuration ? `<span data-field="primary-track-duration" class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">(${data.primaryTrackDuration})</span>` : ''}
-          </div>`
-            : `<div class="flex items-center min-w-0">
-            <span class="album-cell-text text-gray-800 italic hover:text-gray-100">Select Track</span>
-          </div>`
-        }
-        ${
-          data.hasSecondaryTrack
-            ? `<div class="flex items-center min-w-0 mt-1 overflow-hidden w-full">
-            <span class="inline-block w-5 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif] text-green-400" title="Secondary track">II:</span>
-            <span data-field="secondary-track-text" class="album-cell-text ${data.secondaryTrackClass} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${data.secondaryTrack || ''}">${data.secondaryTrackDisplay}</span>
-            ${data.secondaryTrackDuration ? `<span data-field="secondary-track-duration" class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">(${data.secondaryTrackDuration})</span>` : ''}
-          </div>`
-            : ''
-        }
-      </div>`,
-      comment: `<div class="flex items-center comment-cell relative border-l border-gray-700 pl-2 self-stretch">
-        <span class="album-cell-text ${data.comment ? 'text-gray-300 hover:text-gray-100' : 'text-transparent hover:text-gray-600 italic'} line-clamp-2 cursor-pointer comment-text">${data.comment || 'Comment'}</span>
-      </div>`,
-      comment_2: `<div class="flex items-center comment-2-cell relative pl-2 self-stretch">
-        <span class="album-cell-text ${data.comment2 ? 'text-gray-300 hover:text-gray-100' : 'text-transparent hover:text-gray-600 italic'} line-clamp-2 cursor-pointer comment-2-text">${data.comment2 || 'Comment 2'}</span>
-      </div>`,
-    };
-
-    // Render ALL columns; hidden ones get .column-hidden for zero-cost toggling
-    const allCols = getAllColumns();
-    const visibleCols = getVisibleColumns();
-    row.style.gridTemplateColumns = computeGridTemplate(visibleCols);
-    row.innerHTML = allCols
-      .map((col) => {
-        const html = cellMap[col.id];
-        if (isColumnVisible(col.id)) return html;
-        // Inject column-hidden class into the outermost div
-        return html.replace(/^(<div\s+class=")/, '$1column-hidden ');
-      })
-      .join('\n');
+    const layout = renderDesktopAlbumRow(data, index, {
+      columns: getAllColumns(),
+      visibleColumns: getVisibleColumns(),
+      editable: true,
+      badgeHTML: badgeHtml,
+      badgeState,
+      includePlaycount: true,
+      includeAvailabilityLinks: true,
+      includeTaxonomy: true,
+    });
+    row.className = layout.className;
+    row.style.gridTemplateColumns = layout.gridTemplate;
+    row.innerHTML = layout.html;
 
     // Add shared event handlers
     attachDesktopEventHandlers(row, index);
@@ -842,97 +788,22 @@ export function createAlbumDisplay(deps = {}) {
    * @returns {HTMLElement} Card wrapper element
    */
   function createMobileAlbumCard(data, index) {
-    // === WRAPPER ELEMENT ===
-    // Container for sortable drag functionality
     const cardWrapper = document.createElement('div');
-    cardWrapper.className = 'album-card-wrapper h-[145px]';
-
-    // === CARD ELEMENT ===
-    // Main card with:
-    // - album-card: Touch feedback, box-shadow transitions
-    // - album-row: Inset top/bottom separators (subtle white lines)
-    // - relative: Positioning context for absolute children
-    // - h-[145px]: Fixed height matching wrapper
     const card = document.createElement('div');
-    card.className = 'album-card album-row relative h-[145px] bg-gray-900';
     card.dataset.index = index;
     const mobileBadgeData = getMobileBadgeData(data);
-
-    // === BUILD CARD HTML ===
-    card.innerHTML = `
-      ${renderMobilePositionBadge(data.position)}
-
-      <div class="flex items-stretch h-full">
-        
-        <!-- COVER SECTION -->
-        <!-- h-full is REQUIRED, not cosmetic: the card carries the shared
-             'album-row' class, and app.css's desktop-grid rule
-             '.album-row > div { align-items: center }' (specificity 0,1,1) beats
-             Tailwind's 'items-stretch' on the row wrapper, so the columns are NOT
-             stretched to the card height. Without an explicit height this column
-             collapses to its content (~104px) and centres, leaving justify-evenly
-             with zero free space (all three sections touch, slack pools top/bottom).
-             h-full pins it to the full 145px so justify-evenly can distribute. -->
-        <!-- Full-height column with justify-evenly so the three stacked sections
-             (cover, release date, availability badges) get four equal vertical
-             gaps: top-border->cover, cover->date, date->badges, and
-             badges->bottom-border all match. Competing margins are stripped
-             (no pt on the column, no mt-1 on the date, margin-top:0 on the
-             .album-availability--mobile badges) so the flex spacing is uniform.
-             The date also uses leading-none: text-xs's 16px line-box carries
-             ~2px of half-leading top/bottom that would otherwise inflate the two
-             date-adjacent gaps; collapsing the box to the 12px glyph keeps all
-             four gaps visually equal. The live-update twin (mobile branch of the
-             release-date className reset, ~line 1310) MUST keep these same
-             classes or the asymmetry returns on the next in-place update. -->
-        ${renderMobileCoverSection(data, index, { includeAvailabilityLinks: true, coverExtraHtml: renderMobileDisqualificationSlot(data) })}
-        
-        <!-- INFO SECTION -->
-        <div class="flex-1 min-w-0 pl-0.5 pr-1 flex flex-col justify-evenly h-[130px] leading-[18px]">
-          <!-- Album name -->
-          <!-- The right padding reserves space on the title row, so the
-               truncated title cuts off at (info-section width - this padding).
-               The badge stack uses a narrow right-side lane. -->
-          ${renderMobileTitleRow(data, { paddingRight: mobileBadgeData.paddingRight, badgesHtml: mobileBadgeData.html, badgeState: mobileBadgeData.state, stackBadges: true })}
-          <!-- Artist -->
-          ${renderMobileArtistRow(data, { paddingRight: mobileBadgeData.paddingRight })}
-          <!-- Last.fm playcount -->
-          ${renderMobilePlaycountRow(data, { paddingRight: mobileBadgeData.paddingRight })}
-          <!-- Country -->
-          <div data-mobile-badge-padding class="flex items-center" style="padding-right: ${mobileBadgeData.paddingRight}">
-            <span class="text-[12px] text-gray-400">
-              <i class="fas fa-globe fa-xs inline-block w-4 text-center mr-1"></i><span data-field="country-mobile-text">${escapeHtml(data.country || '')}</span>
-            </span>
-          </div>
-          <!-- Genres -->
-          ${renderMobileGenreRow(data, { paddingRight: mobileBadgeData.paddingRight })}
-          <!-- Primary track (marker: 1) -->
-          <div class="flex items-center ${data.primaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}"
-               data-track-play-btn="${data.primaryTrackDisplay ? 'true' : ''}"
-               data-track-identifier="${data.primaryTrack || ''}">
-            <span class="text-[12px] text-green-400 flex min-w-0 w-full">
-              <span class="inline-block w-5 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif]">I:</span><span data-field="track-mobile-text" class="truncate flex-1 min-w-0">${escapeHtml(data.primaryTrackDisplay || '')}</span>${data.primaryTrackDuration ? `<span data-field="primary-track-mobile-duration" class="shrink-0 ml-1 tabular-nums">(${data.primaryTrackDuration})</span>` : ''}
-            </span>
-          </div>
-          <!-- Secondary track (marker: 2) — always rendered for a consistent layout -->
-          <div class="flex items-center ${data.secondaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}"
-               data-track-play-btn="${data.secondaryTrackDisplay ? 'true' : ''}"
-               data-track-identifier="${data.secondaryTrack || ''}">
-            <span class="text-[12px] text-green-400 flex min-w-0 w-full">
-              <span class="inline-block w-5 text-center mr-1 shrink-0 text-2xs font-semibold font-[Georgia,serif]">II:</span><span data-field="secondary-track-mobile-text" class="truncate flex-1 min-w-0">${escapeHtml(data.secondaryTrackDisplay || '')}</span>${data.secondaryTrackDuration ? `<span data-field="secondary-track-mobile-duration" class="shrink-0 ml-1 tabular-nums">(${data.secondaryTrackDuration})</span>` : ''}
-            </span>
-          </div>
-        </div>
-        
-        <!-- MENU SECTION -->
-        <div class="shrink-0 w-[30px] border-l border-gray-700/80" style="display: flex; align-items: center; justify-content: center;">
-          <button data-album-menu-btn class="no-drag text-gray-400 active:text-gray-200" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;">
-            <i class="fas fa-ellipsis-v fa-fw"></i>
-          </button>
-        </div>
-        
-      </div>
-    `;
+    const layout = renderMobileAlbumCard(data, index, {
+      editable: true,
+      includePlaycount: true,
+      includeTracks: true,
+      badgeHTML: mobileBadgeData.html,
+      badgeState: mobileBadgeData.state,
+      badgePaddingRight: mobileBadgeData.paddingRight,
+      includeAvailabilityLinks: true,
+    });
+    cardWrapper.className = layout.wrapperClassName;
+    card.className = layout.className;
+    card.innerHTML = layout.html;
 
     cardWrapper.appendChild(card);
     attachMobileEventHandlers(card, index);
@@ -2181,6 +2052,9 @@ export function createAlbumDisplay(deps = {}) {
    * @param {boolean} options.hydrate - Reconcile same-order core-to-full metadata in place
    */
   function displayAlbums(albums, options = {}) {
+    if (isCommunityView()) return;
+    ownedViewActive = true;
+    const incrementalGeneration = renderGeneration;
     const { forceFullRebuild = false, hydrate = false } = options;
     const isMobile = isMobileViewport();
     const container = document.getElementById('albumContainer');
@@ -2227,6 +2101,8 @@ export function createAlbumDisplay(deps = {}) {
         if (success) {
           // Update lightweight state
           requestAnimationFrame(() => {
+            if (!ownedViewActive || incrementalGeneration !== renderGeneration)
+              return;
             lastRenderedFingerprint = newFingerprint;
             lastRenderedMutableState = extractMutableFingerprints(albums);
           });
@@ -2248,6 +2124,8 @@ export function createAlbumDisplay(deps = {}) {
         if (success) {
           // Update lightweight state
           requestAnimationFrame(() => {
+            if (!ownedViewActive || incrementalGeneration !== renderGeneration)
+              return;
             lastRenderedFingerprint = newFingerprint;
             lastRenderedMutableState = extractMutableFingerprints(albums);
           });
@@ -2265,6 +2143,8 @@ export function createAlbumDisplay(deps = {}) {
         if (success && verifyDOMIntegrity(albums, isMobile)) {
           // Update lightweight state instead of expensive deep clone
           requestAnimationFrame(() => {
+            if (!ownedViewActive || incrementalGeneration !== renderGeneration)
+              return;
             lastRenderedFingerprint = newFingerprint;
             lastRenderedMutableState = extractMutableFingerprints(albums);
           });
@@ -2288,6 +2168,7 @@ export function createAlbumDisplay(deps = {}) {
 
     // Full rebuild path - clear element caches
     renderGeneration += 1;
+    cleanupColumnControls();
     const activeRenderGeneration = renderGeneration;
     positionElementCache = new WeakMap();
     resetRowElementsCache();
@@ -2396,33 +2277,16 @@ export function createAlbumDisplay(deps = {}) {
 
     if (!isMobile) {
       // Desktop: Table layout with header
-      // Build header with ALL columns; hidden ones get .column-hidden
-      const allCols = getAllColumns();
-      const visibleCols = getVisibleColumns();
-      const gridTemplate = computeGridTemplate(visibleCols);
-
+      const headerLayout = renderDesktopAlbumHeader({
+        columns: getAllColumns(),
+        visibleColumns: getVisibleColumns(),
+      });
       const header = document.createElement('div');
-      header.className =
-        'album-header album-grid gap-4 py-2 text-[0.8125rem] font-medium text-gray-200 border-b border-gray-800 sticky top-0 z-10 shrink-0';
+      header.className = headerLayout.className;
       header.style.alignItems = 'center';
-      header.style.gridTemplateColumns = gridTemplate;
+      header.style.gridTemplateColumns = headerLayout.gridTemplate;
       header.style.position = 'relative';
-
-      // Header cell extra classes by column ID
-      const headerExtras = {
-        position: ' text-center',
-        album: ' pl-2',
-        comment: ' pl-2',
-        comment_2: ' pl-2',
-      };
-
-      const headerCells = allCols
-        .map((col) => {
-          const hidden = !isColumnVisible(col.id) ? ' column-hidden' : '';
-          return `<div class="${col.cellClass}${headerExtras[col.id] || ''}${hidden}">${col.label}</div>`;
-        })
-        .join('\n        ');
-      header.innerHTML = headerCells;
+      header.innerHTML = headerLayout.html;
 
       // Column visibility toggle button + dropdown
       const toggleBtn = document.createElement('button');
@@ -2516,6 +2380,12 @@ export function createAlbumDisplay(deps = {}) {
         }
       };
       document.addEventListener('keydown', escHandler);
+      cleanupColumnControls = () => {
+        document.removeEventListener('click', closeDropdown);
+        document.removeEventListener('keydown', escHandler);
+        dropdown.remove();
+        cleanupColumnControls = () => {};
+      };
 
       header.appendChild(toggleBtn);
 
@@ -2578,6 +2448,33 @@ export function createAlbumDisplay(deps = {}) {
   function clearLastRenderedCache() {
     lastRenderedFingerprint = null;
     lastRenderedMutableState = null;
+  }
+
+  // Shared rows must not inherit pending sorting, hydration or lock work from
+  // the owner controller when another controller takes over the container.
+  function deactivate() {
+    ownedViewActive = false;
+    renderGeneration++;
+    progressiveRenderInProgress = false;
+    pendingHydration = null;
+    clearLastRenderedCache();
+    resetRowElementsCache();
+    positionElementCache = new WeakMap();
+    cleanupColumnControls();
+    closeCoverPreview();
+    hideAllMenusBase();
+    clearTimeout(tooltipHideTimeout);
+    clearTimeout(tooltipRemoveTimeout);
+    activeTooltip?.remove();
+    activeTooltip = null;
+    activeBadge = null;
+    const listId = getCurrentList();
+    if (listId) playcountSync.cancelPollingForList(listId);
+    const container = document.getElementById('albumContainer');
+    if (container) {
+      destroySorting?.(container);
+      clearYearLockUIFn(container);
+    }
   }
 
   /**
@@ -2686,6 +2583,7 @@ export function createAlbumDisplay(deps = {}) {
 
   // Listen for column visibility changes from external sources (e.g. settings drawer)
   window.addEventListener('columnvisibilitychange', () => {
+    if (!ownedViewActive || isCommunityView()) return;
     const isMobile = isMobileViewport();
     if (isMobile) return; // Column visibility only applies to desktop
     applyVisibilityInPlace();
@@ -2694,6 +2592,9 @@ export function createAlbumDisplay(deps = {}) {
   // Return public API
   return {
     displayAlbums,
+    deactivate,
+    attachDesktopCoverPreview,
+    closeCoverPreview,
     fetchAndDisplayPlaycounts: playcountSync.fetchAndDisplayPlaycounts,
     prefetchPlaycountsForRender: playcountSync.prefetchPlaycountsForRender,
     primePlaycountCache: playcountSync.primePlaycountCache,

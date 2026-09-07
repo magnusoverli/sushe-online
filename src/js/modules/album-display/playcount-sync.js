@@ -17,7 +17,7 @@ export function createPlaycountSync(deps = {}) {
   // Last.fm playcount cache: { listItemId: { playcount, status } | null }
   // status can be: 'success', 'not_found', 'error', or null (not yet fetched)
   let playcountCache = {};
-  let playcountFetchInProgress = false;
+  let activeFetch = null;
 
   // AbortControllers for active polling sessions (one per list)
   const pollingControllers = new Map(); // listId -> AbortController
@@ -27,6 +27,8 @@ export function createPlaycountSync(deps = {}) {
   }
 
   function clearPlaycountCache() {
+    activeFetch?.controller.abort();
+    activeFetch = null;
     pollingControllers.forEach((controller) => {
       controller.abort();
     });
@@ -41,6 +43,10 @@ export function createPlaycountSync(deps = {}) {
   }
 
   function cancelPollingForList(listId) {
+    if (activeFetch?.listId === listId) {
+      activeFetch.controller.abort();
+      activeFetch = null;
+    }
     const controller = pollingControllers.get(listId);
     if (controller) {
       controller.abort();
@@ -114,7 +120,7 @@ export function createPlaycountSync(deps = {}) {
   }
 
   async function pollForRefreshedPlaycounts(listId, expectedCount) {
-    cancelPollingForList(listId);
+    pollingControllers.get(listId)?.abort();
 
     const controller = createAbortController();
     pollingControllers.set(listId, controller);
@@ -154,6 +160,8 @@ export function createPlaycountSync(deps = {}) {
             signal,
           }
         );
+        if (signal.aborted || pollingControllers.get(listId) !== controller)
+          return;
 
         if (response.playcounts) {
           let changedCount = 0;
@@ -234,26 +242,30 @@ export function createPlaycountSync(deps = {}) {
     schedule(poll, POLL_INTERVAL);
   }
 
-  async function fetchAndDisplayPlaycounts(listId, forceRefresh = false) {
-    if (!listId || playcountFetchInProgress) return;
+  async function loadPlaycounts(listId, forceRefresh = false) {
+    if (!listId || activeFetch) return null;
 
     if (!hasLastfmConnection()) {
       clearPlaycountCache();
-      return;
+      return null;
     }
 
-    playcountFetchInProgress = true;
+    const request = { listId, controller: createAbortController() };
+    activeFetch = request;
 
     try {
       const response = await apiCall(
-        `/api/lastfm/list-playcounts/${listId}${forceRefresh ? '?refresh=true' : ''}`
+        `/api/lastfm/list-playcounts/${listId}${forceRefresh ? '?refresh=true' : ''}`,
+        { signal: request.controller.signal }
       );
+      if (request.controller.signal.aborted || activeFetch !== request)
+        return null;
 
       if (response.error) {
         if (response.error !== 'Last.fm not connected') {
           logger.warn('Failed to fetch playcounts:', response.error);
         }
-        return;
+        return null;
       }
 
       const { playcounts, refreshing } = response;
@@ -263,57 +275,24 @@ export function createPlaycountSync(deps = {}) {
       if (refreshing > 0) {
         pollForRefreshedPlaycounts(listId, refreshing);
       }
+      return response;
     } catch (err) {
+      if (request.controller.signal.aborted || err.name === 'AbortError')
+        return null;
       if (isLastfmNotConnectedError(err)) {
         clearPlaycountCache();
-        return;
+        return null;
       }
 
       logger.warn('Playcount fetch error:', err);
+      return null;
     } finally {
-      playcountFetchInProgress = false;
+      if (activeFetch === request) activeFetch = null;
     }
   }
 
-  async function prefetchPlaycountsForRender(listId) {
-    if (!listId || playcountFetchInProgress) return null;
-
-    if (!hasLastfmConnection()) {
-      clearPlaycountCache();
-      return null;
-    }
-
-    playcountFetchInProgress = true;
-
-    try {
-      const response = await apiCall(`/api/lastfm/list-playcounts/${listId}`);
-
-      if (response.error) {
-        if (response.error !== 'Last.fm not connected') {
-          logger.warn('Failed to fetch playcounts:', response.error);
-        }
-        return null;
-      }
-
-      const { playcounts, refreshing } = response;
-      applyPlaycountUpdates(playcounts);
-
-      if (refreshing > 0) {
-        pollForRefreshedPlaycounts(listId, refreshing);
-      }
-
-      return response;
-    } catch (err) {
-      if (isLastfmNotConnectedError(err)) {
-        clearPlaycountCache();
-        return null;
-      }
-
-      logger.warn('Playcount fetch error:', err);
-      return null;
-    } finally {
-      playcountFetchInProgress = false;
-    }
+  async function fetchAndDisplayPlaycounts(listId, forceRefresh = false) {
+    await loadPlaycounts(listId, forceRefresh);
   }
 
   return {
@@ -321,7 +300,7 @@ export function createPlaycountSync(deps = {}) {
     primePlaycountCache,
     clearPlaycountCache,
     cancelPollingForList,
-    prefetchPlaycountsForRender,
+    prefetchPlaycountsForRender: loadPlaycounts,
     fetchAndDisplayPlaycounts,
   };
 }

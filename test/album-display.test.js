@@ -109,8 +109,184 @@ if (typeof globalThis.window === 'undefined') {
   globalThis.fetch = () => Promise.resolve({ ok: true, json: () => ({}) });
 }
 
-// Since this is a browser module, we need to mock the DOM and dependencies
-// For now, we test the factory function and basic structure
+function lifecycleNode(className = '', fragment = false) {
+  const listeners = new Map();
+  const node = {
+    className,
+    fragment,
+    dataset: {},
+    style: {},
+    children: [],
+    innerHTML: '',
+    parentNode: null,
+    appendChild(child) {
+      if (child.fragment) {
+        for (const entry of [...child.children]) this.appendChild(entry);
+        child.children = [];
+      } else {
+        child.remove();
+        child.parentNode = this;
+        this.children.push(child);
+      }
+      return child;
+    },
+    replaceChildren(...children) {
+      for (const child of [...this.children]) child.remove();
+      children.forEach((child) => this.appendChild(child));
+    },
+    removeChild(child) {
+      child.remove();
+      return child;
+    },
+    remove() {
+      if (!this.parentNode) return;
+      const siblings = this.parentNode.children;
+      siblings.splice(siblings.indexOf(this), 1);
+      this.parentNode = null;
+    },
+    querySelectorAll(selector) {
+      return this.children.flatMap((child) => [
+        ...(selector.startsWith('.') &&
+        child.className.split(' ').includes(selector.slice(1))
+          ? [child]
+          : []),
+        ...child.querySelectorAll(selector),
+      ]);
+    },
+    querySelector(selector) {
+      if (
+        selector === '.column-toggle-reset' &&
+        this.className.includes('column-toggle-dropdown')
+      ) {
+        this.resetButton ||= lifecycleNode();
+        return this.resetButton;
+      }
+      return this.querySelectorAll(selector)[0] || null;
+    },
+    addEventListener(type, handler) {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type).add(handler);
+    },
+    removeEventListener(type, handler) {
+      listeners.get(type)?.delete(handler);
+    },
+    dispatch(type, event = {}) {
+      for (const handler of listeners.get(type) || [])
+        handler({ type, ...event });
+    },
+    listenerCount(type) {
+      return listeners.get(type)?.size || 0;
+    },
+    setAttribute() {},
+    getAttribute() {
+      return null;
+    },
+    getBoundingClientRect() {
+      return {
+        left: 10,
+        top: 20,
+        width: 75,
+        height: 75,
+        right: 85,
+        bottom: 95,
+      };
+    },
+  };
+  node.classList = {
+    add(...names) {
+      node.className = [
+        ...new Set([...node.className.split(' '), ...names]),
+      ].join(' ');
+    },
+    remove(...names) {
+      node.className = node.className
+        .split(' ')
+        .filter((name) => !names.includes(name))
+        .join(' ');
+    },
+    contains(name) {
+      return node.className.split(' ').includes(name);
+    },
+    toggle(name, force = !this.contains(name)) {
+      this[force ? 'add' : 'remove'](name);
+    },
+  };
+  return node;
+}
+
+function ownerLifecycleHarness(
+  t,
+  createAlbumDisplay,
+  { mobile = false, albums = [], ...overrides } = {}
+) {
+  const container = lifecycleNode();
+  const body = lifecycleNode();
+  const docEvents = lifecycleNode();
+  const winEvents = lifecycleNode();
+  const frames = [];
+  const batches = [];
+  const timers = [];
+  const oldBody = document.body;
+  const oldIdle = window.requestIdleCallback;
+  document.body = body;
+  window.requestIdleCallback = (callback) => batches.push(callback);
+  t.mock.method(document, 'createElement', () => lifecycleNode());
+  const oldFragment = document.createDocumentFragment;
+  document.createDocumentFragment = () => lifecycleNode('', true);
+  t.mock.method(document, 'getElementById', (id) =>
+    id === 'albumContainer' ? container : null
+  );
+  t.mock.method(document, 'querySelector', (selector) =>
+    selector === 'body > .column-toggle-dropdown'
+      ? body.querySelector('.column-toggle-dropdown')
+      : null
+  );
+  t.mock.method(document, 'addEventListener', docEvents.addEventListener);
+  t.mock.method(document, 'removeEventListener', docEvents.removeEventListener);
+  t.mock.method(window, 'addEventListener', winEvents.addEventListener);
+  t.mock.method(window, 'matchMedia', () => ({ matches: mobile }));
+  t.mock.method(globalThis, 'requestAnimationFrame', (callback) =>
+    frames.push(callback)
+  );
+  t.mock.method(globalThis, 'setTimeout', (callback, delay) =>
+    timers.push({ callback, delay })
+  );
+  const deps = {
+    getCurrentList: () => 'owned-1',
+    getListData: () => albums,
+    getListMetadata: () => ({ isMain: false }),
+    isCommunityView: () => false,
+    isListLocked: mock.fn(async () => false),
+    initializeUnifiedSorting: mock.fn(),
+    destroySorting: mock.fn(),
+    clearYearLockUI: mock.fn(),
+    showYearLockUI: mock.fn(),
+    reapplyNowPlayingHighlight: mock.fn(),
+    apiCall: mock.fn(async () => ({})),
+    ...overrides,
+  };
+  const module = createAlbumDisplay(deps);
+  module.clearLastRenderedCache();
+  t.after(() => {
+    module.deactivate();
+    document.body = oldBody;
+    if (oldIdle === undefined) delete window.requestIdleCallback;
+    else window.requestIdleCallback = oldIdle;
+    if (oldFragment === undefined) delete document.createDocumentFragment;
+    else document.createDocumentFragment = oldFragment;
+  });
+  return {
+    module,
+    container,
+    body,
+    docEvents,
+    winEvents,
+    frames,
+    batches,
+    timers,
+    deps,
+  };
+}
 
 describe('album-display module', () => {
   describe('createAlbumDisplay factory', () => {
@@ -160,6 +336,8 @@ describe('album-display module', () => {
       assert.strictEqual(typeof module.processAlbumData, 'function');
       assert.strictEqual(typeof module.createAlbumItem, 'function');
       assert.strictEqual(typeof module.detectUpdateType, 'function');
+      assert.strictEqual(typeof module.deactivate, 'function');
+      assert.strictEqual(typeof module.attachDesktopCoverPreview, 'function');
     });
 
     it('should show locked UI for empty locked main lists', async () => {
@@ -493,6 +671,356 @@ describe('album-display module', () => {
       // Should not throw when called with empty deps
       const module = createAlbumDisplay({});
       assert.ok(module);
+    });
+  });
+
+  describe('shared layout integration and owner lifecycle', () => {
+    let createAlbumDisplay;
+    const albums = [
+      {
+        _id: 'item-1',
+        album_id: 'album-1',
+        album: 'Shared Album',
+        artist: 'Shared Artist',
+      },
+    ];
+
+    beforeEach(async () => {
+      ({ createAlbumDisplay } =
+        await import('../src/js/modules/album-display.js'));
+    });
+
+    it('uses the shared component results for owner desktop header/row and mobile card shells', async (t) => {
+      const { renderDesktopAlbumHeader, renderDesktopAlbumRow } =
+        await import('../src/js/modules/album-display/desktop-layout.js');
+      const { renderMobileAlbumCard } =
+        await import('../src/js/modules/album-display/mobile-layout.js');
+      const { getAllColumns, getVisibleColumns } =
+        await import('../src/js/modules/column-config.js');
+      const h = ownerLifecycleHarness(t, createAlbumDisplay, { albums });
+      h.module.displayAlbums(albums, { forceFullRebuild: true });
+      const header = h.container.querySelector('.album-header');
+      const row = h.container.querySelector('.album-row');
+      const options = {
+        columns: getAllColumns(),
+        visibleColumns: getVisibleColumns(),
+      };
+      const headerLayout = renderDesktopAlbumHeader(options);
+      assert.strictEqual(header.className, headerLayout.className);
+      assert.strictEqual(header.innerHTML, headerLayout.html);
+      assert.strictEqual(
+        header.style.gridTemplateColumns,
+        headerLayout.gridTemplate
+      );
+      const data = h.module.processAlbumData(albums[0], 0);
+      const rowLayout = renderDesktopAlbumRow(data, 0, {
+        ...options,
+        editable: true,
+        badgeState: '||||Shared Album|Shared Artist',
+        includePlaycount: true,
+        includeAvailabilityLinks: true,
+        includeTaxonomy: true,
+      });
+      assert.strictEqual(row.className, rowLayout.className);
+      assert.strictEqual(row.innerHTML, rowLayout.html);
+      assert.strictEqual(
+        row.style.gridTemplateColumns,
+        header.style.gridTemplateColumns
+      );
+      assert.strictEqual(String(row.dataset.index), '0');
+
+      const wrapper = h.module.createAlbumItem(albums[0], 0, true);
+      const card = wrapper.children[0];
+      const mobileLayout = renderMobileAlbumCard(data, 0, {
+        editable: true,
+        includePlaycount: true,
+        includeTracks: true,
+        badgeState: '||||{}|Shared Album|Shared Artist',
+        badgePaddingRight: '0px',
+        includeAvailabilityLinks: true,
+      });
+      assert.strictEqual(wrapper.className, mobileLayout.wrapperClassName);
+      assert.strictEqual(wrapper.className, 'album-card-wrapper h-[145px]');
+      assert.strictEqual(card.className, mobileLayout.className);
+      assert.strictEqual(card.innerHTML, mobileLayout.html);
+      assert.strictEqual(String(card.dataset.index), '0');
+      assert.match(card.innerHTML, /data-album-menu-btn/);
+      assert.match(row.innerHTML, /cursor-pointer/);
+    });
+
+    for (const locked of [true, false]) {
+      it(`ignores a deferred owner lock result (${locked}) after deactivation`, async (t) => {
+        let resolveLock;
+        const lock = new Promise((resolve) => {
+          resolveLock = resolve;
+        });
+        const h = ownerLifecycleHarness(t, createAlbumDisplay, {
+          albums,
+          getListMetadata: () => ({ year: 2025, isMain: true }),
+          isListLocked: mock.fn(() => lock),
+        });
+        h.module.displayAlbums(albums, { forceFullRebuild: true });
+        assert.strictEqual(h.deps.isListLocked.mock.calls.length, 1);
+        assert.strictEqual(
+          h.deps.initializeUnifiedSorting.mock.calls.length,
+          0
+        );
+        h.module.deactivate();
+        const community = lifecycleNode('community-list-view');
+        h.container.replaceChildren(community);
+        const clears = h.deps.clearYearLockUI.mock.calls.length;
+        resolveLock(locked);
+        await lock;
+        while (h.frames.length) h.frames.shift()();
+        assert.deepStrictEqual(h.container.children, [community]);
+        assert.strictEqual(
+          h.deps.initializeUnifiedSorting.mock.calls.length,
+          0
+        );
+        assert.strictEqual(h.deps.showYearLockUI.mock.calls.length, 0);
+        assert.strictEqual(h.deps.destroySorting.mock.calls.length, 1);
+        assert.strictEqual(h.deps.clearYearLockUI.mock.calls.length, clears);
+      });
+    }
+
+    for (const finishBatches of [false, true]) {
+      it(`fences progressive batches and queued hydration after deactivation (${finishBatches ? 'final frame' : 'mid-batch'})`, (t) => {
+        const manyAlbums = Array.from({ length: 121 }, (_, index) => ({
+          _id: `item-${index}`,
+          artist: 'Artist',
+          album: `Album ${index}`,
+        }));
+        const hydrated = manyAlbums.map((album) => ({
+          ...album,
+          genre_1: 'Hydrated genre',
+        }));
+        const h = ownerLifecycleHarness(t, createAlbumDisplay, {
+          albums: manyAlbums,
+          mobile: true,
+        });
+        h.module.displayAlbums(manyAlbums, { forceFullRebuild: true });
+        const ownerRows = h.container.querySelector('.mobile-album-list');
+        assert.strictEqual(ownerRows.children.length, 60);
+        assert.strictEqual(h.batches.length, 1);
+        h.module.displayAlbums(hydrated, { hydrate: true });
+        assert.strictEqual(ownerRows.children.length, 60);
+        if (finishBatches) {
+          while (h.batches.length) h.batches.shift()();
+          assert.strictEqual(ownerRows.children.length, 121);
+          assert.strictEqual(h.frames.length, 1);
+        }
+        h.module.deactivate();
+        const community = lifecycleNode('community-list-view');
+        h.container.replaceChildren(community);
+        const childCount = ownerRows.children.length;
+        const highlights = h.deps.reapplyNowPlayingHighlight.mock.calls.length;
+        const sorts = h.deps.initializeUnifiedSorting.mock.calls.length;
+        const queries = t.mock.method(h.container, 'querySelector');
+        const queriesAll = t.mock.method(h.container, 'querySelectorAll');
+        while (h.batches.length) h.batches.shift()();
+        while (h.frames.length) h.frames.shift()();
+        assert.deepStrictEqual(h.container.children, [community]);
+        assert.strictEqual(
+          ownerRows.children.length,
+          childCount,
+          'detached owner rows must not receive another batch'
+        );
+        assert.strictEqual(
+          queries.mock.calls.length,
+          0,
+          'hydration must not query the community DOM'
+        );
+        assert.strictEqual(queriesAll.mock.calls.length, 0);
+        assert.strictEqual(
+          h.deps.reapplyNowPlayingHighlight.mock.calls.length,
+          highlights
+        );
+        assert.strictEqual(
+          h.deps.initializeUnifiedSorting.mock.calls.length,
+          sorts
+        );
+        assert.strictEqual(h.deps.apiCall.mock.calls.length, 0);
+      });
+    }
+
+    it('ignores late owner display and column events while community is active, then renders identical owner data on return', (t) => {
+      let communityActive = false;
+      const h = ownerLifecycleHarness(t, createAlbumDisplay, {
+        albums,
+        isCommunityView: () => communityActive,
+      });
+      h.module.displayAlbums(albums, { forceFullRebuild: true });
+      while (h.frames.length) h.frames.shift()();
+      const oldRow = h.container.querySelector('.album-row');
+      h.module.deactivate();
+      communityActive = true;
+      const community = lifecycleNode('community-list-view');
+      h.container.replaceChildren(community);
+      const getContainer = t.mock.method(document, 'getElementById');
+      for (const options of [
+        {},
+        { hydrate: true },
+        { forceFullRebuild: true },
+      ]) {
+        h.module.displayAlbums(albums, options);
+      }
+      h.winEvents.dispatch('columnvisibilitychange');
+      assert.strictEqual(getContainer.mock.calls.length, 0);
+      assert.deepStrictEqual(h.container.children, [community]);
+      communityActive = false;
+      h.module.displayAlbums(albums);
+      const newRow = h.container.querySelector('.album-row');
+      assert.ok(
+        newRow,
+        'the old fingerprint must not suppress the return render'
+      );
+      assert.notStrictEqual(newRow, oldRow);
+      assert.strictEqual(newRow.innerHTML, oldRow.innerHTML);
+      assert.strictEqual(h.deps.initializeUnifiedSorting.mock.calls.length, 2);
+    });
+
+    it('discards a queued incremental fingerprint update so identical data still renders on return', (t) => {
+      const h = ownerLifecycleHarness(t, createAlbumDisplay, { albums });
+      h.module.displayAlbums(albums, { forceFullRebuild: true });
+      while (h.frames.length) h.frames.shift()();
+      const updated = [
+        ...albums,
+        { _id: 'item-2', artist: 'Second Artist', album: 'Second Album' },
+      ];
+      h.module.displayAlbums(updated);
+      assert.strictEqual(
+        h.container.querySelector('.album-rows-container').children.length,
+        2
+      );
+      assert.strictEqual(h.frames.length, 1);
+      h.module.deactivate();
+      h.container.replaceChildren(lifecycleNode('community-list-view'));
+      while (h.frames.length) h.frames.shift()();
+      h.module.displayAlbums(updated);
+      assert.strictEqual(
+        h.container.querySelector('.album-rows-container')?.children.length,
+        2
+      );
+    });
+
+    it('removes body column controls and their document listeners on rebuild and deactivation', (t) => {
+      const h = ownerLifecycleHarness(t, createAlbumDisplay, { albums });
+      const baselineKeydowns = h.docEvents.listenerCount('keydown');
+      h.module.displayAlbums(albums, { forceFullRebuild: true });
+      const dropdown = h.body.querySelector('.column-toggle-dropdown');
+      assert.ok(dropdown);
+      assert.strictEqual(h.docEvents.listenerCount('click'), 1);
+      assert.strictEqual(
+        h.docEvents.listenerCount('keydown'),
+        baselineKeydowns + 1
+      );
+      h.module.displayAlbums(albums, { forceFullRebuild: true });
+      assert.strictEqual(dropdown.parentNode, null);
+      assert.strictEqual(
+        h.body.querySelectorAll('.column-toggle-dropdown').length,
+        1
+      );
+      assert.strictEqual(h.docEvents.listenerCount('click'), 1);
+      h.module.deactivate();
+      assert.strictEqual(h.body.children.length, 0);
+      assert.strictEqual(h.docEvents.listenerCount('click'), 0);
+      assert.strictEqual(
+        h.docEvents.listenerCount('keydown'),
+        baselineKeydowns
+      );
+      assert.deepStrictEqual(h.deps.destroySorting.mock.calls[0].arguments, [
+        h.container,
+      ]);
+      const queries = t.mock.method(h.container, 'querySelectorAll');
+      h.winEvents.dispatch('columnvisibilitychange');
+      assert.strictEqual(queries.mock.calls.length, 0);
+      h.module.deactivate();
+      assert.strictEqual(h.body.children.length, 0);
+    });
+
+    it('cancels scheduled owner playcount polling on deactivation', async (t) => {
+      const h = ownerLifecycleHarness(t, createAlbumDisplay, {
+        albums,
+        apiCall: mock.fn(async () => ({ playcounts: {}, refreshing: 1 })),
+      });
+      await h.module.fetchAndDisplayPlaycounts('owned-1');
+      assert.strictEqual(h.deps.apiCall.mock.calls.length, 1);
+      assert.strictEqual(h.timers.length, 1);
+      assert.strictEqual(h.timers[0].delay, 3000);
+      h.module.deactivate();
+      await h.timers.shift().callback();
+      assert.strictEqual(h.deps.apiCall.mock.calls.length, 1);
+      assert.strictEqual(h.timers.length, 0);
+    });
+
+    it('aborts an in-flight owner playcount poll without rescheduling it', async (t) => {
+      let pollSignal;
+      let calls = 0;
+      const apiCall = mock.fn(async (_url, options) => {
+        if (++calls === 1) return { playcounts: {}, refreshing: 1 };
+        pollSignal = options.signal;
+        return new Promise((_resolve, reject) => {
+          pollSignal.addEventListener('abort', () => {
+            const error = new Error('Aborted');
+            error.name = 'AbortError';
+            reject(error);
+          });
+        });
+      });
+      const h = ownerLifecycleHarness(t, createAlbumDisplay, { apiCall });
+      await h.module.fetchAndDisplayPlaycounts('owned-1');
+      const pendingPoll = h.timers.shift().callback();
+      assert.strictEqual(pollSignal.aborted, false);
+      h.module.deactivate();
+      assert.strictEqual(pollSignal.aborted, true);
+      await pendingPoll;
+      assert.strictEqual(apiCall.mock.calls.length, 2);
+      assert.strictEqual(h.timers.length, 0);
+    });
+
+    it('does not restart owner polling when its initial playcount request resolves after deactivation', async (t) => {
+      let resolveRequest;
+      const response = new Promise((resolve) => {
+        resolveRequest = resolve;
+      });
+      const h = ownerLifecycleHarness(t, createAlbumDisplay, {
+        apiCall: mock.fn(() => response),
+      });
+      const pendingFetch = h.module.fetchAndDisplayPlaycounts('owned-1');
+      h.module.deactivate();
+      h.container.replaceChildren(lifecycleNode('community-list-view'));
+      resolveRequest({ playcounts: {}, refreshing: 1 });
+      await pendingFetch;
+      assert.strictEqual(
+        h.timers.length,
+        0,
+        'a response from the deactivated owner must not start a new polling session'
+      );
+    });
+
+    it('attaches desktop cover preview once and uses the explicit image rather than owner album data', (t) => {
+      const getListData = mock.fn(() => {
+        throw new Error('preview must not read owner albums');
+      });
+      const h = ownerLifecycleHarness(t, createAlbumDisplay, { getListData });
+      const image = lifecycleNode();
+      image.src = '/community-thumb.jpg';
+      image.dataset.fullSrc = '/community-full.jpg';
+      h.module.attachDesktopCoverPreview(image);
+      h.module.attachDesktopCoverPreview(image);
+      assert.strictEqual(image.listenerCount('click'), 1);
+      const stopPropagation = mock.fn();
+      image.dispatch('click', { stopPropagation });
+      const preview = h.body.querySelector('.album-cover-preview-clone');
+      assert.ok(preview);
+      assert.strictEqual(preview.src, '/community-full.jpg');
+      assert.strictEqual(stopPropagation.mock.calls.length, 1);
+      assert.strictEqual(getListData.mock.calls.length, 0);
+      while (h.frames.length) h.frames.shift()();
+      h.module.closeCoverPreview();
+      for (const timer of h.timers.splice(0)) timer.callback();
+      assert.strictEqual(h.body.children.length, 0);
+      assert.strictEqual(h.body.style.overflow, '');
     });
   });
 

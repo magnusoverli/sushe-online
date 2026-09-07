@@ -166,6 +166,10 @@ const communityViewer = createCommunityViewer({
   showToast,
   playAlbumByMetadata: (artist, album, options) =>
     getPlaybackModule().playAlbumByMetadata(artist, album, options),
+  deactivateOwnedView: () => getAlbumDisplayModule().deactivate(),
+  attachDesktopCoverPreview: (image) =>
+    getAlbumDisplayModule().attachDesktopCoverPreview(image),
+  closeCoverPreview: () => getAlbumDisplayModule().closeCoverPreview(),
   doc: document,
 });
 
@@ -459,6 +463,7 @@ const getAlbumDisplayModule = createLazyModule(() =>
     getListData,
     getListMetadata,
     getCurrentList: () => getCurrentListId(),
+    isCommunityView: () => !!getActiveCommunityListId(),
     saveList,
     showToast,
     apiCall,

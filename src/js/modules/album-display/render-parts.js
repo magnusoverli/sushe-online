@@ -134,7 +134,7 @@ export function renderDesktopGenreCell(data, slot, options = {}) {
   const value = slot === 2 ? data.genre2 : data.genre1;
   const display = slot === 2 ? data.genre2Display : data.genre1Display;
   const defaultClass = slot === 2 ? data.genre2Class : data.genre1Class;
-  const emptyText = options.emptyText || (slot === 2 ? 'Genre 2' : 'Genre 1');
+  const emptyText = options.emptyText ?? (slot === 2 ? 'Genre 2' : 'Genre 1');
   const text = value ? display : emptyText;
   const textClass = value
     ? options.textClass || defaultClass || 'text-gray-300'

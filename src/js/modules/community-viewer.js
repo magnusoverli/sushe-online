@@ -1,22 +1,25 @@
-import { escapeHtml } from './html-utils.js';
 import {
-  renderDesktopCoverCell,
-  renderMobileCoverSection,
-} from './album-display/cover-parts.js';
+  renderDesktopAlbumHeader,
+  renderDesktopAlbumRow,
+} from './album-display/desktop-layout.js';
+import { renderMobileAlbumCard } from './album-display/mobile-layout.js';
+import { getAllColumns, getVisibleColumns } from './column-config.js';
+import { formatReleaseDate } from './date-utils.js';
 import {
   attachMobileCoverPlayback,
   createAlbumDisplayShared,
 } from './album-display-shared.js';
-import {
-  renderDesktopAlbumCell,
-  renderDesktopArtistCell,
-  renderDesktopGenreCell,
-  renderMobileArtistRow,
-  renderMobileDisqualificationSlot,
-  renderMobileGenreRow,
-  renderMobilePositionBadge,
-  renderMobileTitleRow,
-} from './album-display/render-parts.js';
+
+// Preserve the revealed-list projection; presentation reuse does not expand it.
+const COMMUNITY_COLUMNS = new Set([
+  'position',
+  'cover',
+  'album',
+  'artist',
+  'country',
+  'genre_1',
+  'genre_2',
+]);
 
 const { loadCoverImages: initializeCommunityCovers } = createAlbumDisplayShared(
   {
@@ -27,13 +30,13 @@ const { loadCoverImages: initializeCommunityCovers } = createAlbumDisplayShared(
   }
 );
 
-function normalizeItem(item = {}) {
+function normalizeItem(item = {}, index = 0) {
   return {
-    position: item.position,
+    position: item.position ?? index + 1,
     albumId: item.albumId || '',
     albumName: item.album || 'Unknown Album',
     artist: item.artist || 'Unknown Artist',
-    releaseDate: item.releaseDate || '',
+    releaseDate: formatReleaseDate(item.releaseDate || ''),
     country: item.country || '',
     genre1: item.genre1 || '',
     genre2: item.genre2 || '',
@@ -47,73 +50,6 @@ function normalizeItem(item = {}) {
   };
 }
 
-function renderDesktopItem(item, index) {
-  const position = item.position ?? index + 1;
-  return `<div class="community-album-row grid grid-cols-[3rem_4rem_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,.6fr)_minmax(0,.7fr)_minmax(0,.7fr)] gap-3 items-center px-4 py-3 border-b border-gray-800">
-    <div class="position-cell text-center text-sm font-semibold text-gray-300">${escapeHtml(position)}</div>
-    ${renderDesktopCoverCell(item, index, {
-      cellClass: 'cover-cell flex items-center justify-center',
-      loadMode: 'lazy',
-    })}
-    ${renderDesktopAlbumCell(item, {
-      alwaysShowReleaseDate: true,
-      cellClass: 'album-cell flex flex-col justify-center min-w-0',
-      includeAvailability: false,
-      includePlaycount: false,
-      includeTitle: true,
-    })}
-    ${renderDesktopArtistCell(item, {
-      cellClass: 'artist-cell flex items-center min-w-0',
-      includeTitle: true,
-      interactive: false,
-      textClass: 'text-gray-300',
-    })}
-    <div class="country-cell flex items-center min-w-0">
-      <span class="album-cell-text text-gray-400 truncate" title="${escapeHtml(item.country)}">${escapeHtml(item.country)}</span>
-    </div>
-    ${renderDesktopGenreCell(item, 1, {
-      cellClass: 'genre-1-cell flex items-center min-w-0',
-      emptyText: '',
-      includeTitle: true,
-      interactive: false,
-      textClass: 'text-gray-400',
-    })}
-    ${renderDesktopGenreCell(item, 2, {
-      cellClass: 'genre-2-cell flex items-center min-w-0',
-      emptyText: '',
-      includeTitle: true,
-      interactive: false,
-      textClass: 'text-gray-400',
-    })}
-  </div>`;
-}
-
-function renderMobileItem(item, index) {
-  const position = item.position ?? index + 1;
-  return `<article class="community-album-card album-card album-row relative h-[130px] bg-gray-900" data-community-item-index="${index}">
-    ${renderMobilePositionBadge(position)}
-    <div class="flex items-stretch h-full">
-      ${renderMobileCoverSection(item, index, {
-        coverExtraHtml: renderMobileDisqualificationSlot(item),
-        includeAvailability: false,
-        loadMode: 'lazy',
-        wrapperClass:
-          'h-full shrink-0 w-[88px] flex flex-col items-center justify-evenly pl-0.5',
-      })}
-      <div class="flex-1 min-w-0 pl-0.5 pr-3 flex flex-col justify-evenly h-[130px] leading-[18px]">
-        ${renderMobileTitleRow(item)}
-        ${renderMobileArtistRow(item)}
-        <div class="flex items-center min-w-0">
-          <span class="text-[12px] text-gray-400 truncate min-w-0" title="${escapeHtml(item.country)}">
-            <i class="fas fa-globe fa-xs inline-block w-4 text-center mr-1"></i>${escapeHtml(item.country)}
-          </span>
-        </div>
-        ${renderMobileGenreRow(item)}
-      </div>
-    </div>
-  </article>`;
-}
-
 export function renderCommunityList(detail = {}) {
   const items = Array.isArray(detail.items)
     ? detail.items.map(normalizeItem)
@@ -125,15 +61,28 @@ export function renderCommunityList(detail = {}) {
     </div>`;
   }
 
-  return `<div class="community-list-view w-full">
+  const columns = getAllColumns().filter((col) =>
+    COMMUNITY_COLUMNS.has(col.id)
+  );
+  const visibleColumns = getVisibleColumns().filter((col) =>
+    COMMUNITY_COLUMNS.has(col.id)
+  );
+  const options = {
+    columns,
+    visibleColumns,
+    editable: false,
+    includeAvailability: false,
+    coverOptions: { loadMode: 'lazy' },
+  };
+  return `<div class="community-list-view w-full" data-read-only="true">
     <div class="hidden md:block">
-      <div class="grid grid-cols-[3rem_4rem_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,.6fr)_minmax(0,.7fr)_minmax(0,.7fr)] gap-3 px-4 py-2 text-xs font-semibold text-gray-500 border-b border-gray-700 sticky top-0 bg-gray-950 z-10">
-        <span class="text-center">#</span><span>Cover</span><span>Album</span><span>Artist</span><span>Country</span><span>Genre 1</span><span>Genre 2</span>
+      ${renderDesktopAlbumHeader(options).outerHTML}
+      <div class="album-rows-container relative flex-1">
+        ${items.map((item, index) => renderDesktopAlbumRow(item, index, options).outerHTML).join('')}
       </div>
-      ${items.map(renderDesktopItem).join('')}
     </div>
-    <div class="md:hidden">
-      ${items.map(renderMobileItem).join('')}
+    <div class="mobile-album-list md:hidden">
+      ${items.map((item, index) => renderMobileAlbumCard(item, index, options).outerHTML).join('')}
     </div>
   </div>`;
 }
@@ -168,10 +117,14 @@ export function createCommunityViewer(deps = {}) {
     showLoadingSpinner,
     showToast,
     playAlbumByMetadata,
+    deactivateOwnedView,
+    attachDesktopCoverPreview,
+    closeCoverPreview,
   } = deps;
 
   let activeCommunityListId = null;
   let requestController = null;
+  let currentDetail = null;
 
   function getActiveCommunityListId() {
     return activeCommunityListId;
@@ -181,6 +134,8 @@ export function createCommunityViewer(deps = {}) {
     requestController?.abort();
     requestController = null;
     activeCommunityListId = null;
+    currentDetail = null;
+    closeCoverPreview?.();
   }
 
   function updateCommunityHeader(title) {
@@ -190,21 +145,41 @@ export function createCommunityViewer(deps = {}) {
 
   function attachPlaybackHandlers(container, items) {
     container
-      ?.querySelectorAll('[data-community-item-index]')
+      ?.querySelectorAll('.mobile-album-list .album-card')
       .forEach((card) => {
-        const item = items[Number(card.dataset.communityItemIndex)];
+        const item = items[Number(card.dataset.index)];
         attachMobileCoverPlayback(card, () =>
           playCommunityAlbum(item, playAlbumByMetadata, showToast)
         );
       });
+    container
+      ?.querySelectorAll('.album-rows-container .album-cover')
+      .forEach((image) => attachDesktopCoverPreview?.(image));
   }
+
+  function renderCurrentDetail() {
+    const container = doc?.getElementById('albumContainer');
+    if (!container || !currentDetail || !activeCommunityListId) return;
+    container.innerHTML = renderCommunityList(currentDetail);
+    initializeCommunityCovers(container);
+    attachPlaybackHandlers(
+      container,
+      Array.isArray(currentDetail.items) ? currentDetail.items : []
+    );
+  }
+
+  // Apply viewer column preferences without reading or writing anyone's list.
+  const win = deps.win || doc?.defaultView;
+  win?.addEventListener('columnvisibilitychange', renderCurrentDetail);
 
   async function selectCommunityList(listId, summary = {}) {
     requestController?.abort();
     const controller = new AbortController();
     requestController = controller;
+    currentDetail = null;
 
     const previousListId = getCurrentListId();
+    deactivateOwnedView?.();
     const rtSync = getRealtimeSyncModuleInstance();
     if (rtSync && previousListId) {
       rtSync.unsubscribeFromList(previousListId);
@@ -244,12 +219,8 @@ export function createCommunityViewer(deps = {}) {
         `${username} · ${detail.year || summary.year || ''} · ${detail.name || summary.name || ''}`
       );
       if (container) {
-        container.innerHTML = renderCommunityList(detail);
-        initializeCommunityCovers(container);
-        attachPlaybackHandlers(
-          container,
-          Array.isArray(detail.items) ? detail.items : []
-        );
+        currentDetail = detail;
+        renderCurrentDetail();
       }
     } catch (error) {
       if (error?.name === 'AbortError' || controller.signal.aborted) return;

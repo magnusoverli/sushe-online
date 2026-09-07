@@ -1,6 +1,14 @@
 const { describe, it, beforeEach, mock } = require('node:test');
 const assert = require('node:assert');
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 function createElement() {
   return {
     innerHTML: '',
@@ -352,6 +360,174 @@ describe('album-display playcount-sync module', () => {
     );
   });
 
+  for (const fetchMethod of [
+    'prefetchPlaycountsForRender',
+    'fetchAndDisplayPlaycounts',
+  ]) {
+    it(`cancels the pending initial ${fetchMethod} request without late updates or polling`, async () => {
+      const request = deferred();
+      const desktopEl = createElement();
+      const mobileEl = createElement();
+      const querySelector = mock.fn((selector) =>
+        selector === '[data-playcount="item-1"]' ? desktopEl : mobileEl
+      );
+      // Deliberately ignore abort so the response still arrives after cancellation.
+      const apiCall = mock.fn(() => request.promise);
+      const schedule = mock.fn();
+      const sync = createPlaycountSync({
+        apiCall,
+        formatPlaycount: String,
+        doc: { querySelector },
+        schedule,
+      });
+
+      const pending = sync[fetchMethod]('list-1');
+      assert.strictEqual(apiCall.mock.calls.length, 1);
+      const { signal } = apiCall.mock.calls[0].arguments[1];
+      assert.strictEqual(signal.aborted, false);
+
+      sync.cancelPollingForList('other-list');
+      assert.strictEqual(signal.aborted, false);
+      sync.cancelPollingForList('list-1');
+      assert.strictEqual(signal.aborted, true);
+
+      request.resolve({
+        playcounts: { 'item-1': { playcount: 77, status: 'success' } },
+        refreshing: 1,
+      });
+      await pending;
+
+      assert.strictEqual(sync.getPlaycountCacheEntry('item-1'), undefined);
+      assert.strictEqual(querySelector.mock.calls.length, 0);
+      assert.strictEqual(desktopEl.innerHTML, '');
+      assert.strictEqual(mobileEl.innerHTML, '');
+      assert.strictEqual(schedule.mock.calls.length, 0);
+      assert.strictEqual(apiCall.mock.calls.length, 1);
+    });
+
+    it(`clearing cache releases ${fetchMethod} without letting its late finally clear a newer request`, async () => {
+      const oldRequest = deferred();
+      const newRequest = deferred();
+      const apiCall = mock.fn((url) =>
+        url.endsWith('/old-list') ? oldRequest.promise : newRequest.promise
+      );
+      const querySelector = mock.fn(() => null);
+      const schedule = mock.fn();
+      const sync = createPlaycountSync({
+        apiCall,
+        formatPlaycount: String,
+        doc: { querySelector },
+        schedule,
+      });
+      sync.primePlaycountCache({
+        'cached-item': { playcount: 42, status: 'success' },
+      });
+
+      const oldPending = sync[fetchMethod]('old-list');
+      const oldSignal = apiCall.mock.calls[0].arguments[1].signal;
+      sync.clearPlaycountCache();
+      assert.strictEqual(oldSignal.aborted, true);
+      assert.strictEqual(sync.getPlaycountCacheEntry('cached-item'), undefined);
+
+      const newPending = sync[fetchMethod]('new-list');
+      assert.strictEqual(apiCall.mock.calls.length, 2);
+      assert.strictEqual(
+        apiCall.mock.calls[1].arguments[0],
+        '/api/lastfm/list-playcounts/new-list'
+      );
+      const newSignal = apiCall.mock.calls[1].arguments[1].signal;
+      assert.strictEqual(newSignal.aborted, false);
+
+      oldRequest.resolve({
+        playcounts: { 'old-item': { playcount: 99, status: 'success' } },
+        refreshing: 1,
+      });
+      await oldPending;
+      assert.strictEqual(sync.getPlaycountCacheEntry('old-item'), undefined);
+      assert.strictEqual(querySelector.mock.calls.length, 0);
+      assert.strictEqual(schedule.mock.calls.length, 0);
+
+      // The newer request must still own the single-fetch guard after old finally.
+      const thirdPending = sync[fetchMethod]('third-list');
+      assert.strictEqual(apiCall.mock.calls.length, 2);
+      assert.strictEqual(newSignal.aborted, false);
+
+      newRequest.resolve({
+        playcounts: { 'new-item': { playcount: 123, status: 'success' } },
+        refreshing: 1,
+      });
+      await newPending;
+      await thirdPending;
+      assert.deepStrictEqual(sync.getPlaycountCacheEntry('new-item'), {
+        playcount: 123,
+        status: 'success',
+      });
+      assert.strictEqual(schedule.mock.calls.length, 1);
+      sync.clearPlaycountCache();
+    });
+  }
+
+  for (const cancelMethod of ['cancelPollingForList', 'clearPlaycountCache']) {
+    it(`${cancelMethod} ignores an in-flight poll response even when transport ignores abort`, async () => {
+      const pollRequest = deferred();
+      const desktopEl = createElement();
+      const mobileEl = createElement();
+      const querySelector = mock.fn((selector) =>
+        selector === '[data-playcount="item-1"]' ? desktopEl : mobileEl
+      );
+      const initialEntry = { playcount: 42, status: 'success' };
+      const apiCall = mock.fn(() => {
+        if (apiCall.mock.calls.length === 0) {
+          return Promise.resolve({
+            playcounts: { 'item-1': initialEntry },
+            refreshing: 1,
+          });
+        }
+        return pollRequest.promise;
+      });
+      const scheduled = [];
+      const sync = createPlaycountSync({
+        apiCall,
+        formatPlaycount: String,
+        doc: { querySelector },
+        schedule: (callback) => {
+          scheduled.push(callback);
+          return scheduled.length;
+        },
+      });
+
+      await sync.fetchAndDisplayPlaycounts('list-1');
+      assert.strictEqual(scheduled.length, 1);
+      const desktopHtml = desktopEl.innerHTML;
+      const mobileHtml = mobileEl.innerHTML;
+      assert.match(desktopHtml, /42/);
+      assert.match(mobileHtml, /42/);
+      const domQueries = querySelector.mock.calls.length;
+      const pendingPoll = scheduled.shift()();
+      assert.strictEqual(apiCall.mock.calls.length, 2);
+      const { signal } = apiCall.mock.calls[1].arguments[1];
+      assert.strictEqual(signal.aborted, false);
+
+      sync[cancelMethod]('list-1');
+      assert.strictEqual(signal.aborted, true);
+      pollRequest.resolve({
+        playcounts: { 'item-1': { playcount: 999, status: 'success' } },
+        refreshing: 1,
+      });
+      await pendingPoll;
+
+      assert.deepStrictEqual(
+        sync.getPlaycountCacheEntry('item-1'),
+        cancelMethod === 'clearPlaycountCache' ? undefined : initialEntry
+      );
+      assert.strictEqual(querySelector.mock.calls.length, domQueries);
+      assert.strictEqual(desktopEl.innerHTML, desktopHtml);
+      assert.strictEqual(mobileEl.innerHTML, mobileHtml);
+      assert.strictEqual(scheduled.length, 0);
+      assert.strictEqual(apiCall.mock.calls.length, 2);
+    });
+  }
+
   it('aborts polling controllers when cache is cleared', async () => {
     const controllers = [];
     const createAbortController = () => {
@@ -382,8 +558,11 @@ describe('album-display playcount-sync module', () => {
     await sync.fetchAndDisplayPlaycounts('list-refresh');
     sync.clearPlaycountCache();
 
-    assert.strictEqual(controllers.length, 1);
-    assert.strictEqual(controllers[0].signal.aborted, true);
+    assert.strictEqual(controllers.length, 2);
+    assert.strictEqual(controllers[0].signal.aborted, false);
+    assert.strictEqual(controllers[1].signal.aborted, true);
+    assert.strictEqual(scheduled.length, 1);
+    await scheduled[0]();
     assert.strictEqual(scheduled.length, 1);
   });
 });
