@@ -39,7 +39,7 @@ test('buildFileRecord computes path, lines, and legacy marker count', () => {
 
 test('calculateMaintainabilityMetrics aggregates totals and hot spots', () => {
   const files = [
-    buildFileRecord('services/a.js', `function a() {}\n${'x\n'.repeat(301)}`),
+    buildFileRecord('services/a.js', `function a() {}\n${'x\n'.repeat(351)}`),
     buildFileRecord('services/b.js', `function b() {}\n${'y\n'.repeat(705)}`),
     buildFileRecord('views/layout.ejs', '<div>ok</div>'),
     buildFileRecord('utils/c.js', '// backwards compatibility\nconst z = 1;'),
@@ -50,9 +50,9 @@ test('calculateMaintainabilityMetrics aggregates totals and hot spots', () => {
   assert.strictEqual(metrics.totals.sourceFiles, 4);
   assert.strictEqual(metrics.totals.javascriptFiles, 3);
   assert.strictEqual(metrics.totals.appJavascriptFiles, 3);
-  assert.strictEqual(metrics.totals.javascriptFilesOver300, 2);
+  assert.strictEqual(metrics.totals.javascriptFilesOver350, 2);
   assert.strictEqual(metrics.totals.javascriptFilesOver700, 1);
-  assert.strictEqual(metrics.totals.appJavascriptFilesOver300, 2);
+  assert.strictEqual(metrics.totals.appJavascriptFilesOver350, 2);
   assert.strictEqual(metrics.totals.appJavascriptFilesOver700, 1);
   assert.strictEqual(metrics.totals.appJavascriptLegacyMarkers, 1);
 
@@ -64,21 +64,21 @@ test('calculateMaintainabilityMetrics aggregates totals and hot spots', () => {
 test('evaluateThresholds returns violations when thresholds are exceeded', () => {
   const metrics = {
     totals: {
-      appJavascriptFilesOver300: 10,
+      appJavascriptFilesOver350: 10,
       appJavascriptFilesOver700: 4,
       appJavascriptLegacyMarkers: 25,
     },
   };
 
   const violations = evaluateThresholds(metrics, {
-    maxJavascriptFilesOver300: 8,
+    maxJavascriptFilesOver350: 8,
     maxJavascriptFilesOver700: 5,
     maxLegacyMarkers: 20,
   });
 
   assert.strictEqual(violations.length, 2);
   assert.deepStrictEqual(violations[0], {
-    metric: 'app JS files over 300 lines',
+    metric: 'app JS files over 350 lines',
     actual: 10,
     maxAllowed: 8,
   });
@@ -87,4 +87,16 @@ test('evaluateThresholds returns violations when thresholds are exceeded', () =>
     actual: 25,
     maxAllowed: 20,
   });
+});
+
+test('350-line threshold excludes files at the boundary', () => {
+  const files = [300, 350, 351].map((lines) =>
+    buildFileRecord(
+      `services/file-${lines}.js`,
+      Array(lines).fill('x').join('\n')
+    )
+  );
+  const metrics = calculateMaintainabilityMetrics(files);
+  assert.strictEqual(metrics.totals.javascriptFilesOver350, 1);
+  assert.strictEqual(metrics.totals.appJavascriptFilesOver350, 1);
 });

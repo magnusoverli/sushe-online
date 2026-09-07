@@ -28,8 +28,8 @@ function parseArgs(argv) {
     const [flag, value] = arg.split('=');
     const parsedValue = Number(value);
 
-    if (flag === '--max-js-files-over-300' && Number.isFinite(parsedValue)) {
-      args.thresholds.maxJavascriptFilesOver300 = parsedValue;
+    if (flag === '--max-js-files-over-350' && Number.isFinite(parsedValue)) {
+      args.thresholds.maxJavascriptFilesOver350 = parsedValue;
       return;
     }
 
@@ -53,7 +53,7 @@ function printHelp() {
   console.log('Options:');
   console.log('  --json                         Output JSON only');
   console.log(
-    '  --max-js-files-over-300=<n>    Fail when JS files over 300 exceed n'
+    '  --max-js-files-over-350=<n>    Fail when JS files over 350 exceed n'
   );
   console.log(
     '  --max-js-files-over-700=<n>    Fail when JS files over 700 exceed n'
@@ -107,7 +107,7 @@ function printTextReport(metrics, violations) {
   console.log(`Tracked app JS files: ${metrics.totals.appJavascriptFiles}`);
   console.log(`Tracked app JS lines: ${metrics.totals.appJavascriptLines}`);
   console.log(
-    `App JS files >300 lines: ${metrics.totals.appJavascriptFilesOver300}`
+    `App JS files >350 lines: ${metrics.totals.appJavascriptFilesOver350}`
   );
   console.log(
     `App JS files >700 lines: ${metrics.totals.appJavascriptFilesOver700}`

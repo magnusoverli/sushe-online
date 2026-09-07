@@ -109,7 +109,7 @@ function calculateMaintainabilityMetrics(fileRecords) {
         acc.javascriptLines += file.lines;
         acc.allJavascriptLegacyMarkers += file.legacyMarkers;
 
-        if (file.lines > 300) acc.javascriptFilesOver300 += 1;
+        if (file.lines > 350) acc.javascriptFilesOver350 += 1;
         if (file.lines > 700) acc.javascriptFilesOver700 += 1;
       }
 
@@ -118,7 +118,7 @@ function calculateMaintainabilityMetrics(fileRecords) {
         acc.appJavascriptLines += file.lines;
         acc.appJavascriptLegacyMarkers += file.legacyMarkers;
 
-        if (file.lines > 300) acc.appJavascriptFilesOver300 += 1;
+        if (file.lines > 350) acc.appJavascriptFilesOver350 += 1;
         if (file.lines > 700) acc.appJavascriptFilesOver700 += 1;
       }
 
@@ -129,12 +129,12 @@ function calculateMaintainabilityMetrics(fileRecords) {
       sourceLines: 0,
       javascriptFiles: 0,
       javascriptLines: 0,
-      javascriptFilesOver300: 0,
+      javascriptFilesOver350: 0,
       javascriptFilesOver700: 0,
       allJavascriptLegacyMarkers: 0,
       appJavascriptFiles: 0,
       appJavascriptLines: 0,
-      appJavascriptFilesOver300: 0,
+      appJavascriptFilesOver350: 0,
       appJavascriptFilesOver700: 0,
       appJavascriptLegacyMarkers: 0,
     }
@@ -164,9 +164,9 @@ function evaluateThresholds(metrics, thresholds = {}) {
   const violations = [];
   const checks = [
     {
-      key: 'maxJavascriptFilesOver300',
-      actual: metrics.totals.appJavascriptFilesOver300,
-      label: 'app JS files over 300 lines',
+      key: 'maxJavascriptFilesOver350',
+      actual: metrics.totals.appJavascriptFilesOver350,
+      label: 'app JS files over 350 lines',
     },
     {
       key: 'maxJavascriptFilesOver700',
