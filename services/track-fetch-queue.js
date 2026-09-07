@@ -210,6 +210,12 @@ function createTrackFetchQueue(deps = {}) {
       throw new Error('track-fetch-queue requires deps.db');
     }
 
+    const missingTracks = await db.raw(
+      'SELECT album_id FROM albums WHERE album_id = $1 AND tracks IS NULL',
+      [albumId]
+    );
+    if (missingTracks.rows.length === 0) return;
+
     const artistClean = sanitizeQuery(artist);
     const albumClean = sanitizeQuery(album);
 
@@ -249,13 +255,14 @@ function createTrackFetchQueue(deps = {}) {
     });
 
     const dbResult = await db.raw(
-      'UPDATE albums SET tracks = $1, updated_at = NOW() WHERE album_id = $2',
+      'UPDATE albums SET tracks = $1, updated_at = NOW() WHERE album_id = $2 AND tracks IS NULL',
       [JSON.stringify(result.tracks), albumId],
       { name: 'track-fetch-update-tracks' }
     );
 
     if (dbResult.rowCount === 0) {
-      log.warn('Album not found when updating tracks', { albumId });
+      // Explicit tracks or another worker may have won the race during the fetch.
+      log.debug('Tracks no longer missing when storing fetch', { albumId });
       return;
     }
 

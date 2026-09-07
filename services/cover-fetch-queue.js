@@ -352,6 +352,12 @@ function createCoverFetchQueue(deps = {}) {
   async function fetchAndStoreCover(albumId, artist, album) {
     const db = ensureDb(deps.db, 'cover-fetch-queue');
 
+    const missingCover = await db.raw(
+      'SELECT album_id FROM albums WHERE album_id = $1 AND cover_image IS NULL',
+      [albumId]
+    );
+    if (missingCover.rows.length === 0) return;
+
     // Try each provider in order until one succeeds
     for (const provider of coverProviders) {
       try {
@@ -377,7 +383,7 @@ function createCoverFetchQueue(deps = {}) {
                  cover_thumbnail_format = $4,
                  cover_thumbnail_updated_at = NOW(),
                   updated_at = NOW()
-             WHERE album_id = $5
+             WHERE album_id = $5 AND cover_image IS NULL
              RETURNING cover_image_updated_at, cover_thumbnail_updated_at`,
             [
               processed.buffer,
@@ -389,7 +395,10 @@ function createCoverFetchQueue(deps = {}) {
           );
 
           if (result.rowCount === 0) {
-            logger.warn('Album not found when updating cover', { albumId });
+            // An upload or another worker may have populated the cover mid-fetch.
+            logger.debug('Cover no longer missing when storing fetch', {
+              albumId,
+            });
             return;
           }
 

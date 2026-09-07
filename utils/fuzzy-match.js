@@ -127,7 +127,7 @@ function normalizeForComparison(str, options = {}) {
 
   if (!str) return '';
 
-  let result = str.toLowerCase().trim();
+  let result = str.normalize('NFC').toLowerCase().trim();
 
   // Strip edition suffixes BEFORE removing punctuation
   // (so parentheses are still present for matching)
@@ -143,7 +143,7 @@ function normalizeForComparison(str, options = {}) {
     .replace(/[''´`]/g, '') // Remove apostrophes and similar
     .replace(/[&+]/g, ' and ') // Replace & and + with 'and'
     .replace(/[/\\]/g, '') // Remove slashes (AC/DC -> ACDC)
-    .replace(/[^\w\s]/g, ' ') // Remove other punctuation
+    .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ') // Preserve letters, numbers, and combining marks
     .replace(/\s+/g, ' ') // Normalize whitespace
     .trim();
 
@@ -191,7 +191,8 @@ function jaccardSimilarity(a, b) {
  * @returns {boolean} - True if exact match after normalization
  */
 function isExactMatch(a, b) {
-  return normalizeForComparison(a) === normalizeForComparison(b);
+  const normalizedA = normalizeForComparison(a);
+  return Boolean(normalizedA) && normalizedA === normalizeForComparison(b);
 }
 
 /**
@@ -209,6 +210,10 @@ function calculateSimilarity(a, b) {
 
   const normA = normalizeForComparison(a);
   const normB = normalizeForComparison(b);
+
+  if (!normA || !normB) {
+    return { score: 0, reason: 'empty_input' };
+  }
 
   // Exact match after normalization
   if (normA === normB) {

@@ -12,6 +12,7 @@
  * transport metadata this queue attaches before rejecting a queued request.
  * @typedef {Error & {
  *   code?: string,
+ *   cause?: { code?: string },
  *   type?: string,
  *   status?: number,
  *   retries?: number
@@ -40,17 +41,29 @@ class MusicBrainzQueue {
    * @param {Object} [deps] - Dependencies for testing
    * @param {Function} [deps.fetch] - Fetch implementation
    * @param {number} [deps.minInterval] - Minimum interval between requests (ms, default: 1000)
-   * @param {number} [deps.timeout] - Request timeout in milliseconds (default: 30000)
+   * @param {number} [deps.timeout] - Override per-attempt timeout (including body)
+   * @param {number} [deps.totalTimeout] - Override total lifetime, including queue wait
    * @param {number} [deps.maxRetries] - Maximum number of retries (default: 2)
+   * @param {Function} [deps.now] - Clock in milliseconds
+   * @param {Function} [deps.setTimeout] - Timer implementation
+   * @param {Function} [deps.clearTimeout] - Timer cancellation implementation
    */
   constructor(deps = {}) {
     this.fetch = deps.fetch || globalThis.fetch;
     this.minInterval = deps.minInterval !== undefined ? deps.minInterval : 1000;
-    this.timeout = deps.timeout !== undefined ? deps.timeout : 30000;
+    this.timeout = deps.timeout !== undefined ? deps.timeout : 10000;
+    this.lowTimeout = deps.timeout !== undefined ? deps.timeout : 5000;
+    this.totalTimeout = deps.totalTimeout;
     this.maxRetries = deps.maxRetries !== undefined ? deps.maxRetries : 2;
+    this.now = deps.now || Date.now;
+    this.setTimeout = deps.setTimeout || setTimeout;
+    this.clearTimeout = deps.clearTimeout || clearTimeout;
     this.queue = [];
     this.processing = false;
     this.lastRequestTime = 0;
+    this.nextStartTime = 0;
+    this.cooldownUntil = 0;
+    this.wakeTimer = null;
   }
 
   /**
@@ -60,18 +73,11 @@ class MusicBrainzQueue {
    * @returns {boolean} - True if error is retryable
    */
   _isRetryableError(error, response) {
-    // Don't retry on HTTP errors (4xx, 5xx) unless specifically transient
     if (response) {
-      // Don't retry on client errors (4xx)
-      if (response.status >= 400 && response.status < 500) {
-        return false;
-      }
-      // Don't retry on server errors (5xx) unless specifically transient
-      // 503 Service Unavailable and 504 Gateway Timeout are transient
-      if (response.status >= 500) {
-        return response.status === 503 || response.status === 504;
-      }
+      return [429, 503, 504].includes(response.status);
     }
+
+    if (!error || error.name === 'AbortError') return false;
 
     // Retry on network errors
     const retryableCodes = [
@@ -81,12 +87,12 @@ class MusicBrainzQueue {
       'ECONNREFUSED',
       'EAI_AGAIN',
     ];
-    if (error.code && retryableCodes.includes(error.code)) {
+    if (retryableCodes.includes(error.code || error.cause?.code)) {
       return true;
     }
 
     // Retry on timeout errors
-    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+    if (error.name === 'TimeoutError') {
       return true;
     }
 
@@ -105,122 +111,134 @@ class MusicBrainzQueue {
    * @param {string} priority - Priority level: 'high', 'normal', or 'low'
    * @returns {Promise<Response>} - Fetch response
    */
-  async add(url, options, priority = 'normal') {
+  async add(url, options = {}, priority = 'normal') {
     return new Promise((resolve, reject) => {
-      this.queue.push({ url, options, priority, resolve, reject });
-      // Sort by priority: high > normal > low
-      this.queue.sort((a, b) => {
-        const priorityMap = { high: 3, normal: 2, low: 1 };
-        return priorityMap[b.priority] - priorityMap[a.priority];
-      });
+      const signal = options.signal;
+      if (signal?.aborted) {
+        reject(signal.reason);
+        return;
+      }
+      const lifetimes = { high: 10000, normal: 15000, low: 20000 };
+      if (!Object.hasOwn(lifetimes, priority)) priority = 'normal';
+      const lifetime = this.totalTimeout ?? lifetimes[priority];
+      const item = {
+        url,
+        options,
+        priority,
+        resolve,
+        reject,
+        retries: 0,
+        readyAt: this.now(),
+        deadline: this.now() + lifetime,
+        settled: false,
+        controller: null,
+      };
+      item.onAbort = () => this._settle(item, signal.reason);
+      signal?.addEventListener('abort', item.onAbort, { once: true });
+      item.deadlineTimer = this.setTimeout(() => {
+        const error = this._timeoutError(url, lifetime);
+        error.retries = item.retries;
+        this._settle(item, error);
+      }, lifetime);
+      this.queue.push(item);
       this.process();
     });
   }
 
-  /**
-   * Execute a single fetch with timeout handling
-   * @param {string} url - URL to fetch
-   * @param {Object} options - Fetch options
-   * @returns {Promise<{response?: QueuedResponse, error?: RequestError}>}
-   * @private
-   */
-  async _executeFetch(url, options) {
-    const abortController = new AbortController();
-    const timeoutId = setTimeout(() => {
-      abortController.abort();
-    }, this.timeout);
-
-    const fetchOptions = {
-      ...options,
-      signal: abortController.signal,
-    };
-
-    try {
-      const response = await this.fetch(url, fetchOptions);
-      clearTimeout(timeoutId);
-      return { response };
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      // Handle timeout specifically
-      if (fetchError.name === 'AbortError' && abortController.signal.aborted) {
-        /** @type {RequestError} */
-        const timeoutError = new Error(
-          `Request timeout after ${this.timeout}ms: ${url}`
-        );
-        timeoutError.name = 'TimeoutError';
-        timeoutError.code = 'ETIMEDOUT';
-        return { error: timeoutError };
-      }
-      return { error: fetchError };
-    }
+  _timeoutError(url, duration) {
+    /** @type {RequestError} */
+    const error = new Error(`Request timeout after ${duration}ms: ${url}`);
+    error.name = 'TimeoutError';
+    error.code = 'ETIMEDOUT';
+    return error;
   }
 
-  /**
-   * Process a single request with retry logic
-   * @param {string} url - URL to fetch
-   * @param {Object} options - Fetch options
-   * @returns {Promise<Response>}
-   * @private
-   */
-  async _processRequest(url, options) {
-    let retryCount = 0;
-    let lastError = null;
-    let lastResponse = null;
-
-    while (retryCount <= this.maxRetries) {
-      const { response, error } = await this._executeFetch(url, options);
-
-      if (response) {
-        if (response.ok) {
-          // Success - attach retry count for logging
-          if (retryCount > 0) {
-            response._retries = retryCount;
-          }
-          return response;
-        }
-
-        // Non-OK response
-        lastResponse = response;
-        const httpError = new Error(`HTTP ${response.status}`);
-        if (
-          retryCount < this.maxRetries &&
-          this._isRetryableError(httpError, response)
-        ) {
-          retryCount++;
-          const backoffDelay = Math.pow(2, retryCount - 1) * 1000;
-          await wait(backoffDelay);
-          continue;
-        }
-
-        // Not retryable or max retries reached
-        /** @type {RequestError} */
-        const finalError = new Error(
-          `MusicBrainz API responded with status ${response.status}`
-        );
-        finalError.status = response.status;
-        finalError.retries = retryCount;
-        throw finalError;
-      }
-
-      // Fetch error occurred
-      lastError = error;
-      if (
-        retryCount < this.maxRetries &&
-        this._isRetryableError(lastError, lastResponse)
-      ) {
-        retryCount++;
-        const backoffDelay = Math.pow(2, retryCount - 1) * 1000;
-        await wait(backoffDelay);
-        continue;
-      }
-
-      // Not retryable or max retries reached
-      lastError.retries = retryCount;
-      throw lastError;
+  _settle(item, error, response) {
+    if (item.settled) return;
+    item.settled = true;
+    this.clearTimeout(item.deadlineTimer);
+    item.options.signal?.removeEventListener('abort', item.onAbort);
+    const index = this.queue.indexOf(item);
+    if (index !== -1) this.queue.splice(index, 1);
+    if (error !== undefined) {
+      item.controller?.abort(error);
+      item.reject(error);
+    } else {
+      item.resolve(response);
     }
+    this.process();
+  }
 
-    // Should not reach here, but handle it
-    throw lastError || new Error('Unknown error occurred');
+  async _executeFetch(item) {
+    const controller = new AbortController();
+    item.controller = controller;
+    const duration = Math.min(
+      item.priority === 'low' ? this.lowTimeout : this.timeout,
+      item.deadline - this.now()
+    );
+    const timer = this.setTimeout(() => {
+      controller.abort(this._timeoutError(item.url, duration));
+    }, duration);
+    let onAbort;
+    let reader;
+    const aborted = new Promise((_, reject) => {
+      onAbort = () => {
+        reader?.cancel(controller.signal.reason).catch(() => {});
+        reject(controller.signal.reason);
+      };
+      controller.signal.addEventListener('abort', onAbort, { once: true });
+    });
+    try {
+      // Race also bounds injected transports that fail to reject on abort.
+      return await Promise.race([
+        (async () => {
+          const response = await this.fetch(item.url, {
+            ...item.options,
+            signal: controller.signal,
+          });
+          if (controller.signal.aborted || !response.ok) {
+            response.body?.cancel().catch(() => {});
+            controller.signal.throwIfAborted();
+            return response;
+          }
+          // All MB consumers use small JSON. Buffer before resolving so json(),
+          // text() and clone() never perform an unbounded network body read.
+          if (typeof response.arrayBuffer !== 'function') return response;
+          let body = null;
+          if (response.body) {
+            reader = response.body.getReader();
+            const chunks = [];
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+              }
+              body = Buffer.concat(chunks);
+            } finally {
+              reader.releaseLock();
+              reader = null;
+            }
+          }
+          controller.signal.throwIfAborted();
+          const headers = new Headers(response.headers);
+          headers.delete('content-encoding');
+          headers.delete('transfer-encoding');
+          if (body !== null)
+            headers.set('content-length', String(body.byteLength));
+          return new globalThis.Response(body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers,
+          });
+        })(),
+        aborted,
+      ]);
+    } finally {
+      this.clearTimeout(timer);
+      controller.signal.removeEventListener('abort', onAbort);
+      item.controller = null;
+    }
   }
 
   /**
@@ -228,32 +246,83 @@ class MusicBrainzQueue {
    * @returns {Promise<void>}
    */
   async process() {
+    this.clearTimeout(this.wakeTimer);
+    this.wakeTimer = null;
     if (this.processing || this.queue.length === 0) return;
-
+    const now = this.now();
+    const readyAt = Math.max(
+      this.nextStartTime,
+      this.cooldownUntil,
+      this.queue.reduce(
+        (earliest, item) => Math.min(earliest, item.readyAt),
+        Infinity
+      )
+    );
+    if (readyAt > now) {
+      // A new arrival/cancellation reschedules this single wake-up timer.
+      // Never schedule beyond a request deadline, including enormous Retry-After
+      // values that would overflow Node's timer range and cause a busy loop.
+      const wakeAt = this.queue.reduce(
+        (earliest, item) => Math.min(earliest, item.deadline),
+        readyAt
+      );
+      this.wakeTimer = this.setTimeout(() => this.process(), wakeAt - now);
+      return;
+    }
+    const ranks = { high: 3, normal: 2, low: 1 };
+    const item = this.queue
+      .filter((entry) => entry.readyAt <= now)
+      .sort((a, b) => ranks[b.priority] - ranks[a.priority])[0];
+    this.queue.splice(this.queue.indexOf(item), 1);
+    if (item.deadline <= now) {
+      this._settle(item, this._timeoutError(item.url, 0));
+      return;
+    }
     this.processing = true;
-
+    this.lastRequestTime = now;
+    this.nextStartTime = now + this.minInterval;
+    let response;
     try {
-      while (this.queue.length > 0) {
-        const now = Date.now();
-        const timeSinceLastRequest = now - this.lastRequestTime;
-
-        // Wait if we need to respect rate limit
-        if (timeSinceLastRequest < this.minInterval) {
-          await wait(this.minInterval - timeSinceLastRequest);
+      response = await this._executeFetch(item);
+      if (item.settled) return;
+      if (!response.ok) {
+        if ([429, 503].includes(response.status)) {
+          const value = response.headers?.get('retry-after');
+          if (value) {
+            const seconds = Number(value);
+            const until = Number.isFinite(seconds)
+              ? this.now() + Math.max(0, seconds) * 1000
+              : Date.parse(value);
+            if (Number.isFinite(until)) {
+              this.cooldownUntil = Math.max(this.cooldownUntil, until);
+            }
+          }
         }
-
-        const { url, options, resolve, reject } = this.queue.shift();
-        this.lastRequestTime = Date.now();
-
-        try {
-          const response = await this._processRequest(url, options);
-          resolve(response);
-        } catch (error) {
-          reject(error);
-        }
+        /** @type {RequestError} */
+        const error = new Error(
+          `MusicBrainz API responded with status ${response.status}`
+        );
+        error.status = response.status;
+        throw error;
+      }
+      if (item.retries) response._retries = item.retries;
+      this._settle(item, undefined, response);
+    } catch (error) {
+      if (item.settled) return;
+      if (
+        item.retries < this.maxRetries &&
+        this._isRetryableError(error, response)
+      ) {
+        item.readyAt = this.now() + 2 ** item.retries * 1000;
+        item.retries++;
+        this.queue.push(item);
+      } else {
+        error.retries = item.retries;
+        this._settle(item, error);
       }
     } finally {
       this.processing = false;
+      this.process();
     }
   }
 

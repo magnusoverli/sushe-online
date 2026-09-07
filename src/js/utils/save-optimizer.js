@@ -20,7 +20,7 @@ import { createListSnapshot } from '../modules/app-state.js';
  * @returns {Object|null} Diff object { added, removed, updated, totalChanges }, or null
  */
 export function computeListDiff(oldSnapshot, newData) {
-  if (!oldSnapshot || oldSnapshot.length === 0) {
+  if (!Array.isArray(oldSnapshot)) {
     // No previous snapshot - can't compute diff
     return null;
   }

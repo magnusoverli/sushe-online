@@ -133,10 +133,16 @@ function createHelpers(deps) {
       if (seen.has(item.album_id)) continue;
       seen.add(item.album_id);
 
-      triggerAlbumSummaryFetch(item.album_id, item.artist, item.album);
-      if (coverQueue) coverQueue.add(item.album_id, item.artist, item.album);
-      if (trackQueue) trackQueue.add(item.album_id, item.artist, item.album);
-      if (nativeNameQueue) {
+      if (item.needsSummaryFetch) {
+        triggerAlbumSummaryFetch(item.album_id, item.artist, item.album);
+      }
+      if (coverQueue && item.needsCoverFetch) {
+        coverQueue.add(item.album_id, item.artist, item.album);
+      }
+      if (trackQueue && item.needsTracksFetch) {
+        trackQueue.add(item.album_id, item.artist, item.album);
+      }
+      if (nativeNameQueue && item.wasInserted) {
         nativeNameQueue.add(item.album_id, item.artist, item.album);
       }
       if (availabilityQueue) {
@@ -294,6 +300,13 @@ function createHelpers(deps) {
       );
       result.needsCoverFetch = false;
       explicitCoverAlbumIds.add(result.albumId);
+    }
+
+    // Different input names can resolve to the same album with an uploaded cover.
+    for (const result of results.values()) {
+      if (explicitCoverAlbumIds.has(result.albumId)) {
+        result.needsCoverFetch = false;
+      }
     }
 
     // Transactional callers schedule async operations after commit.

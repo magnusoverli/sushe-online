@@ -584,3 +584,303 @@ describe('app-list-operations module', () => {
     assert.strictEqual(apiCall.mock.calls.length, 5);
   });
 });
+
+describe('saveList with real state and diff computation', () => {
+  let state;
+  let operations;
+  let apiCall;
+  let showToast;
+
+  beforeEach(async (t) => {
+    state = await import('../src/js/modules/app-state.js');
+    const { computeListDiff } =
+      await import('../src/js/utils/save-optimizer.js');
+    const { createAppListOperations } =
+      await import('../src/js/modules/app-list-operations.js');
+    const previousStorage = globalThis.localStorage;
+    globalThis.localStorage = { setItem: mock.fn() };
+    t.after(() => {
+      if (previousStorage === undefined) delete globalThis.localStorage;
+      else globalThis.localStorage = previousStorage;
+      state.setLists({});
+      state.getLastSavedSnapshots().clear();
+    });
+    state.setLists({});
+    state.getLastSavedSnapshots().clear();
+    apiCall = mock.fn(async () => ({ addedItems: [] }));
+    showToast = mock.fn();
+    operations = createAppListOperations({
+      ...state,
+      computeListDiff,
+      apiCall,
+      showToast,
+      markLocalSave: mock.fn(),
+      updateListNav: mock.fn(),
+      logger: { log() {} },
+    });
+  });
+
+  for (const baseline of [[], [{ album_id: 'old', _id: 'old-item' }]]) {
+    it(`PATCHes one addition from ${baseline.length ? 'a populated' : 'an empty'} saved baseline`, async () => {
+      state.setListData('list-1', baseline);
+      const added = { album_id: 'new', album: 'New', rank: 2, points: 10 };
+      const optimistic = [...baseline, added];
+      state.setListData('list-1', optimistic, false);
+      apiCall.mock.mockImplementation(async () => ({
+        addedItems: [{ album_id: 'new', _id: 'new-item' }],
+      }));
+
+      await operations.saveList('list-1', optimistic);
+
+      assert.strictEqual(apiCall.mock.callCount(), 1);
+      const [url, options] = apiCall.mock.calls[0].arguments;
+      assert.strictEqual(url, '/api/lists/list-1/items');
+      assert.strictEqual(options.method, 'PATCH');
+      assert.deepStrictEqual(JSON.parse(options.body), {
+        added: [
+          { album_id: 'new', album: 'New', position: baseline.length + 1 },
+        ],
+        removed: [],
+        updated: [],
+      });
+      assert.strictEqual(state.getListData('list-1').at(-1)._id, 'new-item');
+      assert.strictEqual(added._id, undefined);
+      assert.deepStrictEqual(state.getLastSavedSnapshots().get('list-1'), [
+        ...baseline.map((item) => item.album_id),
+        'new',
+      ]);
+      assert.deepStrictEqual(
+        globalThis.localStorage.setItem.mock.calls.at(-1).arguments,
+        [
+          'list-snapshot-list-1',
+          JSON.stringify(state.getLastSavedSnapshots().get('list-1')),
+        ]
+      );
+    });
+  }
+
+  it('serializes saves per list, rebases the second diff and merges assigned IDs while other lists save independently', async () => {
+    state.setListData('list-1', []);
+    state.setListData('list-2', []);
+    const gate = Promise.withResolvers();
+    const started = Promise.withResolvers();
+    apiCall.mock.mockImplementation((url, options) => {
+      const { added } = JSON.parse(options.body);
+      if (url.includes('list-1') && added[0].album_id === 'a') {
+        started.resolve();
+        return gate.promise;
+      }
+      return Promise.resolve({
+        addedItems: added.map((item) => ({
+          album_id: item.album_id,
+          _id: `item-${item.album_id}`,
+        })),
+      });
+    });
+    state.setListData('list-1', [{ album_id: 'a' }], false);
+    const first = operations.saveList('list-1', state.getListData('list-1'));
+    await started.promise;
+    state.setListData('list-1', [{ album_id: 'a' }, { album_id: 'b' }], false);
+    const second = operations.saveList('list-1', state.getListData('list-1'));
+    state.setListData('list-2', [{ album_id: 'c' }], false);
+    await operations.saveList('list-2', state.getListData('list-2'));
+    assert.strictEqual(apiCall.mock.callCount(), 2);
+    assert.deepStrictEqual(state.getLastSavedSnapshots().get('list-1'), []);
+    assert.deepStrictEqual(state.getLastSavedSnapshots().get('list-2'), ['c']);
+
+    gate.resolve({ addedItems: [{ album_id: 'a', _id: 'item-a' }] });
+    await Promise.all([first, second]);
+
+    assert.strictEqual(apiCall.mock.callCount(), 3);
+    assert.deepStrictEqual(
+      JSON.parse(apiCall.mock.calls[2].arguments[1].body),
+      {
+        added: [{ album_id: 'b', position: 2 }],
+        removed: [],
+        updated: [],
+      }
+    );
+    assert.deepStrictEqual(state.getListData('list-1'), [
+      { album_id: 'a', _id: 'item-a' },
+      { album_id: 'b', _id: 'item-b' },
+    ]);
+    assert.deepStrictEqual(state.getLastSavedSnapshots().get('list-1'), [
+      'a',
+      'b',
+    ]);
+  });
+
+  it('prunes a failed addition from an already-queued save but allows an explicit later retry', async () => {
+    state.setListData('list-1', []);
+    const gate = Promise.withResolvers();
+    const started = Promise.withResolvers();
+    apiCall.mock.mockImplementationOnce(() => {
+      started.resolve();
+      return gate.promise;
+    });
+    state.setListData('list-1', [{ album_id: 'a' }], false);
+    const first = operations.saveList('list-1', state.getListData('list-1'));
+    const rejected = assert.rejects(first, /offline/);
+    await started.promise;
+    state.setListData('list-1', [{ album_id: 'a' }, { album_id: 'b' }], false);
+    const second = operations.saveList('list-1', state.getListData('list-1'));
+    apiCall.mock.mockImplementation(() => {
+      assert.deepStrictEqual(state.getLastSavedSnapshots().get('list-1'), []);
+      return Promise.resolve({ addedItems: [] });
+    });
+    gate.reject(new Error('offline'));
+    await rejected;
+    await second;
+
+    assert.strictEqual(apiCall.mock.callCount(), 2);
+    assert.strictEqual(apiCall.mock.calls[1].arguments[1].method, 'PATCH');
+    assert.deepStrictEqual(
+      JSON.parse(apiCall.mock.calls[1].arguments[1].body).added,
+      [{ album_id: 'b', position: 1 }]
+    );
+    assert.deepStrictEqual(state.getListData('list-1'), [{ album_id: 'b' }]);
+    assert.deepStrictEqual(state.getLastSavedSnapshots().get('list-1'), ['b']);
+    assert.strictEqual(showToast.mock.callCount(), 1);
+
+    apiCall.mock.mockImplementation(async () => ({
+      addedItems: [{ album_id: 'a', _id: 'item-a' }],
+    }));
+    state.setListData('list-1', [{ album_id: 'b' }, { album_id: 'a' }], false);
+    await operations.saveList('list-1', state.getListData('list-1'));
+
+    assert.strictEqual(apiCall.mock.callCount(), 3);
+    assert.strictEqual(apiCall.mock.calls[2].arguments[1].method, 'PATCH');
+    assert.deepStrictEqual(
+      JSON.parse(apiCall.mock.calls[2].arguments[1].body),
+      {
+        added: [{ album_id: 'a', position: 2 }],
+        removed: [],
+        updated: [],
+      }
+    );
+    assert.deepStrictEqual(state.getListData('list-1'), [
+      { album_id: 'b' },
+      { album_id: 'a', _id: 'item-a' },
+    ]);
+    assert.deepStrictEqual(state.getLastSavedSnapshots().get('list-1'), [
+      'b',
+      'a',
+    ]);
+  });
+
+  it('invalidates the failed addition across three queued saves while allowing a retry queued after failure before they drain', async () => {
+    const old = { album_id: 'old', _id: 'old-item', comment: 'Original' };
+    state.setListData('list-1', [old]);
+    const responses = Array.from({ length: 5 }, () => Promise.withResolvers());
+    const started = Array.from({ length: 5 }, () => Promise.withResolvers());
+    let request = 0;
+    apiCall.mock.mockImplementation(() => {
+      const index = request++;
+      started[index].resolve();
+      return responses[index].promise;
+    });
+    state.setListData('list-1', [old, { album_id: 'a' }], false);
+    const first = operations.saveList('list-1', state.getListData('list-1'));
+    const rejected = assert.rejects(first, /addition failed/);
+    await started[0].promise;
+    const queued = [];
+    for (let index = 1; index <= 3; index++) {
+      state.setListData(
+        'list-1',
+        [{ ...old, comment: `Edit ${index}` }, { album_id: 'a' }],
+        false
+      );
+      queued.push(operations.saveList('list-1', state.getListData('list-1')));
+    }
+    assert.strictEqual(apiCall.mock.callCount(), 1);
+    responses[0].reject(new Error('addition failed'));
+    await rejected;
+    await started[1].promise;
+    assert.deepStrictEqual(state.getLastSavedSnapshots().get('list-1'), [
+      'old',
+    ]);
+    const retryData = [{ ...old, comment: 'Edit 3' }, { album_id: 'a' }];
+    state.setListData('list-1', retryData, false);
+    const retry = operations.saveList('list-1', retryData);
+
+    for (let index = 1; index <= 3; index++) {
+      await started[index].promise;
+      const [url, options] = apiCall.mock.calls[index].arguments;
+      assert.strictEqual(url, '/api/lists/list-1');
+      assert.strictEqual(options.method, 'PUT');
+      assert.deepStrictEqual(JSON.parse(options.body), {
+        data: [{ ...old, comment: `Edit ${index}` }],
+      });
+      responses[index].resolve({});
+      await queued[index - 1];
+      assert.deepStrictEqual(state.getLastSavedSnapshots().get('list-1'), [
+        'old',
+      ]);
+    }
+    await started[4].promise;
+    assert.strictEqual(apiCall.mock.callCount(), 5);
+    assert.strictEqual(apiCall.mock.calls[4].arguments[1].method, 'PATCH');
+    assert.deepStrictEqual(
+      JSON.parse(apiCall.mock.calls[4].arguments[1].body),
+      {
+        added: [{ album_id: 'a', position: 2 }],
+        removed: [],
+        updated: [],
+      }
+    );
+    responses[4].resolve({ addedItems: [{ album_id: 'a', _id: 'item-a' }] });
+    await retry;
+    assert.deepStrictEqual(state.getListData('list-1'), [
+      { ...old, comment: 'Edit 3' },
+      { album_id: 'a', _id: 'item-a' },
+    ]);
+    assert.deepStrictEqual(state.getLastSavedSnapshots().get('list-1'), [
+      'old',
+      'a',
+    ]);
+    assert.strictEqual(operations.getListSaveState('list-1').pending, 0);
+  });
+
+  for (const inPlace of [false, true]) {
+    it(`preserves a newer ${inPlace ? 'in-place edit' : 'optimistic replacement'} while merging only missing IDs`, async () => {
+      state.setListData('list-1', []);
+      const gate = Promise.withResolvers();
+      const started = Promise.withResolvers();
+      apiCall.mock.mockImplementation(() => {
+        started.resolve();
+        return gate.promise;
+      });
+      state.setListData(
+        'list-1',
+        [{ album_id: 'a', album: 'Before' }, { album_id: 'b' }],
+        false
+      );
+      const saving = operations.saveList('list-1', state.getListData('list-1'));
+      await started.promise;
+      const newer = inPlace
+        ? state.getListData('list-1')
+        : globalThis.structuredClone(state.getListData('list-1'));
+      newer[0].album = 'Edited';
+      newer[1]._id = 'newer-item-b';
+      newer.push({ album_id: 'c' });
+      if (!inPlace) state.setListData('list-1', newer, false);
+      gate.resolve({
+        addedItems: [
+          { album_id: 'a', _id: 'item-a' },
+          { album_id: 'b', _id: 'stale-item-b' },
+        ],
+      });
+      await saving;
+
+      assert.deepStrictEqual(state.getListData('list-1'), [
+        { album_id: 'a', album: 'Edited', _id: 'item-a' },
+        { album_id: 'b', _id: 'newer-item-b' },
+        { album_id: 'c' },
+      ]);
+      assert.deepStrictEqual(state.getLastSavedSnapshots().get('list-1'), [
+        'a',
+        'b',
+      ]);
+    });
+  }
+});

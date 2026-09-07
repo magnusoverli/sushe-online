@@ -37,21 +37,7 @@ export function extractLatinName(artist) {
     }
   }
 
-  if (!latinName && artist.disambiguation) {
-    if (!hasNonLatinCharacters(artist.disambiguation)) {
-      const looksLikeName =
-        !artist.disambiguation.includes(' ') ||
-        artist.disambiguation.split(' ').length <= 3;
-      if (
-        looksLikeName &&
-        !artist.disambiguation.toLowerCase().includes('group') &&
-        !artist.disambiguation.toLowerCase().includes('band')
-      ) {
-        latinName = artist.disambiguation;
-      }
-    }
-  }
-
+  // Disambiguation describes an entity; it is not an alternate artist name.
   if (!latinName && artist.aliases && Array.isArray(artist.aliases)) {
     for (const alias of artist.aliases) {
       if (alias.name && !hasNonLatinCharacters(alias.name)) {

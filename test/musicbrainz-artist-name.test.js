@@ -32,6 +32,18 @@ describe('musicbrainz artist name helpers', () => {
     });
   });
 
+  for (const description of ['Japanese singer', 'metal', 'US composer']) {
+    it(`does not treat ${description} as an artist name`, () => {
+      const artist = {
+        name: '\u05de\u05d6\u05de\u05d5\u05e8',
+        disambiguation: description,
+      };
+      assert.equal(formatArtistDisplayName(artist).primary, artist.name);
+      artist.aliases = [{ name: 'Mizmor', type: 'Artist name' }];
+      assert.equal(formatArtistDisplayName(artist).primary, 'Mizmor');
+    });
+  }
+
   it('uses extracted latin transliteration for non-latin names', () => {
     const result = formatArtistDisplayName({
       name: '\u05de\u05d6\u05de\u05d5\u05e8',

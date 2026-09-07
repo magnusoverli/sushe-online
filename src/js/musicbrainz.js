@@ -2,12 +2,15 @@
 import { isMobileViewport } from './utils/viewport.js';
 import { createModal } from './modules/modal-factory.js';
 import { isAlbumInList, showToast } from './modules/utils.js';
-import { escapeHtmlAttr } from './modules/html-utils.js';
+import { escapeHtml, escapeHtmlAttr } from './modules/html-utils.js';
 import { checkAndPromptSimilar } from './modules/similar-album-modal.js';
+import { createAlbumListAdder } from './modules/album-list-add.js';
+import { createArtistDiscography } from './modules/artist-discography.js';
+import { normalizeForExternalApi } from './modules/normalization.js';
 import {
-  stringSimilarity,
-  normalizeForExternalApi,
-} from './modules/normalization.js';
+  createAlbumCoverLoader,
+  createAlbumCoverObserver,
+} from './modules/album-cover-loader.js';
 import {
   hasNonLatinCharacters,
   formatArtistDisplayName,
@@ -23,12 +26,17 @@ import {
 import { apiCall } from './modules/api-client.js';
 import {
   saveList,
-  selectList,
+  getListSaveState,
   displayAlbums,
   fetchAndDisplayPlaycounts,
   selectRecommendations,
 } from './modules/list-actions.js';
 import { showReasoningModal } from './modules/modals.js';
+import {
+  createArtistImageLoader,
+  qualifiedArtistCandidates,
+  firstWorkingArtistImage,
+} from './modules/artist-image-loader.js';
 
 const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
 const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
@@ -148,14 +156,7 @@ function toComparableDate(dateStr) {
   return dateStr;
 }
 
-// Rate limiting is now handled on the backend, but we'll keep a small delay for the UI
-let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 100; // Small delay for UI responsiveness
-
 let searchMode = 'artist';
-
-// Cache for artist images to avoid duplicate requests (keyed by artist ID)
-const artistImageCache = new Map();
 
 // Global abort controller for artist image searches - aborted when user selects an artist
 let artistImageAbortController = null;
@@ -169,88 +170,73 @@ const artistImageProviders = [
   // Deezer - fast, good commercial coverage
   {
     name: 'Deezer',
-    search: async (artistName, _artistId, signal) => {
+    search: async (artistName, _artistId, signal, excluded) => {
       // Normalize artist name for better API matching (strips diacritics)
       const searchQuery = normalizeForExternalApi(artistName);
       const url = `/api/proxy/deezer/artist?q=${encodeURIComponent(searchQuery)}`;
 
       const response = await fetch(url, { signal, credentials: 'same-origin' });
-      if (!response.ok) return null;
+      if (!response.ok) throw new Error(`Deezer HTTP ${response.status}`);
 
       const data = await response.json();
-      if (!data.data || data.data.length === 0) return null;
-
-      // Find best match
-      const searchNameLower = artistName.toLowerCase();
-      let bestMatch = data.data.find(
-        (a) => a.name.toLowerCase() === searchNameLower
+      if (data?.error) throw new Error('Deezer provider error');
+      if (!Array.isArray(data.data)) throw new Error('Invalid Deezer response');
+      const candidates = qualifiedArtistCandidates(
+        artistName,
+        data.data,
+        (a) => a.name,
+        (a) => a.id
       );
-
-      if (!bestMatch) {
-        // Fuzzy match using stringSimilarity
-        const candidates = data.data.map((a) => ({
-          artist: a,
-          score: stringSimilarity(artistName, a.name),
-        }));
-        candidates.sort((a, b) => b.score - a.score);
-        if (candidates[0]?.score >= 0.7) {
-          bestMatch = candidates[0].artist;
-        }
-      }
-
-      if (!bestMatch) return null;
-
-      const imageUrl =
-        bestMatch.picture_xl ||
-        bestMatch.picture_big ||
-        bestMatch.picture_medium;
-      if (!imageUrl) return null;
-
-      // Verify image loads
-      await verifyImageLoads(imageUrl, signal);
-      return imageUrl;
+      return firstWorkingArtistImage(
+        candidates
+          .flatMap((a) => [
+            a.picture_medium,
+            a.picture_small,
+            a.picture_big,
+            a.picture_xl,
+          ])
+          .filter((url) => !excluded.has(url)),
+        signal
+      );
     },
   },
 
   // iTunes/Apple Music - good coverage, high quality images
   {
     name: 'iTunes',
-    search: async (artistName, _artistId, signal) => {
+    search: async (artistName, _artistId, signal, excluded) => {
       // Normalize artist name for better API matching (strips diacritics)
       const searchTerm = normalizeForExternalApi(artistName);
       const url = `/api/proxy/itunes?term=${encodeURIComponent(searchTerm)}&limit=10`;
 
       const response = await fetch(url, { signal, credentials: 'same-origin' });
-      if (!response.ok) return null;
+      if (!response.ok) throw new Error(`iTunes HTTP ${response.status}`);
 
       const data = await response.json();
-      if (!data.results || data.results.length === 0) return null;
-
-      // iTunes album search returns artist info - find best artist match
-      let bestMatch = null;
-      let bestScore = 0;
-
-      for (const album of data.results) {
-        if (!album.artistName || !album.artworkUrl100) continue;
-
-        const score = stringSimilarity(artistName, album.artistName);
-        if (score > bestScore) {
-          bestScore = score;
-          bestMatch = album;
-        }
-      }
-
-      if (!bestMatch || bestScore < 0.7) return null;
-
-      // Use album artwork as artist image (common practice when no dedicated artist image)
-      // Convert to larger size
-      const imageUrl = bestMatch.artworkUrl100.replace(
-        /\/\d+x\d+bb\./,
-        `/${ITUNES_IMAGE_SIZE}x${ITUNES_IMAGE_SIZE}bb.`
+      if (data?.error || data?.errorMessage)
+        throw new Error('iTunes provider error');
+      if (!Array.isArray(data.results))
+        throw new Error('Invalid iTunes response');
+      const candidates = qualifiedArtistCandidates(
+        artistName,
+        data.results,
+        (a) => a.artistName,
+        (a) => a.artistId
       );
-
-      await verifyImageLoads(imageUrl, signal);
-      return imageUrl;
+      // Keep album artwork as the fallback, with the original small size available.
+      return firstWorkingArtistImage(
+        candidates
+          .flatMap((a) =>
+            a.artworkUrl100
+              ? [
+                  a.artworkUrl100.replace(/\/\d+x\d+bb\./, '/300x300bb.'),
+                  a.artworkUrl100,
+                ]
+              : []
+          )
+          .filter((url) => !excluded.has(url)),
+        signal
+      );
     },
   },
 
@@ -260,7 +246,7 @@ const artistImageProviders = [
   {
     name: 'Wikidata',
     lastResort: true,
-    search: async (artistName, artistId, signal) => {
+    search: async (artistName, artistId, signal, excluded) => {
       if (!artistId) return null;
 
       // Get Wikidata ID from MusicBrainz
@@ -268,7 +254,9 @@ const artistImageProviders = [
       const mbData = await rateLimitedFetch(endpoint, 'low', signal);
 
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-      if (!mbData.relations) return null;
+      if (mbData?.error) throw new Error('MusicBrainz provider error');
+      if (!Array.isArray(mbData.relations))
+        throw new Error('Invalid MusicBrainz artist response');
 
       const wikidataRel = mbData.relations.find(
         (r) => r.type === 'wikidata' && r.url?.resource
@@ -284,367 +272,131 @@ const artistImageProviders = [
         credentials: 'same-origin',
       });
 
-      if (!wdResponse.ok) return null;
+      if (!wdResponse.ok) throw new Error(`Wikidata HTTP ${wdResponse.status}`);
 
       const wdData = await wdResponse.json();
+      if (wdData?.error) throw new Error('Wikidata provider error');
+      if (!wdData.claims || typeof wdData.claims !== 'object')
+        throw new Error('Invalid Wikidata response');
       if (!wdData.claims?.P18?.[0]?.mainsnak?.datavalue?.value) return null;
 
       const filename = wdData.claims.P18[0].mainsnak.datavalue.value;
       const encodedFilename = encodeURIComponent(filename.replace(/ /g, '_'));
       const imageUrl = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodedFilename}?width=500`;
 
-      // Verify image loads
-      await verifyImageLoads(imageUrl, signal);
-      return imageUrl;
+      return firstWorkingArtistImage(
+        [imageUrl.replace('width=500', 'width=200'), imageUrl].filter(
+          (url) => !excluded.has(url)
+        ),
+        signal
+      );
     },
   },
 ];
 
-// Race all artist image providers - first verified load wins
-async function searchArtistImageRacing(
-  artistName,
-  artistId,
-  externalSignal = null
-) {
-  // If already aborted externally, bail immediately
-  if (externalSignal?.aborted) {
-    return null;
-  }
-
-  const cacheKey = artistId || artistName.toLowerCase();
-
-  if (artistImageCache.has(cacheKey)) {
-    return artistImageCache.get(cacheKey);
-  }
-
-  if (artistImageProviders.length === 0) {
-    artistImageCache.set(cacheKey, null);
-    return null;
-  }
-
-  const controller = new AbortController();
-
-  // Link external signal to our controller - abort providers if parent aborts
-  if (externalSignal) {
-    externalSignal.addEventListener('abort', () => controller.abort(), {
-      once: true,
-    });
-  }
-
-  const fastProviders = artistImageProviders.filter((p) => !p.lastResort);
-  const lastResortProviders = artistImageProviders.filter((p) => p.lastResort);
-
-  const runProvider = async (provider) => {
-    const url = await provider.search(artistName, artistId, controller.signal);
-    if (!url) throw new Error('No result');
-    console.log(
-      `📊 [ARTIST] ✅ ${provider.name} loaded image for "${artistName}"`
-    );
-    return url;
-  };
-
-  try {
-    let url = null;
-
-    // Tier 1: race the fast providers (Deezer, iTunes) - no MusicBrainz.
-    if (fastProviders.length > 0) {
-      try {
-        url = await Promise.any(fastProviders.map(runProvider));
-      } catch (_e) {
-        url = null;
-      }
-    }
-
-    // Tier 2: only if the fast tier found nothing, try the last-resort
-    // providers (Wikidata) sequentially. These hit the rate-limited MusicBrainz
-    // queue, so we avoid them unless genuinely needed.
-    if (!url && !controller.signal.aborted) {
-      for (const provider of lastResortProviders) {
-        if (controller.signal.aborted) break;
-        try {
-          url = await runProvider(provider);
-          if (url) break;
-        } catch (_e) {
-          // Try the next last-resort provider.
-        }
-      }
-    }
-
-    controller.abort(); // cancel any stragglers
-
-    if (url) {
-      artistImageCache.set(cacheKey, url);
-      return url;
-    }
-    // Don't cache a miss if we were aborted - might succeed on retry.
-    if (!externalSignal?.aborted) {
-      artistImageCache.set(cacheKey, null);
-    }
-    return null;
-  } catch (_error) {
-    if (!externalSignal?.aborted) {
-      artistImageCache.set(cacheKey, null);
-    }
-    return null;
-  }
-}
+const artistImageLoader = createArtistImageLoader(artistImageProviders);
+const searchArtistImageRacing = artistImageLoader.search;
 
 // =============================================================================
 // COVER ART PROVIDER SYSTEM
-// All providers are queried in PARALLEL. First successful result wins,
-// and remaining requests are automatically aborted via AbortSignal.
-//
-// To add a new provider:
-// 1. Create a search function: async (artistName, albumTitle, releaseGroupId, signal) => url | null
-//    - signal is an AbortSignal - pass it to fetch() to support cancellation
-// 2. Add to coverArtProviders array with name and search function
-// 3. Optionally add CDN to warmupConnections() for preconnect
+// CAA starts immediately; iTunes is hedged after 200ms. First verified cover wins.
 // =============================================================================
 
-// Cache for cover art searches (keyed by releaseGroupId or "artistName::albumTitle")
-const coverArtCache = new Map();
+const albumCoverLoader = createAlbumCoverLoader();
 
-// iTunes/Apple Music image size (pixels)
-// Options: 100, 300, 600, 1000, 2000, 5000
-const ITUNES_IMAGE_SIZE = 600;
+const albumCoverRenders = new WeakMap();
 
-// normalizeForMatch and stringSimilarity imported from ./modules/normalization.js
-
-// Verify an image URL actually loads successfully
-// Returns the URL if successful, throws on failure
-async function verifyImageLoads(url, signal) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-
-    // Handle abort signal
-    const abortHandler = () => {
-      img.src = ''; // Cancel the load
-      reject(new DOMException('Aborted', 'AbortError'));
-    };
-    signal?.addEventListener('abort', abortHandler);
-
-    img.onload = () => {
-      signal?.removeEventListener('abort', abortHandler);
-      // Check for valid image (not a placeholder)
-      if (img.naturalWidth > 1 && img.naturalHeight > 1) {
-        resolve(url);
-      } else {
-        reject(new Error('Invalid image dimensions'));
-      }
-    };
-
-    img.onerror = () => {
-      signal?.removeEventListener('abort', abortHandler);
-      reject(new Error('Image failed to load'));
-    };
-
-    img.src = url;
-  });
-}
-
-// Cover art providers - queried in parallel, first to LOAD wins
-// Each provider returns URL only after verifying the image actually loads
-const coverArtProviders = [
-  // Cover Art Archive - uses MusicBrainz release group ID
-  {
-    name: 'CoverArtArchive',
-    search: async (_artistName, _albumTitle, releaseGroupId, signal) => {
-      if (!releaseGroupId) return null;
-      const url = `https://coverartarchive.org/release-group/${releaseGroupId}/front-250`;
-      // Actually load the image to verify it exists
-      await verifyImageLoads(url, signal);
-      return url;
-    },
-  },
-
-  // iTunes/Apple Music - search-based provider with fuzzy matching
-  {
-    name: 'iTunes',
-    search: async (artistName, albumTitle, _releaseGroupId, signal) => {
-      if (!artistName || !albumTitle) return null;
-
-      try {
-        const searchTerm = `${artistName} ${albumTitle}`;
-        const apiUrl = `/api/proxy/itunes?term=${encodeURIComponent(searchTerm)}&limit=10`;
-
-        const response = await fetch(apiUrl, {
-          signal,
-          credentials: 'same-origin',
-        });
-
-        if (!response.ok) return null;
-
-        const data = await response.json();
-
-        if (!data.results || data.results.length === 0) return null;
-
-        // Find best matching album using fuzzy matching
-        let bestMatch = null;
-        let bestScore = 0;
-
-        for (const album of data.results) {
-          if (!album.artworkUrl100) continue;
-
-          const artistScore = stringSimilarity(
-            artistName,
-            album.artistName || ''
-          );
-          const albumScore = stringSimilarity(
-            albumTitle,
-            album.collectionName || ''
-          );
-          const combinedScore = artistScore * 0.4 + albumScore * 0.6;
-
-          if (combinedScore > bestScore) {
-            bestScore = combinedScore;
-            bestMatch = album;
-          }
-        }
-
-        if (!bestMatch || bestScore < 0.5) return null;
-
-        // Convert artwork URL to desired size
-        const artworkUrl = bestMatch.artworkUrl100.replace(
-          /\/\d+x\d+bb\./,
-          `/${ITUNES_IMAGE_SIZE}x${ITUNES_IMAGE_SIZE}bb.`
-        );
-
-        // Actually load the image to verify it works
-        await verifyImageLoads(artworkUrl, signal);
-        return artworkUrl;
-      } catch (error) {
-        if (error.name === 'AbortError') throw error;
-        return null;
-      }
-    },
-  },
-];
-
-// Concurrency limit for cover art searches to avoid stampeding iTunes and CAA
-const COVER_CONCURRENCY = 8;
-let coverRunning = 0;
-const coverQueue = [];
-
-function runWithCoverConcurrency(fn) {
-  return new Promise((resolve, reject) => {
-    const run = () => {
-      coverRunning++;
-      Promise.resolve(fn())
-        .then(
-          (v) => resolve(v),
-          (e) => reject(e)
-        )
-        .finally(() => {
-          coverRunning--;
-          if (coverQueue.length > 0) coverQueue.shift()();
-        });
-    };
-    if (coverRunning < COVER_CONCURRENCY) run();
-    else coverQueue.push(run);
-  });
-}
-
-// Try CoverArtArchive first when we have releaseGroupId (no rate limit, fast).
-// Fall back to iTunes only when CAA fails or we have no ID. Reduces iTunes 500s.
-async function searchCoverArt(artistName, albumTitle, releaseGroupId) {
-  const cacheKey =
-    releaseGroupId || `${artistName}::${albumTitle}`.toLowerCase();
-
-  if (coverArtCache.has(cacheKey)) {
-    return coverArtCache.get(cacheKey);
-  }
-
-  const controller = new AbortController();
-  const signal = controller.signal;
-
-  const caa = coverArtProviders.find((p) => p.name === 'CoverArtArchive');
-  const itunes = coverArtProviders.find((p) => p.name === 'iTunes');
-
-  try {
-    // When we have a MusicBrainz ID, try CoverArtArchive first (no API rate limit)
-    if (releaseGroupId && caa) {
-      try {
-        const url = await caa.search(
-          artistName,
-          albumTitle,
-          releaseGroupId,
-          signal
-        );
-        if (url) {
-          console.log(
-            `📊 [COVER] ✅ ${caa.name} loaded cover for "${albumTitle}"`
-          );
-          coverArtCache.set(cacheKey, url);
-          return url;
-        }
-      } catch (_e) {
-        // CAA failed (404, bad image, etc.) – fall through to iTunes
-      }
-    }
-
-    // CAA failed or no releaseGroupId: try iTunes (rate-limited; we throttle on server)
-    if (itunes && artistName && albumTitle) {
-      try {
-        const url = await itunes.search(
-          artistName,
-          albumTitle,
-          releaseGroupId,
-          signal
-        );
-        if (url) {
-          console.log(
-            `📊 [COVER] ✅ ${itunes.name} loaded cover for "${albumTitle}"`
-          );
-          coverArtCache.set(cacheKey, url);
-          return url;
-        }
-      } catch (err) {
-        if (err.name === 'AbortError') throw err;
-      }
-    }
-
-    coverArtCache.set(cacheKey, null);
-    return null;
-  } catch (err) {
-    if (err.name === 'AbortError') throw err;
-    coverArtCache.set(cacheKey, null);
-    return null;
-  }
-}
-
-// Load cover art for an album element - called when albums are rendered
-// The provider system already verifies images load, so we just set the src
-async function loadAlbumCover(
+// A verified URL can still require a fresh network request in the actual row.
+function loadAlbumCover(
   imgElement,
   artistName,
   albumTitle,
   releaseGroupId,
-  index
+  album,
+  request
 ) {
-  try {
-    const coverUrl = await runWithCoverConcurrency(() =>
-      searchCoverArt(artistName, albumTitle, releaseGroupId)
-    );
+  let active = true;
+  let clearRender = () => {};
+  const cancel = () => {
+    active = false;
+    clearRender();
+    request.signal.removeEventListener('abort', cancel);
+    if (albumCoverRenders.get(imgElement) === cancel)
+      albumCoverRenders.delete(imgElement);
+  };
+  const identity = {
+    artist: artistName,
+    title: albumTitle,
+    id: releaseGroupId,
+  };
+  const isCurrent = () =>
+    active &&
+    !request.signal.aborted &&
+    isSearchRequestCurrent(request) &&
+    imgElement?.isConnected &&
+    imgElement.parentElement;
+  if (!isCurrent()) return;
+  albumCoverRenders.get(imgElement)?.();
+  albumCoverRenders.set(imgElement, cancel);
+  request.signal.addEventListener('abort', cancel, { once: true });
+  const attempt = async (excluded = new Set()) => {
+    try {
+      const coverUrl =
+        (!excluded.size &&
+          (album.coverArt || albumCoverLoader.peek(identity))) ||
+        (await albumCoverLoader.search(identity, request.signal, excluded));
 
-    if (coverUrl && imgElement && imgElement.parentElement) {
-      // Store the cover URL for later use
-      if (currentReleaseGroups[index]) {
-        currentReleaseGroups[index].coverArt = coverUrl;
+      if (!isCurrent()) return cancel();
+      if (coverUrl && imgElement && imgElement.parentElement) {
+        // Store the cover URL for later use
+        album.coverArt = coverUrl;
+        let settled = false;
+        const finish = (loaded) => {
+          if (settled) return;
+          clearRender();
+          if (!isCurrent()) return cancel();
+          if (loaded) {
+            albumCoverLoader.seed(identity, coverUrl);
+            return cancel();
+          }
+          imgElement.removeAttribute('src');
+          albumCoverLoader.evict(identity);
+          delete album.coverArt;
+          if (excluded.size) {
+            showCoverPlaceholder(imgElement);
+            return cancel();
+          }
+          attempt(new Set([coverUrl]));
+        };
+        const timer = setTimeout(() => finish(false), 3000);
+        clearRender = () => {
+          settled = true;
+          clearTimeout(timer);
+          imgElement.onload = null;
+          imgElement.onerror = null;
+          clearRender = () => {};
+        };
+        imgElement.onload = () => finish(true);
+        imgElement.onerror = () => finish(false);
+        // Remove loading state and set the verified image
+        imgElement.parentElement.classList.remove('animate-pulse');
+        imgElement.src = coverUrl;
+      } else {
+        // No provider found a working image
+        showCoverPlaceholder(imgElement);
+        cancel();
       }
-      // Remove loading state and set the verified image
-      imgElement.parentElement.classList.remove('animate-pulse');
-      imgElement.src = coverUrl;
-    } else {
-      // No provider found a working image
+    } catch (error) {
+      if (!isCurrent()) return cancel();
+      console.warn(
+        `📊 [COVER] Failed to load cover for "${albumTitle}":`,
+        error.message
+      );
       showCoverPlaceholder(imgElement);
+      cancel();
     }
-  } catch (error) {
-    console.warn(
-      `📊 [COVER] Failed to load cover for "${albumTitle}":`,
-      error.message
-    );
-    showCoverPlaceholder(imgElement);
-  }
+  };
+  return attempt();
 }
 
 // =============================================================================
@@ -708,15 +460,23 @@ function resultsScrollRoot() {
 /** Replace the album-cover lazy loader, disconnecting any previous one. */
 function resetAlbumCoverObserver() {
   if (albumCoverObserver) albumCoverObserver.disconnect();
-  albumCoverObserver = createLazyLoader(
+  albumCoverObserver = createAlbumCoverObserver(
     (ctx) =>
       loadAlbumCover(
         ctx.img,
         ctx.artistName,
         ctx.albumTitle,
         ctx.releaseGroupId,
-        ctx.index
+        ctx.album,
+        ctx.request
       ),
+    (ctx) =>
+      ctx.album.coverArt ||
+      albumCoverLoader.peek({
+        artist: ctx.artistName,
+        title: ctx.albumTitle,
+        id: ctx.releaseGroupId,
+      }),
     resultsScrollRoot()
   );
 }
@@ -745,112 +505,97 @@ let modalElements = {};
 let addAlbumController = null;
 let currentLoadingController = null;
 let currentReleaseGroups = [];
+let albumModalSession = 0;
+let albumListAdder = null;
+let currentArtistResults = [];
+let searchEmptyHTML = '';
 
-// =============================================================================
-// ALBUM PROVIDER SYSTEM
-// Album metadata provider - MusicBrainz only for authoritative, high-quality data
-// Cover images are fetched separately via coverArtProviders (CoverArtArchive, iTunes)
-// =============================================================================
+function captureAlbumAddContext() {
+  const listId = getCurrentListId();
+  const session = albumModalSession;
+  const request = currentLoadingController;
+  return {
+    listId,
+    isCurrent: () =>
+      session === albumModalSession &&
+      request === currentLoadingController &&
+      getCurrentListId() === listId &&
+      !modal.classList.contains('hidden'),
+  };
+}
 
-// MusicBrainz provides release group IDs, proper album types, and accurate dates
-// Images are fetched separately via coverArtProviders (CoverArtArchive, iTunes)
-const albumProviders = [
-  // MusicBrainz - authoritative source with proper release group IDs, types, and dates
-  {
-    name: 'MusicBrainz',
-    search: async (artistName, artistId, signal) => {
-      if (!artistId) return null;
-
-      const endpoint = `release-group?artist=${artistId}&type=album|ep&fmt=json&limit=100`;
-      const data = await rateLimitedFetch(endpoint, 'high', signal);
-
-      let releaseGroups = data['release-groups'] || [];
-
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
-
-      releaseGroups = releaseGroups.filter((rg) => {
-        const primaryType = rg['primary-type'];
-        const secondaryTypes = rg['secondary-types'] || [];
-        const releaseDate = rg['first-release-date'];
-
-        const isValidType =
-          (primaryType === 'Album' || primaryType === 'EP') &&
-          secondaryTypes.length === 0;
-
-        if (!releaseDate) return false;
-
-        return isValidType && toComparableDate(releaseDate) <= todayStr;
-      });
-
-      if (releaseGroups.length === 0) return null;
-
-      const albums = releaseGroups.map((rg) => ({
-        title: rg.title,
-        releaseDate: rg['first-release-date'] || '',
-        type: rg['primary-type'],
-        releaseGroupId: rg.id,
-        artistName: artistName,
-        source: 'MusicBrainz',
-        // No coverUrl - will be fetched separately via cover art providers
-      }));
-
-      // Sort by release date descending
-      albums.sort((a, b) =>
-        (b.releaseDate || '').localeCompare(a.releaseDate || '')
-      );
-
-      return albums;
-    },
-  },
-];
-
-// Race all album providers - first valid album list wins
-async function searchArtistAlbumsRacing(artistName, artistId) {
-  const controller = new AbortController();
-
-  const providerPromises = albumProviders.map(async (provider) => {
-    try {
-      const albums = await provider.search(
-        artistName,
-        artistId,
-        controller.signal
-      );
-      if (albums && albums.length > 0) {
-        console.log(
-          `📊 [ALBUMS] ✅ ${provider.name} returned ${albums.length} albums for "${artistName}"`
-        );
-        return { name: provider.name, albums };
-      }
-      return null;
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        console.warn(
-          `📊 [ALBUMS] ${provider.name} failed for "${artistName}":`,
-          error.message
-        );
-      }
-      return null;
-    }
+function persistAlbumAddition(album, context) {
+  albumListAdder ||= createAlbumListAdder({
+    getCurrentListId,
+    getListData,
+    setListData,
+    resolveAndDedup,
+    isAlbumInList,
+    saveList,
+    getListSaveState,
+    apiCall,
+    displayAlbums,
+    closeAddAlbumModal,
+    showToast,
+    fetchAndDisplayPlaycounts,
   });
+  return albumListAdder.add(album, context);
+}
+// A request owns its results until the next search, selection or view change.
+function invalidateSearchWork() {
+  currentLoadingController?.abort();
+  currentLoadingController = null;
+  artistImageAbortController?.abort();
+  artistImageAbortController = null;
+  disconnectImageObservers();
+  currentArtist = null;
+  currentReleaseGroups = [];
+}
 
-  try {
-    const result = await Promise.any(
-      providerPromises.map((p) =>
-        p.then((r) => {
-          if (r?.albums) return r;
-          throw new Error('No result');
-        })
-      )
-    );
+function beginSearchRequest() {
+  invalidateSearchWork();
+  currentLoadingController = new AbortController();
+  return currentLoadingController;
+}
 
-    // Got a winner - abort other providers
-    controller.abort();
-    return result;
-  } catch (_error) {
-    // All providers failed
-    return null;
-  }
+function isSearchRequestCurrent(request) {
+  return (
+    !!request && request === currentLoadingController && !request.signal.aborted
+  );
+}
+
+// MusicBrainz is the authoritative metadata source; covers load independently.
+const getArtistDiscography = createArtistDiscography((...args) =>
+  rateLimitedFetch(...args)
+);
+async function searchArtistAlbums(artistName, artistId, signal, offset = 0) {
+  const { groups, nextOffset } = await getArtistDiscography(
+    artistId,
+    signal,
+    offset
+  );
+  const todayStr = new Date().toISOString().split('T')[0];
+  const albums = groups
+    .filter((rg) => {
+      const primaryType = rg['primary-type'];
+      const releaseDate = rg['first-release-date'];
+      return (
+        (primaryType === 'Album' || primaryType === 'EP') &&
+        (rg['secondary-types'] || []).length === 0 &&
+        releaseDate &&
+        toComparableDate(releaseDate) <= todayStr
+      );
+    })
+    .map((rg) => ({
+      title: rg.title,
+      releaseDate: rg['first-release-date'],
+      type: rg['primary-type'],
+      releaseGroupId: rg.id,
+      artistName,
+      source: 'MusicBrainz',
+    }));
+  albums.sort((a, b) => b.releaseDate.localeCompare(a.releaseDate));
+  return { name: 'MusicBrainz', albums, nextOffset };
 }
 
 // Browser Connection Optimization
@@ -883,36 +628,6 @@ async function rateLimitedFetch(endpoint, priority = 'normal', signal = null) {
     throw new DOMException('Aborted', 'AbortError');
   }
 
-  const now = Date.now();
-  const timeSinceLastRequest = now - lastRequestTime;
-
-  // Small UI delay to prevent overwhelming the interface
-  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(
-        resolve,
-        MIN_REQUEST_INTERVAL - timeSinceLastRequest
-      );
-      if (signal) {
-        signal.addEventListener(
-          'abort',
-          () => {
-            clearTimeout(timeout);
-            reject(new DOMException('Aborted', 'AbortError'));
-          },
-          { once: true }
-        );
-      }
-    });
-  }
-
-  // Check again after delay
-  if (signal?.aborted) {
-    throw new DOMException('Aborted', 'AbortError');
-  }
-
-  lastRequestTime = Date.now();
-
   const url = `${MUSICBRAINZ_PROXY}?endpoint=${encodeURIComponent(endpoint)}&priority=${priority}`;
   const response = await fetch(url, {
     credentials: 'same-origin',
@@ -923,16 +638,26 @@ async function rateLimitedFetch(endpoint, priority = 'normal', signal = null) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  if (!data || typeof data !== 'object' || data.error || data.errors) {
+    throw new Error('Invalid MusicBrainz response');
+  }
+  Object.defineProperty(data, '_providerCache', {
+    value: response.headers?.get('X-Provider-Cache'),
+  });
+  return data;
 }
 
 // Search for artists
-async function searchArtists(query) {
+async function searchArtists(query, signal) {
   // Request aliases and tags for better popularity scoring
   const endpoint = `artist/?query=${encodeURIComponent(query)}&fmt=json&limit=20&inc=aliases+tags`;
   // HIGH priority: user-initiated search
-  const data = await rateLimitedFetch(endpoint, 'high');
-  return data.artists || [];
+  const data = await rateLimitedFetch(endpoint, 'high', signal);
+  if (!Array.isArray(data.artists)) {
+    throw new Error('Invalid MusicBrainz artist response');
+  }
+  return data.artists;
 }
 
 // Add this function to sort and prioritize search results
@@ -1025,6 +750,8 @@ function showCoverPlaceholder(imgElement) {
 
 async function performSearch() {
   const query = modalElements.artistSearchInput.value.trim();
+  const mode = searchMode;
+  clearSearchResults();
   if (!query) {
     showToast(
       `Please enter ${searchMode === 'artist' ? 'an artist' : 'an album'} name`,
@@ -1033,11 +760,13 @@ async function performSearch() {
     return;
   }
 
+  const request = beginSearchRequest();
   showLoading();
 
   try {
-    if (searchMode === 'artist') {
-      const artists = await searchArtists(query);
+    if (mode === 'artist') {
+      const artists = await searchArtists(query, request.signal);
+      if (!isSearchRequestCurrent(request)) return;
 
       if (artists.length === 0) {
         modalElements.searchLoading.classList.add('hidden');
@@ -1052,7 +781,8 @@ async function performSearch() {
       await displayArtistResults(prioritizedArtists);
     } else {
       // Album search mode
-      const albums = await searchAlbums(query);
+      const albums = await searchAlbums(query, request.signal);
+      if (!isSearchRequestCurrent(request)) return;
 
       if (albums.length === 0) {
         modalElements.searchLoading.classList.add('hidden');
@@ -1062,16 +792,19 @@ async function performSearch() {
         return;
       }
 
-      await displayDirectAlbumResults(albums);
+      await displayDirectAlbumResults(albums, request);
     }
-  } catch (_error) {
-    showToast(`Error searching ${searchMode}s`, 'error');
+  } catch (error) {
+    if (!isSearchRequestCurrent(request) || error.name === 'AbortError') return;
+    showToast(`Error searching ${mode}s`, 'error');
     modalElements.searchLoading.classList.add('hidden');
     modalElements.searchEmpty.classList.remove('hidden');
+    modalElements.searchEmpty.textContent = `Error searching ${mode}s. Try again.`;
   }
 }
 
-async function displayDirectAlbumResults(releaseGroups) {
+async function displayDirectAlbumResults(releaseGroups, request) {
+  if (!isSearchRequestCurrent(request)) return;
   showAlbumResults();
   modalElements.albumList.innerHTML = '';
 
@@ -1124,7 +857,7 @@ async function displayDirectAlbumResults(releaseGroups) {
       <div class="album-cover-container shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md bg-gray-700 animate-pulse">
         <img data-artist="${escapeHtmlAttr(artistDisplay)}"
             data-album="${escapeHtmlAttr(rg.title)}"
-            data-release-group-id="${rg.id}"
+            data-release-group-id="${escapeHtmlAttr(rg.id)}"
             data-index="${index}"
             alt="${escapeHtmlAttr(rg.title)}"
             class="w-20 h-20 object-cover rounded-lg"
@@ -1143,6 +876,9 @@ async function displayDirectAlbumResults(releaseGroups) {
 
     // Click handler
     albumEl.onclick = async () => {
+      if (currentReleaseGroups !== releaseGroups) return;
+      const selectionRequest = beginSearchRequest();
+      currentReleaseGroups = releaseGroups;
       const coverContainer = albumEl.querySelector('.album-cover-container');
       const existingImg = coverContainer.querySelector('img');
 
@@ -1163,7 +899,22 @@ async function displayDirectAlbumResults(releaseGroups) {
       `;
 
       const primaryArtist = artistCredits[0];
-      const combinedCountries = await getCombinedArtistCountries(artistCredits);
+      let combinedCountries;
+      try {
+        combinedCountries = await getCombinedArtistCountries(
+          artistCredits,
+          selectionRequest.signal
+        );
+      } catch (error) {
+        if (
+          !isSearchRequestCurrent(selectionRequest) ||
+          error.name === 'AbortError'
+        )
+          return;
+        showToast('Error fetching artist countries', 'error');
+        return;
+      }
+      if (!isSearchRequestCurrent(selectionRequest)) return;
 
       currentArtist = {
         name: artistDisplay,
@@ -1184,7 +935,8 @@ async function displayDirectAlbumResults(releaseGroups) {
         artistName: artistDisplay,
         albumTitle: rg.title,
         releaseGroupId: rg.id,
-        index,
+        album: rg,
+        request,
       });
     }
   }
@@ -1222,6 +974,7 @@ function initializeAddAlbumFeature() {
     countrySelect: document.getElementById('manualCountry'),
     cancelBtn: document.getElementById('cancelManualEntry'),
   };
+  searchEmptyHTML = modalElements.searchEmpty?.innerHTML || '';
 
   // Check if all essential elements exist
   const essentialElements = [
@@ -1257,10 +1010,6 @@ function initializeAddAlbumFeature() {
     label: 'Add album',
     initialFocus: '#artistSearchInput',
     onClose: () => {
-      if (currentLoadingController) {
-        currentLoadingController.abort();
-        currentLoadingController = null;
-      }
       resetModalState();
     },
   });
@@ -1276,11 +1025,8 @@ function initializeAddAlbumFeature() {
   // Back to artists button
   if (modalElements.backToArtists) {
     modalElements.backToArtists.onclick = () => {
-      if (currentLoadingController) {
-        currentLoadingController.abort();
-        currentLoadingController = null;
-      }
-      showArtistResults();
+      invalidateSearchWork();
+      displayArtistResults(currentArtistResults);
       modalElements.albumResults.classList.add('hidden');
     };
   }
@@ -1367,11 +1113,13 @@ function updateSearchMode(mode) {
 
 // Unified function to clear search results
 function clearSearchResults() {
-  disconnectImageObservers();
+  invalidateSearchWork();
+  currentArtistResults = [];
   modalElements.artistResults.classList.add('hidden');
   modalElements.albumResults.classList.add('hidden');
   modalElements.searchLoading.classList.add('hidden');
   modalElements.searchEmpty.classList.remove('hidden');
+  modalElements.searchEmpty.innerHTML = searchEmptyHTML;
   modalElements.artistList.innerHTML = '';
   modalElements.albumList.innerHTML = '';
 }
@@ -1431,6 +1179,8 @@ window.openAddAlbumModal = function () {
 
 // New functions for manual entry
 function showManualEntryForm() {
+  albumModalSession++;
+  clearSearchResults();
   // Hide all other views
   modalElements.artistResults.classList.add('hidden');
   modalElements.albumResults.classList.add('hidden');
@@ -1455,6 +1205,7 @@ function showManualEntryForm() {
 }
 
 function hideManualEntryForm() {
+  albumModalSession++;
   modalElements.manualEntryForm.classList.add('hidden');
   modalElements.searchEmpty.classList.remove('hidden');
 
@@ -1532,6 +1283,7 @@ async function handleCoverArtUpload(e) {
 
 async function handleManualSubmit(e) {
   e.preventDefault();
+  const context = captureAlbumAddContext();
 
   const formData = new FormData(modalElements.form);
 
@@ -1601,7 +1353,7 @@ async function handleManualSubmit(e) {
           album.cover_image_format = 'JPEG';
 
           // Add to list
-          await finishManualAdd(album);
+          await finishManualAdd(album, context);
         };
 
         img.onerror = function () {
@@ -1621,54 +1373,12 @@ async function handleManualSubmit(e) {
     }
   } else {
     // No cover art, add directly
-    await finishManualAdd(album);
+    await finishManualAdd(album, context);
   }
 }
 
-async function finishManualAdd(album) {
-  const currentListId = getCurrentListId();
-
-  try {
-    const currentListData = getListData(currentListId);
-    if (!currentListData) {
-      showToast('No list selected', 'error');
-      return;
-    }
-
-    const { resolved, cancelled, alreadyInList, usedExisting } =
-      await resolveAndDedup(album, currentListData);
-
-    if (cancelled) return; // User dismissed modal — let them continue editing
-
-    if (alreadyInList) {
-      closeAddAlbumModal();
-      const label = usedExisting ? ' (metadata updated)' : '';
-      showToast(
-        `"${album.album}" is already in this list${label}`,
-        usedExisting ? 'info' : 'error'
-      );
-      if (usedExisting && currentListId) selectList(currentListId);
-      return;
-    }
-
-    // Add to current list
-    currentListData.push(resolved);
-    if (!currentListId) {
-      showToast('No list selected', 'error');
-      return;
-    }
-    setListData(currentListId, currentListData);
-
-    const suffix = usedExisting ? ' (using existing album)' : ' to the list';
-    await persistAddedAlbum(
-      currentListId,
-      currentListData,
-      `Added "${resolved.album}" by ${resolved.artist}${suffix}`
-    );
-  } catch (_error) {
-    showToast('Error adding album to list', 'error');
-    rollbackOptimisticAdd(currentListId);
-  }
+function finishManualAdd(album, context = captureAlbumAddContext()) {
+  return persistAlbumAddition(album, { ...context, manual: true });
 }
 
 function closeAddAlbumModal() {
@@ -1679,14 +1389,8 @@ function closeAddAlbumModal() {
 }
 
 function resetModalState() {
-  disconnectImageObservers();
-
-  modalElements.artistResults.classList.add('hidden');
-  modalElements.albumResults.classList.add('hidden');
-  modalElements.searchLoading.classList.add('hidden');
-  modalElements.searchEmpty.classList.remove('hidden');
-  modalElements.artistList.innerHTML = '';
-  modalElements.albumList.innerHTML = '';
+  albumModalSession++;
+  clearSearchResults();
 
   // Don't reset search mode here - it should maintain its current state
   // Only reset to artist when opening the modal fresh
@@ -1743,12 +1447,14 @@ function showArtistResults() {
 
 function showAlbumResults() {
   modalElements.searchLoading.classList.add('hidden');
+  modalElements.searchEmpty.classList.add('hidden');
   modalElements.artistResults.classList.add('hidden');
   modalElements.albumResults.classList.remove('hidden');
 }
 
 // Display artist results with lazy-loaded images
 async function displayArtistResults(artists) {
+  currentArtistResults = artists;
   // Abort any previous artist image searches
   if (artistImageAbortController) {
     artistImageAbortController.abort();
@@ -1814,11 +1520,11 @@ async function displayArtistResults(artists) {
       </div>
       <div class="flex-1 min-w-0">
         <div class="font-medium text-white">
-          ${displayName.primary}
+          ${escapeHtml(displayName.primary)}
           ${displayName.warning ? '<i class="fas fa-exclamation-triangle text-yellow-500 text-xs ml-2" title="Non-Latin script - no Latin version found"></i>' : ''}
         </div>
-        ${secondaryText ? `<div class="text-sm text-gray-400 mt-1">${secondaryText}</div>` : ''}
-        <div class="text-sm text-gray-400 mt-1 artist-country">${artist.type || 'Artist'}${countryDisplay}</div>
+        ${secondaryText ? `<div class="text-sm text-gray-400 mt-1">${escapeHtml(secondaryText)}</div>` : ''}
+        <div class="text-sm text-gray-400 mt-1 artist-country">${escapeHtml(artist.type || 'Artist')}${escapeHtml(countryDisplay)}</div>
       </div>
       <div class="shrink-0">
         <i class="fas fa-chevron-right text-gray-500"></i>
@@ -1831,7 +1537,14 @@ async function displayArtistResults(artists) {
       _displayName: displayName,
     };
 
-    artistEl.onclick = () => selectArtist(enhancedArtist);
+    artistEl.onclick = () => {
+      if (
+        currentArtistResults !== artists ||
+        modalElements.artistResults.classList.contains('hidden')
+      )
+        return;
+      return selectArtist(enhancedArtist);
+    };
 
     modalElements.artistList.appendChild(artistEl);
 
@@ -1856,82 +1569,94 @@ async function displayArtistResults(artists) {
  *
  * @param {Object} ctx - { artistEl, displayName, searchName, artistId, signal }
  */
-function loadArtistImageInto({
+async function loadArtistImageInto({
   artistEl,
   displayName,
   searchName,
   artistId,
   signal,
 }) {
-  searchArtistImageRacing(searchName, artistId, signal)
-    .then((imageUrl) => {
-      if (imageUrl) {
-        const imageContainer = artistEl.querySelector(
-          '.artist-image-container'
-        );
-        if (imageContainer) {
-          imageContainer.innerHTML = `
-            <img
-              src="${escapeHtmlAttr(imageUrl)}"
-              alt="${escapeHtmlAttr(displayName.primary)}"
-              class="w-16 h-16 rounded-full object-cover"
-              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><path d=\\'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\\'></path><circle cx=\\'12\\' cy=\\'7\\' r=\\'4\\'></circle></svg></div>'"
-            >
-          `;
-        }
-      } else {
-        // No image found, remove pulse animation
-        const imageContainer = artistEl.querySelector(
-          '.artist-image-container div'
-        );
-        if (imageContainer) {
-          imageContainer.classList.remove('animate-pulse');
-        }
-      }
-    })
-    .catch(() => {
-      // Error loading image, remove pulse animation
-      const imageContainer = artistEl.querySelector(
-        '.artist-image-container div'
+  const excluded = new Set();
+  const imageContainer = artistEl.querySelector('.artist-image-container');
+  if (!imageContainer || signal.aborted) return;
+  const placeholder = imageContainer.innerHTML.replace('animate-pulse', '');
+  const load = async () => {
+    try {
+      const imageUrl = await searchArtistImageRacing(
+        searchName,
+        artistId,
+        signal,
+        excluded
       );
-      if (imageContainer) {
-        imageContainer.classList.remove('animate-pulse');
+      if (signal.aborted) return;
+      if (imageUrl) {
+        const img = document.createElement('img');
+        img.alt = displayName.primary;
+        img.className = 'w-16 h-16 rounded-full object-cover';
+        const cleanup = () => {
+          clearTimeout(timer);
+          img.onload = null;
+          img.onerror = null;
+          signal.removeEventListener('abort', cancel);
+        };
+        const cancel = () => {
+          cleanup();
+          img.src = '';
+        };
+        const failed = () => {
+          cleanup();
+          img.src = '';
+          if (signal.aborted) return;
+          artistImageLoader.evict(searchName, artistId);
+          imageContainer.innerHTML = placeholder;
+          excluded.add(imageUrl);
+          if (excluded.size < 2) void load();
+        };
+        img.onload = cleanup;
+        img.onerror = failed;
+        signal.addEventListener('abort', cancel, { once: true });
+        const timer = setTimeout(failed, 3000);
+        imageContainer.innerHTML = '';
+        imageContainer.appendChild(img);
+        img.src = imageUrl;
+      } else {
+        imageContainer.innerHTML = placeholder;
       }
-    });
+    } catch (_error) {
+      if (!signal.aborted) imageContainer.innerHTML = placeholder;
+    }
+  };
+  await load();
 }
 
 async function selectArtist(artist) {
-  // Abort any ongoing artist image searches - user has made their selection
-  if (artistImageAbortController) {
-    artistImageAbortController.abort();
-    artistImageAbortController = null;
-  }
-  if (artistImageObserver) {
-    artistImageObserver.disconnect();
-    artistImageObserver = null;
-  }
+  const request = beginSearchRequest();
 
   // Use the enhanced artist with display name
-  currentArtist = artist._displayName
+  const selectedArtist = artist._displayName
     ? {
         ...artist,
         name: artist._displayName.primary, // Use the Latin name for album displays
         originalName: artist.name, // Keep the original for API calls
       }
     : artist;
+  currentArtist = selectedArtist;
 
   showLoading();
-
-  currentLoadingController = new AbortController();
+  modalElements.albumList.innerHTML = '';
+  if (modalElements.backToArtists) {
+    modalElements.backToArtists.style.display = '';
+  }
 
   try {
-    // Race all album providers - first to return wins
-    const result = await searchArtistAlbumsRacing(
-      currentArtist.name,
-      artist.id
+    const result = await searchArtistAlbums(
+      selectedArtist.name,
+      selectedArtist.id,
+      request.signal
     );
+    if (!isSearchRequestCurrent(request)) return;
 
-    if (!result || result.albums.length === 0) {
+    if (!result.nextOffset && result.albums.length === 0) {
       showToast('No albums or EPs found for this artist', 'error');
       showAlbumResults();
       modalElements.albumList.innerHTML =
@@ -1940,15 +1665,69 @@ async function selectArtist(artist) {
     }
 
     // Display albums - covers will be fetched via coverArtProviders
-    displayAlbumResultsWithProvider(result.albums, result.name);
+    displayAlbumResultsWithProvider(
+      result.albums,
+      result.name,
+      selectedArtist,
+      request
+    );
+    appendDiscographyPageButton(result, selectedArtist, request);
   } catch (error) {
-    if (error.name === 'AbortError') {
+    if (!isSearchRequestCurrent(request) || error.name === 'AbortError') {
       // Album loading cancelled - expected behavior
       return;
     }
-    showToast('Error fetching albums', 'error');
-    showArtistResults();
+    showToast(
+      'Could not load albums from MusicBrainz. Please try again.',
+      'error'
+    );
+    await displayArtistResults(currentArtistResults);
   }
+}
+
+function appendDiscographyPageButton(result, artist, request) {
+  if (result.nextOffset === null) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'w-full py-3 text-sm text-gray-400 hover:text-white';
+  button.textContent = 'Load more albums';
+  button.onclick = async () => {
+    if (button.disabled || !isSearchRequestCurrent(request)) return;
+    button.disabled = true;
+    button.textContent = 'Loading more albums...';
+    try {
+      const page = await searchArtistAlbums(
+        artist.name,
+        artist.id,
+        request.signal,
+        result.nextOffset
+      );
+      if (!isSearchRequestCurrent(request)) return;
+      const byId = new Map(
+        [...result.albums, ...page.albums].map((album) => [
+          album.releaseGroupId,
+          album,
+        ])
+      );
+      result.albums = [...byId.values()].sort((a, b) =>
+        b.releaseDate.localeCompare(a.releaseDate)
+      );
+      result.nextOffset = page.nextOffset;
+      displayAlbumResultsWithProvider(
+        result.albums,
+        result.name,
+        artist,
+        request
+      );
+      appendDiscographyPageButton(result, artist, request);
+    } catch (_error) {
+      if (!isSearchRequestCurrent(request)) return;
+      button.disabled = false;
+      button.textContent = 'Retry loading more albums';
+      showToast('Could not load more albums. Please try again.', 'error');
+    }
+  };
+  modalElements.albumList.appendChild(button);
 }
 
 // Country code resolution is now handled server-side during album save.
@@ -1967,24 +1746,26 @@ function formatCountryCode(countryCode) {
 }
 
 // Get combined country names for multiple artists
-async function getCombinedArtistCountries(artistCredits) {
+async function getCombinedArtistCountries(artistCredits, signal) {
   const countries = [];
 
   for (const credit of artistCredits) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     const id = credit.artist?.id;
     if (!id) continue;
 
     try {
       const endpoint = `artist/${id}?fmt=json`;
       // NORMAL priority: needed for display but not critical
-      const artistData = await rateLimitedFetch(endpoint, 'normal');
+      const artistData = await rateLimitedFetch(endpoint, 'normal', signal);
       if (artistData && artistData.country) {
         const name = formatCountryCode(artistData.country);
         if (name && !countries.includes(name)) {
           countries.push(name);
         }
       }
-    } catch (_err) {
+    } catch (error) {
+      if (signal?.aborted || error.name === 'AbortError') throw error;
       // Error fetching artist country - non-critical
     }
   }
@@ -1992,12 +1773,15 @@ async function getCombinedArtistCountries(artistCredits) {
   return countries.join(' / ');
 }
 
-async function searchAlbums(query) {
+async function searchAlbums(query, signal) {
   const endpoint = `release-group/?query=${encodeURIComponent(query)}&type=album|ep&fmt=json&limit=20`;
   // HIGH priority: user-initiated album search
-  const data = await rateLimitedFetch(endpoint, 'high');
+  const data = await rateLimitedFetch(endpoint, 'high', signal);
 
-  let releaseGroups = data['release-groups'] || [];
+  if (!Array.isArray(data['release-groups'])) {
+    throw new Error('Invalid MusicBrainz album response');
+  }
+  let releaseGroups = data['release-groups'];
 
   // Filter and sort similar to getArtistReleaseGroups
   const today = new Date();
@@ -2028,7 +1812,13 @@ async function searchAlbums(query) {
 }
 
 // Display albums from provider system - handles albums with/without coverUrl
-function displayAlbumResultsWithProvider(albums, providerName) {
+function displayAlbumResultsWithProvider(
+  albums,
+  providerName,
+  artist,
+  request
+) {
+  if (!isSearchRequestCurrent(request)) return;
   showAlbumResults();
   modalElements.albumList.innerHTML = '';
 
@@ -2068,14 +1858,14 @@ function displayAlbumResultsWithProvider(albums, providerName) {
     // If we have a coverUrl from the provider, show it directly
     const hasCover = !!album.coverArt;
     const coverHtml = hasCover
-      ? `<img src="${album.coverArt}" 
-             alt="${album.title.replace(/"/g, '&quot;')}"
+      ? `<img src="${escapeHtmlAttr(album.coverArt)}"
+             alt="${escapeHtmlAttr(album.title)}"
              class="w-20 h-20 object-cover rounded-lg">`
-      : `<img data-artist="${currentArtist.name.replace(/"/g, '&quot;')}"
-             data-album="${album.title.replace(/"/g, '&quot;')}"
-             data-release-group-id="${album.id}"
+      : `<img data-artist="${escapeHtmlAttr(artist.name)}"
+             data-album="${escapeHtmlAttr(album.title)}"
+             data-release-group-id="${escapeHtmlAttr(album.id)}"
              data-index="${index}"
-             alt="${album.title.replace(/"/g, '&quot;')}"
+             alt="${escapeHtmlAttr(album.title)}"
              class="w-20 h-20 object-cover rounded-lg"
              src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">`;
 
@@ -2093,14 +1883,15 @@ function displayAlbumResultsWithProvider(albums, providerName) {
         ${coverHtml}
       </div>
       <div class="flex-1 min-w-0">
-        <div class="font-semibold text-white truncate text-lg" title="${album.title}">${album.title}</div>
-        <div class="text-sm text-gray-400 mt-1">${releaseDate} • ${albumType}</div>
-        <div class="text-xs text-gray-500 mt-1">${currentArtist.name}</div>
+        <div class="font-semibold text-white truncate text-lg" title="${escapeHtmlAttr(album.title)}">${escapeHtml(album.title)}</div>
+        <div class="text-sm text-gray-400 mt-1">${escapeHtml(releaseDate)} • ${escapeHtml(albumType)}</div>
+        <div class="text-xs text-gray-500 mt-1">${escapeHtml(artist.name)}</div>
       </div>
     `;
 
     // Click handler
     albumEl.onclick = async () => {
+      if (!isSearchRequestCurrent(request)) return;
       const coverContainer = albumEl.querySelector('.album-cover-container');
 
       coverContainer.innerHTML = `
@@ -2109,6 +1900,7 @@ function displayAlbumResultsWithProvider(albums, providerName) {
         </div>
       `;
 
+      currentArtist = artist;
       addAlbumToList(album);
     };
 
@@ -2116,17 +1908,14 @@ function displayAlbumResultsWithProvider(albums, providerName) {
 
     const renderedImg = albumEl.querySelector('.album-cover-container img');
     if (hasCover && renderedImg) {
-      renderedImg.onerror = () => {
-        renderedImg.onerror = null;
-        renderedImg.parentElement.classList.add('animate-pulse');
-        loadAlbumCover(
-          renderedImg,
-          currentArtist.name,
-          album.title,
-          album.id,
-          index
-        );
-      };
+      loadAlbumCover(
+        renderedImg,
+        artist.name,
+        album.title,
+        album.id,
+        album,
+        request
+      );
     }
 
     // If no cover from provider, lazy-load via the cover art provider system
@@ -2135,10 +1924,11 @@ function displayAlbumResultsWithProvider(albums, providerName) {
       if (img) {
         albumCoverObserver.observe(img, {
           img,
-          artistName: currentArtist.name,
+          artistName: artist.name,
           albumTitle: album.title,
           releaseGroupId: album.id,
-          index,
+          album,
+          request,
         });
       }
     }
@@ -2206,7 +1996,7 @@ async function addAlbumToList(releaseGroup) {
 
   // Do not block the optimistic add on image proxying/resizing. The server-side
   // cover fetch queue resolves and stores covers after the list save.
-  addAlbumToCurrentList(album);
+  return addAlbumToCurrentList(album);
 }
 
 async function addAlbumToCurrentList(album) {
@@ -2216,104 +2006,7 @@ async function addAlbumToCurrentList(album) {
     return;
   }
 
-  const currentListId = getCurrentListId();
-
-  try {
-    const currentListData = getListData(currentListId);
-    if (!currentListData) {
-      showToast('No list selected', 'error');
-      return;
-    }
-
-    const { resolved, cancelled, alreadyInList, usedExisting } =
-      await resolveAndDedup(album, currentListData);
-
-    if (cancelled) return;
-
-    if (alreadyInList) {
-      closeAddAlbumModal();
-      const label = usedExisting ? ' (metadata updated)' : '';
-      showToast(
-        `"${album.album}" is already in this list${label}`,
-        usedExisting ? 'info' : 'error'
-      );
-      if (usedExisting && currentListId) selectList(currentListId);
-      return;
-    }
-
-    if (!currentListId) {
-      showToast('No list selected', 'error');
-      return;
-    }
-
-    // New array reference so displayAlbums sees a fresh fingerprint
-    // and classifies the optimistic add as a single-row insert
-    const updatedListData = [...currentListData, resolved];
-    setListData(currentListId, updatedListData);
-
-    await persistAddedAlbum(
-      currentListId,
-      updatedListData,
-      `Added "${resolved.album}" by ${resolved.artist} to the list`
-    );
-  } catch (_error) {
-    showToast('Error adding album to list', 'error');
-    rollbackOptimisticAdd(currentListId);
-  }
-}
-
-/**
- * Persist a just-added album with an optimistic UI.
- *
- * The album is rendered and the modal closed immediately; we then await only
- * the fast, MusicBrainz-free incremental save. Tracks, covers and native
- * spellings are resolved by the server's background queues (see
- * `triggerAlbumBackgroundFetches`), so the user is never blocked on MusicBrainz.
- * Server-merged metadata is reconciled afterwards without blocking.
- *
- * @param {string} listId - Current list ID
- * @param {Array} listData - List array that already contains the new album
- * @param {string} successMessage - Toast shown once the save succeeds
- */
-async function persistAddedAlbum(listId, listData, successMessage) {
-  displayAlbums(listData);
-  closeAddAlbumModal();
-
-  await saveList(listId, listData);
-  showToast(successMessage);
-
-  reconcileListFromServer(listId).catch(() => {});
-}
-
-/**
- * Undo an optimistic add when the save fails: drop the last-pushed album and
- * re-render so the UI matches persisted state.
- *
- * @param {string} listId - Current list ID
- */
-function rollbackOptimisticAdd(listId) {
-  const data = getListData(listId);
-  if (!data || !listId) return;
-  // New array reference: popping in place would desync the fingerprint
-  // cached against the optimistic array, silently skipping a retried add
-  const rolledBack = data.slice(0, -1);
-  setListData(listId, rolledBack);
-  displayAlbums(rolledBack, { forceFullRebuild: true });
-}
-
-/**
- * Re-fetch the list from the server to pick up server-merged metadata
- * (canonical names, resolved country names, native spellings) and refresh
- * playcounts. Runs in the background; bails if the user navigated away.
- *
- * @param {string} listId - List ID to reconcile
- */
-async function reconcileListFromServer(listId) {
-  const data = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
-  if (getCurrentListId() !== listId) return;
-  setListData(listId, data);
-  displayAlbums(data);
-  fetchAndDisplayPlaycounts(listId).catch(() => {});
+  return persistAlbumAddition(album, captureAlbumAddContext());
 }
 
 /**

@@ -969,6 +969,7 @@ registerAppWindowGlobals({
 
 registerListActions({
   saveList,
+  getListSaveState: appListOperations.getListSaveState,
   selectList,
   displayAlbums,
   fetchAndDisplayPlaycounts,

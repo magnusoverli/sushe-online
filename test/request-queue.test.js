@@ -34,7 +34,7 @@ describe('MusicBrainzQueue', () => {
     it('should initialize with default values', () => {
       const defaultQueue = new MusicBrainzQueue();
       assert.strictEqual(defaultQueue.minInterval, 1000);
-      assert.strictEqual(defaultQueue.timeout, 30000);
+      assert.strictEqual(defaultQueue.timeout, 10000);
       assert.strictEqual(defaultQueue.maxRetries, 2);
       assert.deepStrictEqual(defaultQueue.queue, []);
       assert.strictEqual(defaultQueue.processing, false);

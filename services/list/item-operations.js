@@ -1,6 +1,18 @@
 const { triggerPlaycountRefresh } = require('./item-playcount-refresh');
 const { ensureDb } = require('../../db/postgres');
 
+function toBackgroundItem({ album, upsertResult }) {
+  return {
+    album_id: upsertResult.albumId,
+    artist: album.artist,
+    album: album.album,
+    needsCoverFetch: upsertResult.needsCoverFetch,
+    needsTracksFetch: upsertResult.needsTracksFetch,
+    needsSummaryFetch: upsertResult.needsSummaryFetch,
+    wasInserted: upsertResult.wasInserted,
+  };
+}
+
 function buildBatchInsertPayload(itemsToInsert, listId, timestamp) {
   const payload = {
     itemIds: [],
@@ -67,15 +79,11 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
       );
     }
 
-    return { album, index, albumId: upsertResult.albumId };
+    return { album, index, albumId: upsertResult.albumId, upsertResult };
   });
 
   await applySourceObservations(ctx, client, canonicalEntries, result);
-  result.backgroundItems = canonicalEntries.map(({ album, albumId }) => ({
-    album_id: albumId,
-    artist: album.artist,
-    album: album.album,
-  }));
+  result.backgroundItems = canonicalEntries.map(toBackgroundItem);
 
   const itemsToInsert = canonicalEntries.map(({ album, albumId }, index) => {
     return {
@@ -288,7 +296,9 @@ async function processAdditions(ctx, client, list, added, timestamp) {
     if (mapped.addedItem) result.addedItems.push(mapped.addedItem);
   }
 
-  result.backgroundItems = [...result.addedItems, ...result.duplicateAlbums];
+  result.backgroundItems = canonicalEntries
+    .filter(({ albumId }) => albumId)
+    .map(toBackgroundItem);
 
   if (itemsToInsert.length === 0) return result;
 

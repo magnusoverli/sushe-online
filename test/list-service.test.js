@@ -979,6 +979,9 @@ describe('list-service write operations', () => {
             {
               albumId: '01ce764b-626f-43a7-b73a-378bcb4c03ea',
               needsCoverFetch: true,
+              needsTracksFetch: false,
+              needsSummaryFetch: false,
+              wasInserted: false,
             },
           ],
         ])
@@ -1029,9 +1032,12 @@ describe('list-service write operations', () => {
       [
         {
           album_id: '01ce764b-626f-43a7-b73a-378bcb4c03ea',
-          _id: '313233343536373839303132',
           artist: 'Panopticon',
           album: 'Det Hjemsokte Hjertet',
+          needsCoverFetch: true,
+          needsTracksFetch: false,
+          needsSummaryFetch: false,
+          wasInserted: false,
         },
       ]
     );

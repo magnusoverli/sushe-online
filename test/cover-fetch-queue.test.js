@@ -156,8 +156,8 @@ describe('CoverFetchQueue', () => {
       assert.ok(mockFetch.calls[0].url.includes('coverartarchive.org'));
       assert.ok(mockFetch.calls[0].url.includes(musicbrainzId));
 
-      assert.strictEqual(mockPool.query.mock.calls.length, 1);
-      const dbCall = mockPool.query.mock.calls[0].arguments;
+      assert.strictEqual(mockPool.query.mock.calls.length, 2);
+      const dbCall = mockPool.query.mock.calls[1].arguments;
       assert.ok(dbCall[0].includes('UPDATE albums'));
       assert.strictEqual(dbCall[1][1], 'JPEG');
     });
@@ -200,7 +200,7 @@ describe('CoverFetchQueue', () => {
       assert.ok(
         mockFetch.calls.some((c) => c.url.includes('itunes.apple.com/search'))
       );
-      assert.strictEqual(mockPool.query.mock.calls.length, 1);
+      assert.strictEqual(mockPool.query.mock.calls.length, 2);
     });
 
     it('should fall back to Deezer when both CAA and iTunes fail', async () => {
@@ -230,7 +230,7 @@ describe('CoverFetchQueue', () => {
       await wait(150);
 
       assert.ok(mockFetch.calls.some((c) => c.url.includes('api.deezer.com')));
-      assert.strictEqual(mockPool.query.mock.calls.length, 1);
+      assert.strictEqual(mockPool.query.mock.calls.length, 2);
     });
 
     it('should skip CoverArtArchive for manual- prefixed IDs', async () => {
@@ -343,9 +343,9 @@ describe('CoverFetchQueue', () => {
       );
 
       assert.strictEqual(mockFetch.calls.length, 1);
-      assert.strictEqual(mockPool.query.mock.calls.length, 1);
+      assert.strictEqual(mockPool.query.mock.calls.length, 2);
 
-      const updateCall = mockPool.query.mock.calls[0].arguments;
+      const updateCall = mockPool.query.mock.calls[1].arguments;
       assert.strictEqual(updateCall[1].length, 5);
       assert.ok(Buffer.isBuffer(updateCall[1][0]));
       assert.strictEqual(updateCall[1][1], 'JPEG');
@@ -360,7 +360,7 @@ describe('CoverFetchQueue', () => {
         if (sql.includes('SELECT DISTINCT l.user_id')) {
           return { rows: [{ user_id: 'user1' }], rowCount: 1 };
         }
-        return { rows: [], rowCount: 1 };
+        return { rows: [{ album_id: musicbrainzId }], rowCount: 1 };
       });
       const responseCache = { invalidate: mock.fn() };
       const albumMetadataUpdated = mock.fn();
@@ -510,7 +510,8 @@ describe('CoverFetchQueue', () => {
 
       await queue.fetchAndStoreCover(musicbrainzId, 'Artist', 'Album');
 
-      assert.strictEqual(mockPool.query.mock.calls.length, 0);
+      assert.strictEqual(mockPool.query.mock.calls.length, 1);
+      assert.match(mockPool.query.mock.calls[0].arguments[0], /^SELECT /);
     });
 
     it('should use cover_big if cover_xl is not available', async () => {

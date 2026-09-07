@@ -10,6 +10,10 @@ export function saveList(...args) {
   return impl.saveList(...args);
 }
 
+export function getListSaveState(listId) {
+  return impl.getListSaveState(listId);
+}
+
 export function selectList(...args) {
   return impl.selectList(...args);
 }

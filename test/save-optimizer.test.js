@@ -40,9 +40,14 @@ describe('save-optimizer', async () => {
       assert.strictEqual(result, null);
     });
 
-    it('returns null when oldSnapshot is empty', () => {
+    it('adds incrementally from a known empty snapshot', () => {
       const result = computeListDiff([], [{ album_id: 'a1' }]);
-      assert.strictEqual(result, null);
+      assert.deepStrictEqual(result, {
+        added: [{ album_id: 'a1', position: 1 }],
+        removed: [],
+        updated: [],
+        totalChanges: 1,
+      });
     });
 
     it('detects no changes when lists are identical', () => {

@@ -128,10 +128,10 @@ describe('TrackFetchQueue', () => {
       // Wait for async processing
       await wait(100);
 
-      assert.strictEqual(mockPool.query.mock.calls.length, 1);
+      assert.strictEqual(mockPool.query.mock.calls.length, 2);
 
       // Verify database update
-      const dbCall = mockPool.query.mock.calls[0].arguments;
+      const dbCall = mockPool.query.mock.calls[1].arguments;
       assert.ok(dbCall[0].includes('UPDATE albums'));
       assert.ok(dbCall[0].includes('tracks'));
     });
@@ -414,10 +414,10 @@ describe('TrackFetchQueue', () => {
 
       await queue.fetchAndStoreTracks('test-id', 'Artist Name', 'Album Name');
 
-      assert.strictEqual(mockPool.query.mock.calls.length, 1);
+      assert.strictEqual(mockPool.query.mock.calls.length, 2);
 
       // Verify database update parameters
-      const updateCall = mockPool.query.mock.calls[0].arguments;
+      const updateCall = mockPool.query.mock.calls[1].arguments;
       assert.ok(updateCall[0].includes('UPDATE albums'));
       assert.ok(updateCall[0].includes('tracks'));
       assert.strictEqual(updateCall[1].length, 2); // [tracks JSON, albumId]
@@ -447,7 +447,7 @@ describe('TrackFetchQueue', () => {
       const query = mock.fn(async (sql) =>
         sql.includes('SELECT DISTINCT l.user_id')
           ? { rows: [{ user_id: 'user-1' }], rowCount: 1 }
-          : { rows: [], rowCount: 1 }
+          : { rows: [{ album_id: 'test-id' }], rowCount: 1 }
       );
       const responseCache = { invalidate: mock.fn() };
       const albumMetadataUpdated = mock.fn();
@@ -492,7 +492,8 @@ describe('TrackFetchQueue', () => {
       await queue.fetchAndStoreTracks('test-id', 'Artist', 'Album');
 
       // Should not update database
-      assert.strictEqual(mockPool.query.mock.calls.length, 0);
+      assert.strictEqual(mockPool.query.mock.calls.length, 1);
+      assert.match(mockPool.query.mock.calls[0].arguments[0], /^SELECT /);
     });
 
     it('should throw if db is not initialized', async () => {
@@ -507,23 +508,13 @@ describe('TrackFetchQueue', () => {
       );
     });
 
-    it('should log warning if album not found in database', async () => {
-      const mockFetch = createMockFetch({
-        deezerSearch: {
-          ok: true,
-          json: () => Promise.resolve({ data: [{ id: 12345 }] }),
-        },
-        deezerAlbum: {
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              tracks: { data: [{ title: 'Track', duration: 180 }] },
-            }),
-        },
-      });
+    it('should skip fetching if album not found in database', async () => {
+      const mockFetch = mock.fn();
 
-      // Mock database update returning 0 rows
-      const queryNoRows = mock.fn(() => Promise.resolve({ rowCount: 0 }));
+      // Missing albums do not need external lookups.
+      const queryNoRows = mock.fn(() =>
+        Promise.resolve({ rows: [], rowCount: 0 })
+      );
       const mockPoolNoRows = {
         query: queryNoRows,
         raw: queryNoRows,
@@ -537,12 +528,10 @@ describe('TrackFetchQueue', () => {
 
       await queue.fetchAndStoreTracks('nonexistent-id', 'Artist', 'Album');
 
-      // Should have called warn
-      assert.ok(
-        mockLogger.warn.mock.calls.some(
-          (call) => call.arguments[0] === 'Album not found when updating tracks'
-        )
-      );
+      assert.strictEqual(queryNoRows.mock.calls.length, 1);
+      assert.match(queryNoRows.mock.calls[0].arguments[0], /^SELECT /);
+      assert.strictEqual(mockFetch.mock.calls.length, 0);
+      assert.strictEqual(mockLogger.info.mock.calls.length, 0);
     });
   });
 

@@ -15,8 +15,50 @@ const { createAsyncHandler } = require('../../middleware/async-handler');
 const { SUSHE_USER_AGENT } = require('../../utils/musicbrainz-helpers');
 const { validateUnfurlTarget } = require('../../utils/unfurl-url');
 const {
+  createPublicProviderRequests,
+} = require('../../services/public-provider-requests');
+const {
   createTrackResolutionService,
 } = require('../../services/track-resolution-service');
+
+const DISCOGRAPHY_CACHE_POLICY = {
+  ttlMs: 10 * 60 * 1000,
+  staleTtlMs: 24 * 60 * 60 * 1000,
+};
+
+function discographyCachePolicy(url) {
+  const { pathname, searchParams: params } = new URL(url);
+  if (pathname !== '/ws/2/release-group' || params.get('fmt') !== 'json')
+    return;
+  const allowed = ['query', 'artist', 'type', 'inc', 'fmt', 'limit', 'offset'];
+  for (const key of params.keys()) {
+    if (!allowed.includes(key) || params.getAll(key).length !== 1) return;
+  }
+  if (params.has('limit') && !/^(?:[1-9]\d?|100)$/.test(params.get('limit')))
+    return;
+  if (params.has('offset') && !/^\d+$/.test(params.get('offset'))) return;
+  const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+  if (params.has('query')) {
+    // Deliberately recognize only the indexed discography query, not arbitrary Lucene.
+    if (params.has('artist') || params.has('type') || params.has('inc')) return;
+    if (
+      !new RegExp(
+        `^arid:${uuid} AND \\(primarytype:album OR primarytype:ep\\)$`,
+        'i'
+      ).test(params.get('query'))
+    )
+      return;
+  } else {
+    if (!new RegExp(`^${uuid}$`, 'i').test(params.get('artist') || '')) return;
+    if (
+      params.has('type') &&
+      !/^(album|ep|album\|ep)$/i.test(params.get('type'))
+    )
+      return;
+    if (params.has('inc') && params.get('inc') !== 'artist-credits') return;
+  }
+  return DISCOGRAPHY_CACHE_POLICY;
+}
 
 /**
  * Register proxy routes
@@ -37,6 +79,23 @@ module.exports = (app, deps) => {
 
   const asyncHandler = createAsyncHandler(logger);
   const trackService = createTrackResolutionService({ fetch, mbFetch, logger });
+  const providerRequests = createPublicProviderRequests(
+    deps.providerRequestOptions
+  );
+
+  async function publicJson(req, res, url, load, policy) {
+    try {
+      const data = await providerRequests.get(req, res, url, load, policy);
+      if (!res.destroyed) res.json(data);
+    } catch (err) {
+      if (res.destroyed || req.aborted) return;
+      if (err.name === 'TimeoutError') {
+        res.status(504).json({ error: 'Provider request timed out' });
+        return;
+      }
+      throw err;
+    }
+  }
 
   /**
    * Report a failure that came from the upstream service with that service's
@@ -120,22 +179,25 @@ module.exports = (app, deps) => {
   app.get(
     '/api/proxy/deezer/artist',
     ensureAuthAPI,
-    cacheConfigs.public,
     asyncHandler(async (req, res) => {
       const { q } = req.query;
-      if (!q) {
+      if (typeof q !== 'string' || !q.trim()) {
         return res.status(400).json({ error: 'Query parameter q is required' });
       }
 
       const url = `https://api.deezer.com/search/artist?q=${encodeURIComponent(q)}&limit=30`;
-      const response = await fetch(url);
+      await publicJson(req, res, url, async (signal) => {
+        const response = await fetch(url, { signal });
 
-      if (!response.ok) {
-        throw new Error(`Deezer API responded with status ${response.status}`);
-      }
+        if (!response.ok) {
+          throw new Error(
+            `Deezer API responded with status ${response.status}`
+          );
+        }
 
-      const data = await response.json();
-      res.json(data);
+        const data = await response.json();
+        return data;
+      });
     }, 'fetching artist from Deezer')
   );
 
@@ -166,11 +228,23 @@ module.exports = (app, deps) => {
   app.get(
     '/api/proxy/musicbrainz',
     ensureAuthAPI,
-    cacheConfigs.public,
     asyncHandler(
       withUpstreamStatus(async (req, res) => {
         const { endpoint, priority } = req.query;
-        if (!endpoint) {
+        if (
+          typeof endpoint !== 'string' ||
+          !endpoint.trim() ||
+          Array.from(endpoint).some(
+            (char) => char < ' ' || char === '\u007f'
+          ) ||
+          endpoint.startsWith('/') ||
+          endpoint.includes('#') ||
+          endpoint.includes('\\') ||
+          endpoint
+            .split('?')[0]
+            .split('/')
+            .some((part) => /^(\.|%2e){1,2}$/i.test(part))
+        ) {
           return res
             .status(400)
             .json({ error: 'Query parameter endpoint is required' });
@@ -180,71 +254,106 @@ module.exports = (app, deps) => {
         // high: user-initiated searches, album lists
         // normal: artist metadata for display
         // low: background image fetching
-        const requestPriority = priority || 'normal';
+        const requestPriority = ['high', 'normal', 'low'].includes(priority)
+          ? priority
+          : 'normal';
 
+        // Coalesced callers retain the first caller's scheduling priority;
+        // mbFetch currently exposes no queued-request promotion handle.
         // Use the MusicBrainz rate-limited fetch function with priority
         const url = `https://musicbrainz.org/ws/2/${endpoint}`;
-        const response = await mbFetch(
+        if (!new URL(url).pathname.startsWith('/ws/2/')) {
+          return res
+            .status(400)
+            .json({ error: 'Invalid MusicBrainz endpoint' });
+        }
+        const policy = discographyCachePolicy(url);
+        await publicJson(
+          req,
+          res,
           url,
-          {
-            headers: {
-              'User-Agent': `SuSheOnline/1.0 ( ${process.env.BASE_URL || 'https://github.com/yourusername/sushe-online'} )`,
-              Accept: 'application/json',
-            },
+          async (signal, { background }) => {
+            const response = await mbFetch(
+              url,
+              {
+                signal,
+                headers: {
+                  'User-Agent': `SuSheOnline/1.0 ( ${process.env.BASE_URL || 'https://github.com/yourusername/sushe-online'} )`,
+                  Accept: 'application/json',
+                },
+              },
+              background ? 'low' : requestPriority
+            );
+
+            if (!response.ok) {
+              const error = /** @type {Error & { status?: number }} */ (
+                new Error(
+                  `MusicBrainz API responded with status ${response.status}`
+                )
+              );
+              error.status = response.status;
+              throw error;
+            }
+
+            // Validate Content-Type before parsing
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+              const error =
+                /** @type {Error & { status?: number, contentType?: string }} */ (
+                  new Error(
+                    `Unexpected Content-Type: ${contentType}. Expected application/json`
+                  )
+                );
+              error.status = response.status;
+              error.contentType = contentType;
+              throw error;
+            }
+
+            // Parse JSON with error handling
+            let data;
+            try {
+              data = await response.json();
+            } catch (parseError) {
+              // Try to get response body for debugging
+              let bodyPreview = '';
+              try {
+                const text = await response.text();
+                bodyPreview = text.substring(0, 200);
+              } catch (_textError) {
+                // Ignore if we can't read body
+              }
+
+              const jsonError =
+                /** @type {Error & { status?: number, contentType?: string, bodyPreview?: string }} */ (
+                  new Error(
+                    `Failed to parse JSON response: ${parseError.message}`
+                  )
+                );
+              jsonError.name = parseError.name || 'SyntaxError';
+              jsonError.status = response.status;
+              jsonError.contentType = contentType;
+              jsonError.bodyPreview = bodyPreview;
+              throw jsonError;
+            }
+
+            if (
+              policy &&
+              (!data ||
+                !Array.isArray(data['release-groups']) ||
+                'error' in data ||
+                'errors' in data ||
+                'errorMessage' in data)
+            ) {
+              throw Object.assign(
+                new Error('Invalid MusicBrainz discography response'),
+                { status: 502 }
+              );
+            }
+
+            return data;
           },
-          requestPriority
+          policy
         );
-
-        if (!response.ok) {
-          const error = /** @type {Error & { status?: number }} */ (
-            new Error(
-              `MusicBrainz API responded with status ${response.status}`
-            )
-          );
-          error.status = response.status;
-          throw error;
-        }
-
-        // Validate Content-Type before parsing
-        const contentType = response.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) {
-          const error =
-            /** @type {Error & { status?: number, contentType?: string }} */ (
-              new Error(
-                `Unexpected Content-Type: ${contentType}. Expected application/json`
-              )
-            );
-          error.status = response.status;
-          error.contentType = contentType;
-          throw error;
-        }
-
-        // Parse JSON with error handling
-        let data;
-        try {
-          data = await response.json();
-        } catch (parseError) {
-          // Try to get response body for debugging
-          let bodyPreview = '';
-          try {
-            const text = await response.text();
-            bodyPreview = text.substring(0, 200);
-          } catch (_textError) {
-            // Ignore if we can't read body
-          }
-
-          const jsonError =
-            /** @type {Error & { status?: number, contentType?: string, bodyPreview?: string }} */ (
-              new Error(`Failed to parse JSON response: ${parseError.message}`)
-            );
-          jsonError.name = parseError.name || 'SyntaxError';
-          jsonError.status = response.status;
-          jsonError.contentType = contentType;
-          jsonError.bodyPreview = bodyPreview;
-          throw jsonError;
-        }
-
-        res.json(data);
       }, 'MusicBrainz'),
       'fetching from MusicBrainz'
     )
@@ -254,31 +363,38 @@ module.exports = (app, deps) => {
   app.get(
     '/api/proxy/wikidata',
     ensureAuthAPI,
-    cacheConfigs.public,
     asyncHandler(async (req, res) => {
       const { entity, property } = req.query;
-      if (!entity || !property) {
+      if (
+        typeof entity !== 'string' ||
+        !/^Q\d+$/.test(entity) ||
+        typeof property !== 'string' ||
+        !/^P\d+$/.test(property)
+      ) {
         return res.status(400).json({
           error: 'Query parameters entity and property are required',
         });
       }
 
       const url = `https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=${encodeURIComponent(entity)}&property=${encodeURIComponent(property)}&format=json`;
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': SUSHE_USER_AGENT,
-          Accept: 'application/json',
-        },
+      await publicJson(req, res, url, async (signal) => {
+        const response = await fetch(url, {
+          signal,
+          headers: {
+            'User-Agent': SUSHE_USER_AGENT,
+            Accept: 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Wikidata API responded with status ${response.status}`
+          );
+        }
+
+        const data = await response.json();
+        return data;
       });
-
-      if (!response.ok) {
-        throw new Error(
-          `Wikidata API responded with status ${response.status}`
-        );
-      }
-
-      const data = await response.json();
-      res.json(data);
     }, 'fetching from Wikidata')
   );
 
@@ -288,36 +404,53 @@ module.exports = (app, deps) => {
   app.get(
     '/api/proxy/itunes',
     ensureAuthAPI,
-    cacheConfigs.public,
     asyncHandler(
       withUpstreamStatus(async (req, res) => {
         const { term, limit = 10 } = req.query;
-        if (!term) {
+        if (typeof term !== 'string' || !term.trim()) {
           return res.status(400).json({
             error: 'Query parameter term is required',
           });
         }
 
-        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&country=us&limit=${limit}`;
-        const response = await itunesProxyQueue.add(async () => {
-          return fetch(url, {
-            headers: {
-              'User-Agent': 'SuSheOnline/1.0',
-              Accept: 'application/json',
-            },
-          });
-        });
-
-        if (!response.ok) {
-          const err = /** @type {Error & { status?: number }} */ (
-            new Error(`iTunes API responded with status ${response.status}`)
-          );
-          err.status = response.status;
-          throw err;
+        if (
+          !['string', 'number'].includes(typeof limit) ||
+          !/^\d+$/.test(String(limit)) ||
+          !Number.isInteger(Number(limit)) ||
+          Number(limit) < 1 ||
+          Number(limit) > 200
+        ) {
+          return res
+            .status(400)
+            .json({ error: 'Limit must be an integer between 1 and 200' });
         }
+        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&country=us&limit=${Number(limit)}`;
+        await publicJson(req, res, url, async (signal) => {
+          const response = await itunesProxyQueue.add(
+            async () => {
+              signal.throwIfAborted();
+              return fetch(url, {
+                signal,
+                headers: {
+                  'User-Agent': 'SuSheOnline/1.0',
+                  Accept: 'application/json',
+                },
+              });
+            },
+            { signal }
+          );
 
-        const data = await response.json();
-        res.json(data);
+          if (!response.ok) {
+            const err = /** @type {Error & { status?: number }} */ (
+              new Error(`iTunes API responded with status ${response.status}`)
+            );
+            err.status = response.status;
+            throw err;
+          }
+
+          const data = await response.json();
+          return data;
+        });
       }, 'iTunes'),
       'fetching from iTunes'
     )

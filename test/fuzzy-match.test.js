@@ -9,6 +9,7 @@ const {
   levenshteinDistance,
   similarityRatio,
   normalizeForComparison,
+  normalizeAlbumKey,
   getTokens,
   jaccardSimilarity,
   calculateSimilarity,
@@ -74,6 +75,17 @@ describe('similarityRatio', () => {
 // ============================================
 
 describe('normalizeForComparison', () => {
+  it('preserves Unicode letters and numbers without splitting accented words', () => {
+    assert.strictEqual(
+      normalizeForComparison('\u6771\u4eac \uff12'),
+      '\u6771\u4eac \uff12'
+    );
+    assert.strictEqual(normalizeForComparison('Bj\u00f6rk'), 'bj\u00f6rk');
+    assert.strictEqual(normalizeForComparison('Bjo\u0308rk'), 'bj\u00f6rk');
+    assert.ok(isExactMatch('Bj\u00f6rk', 'Bjo\u0308rk'));
+    assert.ok(!isExactMatch('Bj\u00f6rk', 'Bj rk'));
+  });
+
   it('should lowercase and trim', () => {
     assert.strictEqual(
       normalizeForComparison('  HELLO World  '),
@@ -184,6 +196,19 @@ describe('jaccardSimilarity', () => {
 // ============================================
 
 describe('calculateSimilarity', () => {
+  it('does not treat punctuation-only or whitespace inputs as matching evidence', () => {
+    for (const [a, b] of [
+      ['!!!', '???'],
+      ['...', '...'],
+      [' ', '\t'],
+      ['()', 'Album'],
+    ]) {
+      assert.strictEqual(calculateSimilarity(a, b).score, 0);
+      assert.strictEqual(isExactMatch(a, b), false);
+    }
+    assert.strictEqual(isExactMatch('', ''), false);
+  });
+
   it('should return 1.0 for exact normalized match', () => {
     const result = calculateSimilarity('The Album', 'Album');
     assert.strictEqual(result.score, 1.0);
@@ -340,6 +365,33 @@ describe('isPotentialDuplicate', () => {
 // ============================================
 
 describe('findPotentialDuplicates', () => {
+  it('keeps unrelated Japanese names with different IDs distinct', () => {
+    const first = {
+      album_id: 'jp-1',
+      artist: '\u5b87\u591a\u7530\u30d2\u30ab\u30eb',
+      album: '\u521d\u604b',
+    };
+    const second = {
+      album_id: 'jp-2',
+      artist: '\u690e\u540d\u6797\u6a8e',
+      album: '\u52dd\u8a34\u30b9\u30c8\u30ea\u30c3\u30d7',
+    };
+    assert.notStrictEqual(
+      normalizeAlbumKey(first.artist, first.album),
+      normalizeAlbumKey(second.artist, second.album)
+    );
+    assert.deepStrictEqual(findPotentialDuplicates(first, [second]), []);
+    assert.strictEqual(
+      isPotentialDuplicate(first, second).shouldAutoMerge,
+      false
+    );
+    assert.strictEqual(
+      isPotentialDuplicate(first, { ...first, album_id: 'jp-3' })
+        .shouldAutoMerge,
+      true
+    );
+  });
+
   const candidates = [
     { album_id: '1', artist: 'Metallica', album: 'Master of Puppets' },
     { album_id: '2', artist: 'Pink Floyd', album: 'The Wall' },
