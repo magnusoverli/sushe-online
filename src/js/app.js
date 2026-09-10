@@ -114,7 +114,6 @@ import {
   getRealtimeSyncModule as getRealtimeSyncModuleInstance,
   setRealtimeSyncModule as setRealtimeSyncModuleInstance,
   markLocalSave,
-  wasRecentLocalSave,
   getLastSavedSnapshots,
   createListSnapshot,
   saveSnapshotToStorage,
@@ -228,6 +227,7 @@ const appListOperations = createAppListOperations({
   selectList,
   focusAlbum: albumDeepLinkFlash.flash,
   updateListNav,
+  updateHeaderTitle,
   setRecommendationYears,
   loadSnapshotFromStorage,
   getLastSavedSnapshots,
@@ -823,6 +823,8 @@ function initializeImportConflictHandling() {
 }
 
 const { initializeRealtimeSync } = createAppRealtimeSync({
+  getListSaveState: appListOperations.getListSaveState,
+  waitForListSaves: appListOperations.waitForListSaves,
   getRealtimeSyncModuleInstance,
   setRealtimeSyncModuleInstance,
   getCurrentListId,
@@ -831,7 +833,6 @@ const { initializeRealtimeSync } = createAppRealtimeSync({
   apiCall,
   updateAlbumSummaryInPlace: (albumId, summaryData) =>
     getAlbumDisplayModule().updateAlbumSummaryInPlace(albumId, summaryData),
-  wasRecentLocalSave,
   setListData,
   updateListNav,
   displayAlbums,
@@ -897,13 +898,15 @@ async function importList(name, albums, metadata = null) {
 // @param {string} listId - List ID
 // @param {Array} data - Album array
 // @param {number|null} year - Optional year for the list (required for new lists)
-export async function saveList(listId, data, year = undefined) {
-  return appListOperations.saveList(listId, data, year);
+export async function saveList(listId, data, year = undefined, options = {}) {
+  return appListOperations.saveList(listId, data, year, options);
 }
 
 // Select and display a list by ID
 const getListSelectionModule = createLazyModule(() =>
   createListSelection({
+    getListSaveState: appListOperations.getListSaveState,
+    waitForListSaves: appListOperations.waitForListSaves,
     setCurrentListId,
     setCurrentRecommendationsYear,
     getCurrentListId,
@@ -923,7 +926,6 @@ const getListSelectionModule = createLazyModule(() =>
     displayAlbums,
     prefetchPlaycountsForRender,
     fetchAndDisplayPlaycounts,
-    wasRecentLocalSave,
     clearCommunitySelection: communityViewer.clearSelection,
     showToast,
     logger: console,

@@ -9,67 +9,41 @@ const {
   resolveTrackPicks,
   processTrackBatches,
 } = require('./playlist-helpers');
+const { findTidalPlaylist } = require('./bound-playlist');
 
 /**
  * Create Tidal playlist service
  * @param {Object} deps - Dependencies
  * @param {Object} deps.logger - Logger instance
+ * @param {Object} [deps.bindings]
  * @returns {Object} - Tidal playlist service functions
  */
 // eslint-disable-next-line max-lines-per-function -- Factory function with complex playlist handling logic extracted from api.js
 function createTidalPlaylistService(deps) {
-  const { logger } = deps;
+  const { logger, bindings } = deps;
 
   const BASE_URL = 'https://openapi.tidal.com/v2';
 
-  async function findPlaylistByName(playlistName, headers) {
-    let offset = 0;
-
-    while (true) {
-      const resp = await fetch(
-        `${BASE_URL}/me/playlists?limit=50&offset=${offset}`,
-        {
-          headers,
-        }
-      );
-
-      if (!resp.ok) {
-        const errorText = await resp.text();
-        throw new Error(
-          `Failed to fetch Tidal playlists: ${resp.status} - ${errorText}`
-        );
-      }
-
-      const playlists = await resp.json();
-      const existing = playlists.data.find(
-        (p) => p.attributes.title === playlistName
-      );
-
-      if (existing) {
-        return existing;
-      }
-
-      if (playlists.data.length < 50) {
-        return null;
-      }
-
-      offset += 50;
-    }
-  }
-
   /**
    * Check if playlist exists in Tidal
-   * @param {string} playlistName - Name of the playlist
+   * @param {string} _playlistName - Display label (not an identifier)
    * @param {Object} auth - Authentication object with access_token
    * @returns {Promise<boolean>} - Whether playlist exists
    */
-  async function checkPlaylistExists(playlistName, auth) {
+  async function checkPlaylistExists(_playlistName, auth, user, listId) {
     const headers = {
       Authorization: `Bearer ${auth.access_token}`,
       Accept: 'application/vnd.api+json',
     };
     try {
-      const existing = await findPlaylistByName(playlistName, headers);
+      if (!bindings || !user?._id || !listId) return false;
+      const response = await fetch(`${BASE_URL}/me`, { headers });
+      if (!response.ok) throw new Error('Unable to verify Tidal account');
+      const profile = await response.json();
+      const accountId = profile.data?.id || profile.id;
+      if (!accountId) throw new Error('Missing Tidal account identity');
+      const id = await bindings.get(user._id, listId, 'tidal', accountId);
+      const existing = await findTidalPlaylist(id, headers);
       return Boolean(existing);
     } catch (_err) {
       return false;
@@ -206,11 +180,18 @@ function createTidalPlaylistService(deps) {
     if (!profileResp.ok) {
       throw new Error(`Failed to get Tidal profile: ${profileResp.status}`);
     }
-    await profileResp.json();
+    const profile = await profileResp.json();
+    const accountId = profile.data?.id || profile.id;
+    if (bindings && !accountId)
+      throw new Error('Missing Tidal account identity');
 
     // Check if playlist exists
     let playlistId = null;
-    const existingPlaylist = await findPlaylistByName(playlistName, headers);
+    const boundId =
+      bindings && result.listId
+        ? await bindings.get(user._id, result.listId, 'tidal', accountId)
+        : null;
+    const existingPlaylist = await findTidalPlaylist(boundId, headers);
     if (existingPlaylist) {
       playlistId = existingPlaylist.id;
     }
@@ -249,6 +230,14 @@ function createTidalPlaylistService(deps) {
       if (!playlistId) {
         throw new Error('Tidal playlist creation returned no playlist id');
       }
+      if (bindings && result.listId)
+        await bindings.set(
+          user._id,
+          result.listId,
+          'tidal',
+          accountId,
+          playlistId
+        );
       result.playlistUrl = `https://tidal.com/browse/playlist/${playlistId}`;
     } else {
       result.playlistUrl = `https://tidal.com/browse/playlist/${playlistId}`;

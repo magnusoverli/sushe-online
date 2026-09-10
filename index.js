@@ -270,6 +270,7 @@ const ensureAuthAPI = createEnsureAuthAPI({
   validateExtensionToken,
   recordActivity: (req, queryable) => recordActivityBase(req, queryable),
   logger,
+  csrfProtection,
 });
 
 const deps = {
@@ -284,7 +285,8 @@ const deps = {
   isTokenValid,
   isTokenUsable,
   csrfProtection,
-  ensureAuth,
+  ensureAuth: (req, res, next) =>
+    ensureAuth(req, res, () => csrfProtection(req, res, next)),
   ensureAuthAPI,
   ensureAdmin,
   rateLimitAdminRequest,
@@ -435,7 +437,7 @@ ready
     initializeQueues(db, { coverCache, responseCache });
 
     // Set up WebSocket server with session middleware
-    setupWebSocket(httpServer, sessionMiddleware);
+    setupWebSocket(httpServer, sessionMiddleware, { authService });
     app.locals.broadcast = broadcast;
 
     httpServer.listen(PORT, () => {

@@ -12,6 +12,7 @@
  */
 
 import { isAlbumInList } from '../utils/album-list-utils.js';
+import { getListRevision } from './list-revisions.js';
 
 /**
  * Transfer (move or copy) an album from the current list to a target list.
@@ -50,6 +51,7 @@ export async function transferAlbumToList(deps, options) {
   const { index, albumId, targetListId, mode } = options;
 
   const currentListId = getCurrentList();
+  const sourceRevision = getListRevision(currentListId);
   const lists = getLists();
 
   if (
@@ -60,12 +62,13 @@ export async function transferAlbumToList(deps, options) {
   ) {
     throw new Error('Invalid source or target list');
   }
+  if (currentListId === targetListId)
+    throw new Error('Choose a different destination list');
 
   const sourceAlbums = getListData(currentListId);
   if (!sourceAlbums) throw new Error('Source list data not loaded');
 
   let album = sourceAlbums[index];
-  let indexToTransfer = index;
 
   // Verify the album at the given index matches the expected identity
   if (album && albumId) {
@@ -75,7 +78,6 @@ export async function transferAlbumToList(deps, options) {
       const result = findAlbumByIdentity(albumId);
       if (result) {
         album = result.album;
-        indexToTransfer = result.index;
       } else {
         throw new Error('Album not found');
       }
@@ -85,13 +87,27 @@ export async function transferAlbumToList(deps, options) {
   }
 
   const albumToTransfer = { ...album };
+  delete albumToTransfer._id;
+  delete albumToTransfer.list_id;
+  delete albumToTransfer.listId;
 
   // Get target list name for user-facing messages
   const targetListMeta = getListMetadata(targetListId);
   const targetListName = targetListMeta?.name || 'Unknown';
 
   // Check for duplicate in target list
-  const targetAlbums = getListData(targetListId);
+  let targetAlbums = getListData(targetListId);
+  if (!targetAlbums) {
+    targetAlbums = await apiCall(
+      `/api/lists/${encodeURIComponent(targetListId)}`
+    );
+    if (!Array.isArray(targetAlbums))
+      throw new Error('Unable to load destination list');
+    if (setListData) setListData(targetListId, targetAlbums);
+  }
+  const indexToTransfer = sourceAlbums.indexOf(album);
+  if (indexToTransfer === -1)
+    throw new Error('Source album changed while loading the destination');
   if (isAlbumInList(albumToTransfer, targetAlbums || [])) {
     showToast(
       `"${albumToTransfer.album}" already exists in "${targetListName}"`,
@@ -100,36 +116,19 @@ export async function transferAlbumToList(deps, options) {
     return;
   }
 
-  // For move: remove from source list
-  if (mode === 'move') {
-    sourceAlbums.splice(indexToTransfer, 1);
-  }
-
   // Add to target list
-  let targetData = targetAlbums;
-  if (!targetData) {
-    targetData = await apiCall(
-      `/api/lists/${encodeURIComponent(targetListId)}`
-    );
-    if (setListData) {
-      setListData(targetListId, targetData);
-    }
-  }
+  const targetData = targetAlbums;
   targetData.push(albumToTransfer);
 
-  // Save the target first: if it fails, nothing was persisted and we can
-  // roll back cleanly. Saving in parallel could remove the album from the
-  // source while the target save failed, losing it from both lists.
+  // Keep the source intact until the destination write is acknowledged.
   try {
-    await saveList(targetListId, targetData);
+    const outcome = await saveList(targetListId, targetData);
+    if (outcome?.duplicates?.length)
+      throw new Error('Destination reported duplicates; the source was kept.');
   } catch (error) {
     console.error(`Error saving lists after ${mode}:`, error);
 
-    // Nothing persisted; undo the local changes. Remove the exact album we
-    // pushed (not the last element — realtime sync may have appended since).
-    if (mode === 'move') {
-      sourceAlbums.splice(indexToTransfer, 0, albumToTransfer);
-    }
+    // Undo the optimistic insertion, not an unrelated item appended meanwhile.
     const pushedIndex = targetData.indexOf(albumToTransfer);
     if (pushedIndex !== -1) {
       targetData.splice(pushedIndex, 1);
@@ -139,21 +138,39 @@ export async function transferAlbumToList(deps, options) {
   }
 
   if (mode === 'move') {
+    // Other saves must not observe a local removal until the destination is
+    // durable. Re-read the source because realtime may have replaced its array.
+    const latestSource = getListData(currentListId) || sourceAlbums;
+    const sourceIndex = latestSource.findIndex(
+      (candidate) =>
+        candidate === album ||
+        (album._id && candidate._id === album._id) ||
+        (album.album_id && candidate.album_id === album.album_id)
+    );
+    if (sourceIndex < 0)
+      throw new Error(
+        'Album copied, but the source changed. Review both lists.'
+      );
+    const [removedAlbum] = latestSource.splice(sourceIndex, 1);
     try {
-      await saveList(currentListId, sourceAlbums);
+      await saveList(currentListId, latestSource, undefined, {
+        expectedRevision: sourceRevision,
+      });
     } catch (error) {
       console.error(`Error saving lists after ${mode}:`, error);
 
       // The target save already persisted, so keep the local source in sync
       // with the server: the album exists in both lists until removed again.
-      sourceAlbums.splice(indexToTransfer, 0, albumToTransfer);
+      latestSource.splice(sourceIndex, 0, removedAlbum);
 
       throw error;
     }
   }
 
-  if (mode === 'move') {
+  if (mode === 'move' && getCurrentList() === currentListId) {
     displayAlbums(getListData(currentListId) || sourceAlbums);
+  } else if (getCurrentList() === targetListId) {
+    displayAlbums(getListData(targetListId) || targetData);
   }
 
   const actionVerb = mode === 'move' ? 'Moved' : 'Copied';

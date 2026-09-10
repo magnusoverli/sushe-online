@@ -82,6 +82,7 @@ function recordActivity(req, queryable) {
  */
 function ensureAuth(req, res, next) {
   if (req.user || (req.isAuthenticated && req.isAuthenticated())) {
+    req.authMethod = 'session';
     return next();
   }
   res.redirect('/login');
@@ -97,6 +98,7 @@ function ensureAuth(req, res, next) {
  * @param {Function} deps.validateExtensionToken - Token validation function
  * @param {Function} deps.recordActivity - Activity recording function
  * @param {Object} deps.logger - Logger instance
+ * @param {Function} [deps.csrfProtection] - Session mutation validation
  * @returns {Function} - Express middleware
  */
 function createEnsureAuthAPI(deps) {
@@ -106,6 +108,7 @@ function createEnsureAuthAPI(deps) {
     validateExtensionToken,
     recordActivity: recordActivityFn,
     logger,
+    csrfProtection,
   } = deps;
 
   if (!authService) {
@@ -118,8 +121,9 @@ function createEnsureAuthAPI(deps) {
   return async function ensureAuthAPI(req, res, next) {
     // First check if authenticated via session
     if (req.isAuthenticated && req.isAuthenticated()) {
+      req.authMethod = 'session';
       recordActivityFn(req, db);
-      return next();
+      return csrfProtection ? csrfProtection(req, res, next) : next();
     }
 
     // Check for bearer token
@@ -133,7 +137,10 @@ function createEnsureAuthAPI(deps) {
         if (userId) {
           // Load user and attach to request
           const user = await authService.getUserById(userId);
-          if (user) {
+          if (
+            user &&
+            (user.approvalStatus == null || user.approvalStatus === 'approved')
+          ) {
             req.user = user;
             // Mark this as token-based auth for logging
             req.authMethod = 'token';

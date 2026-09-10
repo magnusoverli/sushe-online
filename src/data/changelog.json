@@ -1,5 +1,15 @@
 [
   {
+    "date": "2026-09-10",
+    "category": "security",
+    "description": "Hardened URL previews, account recovery, OAuth linking, and extension sign-in."
+  },
+  {
+    "date": "2026-09-10",
+    "category": "fix",
+    "description": "Protected list transfers, concurrent saves, locked rankings, realtime updates, and playlist exports."
+  },
+  {
     "date": "2026-09-07",
     "category": "feature",
     "description": "Shared list layouts now apply consistently across owned and revealed lists.",

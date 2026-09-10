@@ -42,7 +42,8 @@ export function createListSelection(deps = {}) {
     displayAlbums,
     prefetchPlaycountsForRender,
     fetchAndDisplayPlaycounts,
-    wasRecentLocalSave,
+    getListSaveState = () => ({ pending: 0, version: 0 }),
+    waitForListSaves = async () => {},
     clearCommunitySelection,
     showToast,
   } = deps;
@@ -89,12 +90,17 @@ export function createListSelection(deps = {}) {
     if (!listId || isListDataFullyLoaded?.(listId)) return;
 
     try {
+      await waitForListSaves(listId);
+      const state = getListSaveState(listId);
+      if (state.dirty) return;
       const fullData = await apiCall(
         `/api/lists/${encodeURIComponent(listId)}`,
         { signal: selection.controller.signal }
       );
       if (!ownsSelection(selection)) return;
-      if (wasRecentLocalSave?.(listId)) return;
+      const current = getListSaveState(listId);
+      if (current.pending || current.dirty || current.version !== state.version)
+        return;
 
       setListData(listId, fullData, true, { profile: 'full' });
       if (ownsSelection(selection)) {

@@ -22,7 +22,7 @@ function createExtensionTokenHandlers(deps = {}) {
       return res.redirect('/login');
     }
 
-    res.send(deps.extensionAuthTemplate());
+    res.send(deps.extensionAuthTemplate(req.csrfToken()));
   }
 
   const createExtensionToken = asyncHandler(async (req, res) => {
@@ -31,7 +31,8 @@ function createExtensionTokenHandlers(deps = {}) {
       db,
       req.user._id,
       userAgent,
-      generateExtensionToken
+      generateExtensionToken,
+      req.user.authVersion
     );
 
     logger.info('Extension token generated', {

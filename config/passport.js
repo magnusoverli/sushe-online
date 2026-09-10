@@ -2,43 +2,18 @@
  * Passport Authentication Configuration
  *
  * Configures Passport.js with LocalStrategy for email/password authentication.
- * Includes a user cache layer to reduce database queries during deserialization.
+ * Reads current authentication state during deserialization.
  */
 
 const LocalStrategy = require('passport-local').Strategy;
 const logger = require('../utils/logger');
+const {
+  serializeIdentity,
+  resolveSessionIdentity,
+} = require('../services/session-identity');
 
-// ============ USER CACHE FOR PASSPORT DESERIALIZATION ============
-// Reduces database queries by caching user objects with 5-minute TTL
-const userCache = new Map();
-const USER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const USER_CACHE_MAX_SIZE = 1000; // Maximum cached users to prevent unbounded growth
-
-function getCachedUser(id) {
-  const cached = userCache.get(id);
-  if (cached && Date.now() - cached.timestamp < USER_CACHE_TTL) {
-    return cached.user;
-  }
-  userCache.delete(id);
-  return null;
-}
-
-function setCachedUser(id, user) {
-  // Evict oldest entry if cache is full
-  if (userCache.size >= USER_CACHE_MAX_SIZE) {
-    const firstKey = userCache.keys().next().value;
-    userCache.delete(firstKey);
-  }
-  userCache.set(id, { user, timestamp: Date.now() });
-}
-
-/**
- * Invalidate user cache entry - call when user data changes
- * @param {string} userId - User ID to invalidate
- */
-function invalidateUserCache(userId) {
-  userCache.delete(userId);
-}
+// Existing mutation callers retain this hook; authentication reads are now fresh.
+function invalidateUserCache(_userId) {}
 
 /**
  * Configure Passport with LocalStrategy and serialization.
@@ -117,17 +92,11 @@ function configurePassport(passport, { authService, bcrypt }) {
     )
   );
 
-  passport.serializeUser((user, done) => done(null, user._id));
-  passport.deserializeUser(async (id, done) => {
+  passport.serializeUser((user, done) => done(null, serializeIdentity(user)));
+  passport.deserializeUser(async (identity, done) => {
     try {
-      // Check user cache first to avoid database query on every request
-      let user = getCachedUser(id);
-      if (!user) {
-        user = await authService.getUserById(id);
-        if (user) {
-          setCachedUser(id, user);
-        }
-      }
+      // Authentication and credential state must not be served from a TTL cache.
+      const user = await resolveSessionIdentity(identity, authService);
       done(null, user);
     } catch (err) {
       done(err);

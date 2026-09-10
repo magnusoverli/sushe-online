@@ -45,7 +45,6 @@ function resolveSessionSettings(env = process.env, log = logger) {
 /**
  * Create session middleware with PostgreSQL store and caching.
  * @param {Object} pool - PostgreSQL connection pool
- * @returns {Function} Express session middleware
  */
 function createSessionMiddleware(pool) {
   const settings = resolveSessionSettings(process.env, logger);
@@ -87,7 +86,6 @@ function createSessionMiddleware(pool) {
 /**
  * Custom flash middleware.
  * Makes flash messages available to templates and provides req.flash() method.
- * @returns {Function} Express middleware
  */
 function flashMiddleware() {
   return (req, res, next) => {

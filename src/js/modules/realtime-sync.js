@@ -39,6 +39,7 @@ export function createRealtimeSync(deps = {}) {
 
   let socket = null;
   let isConnected = false;
+  let hasConnected = false;
   let reconnectAttempts = 0;
   const MAX_RECONNECT_ATTEMPTS = 10;
   const SESSION_INVALIDATION_REDIRECT_DELAY_MS = 2600;
@@ -55,6 +56,18 @@ export function createRealtimeSync(deps = {}) {
   function registerSocketEventHandlers() {
     if (!socket) return;
     socket.on('list:updated', handleListUpdated);
+    socket.on('library:updated', async () => {
+      try {
+        const metadataChanged = await refreshListNav();
+        const current = getCurrentList();
+        if (current)
+          await (metadataChanged
+            ? refreshListDataSilent(current)
+            : refreshListData(current));
+      } catch (error) {
+        logger.warn('Unable to refresh library', error);
+      }
+    });
     socket.on('list:reordered', handleListReordered);
     socket.on('list:created', handleListCreated);
     socket.on('list:deleted', handleListDeleted);
@@ -112,6 +125,17 @@ export function createRealtimeSync(deps = {}) {
       if (currentList) {
         subscribeToList(currentList);
       }
+      if (hasConnected) {
+        Promise.resolve(refreshListNav())
+          .then(() => {
+            const selected = getCurrentList();
+            return selected ? refreshListDataSilent(selected) : undefined;
+          })
+          .catch((error) =>
+            logger.warn('Unable to refresh after reconnect', error)
+          );
+      }
+      hasConnected = true;
     });
 
     socket.on('disconnect', (reason) => {

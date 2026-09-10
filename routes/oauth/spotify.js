@@ -10,9 +10,13 @@
 const { URLSearchParams } = require('url');
 const logger = require('../../utils/logger');
 const { sanitizeReturnPath } = require('../../utils/redirect-path');
+const {
+  beginOAuthState,
+  consumeOAuthState,
+} = require('../../utils/oauth-state');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, userService, crypto } = deps;
+  const { ensureAuth, userService } = deps;
 
   if (!userService) {
     throw new Error('spotify oauth routes require userService');
@@ -20,9 +24,8 @@ module.exports = (app, deps) => {
 
   // Initiate Spotify OAuth flow
   app.get('/auth/spotify', ensureAuth, (req, res) => {
-    const state = crypto.randomBytes(8).toString('hex');
-    logger.info('Starting Spotify OAuth flow', { state, userId: req.user._id });
-    req.session.spotifyState = state;
+    const state = beginOAuthState(req.session, 'spotify');
+    logger.info('Starting Spotify OAuth flow', { userId: req.user._id });
 
     // Store returnTo path for after OAuth completes
     if (req.query.returnTo) {
@@ -48,14 +51,17 @@ module.exports = (app, deps) => {
 
   // Handle Spotify OAuth callback
   app.get('/auth/spotify/callback', ensureAuth, async (req, res) => {
-    if (req.query.state !== req.session.spotifyState) {
+    if (
+      !consumeOAuthState(req.session, 'spotify', req.query.state) ||
+      typeof req.query.code !== 'string' ||
+      !req.query.code
+    ) {
       req.flash('error', 'Invalid Spotify state');
       return res.redirect('/');
     }
     delete req.session.spotifyState;
     logger.info('Spotify callback received', {
       hasCode: !!req.query.code,
-      state: req.query.state,
       userId: req.user._id,
     });
     try {
@@ -82,7 +88,6 @@ module.exports = (app, deps) => {
       }
       const token = await resp.json();
       logger.info('Spotify token received', {
-        access_token: token.access_token?.slice(0, 6) + '...',
         expires_in: token.expires_in,
         refresh: !!token.refresh_token,
       });
@@ -112,7 +117,13 @@ module.exports = (app, deps) => {
   });
 
   // Disconnect Spotify account
-  app.get('/auth/spotify/disconnect', ensureAuth, async (req, res) => {
+  app.get('/auth/spotify/disconnect', ensureAuth, (_req, res) =>
+    res
+      .set('Allow', 'POST')
+      .status(405)
+      .json({ error: 'Use POST to disconnect' })
+  );
+  app.post('/auth/spotify/disconnect', ensureAuth, async (req, res) => {
     try {
       logger.info('Disconnecting Spotify', {
         email: req.user.email,
@@ -127,14 +138,14 @@ module.exports = (app, deps) => {
 
       delete req.user.spotifyAuth;
       req.flash('success', 'Spotify disconnected');
-      res.redirect('/');
+      res.json({ success: true });
     } catch (err) {
       logger.error('Spotify disconnect error', {
         error: err.message,
         userId: req.user._id,
       });
       req.flash('error', 'Failed to disconnect Spotify');
-      res.redirect('/');
+      res.status(500).json({ error: 'Failed to disconnect Spotify' });
     }
   });
 };

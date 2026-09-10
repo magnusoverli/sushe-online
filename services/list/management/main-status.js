@@ -1,5 +1,7 @@
+const { withListTransaction } = require('../transaction');
+
 async function toggleMainStatus(ctx, listId, userId, isMain) {
-  return ctx.db.withTransaction(async (client) => {
+  return withListTransaction(ctx.db, userId, async (client) => {
     const listResult = await client.query(
       `SELECT l.id, l._id, l.name, l.year, l.is_main, g.year as group_year
        FROM lists l
@@ -80,7 +82,7 @@ async function toggleMainStatus(ctx, listId, userId, isMain) {
 }
 
 async function deleteList(ctx, listId, userId) {
-  return ctx.db.withTransaction(async (client) => {
+  return withListTransaction(ctx.db, userId, async (client) => {
     const listResult = await client.query(
       `SELECT id, _id, name, year, group_id, is_main
        FROM lists

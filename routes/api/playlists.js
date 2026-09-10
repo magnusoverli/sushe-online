@@ -132,7 +132,9 @@ module.exports = (app, deps) => {
           const exists = await playlistService.checkPlaylistExists(
             listName,
             targetService,
-            auth
+            auth,
+            req.user,
+            listId
           );
           logger.info('Playlist check result:', { listName, exists });
           return res.json({ exists, playlistName: listName });
@@ -160,7 +162,8 @@ module.exports = (app, deps) => {
           items,
           targetService,
           auth,
-          req.user
+          req.user,
+          listId
         );
 
         res.json(result);

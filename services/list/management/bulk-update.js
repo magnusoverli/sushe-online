@@ -1,9 +1,11 @@
+const { withListTransaction } = require('../transaction');
+
 async function bulkUpdate(ctx, userId, updates) {
   const results = [];
   const yearsToRecompute = new Set();
 
   // eslint-disable-next-line complexity -- The transaction performs a two-pass validation and lock sequence for partial bulk updates
-  await ctx.db.withTransaction(async (client) => {
+  await withListTransaction(ctx.db, userId, async (client) => {
     const pendingUpdates = [];
 
     for (const update of updates) {
@@ -27,7 +29,10 @@ async function bulkUpdate(ctx, userId, updates) {
       const oldList = listCheck.rows[0];
       const newYear = year !== undefined ? year : oldList.year;
 
-      if (newYear !== null && (newYear < 1000 || newYear > 9999)) {
+      if (
+        newYear !== null &&
+        (!Number.isInteger(newYear) || newYear < 1000 || newYear > 9999)
+      ) {
         results.push({ listId, success: false, error: 'Invalid year' });
         continue;
       }
@@ -75,6 +80,29 @@ async function bulkUpdate(ctx, userId, updates) {
       const newIsMain =
         updateIsMain !== undefined ? updateIsMain : oldList.is_main;
 
+      if (typeof newIsMain !== 'boolean' || (newIsMain && !newYear)) {
+        results.push({
+          listId,
+          success: false,
+          error: 'A main list requires a year and a boolean main status',
+        });
+        continue;
+      }
+
+      if (
+        oldList.is_main &&
+        oldYear &&
+        oldYear !== newYear &&
+        (await ctx.isYearLocked(client, oldYear, { failOpen: false }))
+      ) {
+        results.push({
+          listId,
+          success: false,
+          error: `Cannot update main list: Year ${oldYear} is locked`,
+        });
+        continue;
+      }
+
       const effectiveYear = newYear || oldYear;
       if (effectiveYear) {
         const yearLocked = await ctx.isYearLocked(client, effectiveYear, {
@@ -105,6 +133,29 @@ async function bulkUpdate(ctx, userId, updates) {
           `UPDATE lists SET is_main = FALSE, updated_at = NOW()
            WHERE user_id = $1 AND year = $2 AND is_main = TRUE AND _id != $3`,
           [userId, newYear, listId]
+        );
+      }
+
+      if (year !== undefined && newYear !== oldYear) {
+        const groupId =
+          newYear === null
+            ? await ctx.findOrCreateUncategorizedGroup(client, userId)
+            : (await ctx.findOrCreateYearGroup(client, userId, newYear))
+                .groupId;
+        const duplicate = await client.query(
+          `SELECT 1 FROM lists destination JOIN lists source ON source._id = $1
+          WHERE destination.group_id = $2 AND destination.name = source.name AND destination._id <> source._id`,
+          [listId, groupId]
+        );
+        if (duplicate.rows.length)
+          throw new ctx.TransactionAbort(409, {
+            error: 'Destination group already has a list with this name',
+          });
+        await client.query(
+          `UPDATE lists SET group_id = $1,
+          sort_order = (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM lists WHERE group_id = $1)
+          WHERE _id = $2`,
+          [groupId, listId]
         );
       }
 

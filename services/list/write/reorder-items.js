@@ -1,4 +1,7 @@
-async function reorderItems(ctx, listId, userId, order) {
+const { withListTransaction } = require('../transaction');
+const { checkRevision, readRevision } = require('../revision');
+
+async function reorderItems(ctx, listId, userId, order, expectedRevision) {
   if (!Array.isArray(order)) {
     throw new ctx.TransactionAbort(400, { error: 'Invalid order array' });
   }
@@ -6,13 +9,14 @@ async function reorderItems(ctx, listId, userId, order) {
   let effectivePos = 0;
   let list;
 
-  await ctx.db.withTransaction(async (client) => {
+  await withListTransaction(ctx.db, userId, async (client) => {
     list = await ctx.findListByIdOrThrow(
       listId,
       userId,
       'reorder list items',
       client
     );
+    checkRevision(list, expectedRevision);
 
     const now = new Date();
 
@@ -79,6 +83,7 @@ async function reorderItems(ctx, listId, userId, order) {
     );
 
     effectivePos = orderedItemIds.length;
+    await readRevision(client, list);
   });
 
   ctx.logger?.info('List reordered', {

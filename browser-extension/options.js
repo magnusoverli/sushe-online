@@ -105,10 +105,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const loginUrl = `${apiUrl}${API.EXTENSION_AUTH}`;
-
-    // Open login page in new tab
-    chrome.tabs.create({ url: loginUrl });
+    const result = await chrome.runtime.sendMessage({
+      action: ACTIONS.START_LOGIN,
+    });
+    if (!result?.success) {
+      showStatus(result?.error || 'Unable to start login', 'error');
+      return;
+    }
 
     // Show message
     showStatus(

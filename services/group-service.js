@@ -19,6 +19,7 @@ const { ensureDb } = require('../db/postgres');
 const { acquireYearLocks, isYearLocked } = require('./year-lock-service');
 const { TransactionAbort } = require('../db/transaction');
 const { buildPartialUpdate } = require('../utils/query-builder');
+const { withListTransaction } = require('./list/transaction');
 
 /**
  * Create group service with injected dependencies
@@ -111,7 +112,7 @@ function createGroupService(deps = {}) {
     const timestamp = new Date();
 
     let sortOrder = 0;
-    await db.withTransaction(async (client) => {
+    await withListTransaction(db, userId, async (client) => {
       await acquireTransactionLocks(client, LOCK_NAMESPACES.LIST_GROUPS_USER, [
         userId,
       ]);
@@ -160,10 +161,10 @@ function createGroupService(deps = {}) {
    * @param {Object} updates - { name?, sortOrder? }
    * @throws {TransactionAbort} on validation failure
    */
-  async function updateGroup(userId, groupExternalId, updates) {
+  async function updateGroup(userId, groupExternalId, updates, client) {
     const { name, sortOrder } = updates;
 
-    const groupResult = await db.raw(
+    const groupResult = await client.query(
       `SELECT id, name, year, sort_order FROM list_groups WHERE _id = $1 AND user_id = $2`,
       [groupExternalId, userId]
     );
@@ -191,7 +192,7 @@ function createGroupService(deps = {}) {
           error: 'Collection name cannot be a year',
         });
       }
-      const existing = await db.raw(
+      const existing = await client.query(
         `SELECT 1 FROM list_groups WHERE user_id = $1 AND name = $2 AND _id != $3`,
         [userId, name.trim(), groupExternalId]
       );
@@ -218,7 +219,7 @@ function createGroupService(deps = {}) {
     }
 
     const update = buildPartialUpdate('list_groups', 'id', group.id, fields);
-    await db.raw(update.query, update.values);
+    await client.query(update.query, update.values);
   }
 
   /**
@@ -231,7 +232,7 @@ function createGroupService(deps = {}) {
    * @throws {TransactionAbort} on validation failure
    */
   async function deleteGroup(userId, groupExternalId, force = false) {
-    return db.withTransaction(async (client) => {
+    return withListTransaction(db, userId, async (client) => {
       const groupResult = await client.query(
         `SELECT id, name, year FROM list_groups WHERE _id = $1 AND user_id = $2`,
         [groupExternalId, userId]
@@ -271,7 +272,8 @@ function createGroupService(deps = {}) {
         ...new Set(mainListsWithYears.rows.map((r) => r.year)),
       ];
       if (uniqueYears.length > 0) {
-        let lockedYears = new Set();
+        await acquireYearLocks(client, uniqueYears);
+        let lockedYears;
         try {
           const lockedResult = await client.query(
             `SELECT year FROM master_lists WHERE year = ANY($1::int[]) AND locked = TRUE`,
@@ -279,12 +281,14 @@ function createGroupService(deps = {}) {
           );
           lockedYears = new Set(lockedResult.rows.map((r) => r.year));
         } catch (err) {
-          // Preserve existing fail-open semantics from isYearLocked utility.
           logger.error('Error checking locked years for group delete', {
             userId,
             groupId: groupExternalId,
             years: uniqueYears,
             error: err.message,
+          });
+          throw new TransactionAbort(503, {
+            error: 'Cannot verify year locks',
           });
         }
 
@@ -397,7 +401,7 @@ function createGroupService(deps = {}) {
       });
     }
 
-    await db.withTransaction(async (client) => {
+    await withListTransaction(db, userId, async (client) => {
       const groupsResult = await client.query(
         `SELECT g._id, g.name, g.year, COUNT(l.id) as list_count
          FROM list_groups g
@@ -474,7 +478,7 @@ function createGroupService(deps = {}) {
       });
     }
 
-    return await db.withTransaction(async (client) => {
+    return await withListTransaction(db, userId, async (client) => {
       const listResult = await client.query(
         `SELECT l.id, l._id, l.name, l.year, l.is_main, l.group_id, g.year as current_group_year
          FROM lists l
@@ -489,7 +493,7 @@ function createGroupService(deps = {}) {
       }
 
       const list = listResult.rows[0];
-      const oldYear = list.current_group_year;
+      const oldYear = list.year || list.current_group_year;
       let targetGroupId;
       let targetYear;
 
@@ -540,6 +544,16 @@ function createGroupService(deps = {}) {
       }
 
       // If moving to a collection (no year), clear is_main flag
+      if (list.is_main && targetYear && targetYear !== oldYear) {
+        const existing = await client.query(
+          'SELECT _id FROM lists WHERE user_id = $1 AND year = $2 AND is_main = TRUE AND _id <> $3',
+          [userId, targetYear, listExternalId]
+        );
+        if (existing.rows.length)
+          throw new TransactionAbort(409, {
+            error: 'Destination year already has a main list',
+          });
+      }
       if (targetYear === null && list.is_main) {
         await client.query(`UPDATE lists SET is_main = FALSE WHERE id = $1`, [
           list.id,
@@ -584,7 +598,7 @@ function createGroupService(deps = {}) {
       });
     }
 
-    await db.withTransaction(async (client) => {
+    await withListTransaction(db, userId, async (client) => {
       const groupResult = await client.query(
         `SELECT id FROM list_groups WHERE _id = $1 AND user_id = $2`,
         [groupExternalId, userId]
@@ -641,7 +655,10 @@ function createGroupService(deps = {}) {
   return {
     getGroups,
     createGroup,
-    updateGroup,
+    updateGroup: (userId, groupId, updates) =>
+      withListTransaction(db, userId, (client) =>
+        updateGroup(userId, groupId, updates, client)
+      ),
     deleteGroup,
     reorderGroups,
     moveList,

@@ -1,4 +1,5 @@
 const MAX_REASON_LENGTH = 1000;
+const { withListTransaction } = require('./transaction');
 
 function normalizeReason(reason, disqualified, TransactionAbort) {
   if (!disqualified) return null;
@@ -40,7 +41,7 @@ function createItemDisqualification(deps) {
     const timestamp = new Date();
     let list;
 
-    await db.withTransaction(async (client) => {
+    await withListTransaction(db, userId, async (client) => {
       list = await findListByIdOrThrow(
         listId,
         userId,

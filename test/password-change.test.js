@@ -170,12 +170,12 @@ function createTestApp(options = {}) {
         if (sql.includes('SET hash = $1')) {
           return Promise.resolve(
             mockUsersAsync.update(
-              { _id: params[2] },
-              { $set: { hash: params[0], updatedAt: params[1] } },
+              { _id: params[1] },
+              { $set: { hash: params[0] } },
               {}
             )
           ).then((updated) => ({
-            rows: updated > 0 ? [{ _id: params[2] }] : [],
+            rows: updated > 0 ? [{ _id: params[1] }] : [],
             rowCount: typeof updated === 'number' ? updated : 1,
           }));
         }
@@ -222,6 +222,7 @@ function createTestApp(options = {}) {
       }),
   };
   mockPool.raw = mockPool.query;
+  mockPool.withTransaction = async (fn) => fn({ query: mockPool.query });
 
   // Create service instances with test mocks
   const { createAuthService } = require('../services/auth-service');

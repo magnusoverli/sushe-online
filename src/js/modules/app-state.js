@@ -13,6 +13,7 @@ import {
   normalizeAlbumRecords,
   normalizeListsMap,
 } from './list-data-normalization.js';
+import { rememberListRevision } from './list-revisions.js';
 
 // ============ CORE STATE VARIABLES ============
 
@@ -168,6 +169,7 @@ export function setListData(
 
   // Update snapshot for diff-based saves (when data is fetched from server)
   if (updateSnapshot && albums) {
+    rememberListRevision(listId, albums._listRevision);
     const snapshot = createListSnapshot(normalizedAlbums);
     lastSavedSnapshots.set(listId, snapshot);
     saveSnapshotToStorage(listId, snapshot);

@@ -4,6 +4,8 @@
  * devices, and playing on a specific device.
  */
 
+import { csrfHeaders } from '../modules/csrf-headers.js';
+
 const APP_FALLBACK_DELAY_MS = 1800;
 const SPOTIFY_APP_FALLBACK_DELAY_MS = 2500;
 
@@ -256,7 +258,7 @@ export async function playOnSpotifyDevice(album, deviceId, showToast) {
     const playResp = await fetch('/api/spotify/play', {
       method: 'PUT',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
       body: JSON.stringify({
         albumId: searchData.id,
         deviceId: deviceId,

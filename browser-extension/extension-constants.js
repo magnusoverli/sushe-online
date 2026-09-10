@@ -35,6 +35,8 @@
   };
 
   const ACTIONS = {
+    START_LOGIN: 'startExtensionLogin',
+    COMPLETE_LOGIN: 'completeExtensionLogin',
     EXTRACT_ALBUM_IDENTITY: 'extractAlbumIdentity',
     FETCH_GENRES_FOR_ALBUM: 'fetchGenresForAlbum',
     EXTRACT_ALBUM_DATA: 'extractAlbumData',

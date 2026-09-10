@@ -129,7 +129,6 @@ module.exports = (app, deps) => {
     logger.debug('Login GET - CSRF token generation', {
       hasSession: !!req.session,
       hasSecret: !!req.session?.csrfSecret,
-      sessionId: req.sessionID,
       userAgent: req.get('User-Agent'),
     });
 
@@ -143,8 +142,6 @@ module.exports = (app, deps) => {
       email: req.body.email,
       hasSession: !!req.session,
       hasSecret: !!req.session?.csrfSecret,
-      sessionId: req.sessionID,
-      csrfToken: req.body._csrf?.substring(0, 8) + '...',
       userAgent: req.get('User-Agent'),
     });
 
@@ -226,6 +223,12 @@ module.exports = (app, deps) => {
     res.send(spotifyTemplate(sanitizeUser(req.user), req.csrfToken()));
   });
 
+  app.get('/api/auth/csrf', ensureAuthAPI, csrfProtection, (req, res) => {
+    if (typeof req.csrfToken !== 'function')
+      return res.status(400).json({ error: 'A browser session is required' });
+    res.json({ csrfToken: req.csrfToken() });
+  });
+
   app.post(
     '/settings/update-accent-color',
     ensureAuth,
@@ -293,7 +296,11 @@ module.exports = (app, deps) => {
     securityHandlers.requestAdmin
   );
 
-  app.get('/extension/auth', extensionTokenHandlers.showExtensionAuthPage);
+  app.get(
+    '/extension/auth',
+    csrfProtection,
+    extensionTokenHandlers.showExtensionAuthPage
+  );
 
   app.post(
     '/api/auth/extension-token',

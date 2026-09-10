@@ -218,6 +218,7 @@ function mapItemToInsertRecord(
           : null,
     },
     addedItem: {
+      inputAlbumId: item.album_id,
       album_id: upsertResult.albumId,
       _id: itemId,
       artist: item.artist,
@@ -341,6 +342,16 @@ async function processAdditions(ctx, client, list, added, timestamp) {
 async function processPositionUpdates(client, listId, updated, timestamp) {
   if (!updated || !Array.isArray(updated)) return 0;
   const validItems = updated.filter((item) => item && item.album_id);
+  if (
+    validItems.some(
+      (item) => !Number.isSafeInteger(item.position) || item.position < 1
+    )
+  ) {
+    const { TransactionAbort } = require('../../db/transaction');
+    throw new TransactionAbort(400, {
+      error: 'Positions must be positive integers',
+    });
+  }
   if (validItems.length === 0) return 0;
 
   const albumIds = validItems.map((item) => item.album_id);

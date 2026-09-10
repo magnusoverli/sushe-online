@@ -90,8 +90,9 @@ function createAuthUtils(deps = {}) {
       // compare the full hash. Tokens are stored only as hashes, so a leaked
       // database dump does not expose usable credentials.
       const result = await datastore.raw(
-        `SELECT id, user_id, expires_at, is_revoked, token_hash
-         FROM extension_tokens
+        `SELECT t.id, t.user_id, t.expires_at, t.is_revoked, t.token_hash
+         FROM extension_tokens t
+         JOIN users u ON u._id = t.user_id AND u.auth_version = t.auth_version
          WHERE token_lookup = $1 AND is_revoked = FALSE`,
         [lookup],
         { name: 'auth-utils-validate-extension-token', retryable: true }

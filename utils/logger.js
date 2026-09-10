@@ -232,7 +232,7 @@ function createLogger(options = {}) {
           const logData = {
             requestId: req.id,
             method: req.method,
-            url: req.originalUrl,
+            url: require('./log-url').logSafeUrl(req.originalUrl),
             statusCode: res.statusCode,
             duration_ms: duration,
             ip: req.ip,
@@ -242,7 +242,7 @@ function createLogger(options = {}) {
           };
 
           // Create descriptive log message with key information
-          const logMessage = `${req.method} ${req.originalUrl} ${res.statusCode} (${duration}ms)`;
+          const logMessage = `${req.method} ${logData.url} ${res.statusCode} (${duration}ms)`;
 
           if (res.statusCode >= 400) {
             pinoLogger.warn(logData, logMessage);

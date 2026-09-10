@@ -56,15 +56,17 @@ function createProcessHandlers(deps = {}) {
     }
 
     try {
+      // Begin closing upgraded connections before awaiting the HTTP close
+      // callback: that callback waits for those sockets to disappear.
+      const websocketShutdown = shutdownWebSocket();
       if (typeof closeHttpServer === 'function') {
         await closeHttpServer();
       }
+      await websocketShutdown;
 
       if (typeof runCleanup === 'function') {
         await runCleanup();
       }
-
-      shutdownWebSocket();
 
       const responseCache = getResponseCache();
       if (responseCache && typeof responseCache.shutdown === 'function') {
@@ -131,5 +133,6 @@ function createProcessHandlers(deps = {}) {
 const defaultHandlers = createProcessHandlers();
 
 module.exports = {
+  createProcessHandlers,
   registerProcessHandlers: defaultHandlers.registerProcessHandlers,
 };

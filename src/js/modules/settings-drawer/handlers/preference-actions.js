@@ -51,7 +51,9 @@ export function createSettingsPreferenceActions(deps = {}) {
         return;
       }
 
-      win.location.href = `/auth/${service}/disconnect`;
+      await apiCall(`/auth/${service}/disconnect`, { method: 'POST' });
+      showToast(`${serviceName} disconnected successfully`, 'success');
+      await loadCategoryData('integrations');
     } catch (error) {
       console.error('Error disconnecting service:', error);
       showToast(`Failed to disconnect ${serviceName}`, 'error');

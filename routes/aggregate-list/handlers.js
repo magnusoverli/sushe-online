@@ -2,7 +2,9 @@ function createAggregateListHandlers(deps = {}) {
   const { aggregateList, logger, scheduleAggregateRecompute } = deps;
 
   function renderPage(req, res, aggregateListTemplate) {
-    res.send(aggregateListTemplate(req.user, req.validatedYear));
+    res.send(
+      aggregateListTemplate(req.user, req.validatedYear, req.csrfToken?.())
+    );
   }
 
   async function getAggregateList(req, res) {

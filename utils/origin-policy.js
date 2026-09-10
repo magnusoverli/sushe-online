@@ -24,11 +24,13 @@ function parseAllowedOrigins(rawAllowedOrigins) {
 }
 
 function isLocalOrigin(origin) {
-  return (
-    origin.includes('localhost') ||
-    origin.includes('127.0.0.1') ||
-    origin.includes('[::1]')
-  );
+  try {
+    return ['localhost', '127.0.0.1', '[::1]'].includes(
+      new URL(origin).hostname
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isBrowserExtensionOrigin(origin) {
@@ -73,9 +75,17 @@ function isAllowedOrigin(origin, options = {}) {
 }
 
 function createOriginPolicyFromEnv(env = process.env) {
+  const allowedOrigins = parseAllowedOrigins(env.ALLOWED_ORIGINS);
+  try {
+    if (env.BASE_URL) allowedOrigins.push(new URL(env.BASE_URL).origin);
+  } catch {
+    /* Same-origin requests remain supported without a usable BASE_URL. */
+  }
   return {
-    strictMode: env.CORS_STRICT_MODE === 'true',
-    allowedOrigins: parseAllowedOrigins(env.ALLOWED_ORIGINS),
+    strictMode:
+      env.CORS_STRICT_MODE === 'true' ||
+      (env.NODE_ENV === 'production' && env.CORS_STRICT_MODE !== 'false'),
+    allowedOrigins,
   };
 }
 

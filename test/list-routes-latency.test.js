@@ -27,6 +27,7 @@ describe('list write route latency', () => {
     const notifyTaxonomyUpdated = mock.fn(() => taxonomyNotification.promise);
     const listUpdated = mock.fn();
     const res = {
+      set: mock.fn(),
       json: mock.fn(),
       status: mock.fn(function status() {
         return this;
@@ -65,6 +66,7 @@ describe('list write route latency', () => {
         body: { added: [{ album_id: 'album-1' }] },
         user: { _id: 'user-1' },
         headers: {},
+        get: () => undefined,
         app: { locals: { broadcast: { listUpdated } } },
       },
       res

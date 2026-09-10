@@ -618,11 +618,11 @@ function createAggregateList(deps = {}) {
   /**
    * Aggregate all main lists for a year into an aggregate list
    */
-  async function aggregateForYear(year) {
+  async function aggregateForYear(year, queryable = db) {
     log.info(`Aggregating list for year ${year}`);
 
     const { mainLists, userMap, listIds } = await fetchMainListsForYear(
-      db,
+      queryable,
       year
     );
     log.info(`Found ${mainLists.length} main lists for year ${year}`);
@@ -631,7 +631,7 @@ function createAggregateList(deps = {}) {
       return createEmptyResult(year);
     }
 
-    const items = await fetchListItemsForLists(db, listIds);
+    const items = await fetchListItemsForLists(queryable, listIds);
     const albumMap = buildAlbumMap(items, userMap);
     const albums = sortAndRankAlbums(albumMap);
     const stats = computeStats(albums, mainLists.length, year);
@@ -655,8 +655,14 @@ function createAggregateList(deps = {}) {
    */
   async function recompute(year) {
     log.info(`Recomputing aggregate list for year ${year}`);
-    const { data, stats } = await aggregateForYear(year);
-    const result = await saveAggregateList(db, year, data, stats);
+    const result = await db.withTransaction(async (client) => {
+      // Serialize manual and scheduled recomputes with main-list/contributor
+      // mutations so an older snapshot cannot overwrite a newer aggregate.
+      await acquireYearLocks(client, [year]);
+      const queryable = { raw: (sql, params) => client.query(sql, params) };
+      const { data, stats } = await aggregateForYear(year, queryable);
+      return saveAggregateList(queryable, year, data, stats);
+    });
     notifyRecomputeComplete(deps.onRecomputeComplete, year, log);
     log.info(`Aggregate list for ${year} recomputed successfully`);
     return result;

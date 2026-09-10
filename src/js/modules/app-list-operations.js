@@ -3,6 +3,7 @@
  */
 import { createListImporter } from './app-list-import.js';
 import { createKeyedTaskQueue } from '../utils/keyed-task-queue.js';
+import { markListUnsaved } from './unsaved-lists.js';
 import {
   buildListMetadataEntries,
   fetchCoreList,
@@ -24,6 +25,7 @@ export function createAppListOperations(deps = {}) {
     selectList,
     focusAlbum,
     updateListNav,
+    updateHeaderTitle = () => {},
     setRecommendationYears,
     loadSnapshotFromStorage,
     getLastSavedSnapshots,
@@ -41,7 +43,11 @@ export function createAppListOperations(deps = {}) {
 
   function getListSaveState(listId) {
     const state = saveStates.get(listId);
-    return { pending: state?.pending || 0, version: state?.version || 0 };
+    return {
+      pending: state?.pending || 0,
+      version: state?.version || 0,
+      dirty: state?.dirty || false,
+    };
   }
 
   const importList = createListImporter({
@@ -77,6 +83,8 @@ export function createAppListOperations(deps = {}) {
 
       updateListNav();
       const currentListId = getCurrentListId();
+      if (reconciledLists[currentListId])
+        updateHeaderTitle(reconciledLists[currentListId].name);
       if (currentListId && !reconciledLists[currentListId]) {
         await selectList(null);
       }
@@ -187,7 +195,11 @@ export function createAppListOperations(deps = {}) {
     }
   }
 
-  function saveList(listId, data, year = undefined) {
+  function saveList(listId, data, year = undefined, { expectedRevision } = {}) {
+    const precondition =
+      expectedRevision === undefined
+        ? {}
+        : { headers: { 'If-Match': `"${expectedRevision}"` } };
     const visibleData = getLists()[listId]?._data;
     const visibleFingerprint = JSON.stringify(visibleData);
     let cleanedData = data.map((album) => {
@@ -206,9 +218,11 @@ export function createAppListOperations(deps = {}) {
     const saveState = saveStates.get(listId);
     const queuedVersion = ++saveState.version;
     saveState.pending++;
+    markListUnsaved(listId, true);
 
     return enqueueSave(listId, async () => {
       let addedIds = [];
+      let saveResult;
       try {
         // Queued edits may include an optimistic addition whose earlier write
         // failed. Do not silently retry it; an explicit later retry is allowed.
@@ -246,6 +260,7 @@ export function createAppListOperations(deps = {}) {
             `/api/lists/${encodeURIComponent(listId)}/items`,
             {
               method: 'PATCH',
+              ...precondition,
               body: JSON.stringify({
                 added: diff.added,
                 removed: diff.removed,
@@ -253,16 +268,41 @@ export function createAppListOperations(deps = {}) {
               }),
             }
           );
+          saveResult = result;
 
           if (result.addedItems && result.addedItems.length > 0) {
             for (const added of result.addedItems) {
               const localItem = cleanedData.find(
-                (album) => album.album_id === added.album_id
+                (album) =>
+                  album.album_id === (added.inputAlbumId || added.album_id)
               );
-              if (localItem && !localItem._id) {
+              if (localItem) {
                 localItem._id = added._id;
+                localItem.album_id = added.album_id;
               }
             }
+          }
+          if (result.duplicates?.length) {
+            const inserted = new Set(
+              (result.addedItems || []).map((item) => item.album_id)
+            );
+            const seen = new Set();
+            cleanedData = cleanedData.filter((album) => {
+              const duplicate = result.duplicates.some(
+                (item) =>
+                  item.album_id === album.album_id ||
+                  (item.artist === album.artist && item.album === album.album)
+              );
+              if (
+                (duplicate &&
+                  !previousIds.has(album.album_id) &&
+                  !inserted.has(album.album_id)) ||
+                seen.has(album.album_id)
+              )
+                return false;
+              seen.add(album.album_id);
+              return true;
+            });
           }
 
           const listName = getLists()[listId]?.name || listId;
@@ -270,13 +310,18 @@ export function createAppListOperations(deps = {}) {
             `List "${listName}" saved incrementally: +${diff.added.length} -${diff.removed.length} ~${diff.updated.length}`
           );
         } else {
-          await apiCall(`/api/lists/${encodeURIComponent(listId)}`, {
-            method: 'PUT',
-            body: JSON.stringify({ data: cleanedData }),
-          });
+          saveResult = await apiCall(
+            `/api/lists/${encodeURIComponent(listId)}`,
+            {
+              method: 'PUT',
+              ...precondition,
+              body: JSON.stringify({ data: cleanedData }),
+            }
+          );
         }
 
         const snapshot = createListSnapshot(cleanedData);
+        saveState.dirty = false;
         getLastSavedSnapshots().set(listId, snapshot);
         saveSnapshotToStorage(listId, snapshot);
 
@@ -309,15 +354,25 @@ export function createAppListOperations(deps = {}) {
         if (year !== undefined) {
           updateListMetadata(listId, { year });
         }
+        return saveResult;
       } catch (error) {
+        saveState.dirty = true;
         const failedVersion = ++saveState.version;
         for (const id of addedIds) {
           saveState.failedAdditions.set(id, failedVersion);
         }
-        showToast('Error saving list', 'error');
+        showToast(
+          error.code === 'LIST_CONFLICT' ||
+            error.code === 'LIST_REVISION_REQUIRED' ||
+            error.code === 'SESSION_EXPIRED'
+            ? error.message
+            : 'Error saving list',
+          'error'
+        );
         throw error;
       } finally {
         saveState.pending--;
+        markListUnsaved(listId, saveState.pending > 0 || saveState.dirty);
         if (!saveState.pending) saveState.failedAdditions.clear();
       }
     });
@@ -329,5 +384,6 @@ export function createAppListOperations(deps = {}) {
     importList,
     saveList,
     getListSaveState,
+    waitForListSaves: (listId) => enqueueSave(listId, async () => {}),
   };
 }

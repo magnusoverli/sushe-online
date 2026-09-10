@@ -628,6 +628,8 @@ async function loginAs(agent, user) {
     email: user.email,
     password: 'password',
   });
+  const csrf = await agent.get('/api/auth/csrf').expect(200);
+  agent.set('X-CSRF-Token', csrf.body.csrfToken);
 }
 
 async function addRecommendation(

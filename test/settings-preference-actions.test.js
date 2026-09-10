@@ -62,9 +62,10 @@ describe('settings preference actions', () => {
     createSettingsPreferenceActions = module.createSettingsPreferenceActions;
   });
 
-  it('confirms disconnect and redirects to service disconnect URL', async () => {
+  it('confirms disconnect and uses a CSRF-protected POST', async () => {
     const win = { location: { href: '' } };
     const prompts = [];
+    const calls = [];
 
     const { handleDisconnect } = createSettingsPreferenceActions({
       doc: createDocument(),
@@ -74,14 +75,20 @@ describe('settings preference actions', () => {
         prompts.push(args);
         return true;
       },
-      apiCall: async () => ({}),
+      apiCall: async (...args) => {
+        calls.push(args);
+        return {};
+      },
       showToast: () => {},
       loadCategoryData: async () => {},
     });
 
     await handleDisconnect('spotify');
 
-    assert.strictEqual(win.location.href, '/auth/spotify/disconnect');
+    assert.strictEqual(win.location.href, '');
+    assert.deepStrictEqual(calls, [
+      ['/auth/spotify/disconnect', { method: 'POST' }],
+    ]);
     assert.match(prompts[0][0], /Disconnect Spotify/);
   });
 

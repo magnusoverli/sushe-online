@@ -1,6 +1,18 @@
 /**
  * App API client wrapper for authenticated JSON requests.
  */
+import { getListRevision, rememberListRevision } from './list-revisions.js';
+import { hasUnsavedLists, protectUnsavedLists } from './unsaved-lists.js';
+
+function sessionExpiredError() {
+  return Object.assign(
+    new Error(
+      'Your session expired. Sign in in another tab, then retry to keep your edits.'
+    ),
+    { code: 'SESSION_EXPIRED' }
+  );
+}
+
 export function createAppApiClient(deps = {}) {
   const {
     getRealtimeSyncModuleInstance,
@@ -9,8 +21,10 @@ export function createAppApiClient(deps = {}) {
     FormDataCtor = typeof FormData !== 'undefined' ? FormData : null,
     logger = console,
   } = deps;
+  protectUnsavedLists(win);
 
   function redirectToLogin() {
+    if (hasUnsavedLists()) return;
     if (win) {
       win.location.href = '/login';
     }
@@ -32,7 +46,7 @@ export function createAppApiClient(deps = {}) {
   async function readJsonResponse(response) {
     if (isLoginRedirectResponse(response)) {
       redirectToLogin();
-      return undefined;
+      throw sessionExpiredError();
     }
 
     const contentType = response.headers?.get?.('content-type') || '';
@@ -63,7 +77,7 @@ export function createAppApiClient(deps = {}) {
     return error?.requiresConfirmation === true;
   }
 
-  async function apiCall(url, options = {}) {
+  async function apiCall(url, options = {}, csrfRetried = false) {
     try {
       const socketId = getRealtimeSyncModuleInstance()?.getSocket?.()?.id;
 
@@ -79,6 +93,21 @@ export function createAppApiClient(deps = {}) {
       }
 
       const method = options.method || 'GET';
+      const listMatch =
+        /^\/api\/lists\/([^/?]+)(?:\/(items|reorder))?(?:\?|$)/.exec(url);
+      const listId = listMatch ? decodeURIComponent(listMatch[1]) : null;
+      const conditionalWrite =
+        listId &&
+        (method === 'PUT' ||
+          (method === 'PATCH' && listMatch[2] === 'items') ||
+          (method === 'POST' && listMatch[2] === 'reorder'));
+      if (
+        conditionalWrite &&
+        getListRevision(listId) !== undefined &&
+        !headers['If-Match']
+      ) {
+        headers['If-Match'] = `"${getListRevision(listId)}"`;
+      }
       const csrfToken = win?.csrfToken;
       if (
         csrfToken &&
@@ -97,47 +126,56 @@ export function createAppApiClient(deps = {}) {
       });
 
       if (!response.ok) {
-        if (response.status === 401) {
-          try {
-            const errorData = await readJsonResponse(response);
-
-            if (!errorData) {
-              return;
-            }
-
-            if (
-              errorData.code === 'TOKEN_EXPIRED' ||
-              errorData.code === 'TOKEN_REFRESH_FAILED' ||
-              (errorData.code === 'NOT_AUTHENTICATED' && errorData.service)
-            ) {
-              const oauthError = new Error(
-                errorData.error || `HTTP error! status: ${response.status}`
-              );
-              oauthError.response = response;
-              oauthError.data = errorData;
-              throw oauthError;
-            }
-
-            redirectToLogin();
-            return;
-          } catch (parseError) {
-            if (parseError.data) {
-              throw parseError;
-            }
-            redirectToLogin();
-            return;
-          }
-        }
-
         let errorData = null;
         try {
           errorData = await readJsonResponse(response);
         } catch (_parseError) {
-          // Ignore parse failure and throw generic error below.
+          /* Use the HTTP status if the error body is unavailable. */
+        }
+        if (response.status === 401) {
+          if (
+            errorData &&
+            (errorData.code === 'TOKEN_EXPIRED' ||
+              errorData.code === 'TOKEN_REFRESH_FAILED' ||
+              (errorData.code === 'NOT_AUTHENTICATED' && errorData.service))
+          ) {
+            const oauthError = new Error(
+              errorData.error || `HTTP error! status: ${response.status}`
+            );
+            oauthError.response = response;
+            oauthError.data = errorData;
+            throw oauthError;
+          }
+          redirectToLogin();
+          throw sessionExpiredError();
         }
 
+        if (
+          response.status === 403 &&
+          errorData?.code === 'CSRF_INVALID' &&
+          !csrfRetried
+        ) {
+          try {
+            const refreshed = await fetchImpl('/api/auth/csrf', {
+              credentials: 'same-origin',
+            });
+            if (refreshed.ok) {
+              const { csrfToken } = await refreshed.json();
+              if (win && typeof csrfToken === 'string' && csrfToken) {
+                win.csrfToken = csrfToken;
+                return apiCall(url, options, true);
+              }
+            }
+          } catch (_error) {
+            /* Keep the original mutation error and its unsaved state. */
+          }
+        }
+        const message =
+          typeof errorData?.error === 'string'
+            ? errorData.error
+            : errorData?.error?.message;
         const error = new Error(
-          errorData?.error || `HTTP error! status: ${response.status}`
+          message || `HTTP error! status: ${response.status}`
         );
         error.response = response;
         error.status = response.status;
@@ -149,10 +187,27 @@ export function createAppApiClient(deps = {}) {
         throw error;
       }
 
-      return await readJsonResponse(response);
+      const data = await readJsonResponse(response);
+      if (listId && method !== 'GET')
+        rememberListRevision(
+          listId,
+          response.headers?.get?.('x-list-revision')
+        );
+      if (listId && method === 'GET' && Array.isArray(data)) {
+        Object.defineProperty(data, '_listRevision', {
+          value: response.headers?.get?.('x-list-revision'),
+        });
+      }
+      if (Array.isArray(data?.selectedListItems)) {
+        Object.defineProperty(data.selectedListItems, '_listRevision', {
+          value: data.selectedListRevision,
+        });
+      }
+      return data;
     } catch (error) {
       if (
         error.name !== 'AbortError' &&
+        error.code !== 'SESSION_EXPIRED' &&
         !isExpectedServiceAuthError(error) &&
         !isExpectedConfirmationError(error)
       ) {

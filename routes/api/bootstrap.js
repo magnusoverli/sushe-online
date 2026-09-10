@@ -85,6 +85,7 @@ module.exports = (app, deps) => {
         recommendationYears,
         selectedListId: selectedList ? selectedList.list._id : null,
         selectedListItems: selectedList ? selectedList.items : null,
+        selectedListRevision: selectedList ? selectedList.list.revision : null,
         selectedListProfile: selectedList ? 'core' : null,
         selectedListPlaycounts,
         selectedListPlaycountRefreshing,

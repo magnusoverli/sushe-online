@@ -341,6 +341,13 @@ async function calculateAndSaveAffinity(
 // MAIN FACTORY
 // ============================================
 
+function logSyncStartup(log, syncIntervalMs, staleThresholdMs) {
+  log.info('Starting preference sync service', {
+    syncInterval: `${syncIntervalMs / 1000 / 60} minutes`,
+    staleThreshold: `${staleThresholdMs / 1000 / 60 / 60} hours`,
+  });
+}
+
 /**
  * Create preference sync service with injected dependencies
  * @param {Object} [deps] - Dependencies
@@ -375,6 +382,8 @@ function createPreferenceSyncService(deps = {}) {
   const staleThresholdMs = deps.staleThresholdMs || DEFAULT_STALE_THRESHOLD_MS;
   let syncInterval = null;
   let isRunning = false;
+  let initialTimer = null;
+  const idleWaiters = [];
   /**
    * Get users who need preference sync
    */
@@ -553,6 +562,7 @@ function createPreferenceSyncService(deps = {}) {
       results.errors.push({ source: 'cycle', error: err.message });
     } finally {
       isRunning = false;
+      idleWaiters.splice(0).forEach((resolve) => resolve());
     }
 
     return results;
@@ -567,13 +577,11 @@ function createPreferenceSyncService(deps = {}) {
       return;
     }
 
-    log.info('Starting preference sync service', {
-      syncInterval: `${syncIntervalMs / 1000 / 60} minutes`,
-      staleThreshold: `${staleThresholdMs / 1000 / 60 / 60} hours`,
-    });
+    logSyncStartup(log, syncIntervalMs, staleThresholdMs);
 
     const initialDelay = options.immediate ? 0 : STARTUP_DELAY_MS;
-    setTimeout(() => {
+    initialTimer = setTimeout(() => {
+      initialTimer = null;
       runSyncCycle().catch((err) => {
         log.error('Initial sync cycle failed', { error: err.message });
       });
@@ -590,11 +598,15 @@ function createPreferenceSyncService(deps = {}) {
    * Stop the sync service
    */
   function stop() {
+    clearTimeout(initialTimer);
     if (syncInterval) {
       clearInterval(syncInterval);
       syncInterval = null;
       log.info('Preference sync service stopped');
     }
+    return isRunning
+      ? new Promise((resolve) => idleWaiters.push(resolve))
+      : Promise.resolve();
   }
 
   function isSyncing() {

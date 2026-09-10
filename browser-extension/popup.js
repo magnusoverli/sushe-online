@@ -1,7 +1,7 @@
 // Popup script for SuShe Online extension
 // Renders background-owned extension state.
 
-const { ACTIONS, STORAGE_KEYS, API } = globalThis.ExtensionConstants;
+const { ACTIONS, STORAGE_KEYS } = globalThis.ExtensionConstants;
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Load state and update UI
@@ -168,7 +168,7 @@ async function openLogin() {
     return;
   }
   // Open login page
-  chrome.tabs.create({ url: `${authState.apiUrl}${API.EXTENSION_AUTH}` });
+  await chrome.runtime.sendMessage({ action: ACTIONS.START_LOGIN });
 }
 
 async function logout() {

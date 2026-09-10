@@ -10,6 +10,7 @@
 
 const logger = require('../utils/logger');
 const { ensureDb } = require('../db/postgres');
+const { changePasswordHash } = require('../db/repositories/password-mutations');
 const {
   createUsersRepository,
 } = require('../db/repositories/users-repository');
@@ -48,7 +49,9 @@ const HEX_COLOR_REGEX = /^#[0-9A-F]{6}$/i;
  */
 // eslint-disable-next-line max-lines-per-function -- User service keeps closely related settings/admin mutations in one injected module
 function createUserService(deps = {}) {
-  const db = ensureDb(deps.db, 'UserService');
+  const db = /** @type {import('../db/types').DbFacade} */ (
+    ensureDb(deps.db, 'UserService')
+  );
   const usersRepository = deps.usersRepository || createUsersRepository({ db });
   const invalidateUserCacheDep =
     typeof deps.invalidateUserCache === 'function'
@@ -191,13 +194,12 @@ function createUserService(deps = {}) {
     throw new Error(`Unsupported auth field: ${authField}`);
   }
 
-  async function updatePasswordHash(userId, newHash) {
-    const result = await db.raw(
-      `UPDATE users SET hash = $1, updated_at = $2 WHERE _id = $3 RETURNING _id`,
-      [newHash, new Date(), userId]
-    );
+  async function updatePasswordHash(userId, newHash, expectedHash) {
+    const changed = await changePasswordHash(db, userId, newHash, expectedHash);
     invalidateUserCacheDep(userId);
-    return result.rows.length > 0;
+    if (changed)
+      require('../utils/websocket').broadcast.invalidateUserSessions(userId);
+    return changed;
   }
 
   async function setAdminRole(userId, isAdmin) {

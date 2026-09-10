@@ -128,6 +128,7 @@ class ResponseCache {
       body,
       bytes,
       contentType: options.contentType || 'application/json; charset=utf-8',
+      listRevision: options.listRevision,
       createdAt: now,
       expiresAt: now + ttl,
     };
@@ -220,6 +221,8 @@ function createCacheMiddleware(options = {}) {
         'X-Cache-Key': cacheKey,
         'Content-Type': cached.contentType,
       });
+      if (cached.listRevision !== undefined)
+        res.set('X-List-Revision', cached.listRevision);
       return res.send(cached.body);
     }
 
@@ -234,6 +237,7 @@ function createCacheMiddleware(options = {}) {
       if (res.statusCode >= 200 && res.statusCode < 300) {
         responseCache.set(cacheKey, data, ttl, {
           contentType: res.get('Content-Type'),
+          listRevision: res.get('X-List-Revision'),
           invalidationVersion,
         });
 

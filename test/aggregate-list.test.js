@@ -1143,6 +1143,8 @@ describe('aggregate-list', () => {
   describe('recompute', () => {
     it('should aggregate and store aggregate list', async () => {
       const pool = createMockPool([
+        { rows: [] }, // BEGIN
+        { rows: [] }, // year advisory lock
         // aggregateForYear - main lists
         { rows: [{ list_id: 'list1', user_id: 'user1', username: 'alice' }] },
         // aggregateForYear - list items
@@ -1172,8 +1174,12 @@ describe('aggregate-list', () => {
       const result = await aggregateList.recompute(2024);
 
       assert.ok(result);
-      // Verify upsert was called (3rd query)
-      assert.strictEqual(pool.query.mock.calls.length, 3);
+      assert.strictEqual(pool.query.mock.calls.length, 6);
+      assert.equal(pool.query.mock.calls[0].arguments[0], 'BEGIN');
+      assert.ok(
+        pool.query.mock.calls[1].arguments[0].includes('pg_advisory_xact_lock')
+      );
+      assert.equal(pool.query.mock.calls.at(-1).arguments[0], 'COMMIT');
     });
   });
 

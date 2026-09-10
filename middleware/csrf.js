@@ -2,8 +2,7 @@
  * CSRF Protection Middleware
  *
  * Provides CSRF token creation and verification.
- * Skips validation for safe HTTP methods and Bearer token authentication
- * (browser extensions that use JWT tokens).
+ * Skips validation for safe HTTP methods and verified bearer identities.
  */
 
 const csrf = require('csrf');
@@ -18,6 +17,7 @@ function createCsrfProtection() {
   const csrfTokens = new csrf();
 
   return (req, res, next) => {
+    if (req.authMethod === 'token' && req.user) return next();
     if (!req.session.csrfSecret) {
       req.session.csrfSecret = csrfTokens.secretSync();
       // Force session save when CSRF secret is created
@@ -40,15 +40,7 @@ function createCsrfProtection() {
       return next();
     }
 
-    // Skip CSRF validation for Bearer token authentication (browser extensions)
-    // These requests are already authenticated via JWT tokens stored securely
-    // and don't have access to session-based CSRF tokens
-    const authHeader = req.get('Authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      return next();
-    }
-
-    const token = req.body._csrf || req.headers['x-csrf-token'];
+    const token = req.body?._csrf || req.headers['x-csrf-token'];
 
     // Debug CSRF token issues
     logger.debug('CSRF Debug', {
@@ -58,7 +50,7 @@ function createCsrfProtection() {
       tokenLength: token?.length,
       secretLength: req.session?.csrfSecret?.length,
       userAgent: req.get('User-Agent'),
-      url: req.url,
+      url: require('../utils/log-url').logSafeUrl(req.url),
       method: req.method,
     });
 
@@ -66,10 +58,7 @@ function createCsrfProtection() {
       logger.warn('CSRF token validation failed', {
         hasToken: !!token,
         hasSecret: !!req.session?.csrfSecret,
-        tokenPreview: token?.substring(0, 8) + '...',
-        secretPreview: req.session?.csrfSecret?.substring(0, 8) + '...',
         userAgent: req.get('User-Agent'),
-        sessionId: req.sessionID,
       });
       // error-handler.js branches on err.code; err.status mirrors the HTTP
       // status for any handler that reads it directly.
