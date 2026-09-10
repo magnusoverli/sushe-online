@@ -619,6 +619,7 @@
   
   <script>
     const YEAR = <%= year %>;
+    const CSRF_TOKEN = '<%= csrfToken %>';
     const USER_ID = '<%- user?._id || '' %>';
     
     // HTML escape function to prevent XSS. Canonical source is
@@ -640,6 +641,7 @@
         ...options,
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRF-Token': CSRF_TOKEN,
           ...options.headers,
         },
       });

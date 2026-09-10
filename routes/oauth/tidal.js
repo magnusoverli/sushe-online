@@ -10,6 +10,10 @@
 const { URLSearchParams } = require('url');
 const logger = require('../../utils/logger');
 const { sanitizeReturnPath } = require('../../utils/redirect-path');
+const {
+  beginOAuthState,
+  consumeOAuthState,
+} = require('../../utils/oauth-state');
 
 module.exports = (app, deps) => {
   const { ensureAuth, userService, crypto } = deps;
@@ -20,7 +24,7 @@ module.exports = (app, deps) => {
 
   // Initiate Tidal OAuth flow
   app.get('/auth/tidal', ensureAuth, (req, res) => {
-    const state = crypto.randomBytes(8).toString('hex');
+    const state = beginOAuthState(req.session, 'tidal');
     const verifier = crypto.randomBytes(32).toString('base64url');
     const challenge = crypto
       .createHash('sha256')
@@ -29,8 +33,7 @@ module.exports = (app, deps) => {
       .replace(/=/g, '')
       .replace(/\+/g, '-')
       .replace(/\//g, '_');
-    logger.info('Starting Tidal OAuth flow', { state, userId: req.user._id });
-    req.session.tidalState = state;
+    logger.info('Starting Tidal OAuth flow', { userId: req.user._id });
     req.session.tidalVerifier = verifier;
 
     // Store returnTo path for after OAuth completes
@@ -55,7 +58,14 @@ module.exports = (app, deps) => {
 
   // Handle Tidal OAuth callback
   app.get('/auth/tidal/callback', ensureAuth, async (req, res) => {
-    if (req.query.state !== req.session.tidalState) {
+    if (
+      !consumeOAuthState(req.session, 'tidal', req.query.state) ||
+      typeof req.session.tidalVerifier !== 'string' ||
+      !req.session.tidalVerifier ||
+      typeof req.query.code !== 'string' ||
+      !req.query.code
+    ) {
+      delete req.session.tidalVerifier;
       req.flash('error', 'Invalid Tidal state');
       return res.redirect('/');
     }
@@ -64,7 +74,6 @@ module.exports = (app, deps) => {
     delete req.session.tidalVerifier;
     logger.info('Tidal callback received', {
       hasCode: !!req.query.code,
-      state: req.query.state,
       userId: req.user._id,
     });
     try {
@@ -91,7 +100,6 @@ module.exports = (app, deps) => {
       }
       const token = await resp.json();
       logger.info('Tidal token received', {
-        access_token: token.access_token?.slice(0, 6) + '...',
         expires_in: token.expires_in,
         refresh: !!token.refresh_token,
       });
@@ -146,7 +154,13 @@ module.exports = (app, deps) => {
   });
 
   // Disconnect Tidal account
-  app.get('/auth/tidal/disconnect', ensureAuth, async (req, res) => {
+  app.get('/auth/tidal/disconnect', ensureAuth, (_req, res) =>
+    res
+      .set('Allow', 'POST')
+      .status(405)
+      .json({ error: 'Use POST to disconnect' })
+  );
+  app.post('/auth/tidal/disconnect', ensureAuth, async (req, res) => {
     try {
       await userService.clearTidalAuth(req.user._id);
       delete req.user.tidalAuth;
@@ -156,8 +170,8 @@ module.exports = (app, deps) => {
         error: e.message,
         userId: req.user._id,
       });
-      req.flash('error', 'Failed to disconnect Tidal');
+      return res.status(500).json({ error: 'Failed to disconnect Tidal' });
     }
-    res.redirect('/');
+    res.json({ success: true });
   });
 };

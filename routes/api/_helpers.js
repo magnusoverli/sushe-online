@@ -402,6 +402,8 @@ function createHelpers(deps) {
    * @param {boolean} [options.groups=false] - Also invalidate groups cache
    */
   function invalidateListCaches(userId, listId = null, options = {}) {
+    // Invalidate every representation for this user, including URL query variants.
+    responseCache.invalidate(`:${userId}`);
     const { full = true, groups = false } = options;
     if (listId) {
       responseCache.invalidate(`GET:/api/lists/${listId}`);

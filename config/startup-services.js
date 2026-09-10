@@ -73,7 +73,7 @@ function startSyncServices(db) {
 
       cleanupTasks.push(async () => {
         logger.info('Shutting down preference sync service...');
-        syncService.stop();
+        await syncService.stop();
       });
 
       logger.info('Preference sync service initialized');
@@ -97,7 +97,7 @@ function startSyncServices(db) {
 
       cleanupTasks.push(async () => {
         logger.info('Shutting down playcount sync service...');
-        playcountSyncService.stop();
+        await playcountSyncService.stop();
       });
 
       logger.info('Playcount sync service initialized (24h interval)');
@@ -110,12 +110,13 @@ function startSyncServices(db) {
   }
 
   return async function stopSyncServices() {
-    for (const stopTask of cleanupTasks) {
-      try {
-        await stopTask();
-      } catch (error) {
+    const results = await Promise.allSettled(
+      cleanupTasks.map((stopTask) => stopTask())
+    );
+    for (const result of results) {
+      if (result.status === 'rejected') {
         logger.error('Error while stopping sync service', {
-          error: error.message,
+          error: result.reason.message,
         });
       }
     }

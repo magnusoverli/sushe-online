@@ -45,8 +45,6 @@ module.exports = (app, deps) => {
   const getUserByResetToken = authService.getUserByResetToken.bind(authService);
   const resetPasswordByToken =
     authService.resetPasswordByToken.bind(authService);
-  const revokeAllExtensionTokens =
-    authService.revokeAllExtensionTokens.bind(authService);
 
   // Only the SHA-256 of the token is stored, so a leaked DB row or backup
   // can't be replayed as a live reset link
@@ -146,7 +144,6 @@ module.exports = (app, deps) => {
           logger.warn(
             'No email service configured (RESEND_API_KEY or SENDGRID_API_KEY required) - password reset email not sent'
           );
-          logger.debug('Reset token for testing', { token });
         }
 
         res.redirect('/forgot');
@@ -224,16 +221,6 @@ module.exports = (app, deps) => {
           logger.error('No user updated during password reset');
           req.flash('error', 'Error updating password. Please try again.');
           return res.redirect('/reset/' + req.params.token);
-        }
-
-        // Stolen extension tokens must not outlive the old password
-        try {
-          await revokeAllExtensionTokens(user._id);
-        } catch (revokeError) {
-          logger.error(
-            'Failed to revoke extension tokens after password reset',
-            { error: revokeError.message, userId: user._id }
-          );
         }
 
         logger.info('Password successfully updated for user:', user.email);

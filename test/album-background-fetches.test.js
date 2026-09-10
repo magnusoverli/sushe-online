@@ -42,6 +42,8 @@ function setupListWrite(t, failCommit = false) {
   }
   const client = {
     query: mock.fn(async (sql) => {
+      if (sql.startsWith('SELECT revision FROM lists'))
+        return { rows: [{ revision: '1' }] };
       if (sql.includes('SET cover_image = $1')) {
         events.push('upload');
         return { rows: [{ album_id: albumId }], rowCount: 1 };
@@ -106,6 +108,7 @@ function setupListWrite(t, failCommit = false) {
     triggerAlbumBackgroundFetches: dispatch,
     findListByIdOrThrow: async () => ({
       _id: 'list-1',
+      revision: '0',
       year: 2026,
       is_main: false,
     }),
@@ -129,7 +132,8 @@ function setupListWrite(t, failCommit = false) {
 describe('post-commit enrichment flags', () => {
   const writes = {
     create: (ops, albums) => ops.createList('user-1', { name: 'List', albums }),
-    replace: (ops, albums) => ops.replaceListItems('list-1', 'user-1', albums),
+    replace: (ops, albums) =>
+      ops.replaceListItems('list-1', 'user-1', albums, '0'),
     incremental: (ops, albums) =>
       ops.incrementalUpdate('list-1', 'user-1', { added: albums }, {}),
   };
@@ -184,10 +188,15 @@ describe('post-commit enrichment flags', () => {
 
   it('suppresses cover jobs for all aliases of an explicitly covered canonical album', async (t) => {
     const state = setupListWrite(t);
-    await state.operations.replaceListItems('list-1', 'user-1', [
-      { artist: 'Artist', album: 'Alias' },
-      { artist: 'Artist', album: 'Album', cover_image: preparedCover },
-    ]);
+    await state.operations.replaceListItems(
+      'list-1',
+      'user-1',
+      [
+        { artist: 'Artist', album: 'Alias' },
+        { artist: 'Artist', album: 'Album', cover_image: preparedCover },
+      ],
+      '0'
+    );
     assert.ok(
       state.dispatch.mock.calls[0].arguments[0].every(
         (item) => item.needsCoverFetch === false

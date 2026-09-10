@@ -9,63 +9,44 @@ const {
   resolveTrackPicks,
   processTrackBatches,
 } = require('./playlist-helpers');
+const { findSpotifyPlaylist } = require('./bound-playlist');
 
 /**
  * Create Spotify playlist service
  * @param {Object} deps - Dependencies
  * @param {Object} deps.logger - Logger instance
+ * @param {Object} [deps.bindings]
  * @returns {Object} - Spotify playlist service functions
  */
 // eslint-disable-next-line max-lines-per-function -- Factory function with complex playlist handling logic extracted from api.js
 function createSpotifyPlaylistService(deps) {
-  const { logger } = deps;
+  const { logger, bindings } = deps;
 
   const BASE_URL = 'https://api.spotify.com/v1';
 
-  async function findPlaylistByName(playlistName, headers) {
-    let offset = 0;
-
-    while (true) {
-      const resp = await fetch(
-        `${BASE_URL}/me/playlists?limit=50&offset=${offset}`,
-        {
-          headers,
-        }
-      );
-
-      if (!resp.ok) {
-        const errorText = await resp.text();
-        throw new Error(
-          `Failed to fetch Spotify playlists: ${resp.status} - ${errorText}`
-        );
-      }
-
-      const playlists = await resp.json();
-      const existing = playlists.items.find((p) => p.name === playlistName);
-      if (existing) {
-        return existing;
-      }
-
-      if (!playlists.next) {
-        return null;
-      }
-
-      offset += 50;
-    }
+  async function findBoundPlaylist(user, listId, profile, headers) {
+    return findSpotifyPlaylist(bindings, user, listId, profile, headers);
   }
 
   /**
    * Check if playlist exists in Spotify
-   * @param {string} playlistName - Name of the playlist
+   * @param {string} _playlistName - Display label (not an identifier)
    * @param {Object} auth - Authentication object with access_token
    * @returns {Promise<boolean>} - Whether playlist exists
    */
-  async function checkPlaylistExists(playlistName, auth) {
+  async function checkPlaylistExists(_playlistName, auth, user, listId) {
     const headers = {
       Authorization: `Bearer ${auth.access_token}`,
     };
     try {
-      const existing = await findPlaylistByName(playlistName, headers);
+      const response = await fetch(`${BASE_URL}/me`, { headers });
+      if (!response.ok) throw new Error('Unable to verify Spotify account');
+      const existing = await findBoundPlaylist(
+        user,
+        listId,
+        await response.json(),
+        headers
+      );
       return Boolean(existing);
     } catch (err) {
       logger.error('Error fetching Spotify playlists:', {
@@ -215,7 +196,12 @@ function createSpotifyPlaylistService(deps) {
 
     // Check if playlist exists
     let playlistId = null;
-    const existingPlaylist = await findPlaylistByName(playlistName, headers);
+    const existingPlaylist = await findBoundPlaylist(
+      user,
+      result.listId,
+      profile,
+      headers
+    );
 
     logger.debug('Checking for existing playlists');
     if (existingPlaylist) {
@@ -257,6 +243,14 @@ function createSpotifyPlaylistService(deps) {
       if (!playlistId) {
         throw new Error('Spotify playlist creation returned no playlist id');
       }
+      if (bindings && result.listId)
+        await bindings.set(
+          user._id,
+          result.listId,
+          'spotify',
+          profile.id,
+          playlistId
+        );
       result.playlistUrl =
         newPlaylist.external_urls?.spotify ||
         `https://open.spotify.com/playlist/${playlistId}`;

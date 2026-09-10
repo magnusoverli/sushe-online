@@ -61,7 +61,7 @@ describe('app-realtime-sync module', () => {
     assert.strictEqual(disconnect.mock.calls.length, 1);
   });
 
-  it('refreshes list data only for non-local saves', async () => {
+  it('preserves unsaved work but refreshes after successful local saves', async () => {
     let syncInstance = null;
     let realtimeConfig = null;
     let currentListId = 'list-1';
@@ -86,7 +86,7 @@ describe('app-realtime-sync module', () => {
       getListData: () => [],
       apiCall,
       updateAlbumSummaryInPlace: () => {},
-      wasRecentLocalSave: () => localSave,
+      getListSaveState: () => ({ pending: 0, version: 0, dirty: localSave }),
       setListData,
       updateListNav,
       displayAlbums,
@@ -100,7 +100,7 @@ describe('app-realtime-sync module', () => {
     const localResult = await realtimeConfig.refreshListData('list-2');
     assert.deepStrictEqual(localResult, { wasLocalSave: true });
     assert.strictEqual(apiCall.mock.calls.length, 0);
-    assert.strictEqual(logger.log.mock.calls.length, 1);
+    assert.strictEqual(logger.log.mock.calls.length, 0);
 
     localSave = false;
     currentListId = 'list-2';

@@ -1,4 +1,5 @@
 const logger = require('../utils/logger');
+const PUBLIC_ERROR_CODES = new Map([['EBADCSRFTOKEN', 'CSRF_INVALID']]);
 
 // Error types for better categorization
 const ErrorTypes = {
@@ -47,7 +48,7 @@ function createErrorHandler(log = logger) {
       },
       http: {
         method: req.method,
-        url: req.originalUrl,
+        url: require('../utils/log-url').logSafeUrl(req.originalUrl),
         ip: req.ip,
         userAgent: req.get('User-Agent'),
       },
@@ -145,6 +146,7 @@ function createErrorHandler(log = logger) {
     // Send error response
     const response = {
       success: false,
+      code: PUBLIC_ERROR_CODES.get(err.code),
       error: {
         type: error.type || ErrorTypes.INTERNAL,
         message: error.message || 'Internal Server Error',

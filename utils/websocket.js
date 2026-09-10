@@ -4,6 +4,8 @@
  */
 
 const { Server } = require('socket.io');
+const AUTH_RECHECK_INTERVAL_MS = 30 * 1000;
+const { resolveSessionIdentity } = require('../services/session-identity');
 const {
   incWebsocketConnections,
   decWebsocketConnections,
@@ -37,6 +39,17 @@ function createBroadcast(getIO, logger) {
   }
 
   return {
+    libraryUpdated(userId) {
+      emitToUser('library:updated', 'WebSocket not initialized', userId, {});
+    },
+    invalidateUserSessions(userId) {
+      const io = getIO();
+      if (!io) return;
+      io.to(`user:${userId}`).emit('session:invalidated', {
+        reason: 'credentials_changed',
+      });
+      io.in(`user:${userId}`).disconnectSockets(true);
+    },
     // NOTE: Events now use listId instead of listName to support duplicate names
     listUpdated(userId, listId, options = {}) {
       emitToUser(
@@ -209,19 +222,29 @@ function createWebSocketService(deps = {}) {
    * @param {Object} sessionMiddleware - Express session middleware
    * @returns {Object} Socket.io server instance
    */
-  function setup(httpServer, sessionMiddleware) {
+  function setup(httpServer, sessionMiddleware, options = {}) {
     const originPolicy = createOriginPolicyFromEnv(process.env);
+    const allowOrigin = (request) => {
+      const origin = request.headers.origin;
+      if (isAllowedOrigin(origin, originPolicy)) return true;
+      try {
+        const url = new URL(origin);
+        return (
+          ['http:', 'https:'].includes(url.protocol) &&
+          url.host === request.headers.host
+        );
+      } catch {
+        return false;
+      }
+    };
 
     io = new Server(httpServer, {
-      cors: {
-        origin: function (origin, callback) {
-          if (isAllowedOrigin(origin, originPolicy)) {
-            return callback(null, true);
-          }
-
-          callback(new Error('Not allowed by CORS'));
-        },
-        credentials: true,
+      // CORS alone does not protect WebSocket upgrades.
+      allowRequest: (request, callback) => callback(null, allowOrigin(request)),
+      cors: (request, callback) => {
+        if (!allowOrigin(request))
+          return callback(new Error('Not allowed by CORS'));
+        callback(null, { origin: true, credentials: true });
       },
       // Connection settings
       pingTimeout: 60000,
@@ -230,11 +253,28 @@ function createWebSocketService(deps = {}) {
 
     // Share session with Socket.io
     io.engine.use(sessionMiddleware);
+    io.use(async (socket, next) => {
+      if (!options.authService) return next();
+      try {
+        const user = await resolveSessionIdentity(
+          socket.request.session?.passport?.user,
+          options.authService
+        );
+        if (!user) return next(new Error('Unauthorized'));
+        socket.data.userId = user._id;
+        next();
+      } catch (_error) {
+        next(new Error('Unauthorized'));
+      }
+    });
 
     // Handle new connections
     io.on('connection', (socket) => {
       const session = socket.request.session;
-      const userId = session?.passport?.user;
+      const identity = session?.passport?.user;
+      const userId =
+        socket.data.userId ||
+        (typeof identity === 'string' ? identity : identity?.id);
 
       if (!userId) {
         logger.debug('WebSocket connection rejected: no authenticated user');
@@ -245,6 +285,21 @@ function createWebSocketService(deps = {}) {
       // Join user-specific room for targeted broadcasts
       const userRoom = `user:${userId}`;
       socket.join(userRoom);
+      const authenticationTimer = options.authService
+        ? setInterval(async () => {
+            try {
+              const expires = session?.cookie?.expires;
+              if (
+                (expires && Date.parse(expires) <= Date.now()) ||
+                !(await resolveSessionIdentity(identity, options.authService))
+              )
+                socket.disconnect(true);
+            } catch (_error) {
+              socket.disconnect(true);
+            }
+          }, AUTH_RECHECK_INTERVAL_MS)
+        : null;
+      authenticationTimer?.unref();
 
       // Track connection metrics
       incWebsocketConnections();
@@ -296,6 +351,7 @@ function createWebSocketService(deps = {}) {
 
       // Handle disconnection
       socket.on('disconnect', (reason) => {
+        if (authenticationTimer) clearInterval(authenticationTimer);
         // Track connection metrics
         decWebsocketConnections();
 
@@ -334,10 +390,14 @@ function createWebSocketService(deps = {}) {
    * Shutdown the WebSocket server
    */
   function shutdown() {
-    if (io) {
-      io.close();
-      logger.info('WebSocket server shut down');
-    }
+    if (!io) return Promise.resolve();
+    return new Promise((resolve) =>
+      io.close(() => {
+        io = null;
+        logger.info('WebSocket server shut down');
+        resolve(undefined);
+      })
+    );
   }
 
   return {

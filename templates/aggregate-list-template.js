@@ -16,10 +16,11 @@ function createAggregateListTemplate(deps) {
     headerComponent,
   } = deps;
 
-  return (user, year) =>
+  return (user, year, csrfToken = '') =>
     aggregateListPageTemplateFn({
       user,
       year,
+      csrfToken,
       asset,
       generateAccentCssVars,
       generateAccentOverrides,

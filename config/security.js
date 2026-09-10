@@ -19,7 +19,6 @@ const {
 
 /**
  * Create Helmet security middleware with static-asset bypass optimization.
- * @returns {Function} Express middleware
  */
 function createHelmetMiddleware() {
   /** @type {import('helmet').HelmetOptions} */
@@ -78,26 +77,42 @@ function createHelmetMiddleware() {
 
 /**
  * Create CORS middleware configured for browser extension support.
- * @returns {Function} Express middleware
  */
 function createCorsMiddleware() {
   const originPolicy = createOriginPolicyFromEnv(process.env);
 
   const corsOptions = {
-    origin: function (origin, callback) {
-      if (isAllowedOrigin(origin, originPolicy)) {
-        return callback(null, true);
-      }
-
-      callback(new Error('Not allowed by CORS'));
-    },
     credentials: true, // Allow cookies and authentication headers
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    exposedHeaders: ['Content-Length', 'X-Request-Id'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'X-CSRF-Token',
+      'X-Socket-ID',
+      'If-Match',
+    ],
+    exposedHeaders: ['Content-Length', 'X-Request-Id', 'X-List-Revision'],
   };
 
-  return cors(corsOptions);
+  return (req, res, next) => {
+    const options = {
+      ...corsOptions,
+      origin(origin, callback) {
+        let sameOrigin = false;
+        try {
+          sameOrigin =
+            origin === new URL(`${req.protocol}://${req.get('host')}`).origin;
+        } catch {
+          /* Invalid authorities are not trusted. */
+        }
+        if (sameOrigin || isAllowedOrigin(origin, originPolicy))
+          return callback(null, true);
+        callback(new Error('Not allowed by CORS'));
+      },
+    };
+    return cors(options)(req, res, next);
+  };
 }
 
 module.exports = { createHelmetMiddleware, createCorsMiddleware };

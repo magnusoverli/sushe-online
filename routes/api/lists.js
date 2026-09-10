@@ -106,6 +106,7 @@ module.exports = (app, deps) => {
       if (!result) {
         return res.status(404).json({ error: 'List not found' });
       }
+      res.set('X-List-Revision', result.list.revision);
 
       if (isExport) {
         res.json({
@@ -265,7 +266,13 @@ module.exports = (app, deps) => {
         }
 
         const { list, count, sourceObservationResults, warnings } =
-          await listService.replaceListItems(id, req.user._id, rawAlbums);
+          await listService.replaceListItems(
+            id,
+            req.user._id,
+            rawAlbums,
+            req.get('If-Match')?.replace(/^"|"$/g, '')
+          );
+        res.set('X-List-Revision', list.revision);
 
         invalidateListCaches(req.user._id, id);
         scheduleTaxonomyUpdates(sourceObservationResults);
@@ -293,7 +300,13 @@ module.exports = (app, deps) => {
         return res.status(400).json({ error: 'Invalid order array' });
       }
 
-      const { list } = await listService.reorderItems(id, req.user._id, order);
+      const { list } = await listService.reorderItems(
+        id,
+        req.user._id,
+        order,
+        req.get('If-Match')?.replace(/^"|"$/g, '')
+      );
+      res.set('X-List-Revision', list.revision);
 
       invalidateListCaches(req.user._id, id);
 
@@ -421,9 +434,15 @@ module.exports = (app, deps) => {
         const result = await listService.incrementalUpdate(
           id,
           req.user._id,
-          { added, removed, updated },
+          {
+            added,
+            removed,
+            updated,
+            expectedRevision: req.get('If-Match')?.replace(/^"|"$/g, ''),
+          },
           req.user
         );
+        res.set('X-List-Revision', result.list.revision);
 
         invalidateListCaches(req.user._id, id);
         scheduleTaxonomyUpdates(result.sourceObservationResults);

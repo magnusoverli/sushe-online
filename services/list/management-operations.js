@@ -17,6 +17,8 @@ function createListManagementOperations(deps = {}) {
     isYearLocked: deps.isYearLocked,
     buildPartialUpdate: deps.buildPartialUpdate,
     deleteGroupIfEmptyAutoGroup: deps.deleteGroupIfEmptyAutoGroup,
+    findOrCreateYearGroup: deps.findOrCreateYearGroup,
+    findOrCreateUncategorizedGroup: deps.findOrCreateUncategorizedGroup,
   };
 
   if (!ctx.TransactionAbort) throw new Error('TransactionAbort is required');

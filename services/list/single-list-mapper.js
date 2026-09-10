@@ -15,6 +15,7 @@ function mapSingleListRowToList(listRow) {
     sortOrder: listRow.list_sort_order,
     createdAt: listRow.list_created_at,
     updatedAt: listRow.list_updated_at,
+    revision: String(listRow.list_revision || 0),
   };
 }
 

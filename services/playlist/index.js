@@ -10,18 +10,26 @@
 const { createSpotifyPlaylistService } = require('./spotify-playlist');
 const { createTidalPlaylistService } = require('./tidal-playlist');
 const { resolveTrackPicks } = require('./playlist-helpers');
+const {
+  createPlaylistBindingsRepository,
+} = require('../../db/repositories/playlist-bindings-repository');
 
 /**
  * Create playlist service
  * @param {Object} deps - Dependencies
  * @param {Object} deps.logger - Logger instance
+ * @param {import('../../db/types').DbFacade} [deps.db]
+ * @param {Object} [deps.bindings]
  * @returns {Object} - Playlist service functions
  */
 function createPlaylistService(deps) {
   const { logger } = deps;
+  const bindings =
+    deps.bindings ||
+    (deps.db ? createPlaylistBindingsRepository({ db: deps.db }) : null);
 
-  const spotifyService = createSpotifyPlaylistService({ logger });
-  const tidalService = createTidalPlaylistService({ logger });
+  const spotifyService = createSpotifyPlaylistService({ logger, bindings });
+  const tidalService = createTidalPlaylistService({ logger, bindings });
 
   /**
    * Check if playlist exists in the music service
@@ -30,13 +38,24 @@ function createPlaylistService(deps) {
    * @param {Object} auth - Authentication object with access_token
    * @returns {Promise<boolean>} - Whether playlist exists
    */
-  async function checkPlaylistExists(playlistName, targetService, auth) {
+  async function checkPlaylistExists(
+    playlistName,
+    targetService,
+    auth,
+    user,
+    listId
+  ) {
     logger.info('checkPlaylistExists called:', { playlistName, targetService });
 
     if (targetService === 'spotify') {
-      return spotifyService.checkPlaylistExists(playlistName, auth);
+      return spotifyService.checkPlaylistExists(
+        playlistName,
+        auth,
+        user,
+        listId
+      );
     } else if (targetService === 'tidal') {
-      return tidalService.checkPlaylistExists(playlistName, auth);
+      return tidalService.checkPlaylistExists(playlistName, auth, user, listId);
     }
 
     return false;
@@ -110,10 +129,12 @@ function createPlaylistService(deps) {
     items,
     service,
     auth,
-    user
+    user,
+    listId
   ) {
     const result = {
       service,
+      listId,
       playlistName,
       processed: 0,
       successful: 0,

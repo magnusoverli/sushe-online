@@ -1,4 +1,5 @@
-const extensionAuthTemplate = () => `
+const { escapeHtml } = require('../utils/escape-html');
+const extensionAuthTemplate = (csrfToken = '') => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -124,6 +125,7 @@ const extensionAuthTemplate = () => `
           credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
+            'X-CSRF-Token': '${escapeHtml(csrfToken)}',
           },
         });
 

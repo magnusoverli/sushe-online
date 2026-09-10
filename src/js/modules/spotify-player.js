@@ -6,6 +6,7 @@
 
 import { isMobileViewport } from '../utils/viewport.js';
 import { showToast } from './utils.js';
+import { csrfHeaders } from './csrf-headers.js';
 import { getDeviceIcon } from '../utils/device-icons.js';
 import { formatTime } from './time-utils.js';
 import {
@@ -139,7 +140,7 @@ async function lastfmApiCall(endpoint, body, trackId, onSuccess, logLabel) {
     const response = await fetch(endpoint, {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
       body: JSON.stringify(body),
     });
 
@@ -319,6 +320,7 @@ async function apiCall(url, options = {}, actionName = null) {
     const response = await fetch(url, {
       credentials: 'same-origin',
       ...options,
+      headers: { ...options.headers, ...csrfHeaders() },
     });
 
     if (!response.ok) {

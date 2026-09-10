@@ -102,7 +102,7 @@ describe('password-reset routes', () => {
     assert.strictEqual(authService.resetPasswordByToken.mock.calls.length, 1);
   });
 
-  it('hashes the token before any service lookup and revokes extension tokens on reset', async () => {
+  it('hashes the token and delegates reset plus revocation to the atomic service operation', async () => {
     const { app, authService } = createTestApp();
     const crypto = require('crypto');
     const hashedToken = crypto
@@ -125,11 +125,7 @@ describe('password-reset routes', () => {
     );
     assert.strictEqual(
       authService.revokeAllExtensionTokens.mock.calls.length,
-      1
-    );
-    assert.strictEqual(
-      authService.revokeAllExtensionTokens.mock.calls[0].arguments[0],
-      'user-1'
+      0
     );
   });
 });

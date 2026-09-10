@@ -18,6 +18,7 @@ const {
 } = require('./list/management-operations');
 const { createSetupStatus } = require('./list/setup-status');
 const { createListWriteOperations } = require('./list/write-operations');
+const { withListTransaction } = require('./list/transaction');
 const {
   acquireYearLocks,
   validateYearNotLocked,
@@ -114,6 +115,7 @@ function createListService(deps = {}) {
       sortOrder: row.sort_order,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      revision: String(row.revision || 0),
     };
   }
 
@@ -188,6 +190,8 @@ function createListService(deps = {}) {
     isYearLocked,
     buildPartialUpdate,
     deleteGroupIfEmptyAutoGroup,
+    findOrCreateYearGroup,
+    findOrCreateUncategorizedGroup,
   });
   const setupStatus = createSetupStatus({ db });
   const writeOperations = createListWriteOperations({
@@ -267,12 +271,22 @@ function createListService(deps = {}) {
     });
   }
 
-  async function replaceListItems(listId, userId, rawAlbums) {
-    return writeOperations.replaceListItems(listId, userId, rawAlbums);
+  async function replaceListItems(listId, userId, rawAlbums, expectedRevision) {
+    return writeOperations.replaceListItems(
+      listId,
+      userId,
+      rawAlbums,
+      expectedRevision
+    );
   }
 
-  async function reorderItems(listId, userId, order) {
-    return writeOperations.reorderItems(listId, userId, order);
+  async function reorderItems(listId, userId, order, expectedRevision) {
+    return writeOperations.reorderItems(
+      listId,
+      userId,
+      order,
+      expectedRevision
+    );
   }
 
   async function updateItemComment(listId, userId, identifier, comment) {
@@ -298,13 +312,13 @@ function createListService(deps = {}) {
   async function incrementalUpdate(
     listId,
     userId,
-    { added, removed, updated },
+    { added, removed, updated, expectedRevision },
     user
   ) {
     return writeOperations.incrementalUpdate(
       listId,
       userId,
-      { added, removed, updated },
+      { added, removed, updated, expectedRevision },
       user
     );
   }
@@ -335,54 +349,46 @@ function createListService(deps = {}) {
     trackIdentifier,
     targetPriority
   ) {
-    const owner = await listItemsRepository.findItemWithOwner(listItemId);
-    if (!owner) {
-      return { status: 'not_found' };
-    }
-    if (owner.user_id !== userId) {
-      return { status: 'forbidden' };
-    }
-
-    const result = await listItemsRepository.setTrackPick(
-      listItemId,
-      trackIdentifier,
-      targetPriority
+    return mutateTrackPick(userId, listItemId, (client) =>
+      listItemsRepository.setTrackPick(
+        listItemId,
+        trackIdentifier,
+        targetPriority,
+        client
+      )
     );
-    if (!result) {
-      return { status: 'not_found' };
-    }
-
-    return {
-      status: 'ok',
-      listId: owner.list_id,
-      primary: result.primary,
-      secondary: result.secondary,
-    };
   }
 
   async function removeTrackPick(userId, listItemId, trackIdentifier = null) {
-    const owner = await listItemsRepository.findItemWithOwner(listItemId);
-    if (!owner) {
-      return { status: 'not_found' };
-    }
-    if (owner.user_id !== userId) {
-      return { status: 'forbidden' };
-    }
-
-    const result = await listItemsRepository.removeTrackPick(
-      listItemId,
-      trackIdentifier
+    return mutateTrackPick(userId, listItemId, (client) =>
+      listItemsRepository.removeTrackPick(listItemId, trackIdentifier, client)
     );
-    if (!result) {
-      return { status: 'not_found' };
-    }
+  }
 
-    return {
-      status: 'ok',
-      listId: owner.list_id,
-      primary: result.primary,
-      secondary: result.secondary,
-    };
+  function mutateTrackPick(userId, listItemId, mutate) {
+    return withListTransaction(db, userId, async (client) => {
+      const owner = await listItemsRepository.findItemWithOwner(
+        listItemId,
+        client
+      );
+      if (!owner) return { status: 'not_found' };
+      if (owner.user_id !== userId) return { status: 'forbidden' };
+      await findListByIdOrThrow(
+        owner.list_id,
+        userId,
+        'edit track picks',
+        client
+      );
+      const result = await mutate(client);
+      return result
+        ? {
+            status: 'ok',
+            listId: owner.list_id,
+            primary: result.primary,
+            secondary: result.secondary,
+          }
+        : { status: 'not_found' };
+    });
   }
 
   return {

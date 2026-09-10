@@ -1,5 +1,15 @@
 [
   {
+    "date": "2026-09-10",
+    "category": "security",
+    "description": "Hardened URL previews, account recovery, OAuth linking, and extension sign-in."
+  },
+  {
+    "date": "2026-09-10",
+    "category": "fix",
+    "description": "Protected list transfers, concurrent saves, locked rankings, realtime updates, and playlist exports."
+  },
+  {
     "date": "2026-09-07",
     "category": "fix",
     "description": "Fixed album additions and sped up music search and covers.",

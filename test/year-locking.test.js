@@ -285,8 +285,10 @@ describe('Year Locking Feature', () => {
       await lockYear(pool, testYear);
 
       // Should be able to update items on non-main list (PUT replaces all items)
+      const currentList = await agent.get(`/api/lists/${listId}`).expect(200);
       const res = await agent
         .put(`/api/lists/${listId}`)
+        .set('If-Match', `"${currentList.headers['x-list-revision']}"`)
         .send({
           data: [
             {
@@ -654,6 +656,8 @@ async function loginAs(agent, user) {
     email: user.email,
     password: 'password',
   });
+  const csrf = await agent.get('/api/auth/csrf').expect(200);
+  agent.set('X-CSRF-Token', csrf.body.csrfToken);
 }
 
 async function lockYear(pool, year) {

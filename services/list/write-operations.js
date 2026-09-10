@@ -4,16 +4,21 @@ const {
   acquireTransactionLocks,
 } = require('../../db/advisory-locks');
 const { prepareExplicitCovers } = require('./cover-preparation');
+const { withListTransaction } = require('./transaction');
+const { validateAndCompactOrder } = require('./write/validate-order');
+const { checkRevision, readRevision } = require('./revision');
 
 function preserveDisqualificationState(albums, existingItems) {
   const byItemId = new Map(existingItems.map((item) => [item._id, item]));
   const byAlbumId = new Map(existingItems.map((item) => [item.album_id, item]));
   return albums.map((album) => {
-    if (Object.hasOwn(album, 'is_disqualified')) return album;
     const existing = byItemId.get(album._id) || byAlbumId.get(album.album_id);
-    if (!existing) return album;
+    const identity = byAlbumId.get(album.album_id);
+    const { _id: _submittedId, ...fields } = album;
+    const identified = { ...fields, ...(identity && { _id: identity._id }) };
+    if (Object.hasOwn(album, 'is_disqualified') || !existing) return identified;
     return {
-      ...album,
+      ...identified,
       is_disqualified: existing.is_disqualified === true,
       disqualification_reason: existing.disqualification_reason || null,
     };
@@ -66,6 +71,8 @@ function createListWriteOperations(deps = {}) {
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       throw new TransactionAbort(400, { error: 'List name is required' });
     }
+    if (rawAlbums !== undefined && !Array.isArray(rawAlbums))
+      throw new TransactionAbort(400, { error: 'Albums must be an array' });
 
     const trimmedName = name.trim();
     const listId = crypto.randomBytes(12).toString('hex');
@@ -74,7 +81,7 @@ function createListWriteOperations(deps = {}) {
     await prepareExplicitCovers(rawAlbums, TransactionAbort);
 
     let observationResult = { sourceObservationResults: [], warnings: [] };
-    const listYear = await db.withTransaction(async (client) => {
+    const listYear = await withListTransaction(db, userId, async (client) => {
       let resultYear = null;
       let groupIdInternal;
 
@@ -193,20 +200,23 @@ function createListWriteOperations(deps = {}) {
     };
   }
 
-  async function replaceListItems(listId, userId, rawAlbums) {
+  async function replaceListItems(listId, userId, rawAlbums, expectedRevision) {
+    if (!Array.isArray(rawAlbums))
+      throw new TransactionAbort(400, { error: 'Albums must be an array' });
     const timestamp = new Date();
     let list;
     let observationResult = { sourceObservationResults: [], warnings: [] };
 
     await prepareExplicitCovers(rawAlbums, TransactionAbort);
 
-    await db.withTransaction(async (client) => {
+    await withListTransaction(db, userId, async (client) => {
       list = await findListByIdOrThrow(
         listId,
         userId,
         'modify list items',
         client
       );
+      checkRevision(list, expectedRevision);
 
       await validateMainListNotLocked(
         client,
@@ -241,6 +251,7 @@ function createListWriteOperations(deps = {}) {
         timestamp,
         list._id,
       ]);
+      await readRevision(client, list);
     });
 
     logger?.info('List items replaced', {
@@ -265,9 +276,26 @@ function createListWriteOperations(deps = {}) {
   async function incrementalUpdate(
     listId,
     userId,
-    { added, removed, updated },
+    { added, removed, updated, expectedRevision },
     user
   ) {
+    for (const items of [added, removed, updated]) {
+      if (items !== undefined && !Array.isArray(items))
+        throw new TransactionAbort(400, {
+          error: 'List changes must be arrays',
+        });
+    }
+    if (
+      added?.some(
+        (item) =>
+          item?.position != null &&
+          (!Number.isSafeInteger(item.position) || item.position < 1)
+      )
+    ) {
+      throw new TransactionAbort(400, {
+        error: 'Positions must be positive integers',
+      });
+    }
     const timestamp = new Date();
     let changeCount = 0;
     const addedItems = [];
@@ -279,13 +307,21 @@ function createListWriteOperations(deps = {}) {
 
     await prepareExplicitCovers(added, TransactionAbort);
 
-    await db.withTransaction(async (client) => {
+    await withListTransaction(db, userId, async (client) => {
       list = await findListByIdOrThrow(
         listId,
         userId,
         'modify list items',
         client
       );
+      if (
+        expectedRevision !== undefined ||
+        removed?.length ||
+        updated?.length ||
+        added?.some((item) => item?.position != null)
+      ) {
+        checkRevision(list, expectedRevision);
+      }
 
       await validateMainListNotLocked(
         client,
@@ -319,11 +355,13 @@ function createListWriteOperations(deps = {}) {
         updated,
         timestamp
       );
+      await validateAndCompactOrder(client, list._id);
 
       await client.query('UPDATE lists SET updated_at = $1 WHERE _id = $2', [
         timestamp,
         list._id,
       ]);
+      await readRevision(client, list);
     });
 
     logger?.info('List incrementally updated', {
@@ -356,7 +394,7 @@ function createListWriteOperations(deps = {}) {
   return {
     createList,
     replaceListItems,
-    reorderItems: (listId, userId, order) =>
+    reorderItems: (listId, userId, order, expectedRevision) =>
       reorderItems(
         {
           db,
@@ -366,7 +404,8 @@ function createListWriteOperations(deps = {}) {
         },
         listId,
         userId,
-        order
+        order,
+        expectedRevision
       ),
     incrementalUpdate,
   };

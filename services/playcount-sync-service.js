@@ -184,6 +184,8 @@ function createPlaycountSyncService(deps = {}) {
   const loadUserAlbums = deps.loadLastfmUserAlbums || loadLastfmUserAlbums;
   let syncInterval = null;
   let isRunning = false;
+  let initialTimer = null;
+  const idleWaiters = [];
 
   /**
    * Refresh a single album (for interaction-triggered refreshes).
@@ -282,6 +284,7 @@ function createPlaycountSyncService(deps = {}) {
       recordPlaycountSync('error', 0);
     } finally {
       isRunning = false;
+      idleWaiters.splice(0).forEach((resolve) => resolve());
     }
 
     return results;
@@ -299,7 +302,8 @@ function createPlaycountSyncService(deps = {}) {
     });
 
     const initialDelay = options.immediate ? 0 : STARTUP_DELAY_MS;
-    setTimeout(() => {
+    initialTimer = setTimeout(() => {
+      initialTimer = null;
       runSyncCycle().catch((err) => {
         log.error('Initial playcount sync cycle failed', {
           error: err.message,
@@ -317,11 +321,15 @@ function createPlaycountSyncService(deps = {}) {
   }
 
   function stop() {
+    clearTimeout(initialTimer);
     if (syncInterval) {
       clearInterval(syncInterval);
       syncInterval = null;
       log.info('Playcount sync service stopped');
     }
+    return isRunning
+      ? new Promise((resolve) => idleWaiters.push(resolve))
+      : Promise.resolve();
   }
 
   function isSyncing() {

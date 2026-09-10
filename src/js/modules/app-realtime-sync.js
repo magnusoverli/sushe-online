@@ -14,7 +14,8 @@ export function createAppRealtimeSync(deps = {}) {
     getListData,
     apiCall,
     updateAlbumSummaryInPlace,
-    wasRecentLocalSave,
+    getListSaveState = () => ({ pending: 0, version: 0 }),
+    waitForListSaves = async () => {},
     setListData,
     updateListNav,
     displayAlbums,
@@ -24,6 +25,7 @@ export function createAppRealtimeSync(deps = {}) {
     win = typeof window !== 'undefined' ? window : null,
   } = deps;
   const taxonomyRequests = new Map();
+  const refreshGenerations = new Map();
   const albumPatches = createRealtimeAlbumPatches();
   const METADATA_PATCH_FIELDS = new Set([
     'album',
@@ -163,6 +165,40 @@ export function createAppRealtimeSync(deps = {}) {
     }
   }
 
+  async function refreshList(listId, forceFullRebuild = false) {
+    const generation = (refreshGenerations.get(listId) || 0) + 1;
+    refreshGenerations.set(listId, generation);
+    const requestPatchGeneration = albumPatches.generation;
+    while (refreshGenerations.get(listId) === generation) {
+      await waitForListSaves(listId);
+      const saveState = getListSaveState(listId);
+      if (saveState.dirty) return { wasLocalSave: true };
+      const previousCount = getListData(listId)?.length;
+      const data = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
+      const current = getListSaveState(listId);
+      if (refreshGenerations.get(listId) !== generation)
+        return { wasLocalSave: true };
+      if (current.pending || current.version !== saveState.version) continue;
+      albumPatches.applyAfter(data, requestPatchGeneration);
+      setListData(listId, data);
+      if (previousCount !== data.length) updateListNav();
+      if (getCurrentListId() === listId)
+        displayAlbums(data, { forceFullRebuild });
+      return { wasLocalSave: false };
+    }
+    return { wasLocalSave: true };
+  }
+
+  function invalidateInactiveLists() {
+    for (const [id, list] of Object.entries(getLists())) {
+      const state = getListSaveState(id);
+      if (id !== getCurrentListId() && !state.pending && !state.dirty) {
+        list._data = null;
+        list._dataProfile = null;
+      }
+    }
+  }
+
   function getRealtimeSyncModule() {
     let realtimeSyncModule = getRealtimeSyncModuleInstance();
     if (!realtimeSyncModule) {
@@ -174,53 +210,18 @@ export function createAppRealtimeSync(deps = {}) {
         onAlbumAvailabilityUpdated: handleAlbumAvailabilityUpdated,
         onAlbumMetadataUpdated: handleAlbumMetadataUpdated,
         onAlbumTaxonomyUpdated: handleAlbumTaxonomyUpdated,
-        refreshListData: async (listId) => {
-          if (wasRecentLocalSave(listId)) {
-            logger.log(
-              '[RealtimeSync] Skipping refresh for local save:',
-              listId
-            );
-            return { wasLocalSave: true };
-          }
-
-          const previousCount = getListData(listId)?.length;
-          const refreshGeneration = albumPatches.generation;
-          const data = await apiCall(
-            `/api/lists/${encodeURIComponent(listId)}`
-          );
-          albumPatches.applyAfter(data, refreshGeneration);
-          setListData(listId, data);
-          if (previousCount !== data.length) {
-            updateListNav();
-          }
-          if (getCurrentListId() === listId) {
-            // Let the incremental detector apply the remote add/remove/edit/
-            // reorder instead of forcing a full rebuild — this avoids the
-            // row-recreate flicker, SortableJS re-init, and cover
-            // re-observation on second-device edits. list:updated/reordered
-            // only ever carry fingerprinted changes (item add/remove/comment/
-            // track/order), never cover/availability/summary changes.
-            displayAlbums(data);
-          }
-          return { wasLocalSave: false };
-        },
-        refreshListDataSilent: async (listId) => {
-          const previousCount = getListData(listId)?.length;
-          const refreshGeneration = albumPatches.generation;
-          const data = await apiCall(
-            `/api/lists/${encodeURIComponent(listId)}`
-          );
-          albumPatches.applyAfter(data, refreshGeneration);
-          setListData(listId, data);
-          if (previousCount !== data.length) {
-            updateListNav();
-          }
-          if (getCurrentListId() === listId) {
-            displayAlbums(data, { forceFullRebuild: true });
-          }
-        },
-        refreshListNav: () => {
-          refreshGroupsAndLists();
+        refreshListData: (listId) => refreshList(listId),
+        refreshListDataSilent: (listId) => refreshList(listId, true),
+        refreshListNav: async () => {
+          const id = getCurrentListId();
+          const metadata = () => {
+            const list = getLists()[id];
+            return JSON.stringify([list?.name, list?.year, list?.isMain]);
+          };
+          const before = metadata();
+          invalidateInactiveLists();
+          await refreshGroupsAndLists();
+          return id !== getCurrentListId() || before !== metadata();
         },
         showToast,
         displayAlbums,

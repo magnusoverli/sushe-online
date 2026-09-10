@@ -250,6 +250,7 @@ function createListFetchers(deps = {}) {
                 l.sort_order,
                 l.created_at,
                 l.updated_at,
+                l.revision,
                 g._id AS group_external_id,
                 g.name AS group_name,
                 g.year AS group_year
@@ -270,6 +271,7 @@ function createListFetchers(deps = {}) {
               tl.sort_order AS list_sort_order,
               tl.created_at AS list_created_at,
               tl.updated_at AS list_updated_at,
+              tl.revision AS list_revision,
               li._id,
               li.list_id,
               li.position,

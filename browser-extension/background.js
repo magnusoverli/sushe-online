@@ -8,6 +8,7 @@ importScripts(
   'album-identity-service.js',
   'shared-utils.js',
   'auth-state.js',
+  'login-flow.js',
   'context-menu-service.js',
   'album-presence-service.js',
   'sushe-tab-navigation.js',
@@ -97,6 +98,12 @@ const albumAddService = globalThis.AlbumAddService.createAlbumAddService({
   showErrorMenu,
   onAlbumAdded,
   logger: console,
+});
+
+const loginFlow = globalThis.ExtensionLoginFlow.createLoginFlow({
+  chrome,
+  getApiBase: () => SUSHE_API_BASE,
+  fetch: fetchWithTimeout,
 });
 
 // Get authorization headers for API requests (uses in-memory token for performance)
@@ -736,7 +743,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   // Handle login redirect
   if (info.menuItemId === MENU.LOGIN_ID) {
     // Use the loaded API URL (already loaded by ensureStateLoaded above)
-    chrome.tabs.create({ url: `${SUSHE_API_BASE}${API.EXTENSION_AUTH}` });
+    await loginFlow.begin();
     return;
   }
 
@@ -790,6 +797,31 @@ chrome.notifications.onClicked.addListener((notificationId) => {
 
 // Listen for messages from content script or popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (
+    message.action === ACTIONS.START_LOGIN ||
+    message.action === ACTIONS.COMPLETE_LOGIN
+  ) {
+    (async () => {
+      try {
+        await ensureStateLoaded();
+        if (message.action === ACTIONS.START_LOGIN) {
+          if (
+            sender.tab ||
+            ![
+              chrome.runtime.getURL('popup.html'),
+              chrome.runtime.getURL('options.html'),
+            ].includes(sender.url)
+          ) {
+            throw new Error('Login must be initiated from the extension');
+          }
+          sendResponse(await loginFlow.begin());
+        } else sendResponse(await loginFlow.complete(message, sender));
+      } catch (error) {
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
   // Handle async operations with proper error handling
   if (message.action === ACTIONS.REFRESH_LISTS) {
     // Async operation - keep channel open
@@ -810,6 +842,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         await ensureStateLoaded();
+        if (sender.tab)
+          throw new Error('Settings must be changed from the extension');
+        if (SUSHE_API_BASE !== message.apiUrl) {
+          await loginFlow.cancel();
+          await performLogout(false);
+        }
         SUSHE_API_BASE = message.apiUrl;
         console.log('API URL updated to:', SUSHE_API_BASE);
         clearListCacheInMemory();

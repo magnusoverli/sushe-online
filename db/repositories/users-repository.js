@@ -1,5 +1,6 @@
 const { ensureDb } = require('../postgres');
 const { mapUserRow, USER_SELECT_COLUMNS } = require('../schema/users');
+const { resetPasswordHash } = require('./password-mutations');
 
 /**
  * Provider OAuth payload stored verbatim in the `spotify_auth` / `tidal_auth`
@@ -25,7 +26,9 @@ const { mapUserRow, USER_SELECT_COLUMNS } = require('../schema/users');
 
 /** @param {{ db?: * }} [deps] - `db` is validated by ensureDb, which types the result. */
 function createUsersRepository(deps = {}) {
-  const db = ensureDb(deps.db, 'users-repository');
+  const db = /** @type {import('../types').DbFacade} */ (
+    ensureDb(deps.db, 'users-repository')
+  );
 
   /** @param {string} userId - `users._id` (TEXT), not the SERIAL `id`. */
   async function findById(userId) {
@@ -94,18 +97,7 @@ function createUsersRepository(deps = {}) {
    * @param {string} hash - Already-hashed password to store in `users.hash`.
    */
   async function resetPasswordByToken(token, nowMs, hash) {
-    const result = await db.raw(
-      `UPDATE users
-       SET hash = $1,
-           reset_token = NULL,
-           reset_expires = NULL,
-           updated_at = NOW()
-       WHERE reset_token = $2
-         AND reset_expires > $3`,
-      [hash, token, nowMs],
-      { name: 'users-repo-reset-password-by-token' }
-    );
-    return result.rowCount;
+    return resetPasswordHash(db, token, nowMs, hash);
   }
 
   /**

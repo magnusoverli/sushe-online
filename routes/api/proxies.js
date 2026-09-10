@@ -15,6 +15,9 @@ const { createAsyncHandler } = require('../../middleware/async-handler');
 const { SUSHE_USER_AGENT } = require('../../utils/musicbrainz-helpers');
 const { validateUnfurlTarget } = require('../../utils/unfurl-url');
 const {
+  publicRequest: defaultPublicRequest,
+} = require('../../utils/public-request');
+const {
   createPublicProviderRequests,
 } = require('../../services/public-provider-requests');
 const {
@@ -78,6 +81,21 @@ module.exports = (app, deps) => {
   } = deps;
 
   const asyncHandler = createAsyncHandler(logger);
+  const publicRequest = deps.publicRequest || defaultPublicRequest;
+  async function requestPublicForClient(req, res, url, options) {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    res.once('close', abort);
+    try {
+      if (req.aborted || res.destroyed) controller.abort();
+      return await publicRequest(url, {
+        ...options,
+        signal: controller.signal,
+      });
+    } finally {
+      res.removeListener('close', abort);
+    }
+  }
   const trackService = createTrackResolutionService({ fetch, mbFetch, logger });
   const providerRequests = createPublicProviderRequests(
     deps.providerRequestOptions
@@ -494,24 +512,12 @@ module.exports = (app, deps) => {
 
       // Use request queue to limit concurrent image fetches
       const result = await imageProxyQueue.add(async () => {
-        const response = await fetch(url, {
-          headers: {
-            'User-Agent': SUSHE_USER_AGENT,
-          },
+        const { buffer } = await requestPublicForClient(req, res, url, {
+          headers: { 'User-Agent': SUSHE_USER_AGENT },
+          allowedHosts,
+          contentTypes: ['image/'],
+          maxBytes: 10 * 1024 * 1024,
         });
-
-        if (!response.ok) {
-          throw new Error(
-            `Image fetch responded with status ${response.status}`
-          );
-        }
-
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.startsWith('image/')) {
-          throw new Error('Response is not an image');
-        }
-
-        const buffer = await response.arrayBuffer();
 
         // Resize image to 512x512 pixels using sharp
         // Use 'inside' fit to maintain aspect ratio without cropping
@@ -549,23 +555,16 @@ module.exports = (app, deps) => {
         return res.status(400).json({ error: validation.error });
       }
 
-      const response = await fetch(validation.url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (SuSheBot)' },
-      });
-
-      if (!response.ok) {
-        return res.status(502).json({ error: 'Failed to fetch target URL' });
-      }
-
-      const contentType = response.headers.get('content-type') || '';
-      if (
-        !contentType.includes('text/html') &&
-        !contentType.includes('application/xhtml+xml')
-      ) {
-        return res.status(415).json({ error: 'URL must return HTML content' });
-      }
-
-      const html = await response.text();
+      const { buffer } = await requestPublicForClient(
+        req,
+        res,
+        validation.url,
+        {
+          headers: { 'User-Agent': 'Mozilla/5.0 (SuSheBot)' },
+          contentTypes: ['text/html', 'application/xhtml+xml'],
+        }
+      );
+      const html = buffer.toString('utf8');
 
       const getMeta = (name) => {
         const metaTag =

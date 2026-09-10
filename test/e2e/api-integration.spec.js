@@ -12,6 +12,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
+const { sessionApi } = require('./session-api');
 
 // Test configuration - use a consistent test user
 const TEST_USER = {
@@ -194,7 +195,7 @@ async function createList(page, { name, year, data, groupId }) {
   if (year !== undefined) body.year = year;
   if (groupId !== undefined) body.groupId = groupId;
 
-  const response = await page.request.post('/api/lists', { data: body });
+  const response = await sessionApi(page).post('/api/lists', { data: body });
   return { response, json: await response.json() };
 }
 
@@ -246,7 +247,7 @@ test.describe('Lists API Integration', () => {
     expect(listsBody[listId][0].artist).toBe('Radiohead');
 
     // UPDATE: Replace list items with PUT /api/lists/:id
-    const updateResponse = await page.request.put(`/api/lists/${listId}`, {
+    const updateResponse = await sessionApi(page).put(`/api/lists/${listId}`, {
       data: {
         data: [
           { artist: 'Radiohead', album: 'OK Computer' },
@@ -263,7 +264,9 @@ test.describe('Lists API Integration', () => {
     expect(updatedBody[listId]).toHaveLength(3);
 
     // DELETE: Remove the list by ID
-    const deleteResponse = await page.request.delete(`/api/lists/${listId}`);
+    const deleteResponse = await sessionApi(page).delete(
+      `/api/lists/${listId}`
+    );
     expect(deleteResponse.status()).toBe(200);
 
     // Verify deletion
@@ -276,7 +279,7 @@ test.describe('Lists API Integration', () => {
     await setupAuthenticatedUser(page);
 
     // First create a collection
-    const groupResponse = await page.request.post('/api/groups', {
+    const groupResponse = await sessionApi(page).post('/api/groups', {
       data: { name: 'Test Collection For List' },
     });
     expect(groupResponse.status()).toBe(201);
@@ -300,8 +303,8 @@ test.describe('Lists API Integration', () => {
     expect(list).not.toBeNull();
 
     // Cleanup
-    await page.request.delete(`/api/lists/${listId}`);
-    await page.request.delete(`/api/groups/${groupId}`);
+    await sessionApi(page).delete(`/api/lists/${listId}`);
+    await sessionApi(page).delete(`/api/groups/${groupId}`);
   });
 
   test('should auto-create year group when creating list with year', async ({
@@ -330,7 +333,7 @@ test.describe('Lists API Integration', () => {
     expect(yearGroup.name).toBe('2019');
 
     // Cleanup
-    await page.request.delete(`/api/lists/${listId}`);
+    await sessionApi(page).delete(`/api/lists/${listId}`);
   });
 
   test('should reject invalid data field on item update', async ({ page }) => {
@@ -344,7 +347,7 @@ test.describe('Lists API Integration', () => {
     const listId = createBody._id;
 
     // PUT with wrong field name — 'albums' instead of 'data'
-    const response = await page.request.put(`/api/lists/${listId}`, {
+    const response = await sessionApi(page).put(`/api/lists/${listId}`, {
       data: {
         albums: [], // Wrong! Should be 'data'
       },
@@ -354,13 +357,13 @@ test.describe('Lists API Integration', () => {
     expect(body.error).toBe('Invalid albums array');
 
     // Cleanup
-    await page.request.delete(`/api/lists/${listId}`);
+    await sessionApi(page).delete(`/api/lists/${listId}`);
   });
 
   test('should reject invalid groupId', async ({ page }) => {
     await setupAuthenticatedUser(page);
 
-    const response = await page.request.post('/api/lists', {
+    const response = await sessionApi(page).post('/api/lists', {
       data: {
         name: 'Bad Group Test',
         data: [],
@@ -377,7 +380,7 @@ test.describe('Groups API Integration', () => {
     await setupAuthenticatedUser(page);
 
     // CREATE
-    const createResponse = await page.request.post('/api/groups', {
+    const createResponse = await sessionApi(page).post('/api/groups', {
       data: { name: 'My Test Collection' },
     });
     expect(createResponse.status()).toBe(201);
@@ -386,9 +389,12 @@ test.describe('Groups API Integration', () => {
     const groupId = createBody._id;
 
     // RENAME
-    const renameResponse = await page.request.patch(`/api/groups/${groupId}`, {
-      data: { name: 'Renamed Collection' },
-    });
+    const renameResponse = await sessionApi(page).patch(
+      `/api/groups/${groupId}`,
+      {
+        data: { name: 'Renamed Collection' },
+      }
+    );
     expect(renameResponse.status()).toBe(200);
 
     // Verify rename
@@ -398,7 +404,9 @@ test.describe('Groups API Integration', () => {
     expect(renamedGroup.name).toBe('Renamed Collection');
 
     // DELETE
-    const deleteResponse = await page.request.delete(`/api/groups/${groupId}`);
+    const deleteResponse = await sessionApi(page).delete(
+      `/api/groups/${groupId}`
+    );
     expect(deleteResponse.status()).toBe(200);
 
     // Verify deletion
@@ -411,25 +419,25 @@ test.describe('Groups API Integration', () => {
     await setupAuthenticatedUser(page);
 
     // Create first
-    const first = await page.request.post('/api/groups', {
+    const first = await sessionApi(page).post('/api/groups', {
       data: { name: 'Unique Name' },
     });
     const firstBody = await first.json();
 
     // Try duplicate
-    const duplicateResponse = await page.request.post('/api/groups', {
+    const duplicateResponse = await sessionApi(page).post('/api/groups', {
       data: { name: 'Unique Name' },
     });
     expect(duplicateResponse.status()).toBe(409);
 
     // Cleanup
-    await page.request.delete(`/api/groups/${firstBody._id}`);
+    await sessionApi(page).delete(`/api/groups/${firstBody._id}`);
   });
 
   test('should reject year as collection name', async ({ page }) => {
     await setupAuthenticatedUser(page);
 
-    const response = await page.request.post('/api/groups', {
+    const response = await sessionApi(page).post('/api/groups', {
       data: { name: '2024' },
     });
     expect(response.status()).toBe(400);
@@ -457,7 +465,7 @@ test.describe('Track Picks API Integration', () => {
 
     if (!album?._id) {
       // List item must have _id for track picks API
-      await page.request.delete(`/api/lists/${listId}`);
+      await sessionApi(page).delete(`/api/lists/${listId}`);
       test.skip();
       return;
     }
@@ -465,7 +473,7 @@ test.describe('Track Picks API Integration', () => {
     const listItemId = album._id;
 
     // SET track pick (now uses list item ID instead of album ID)
-    const setResponse = await page.request.post(
+    const setResponse = await sessionApi(page).post(
       `/api/track-picks/${listItemId}`,
       {
         data: {
@@ -479,7 +487,7 @@ test.describe('Track Picks API Integration', () => {
     expect(setBody.primary_track).toBe('My Favorite Track');
 
     // REMOVE track pick
-    const removeResponse = await page.request.delete(
+    const removeResponse = await sessionApi(page).delete(
       `/api/track-picks/${listItemId}`,
       {
         data: { trackIdentifier: 'My Favorite Track' },
@@ -488,7 +496,7 @@ test.describe('Track Picks API Integration', () => {
     expect(removeResponse.status()).toBe(200);
 
     // Cleanup
-    await page.request.delete(`/api/lists/${listId}`);
+    await sessionApi(page).delete(`/api/lists/${listId}`);
   });
 });
 
@@ -508,7 +516,7 @@ test.describe('List Main Status', () => {
     expect(createBody.success).toBe(true);
 
     // Set as main using the list ID
-    const setMainResponse = await page.request.post(
+    const setMainResponse = await sessionApi(page).post(
       `/api/lists/${listId}/main`,
       {
         data: { isMain: true },
@@ -522,7 +530,7 @@ test.describe('List Main Status', () => {
     expect(list.isMain).toBe(true);
 
     // Cleanup
-    await page.request.delete(`/api/lists/${listId}`);
+    await sessionApi(page).delete(`/api/lists/${listId}`);
   });
 });
 
@@ -541,7 +549,7 @@ test.describe('Error Handling', () => {
     await setupAuthenticatedUser(page);
 
     // Missing required 'name' field
-    const response = await page.request.post('/api/lists', {
+    const response = await sessionApi(page).post('/api/lists', {
       data: { year: 2024, data: [] },
     });
     expect(response.status()).toBe(400);
@@ -584,7 +592,7 @@ test.describe('Album Data Preservation', () => {
     // Note: Some fields may be normalized, but core data should be preserved
 
     // Cleanup
-    await page.request.delete(`/api/lists/${listId}`);
+    await sessionApi(page).delete(`/api/lists/${listId}`);
   });
 });
 
@@ -605,6 +613,6 @@ test.describe('Special Characters', () => {
     expect(list.name).toBe(specialName);
 
     // Cleanup
-    await page.request.delete(`/api/lists/${listId}`);
+    await sessionApi(page).delete(`/api/lists/${listId}`);
   });
 });

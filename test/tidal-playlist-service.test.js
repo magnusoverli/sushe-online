@@ -27,11 +27,15 @@ describe('tidal-playlist-service', () => {
 
     global.fetch = mock.fn(async (url) => {
       calls.push(String(url));
+      if (String(url).endsWith('/me'))
+        return createFetchResponse({ jsonData: { id: 'account' } });
 
       if (String(url).includes('offset=0')) {
         const firstPage = Array.from({ length: 50 }, (_, i) => ({
+          id: `unrelated-${i}`,
           attributes: { title: `Other ${i}` },
         }));
+        firstPage[0].attributes.title = 'Target Playlist';
         return createFetchResponse({
           jsonData: { data: firstPage },
         });
@@ -39,7 +43,7 @@ describe('tidal-playlist-service', () => {
 
       return createFetchResponse({
         jsonData: {
-          data: [{ attributes: { title: 'Target Playlist' } }],
+          data: [{ id: 'bound', attributes: { title: 'Renamed Playlist' } }],
         },
       });
     });
@@ -47,10 +51,16 @@ describe('tidal-playlist-service', () => {
     try {
       const service = createTidalPlaylistService({
         logger: createMockLogger(),
+        bindings: { get: async () => 'bound' },
       });
-      const exists = await service.checkPlaylistExists('Target Playlist', {
-        access_token: 'token',
-      });
+      const exists = await service.checkPlaylistExists(
+        'Target Playlist',
+        {
+          access_token: 'token',
+        },
+        { _id: 'user' },
+        'list'
+      );
 
       assert.strictEqual(exists, true);
       assert.ok(calls.some((url) => url.includes('offset=50')));
@@ -89,8 +99,10 @@ describe('tidal-playlist-service', () => {
     try {
       const service = createTidalPlaylistService({
         logger: createMockLogger(),
+        bindings: { get: async () => 'pl1' },
       });
       const result = {
+        listId: 'list',
         processed: 0,
         successful: 0,
         failed: 0,
@@ -105,7 +117,7 @@ describe('tidal-playlist-service', () => {
             'My Playlist',
             [{ artist: 'Artist', album: 'Album', primaryTrack: 'Song' }],
             { access_token: 'token' },
-            { tidalCountry: 'US' },
+            { _id: 'user', tidalCountry: 'US' },
             result
           ),
         /Failed to clear Tidal playlist tracks/

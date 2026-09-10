@@ -130,6 +130,21 @@ module.exports = (app, deps) => {
     crypto,
     coverCache,
   });
+  const {
+    registerListMutationPublisher,
+  } = require('../../services/list/transaction');
+  const {
+    createListMutationPublisher,
+  } = require('../../services/list/mutation-publisher');
+  registerListMutationPublisher(
+    db,
+    createListMutationPublisher({
+      responseCache,
+      aggregateList: helpers.aggregateList,
+      getBroadcast: () => app.locals.broadcast,
+      logger,
+    })
+  );
 
   // Create service auth middleware
   const {
@@ -145,7 +160,7 @@ module.exports = (app, deps) => {
   });
 
   // Create playlist service
-  const playlistService = createPlaylistService({ logger });
+  const playlistService = createPlaylistService({ logger, db });
 
   const albumTaxonomyService = createAlbumTaxonomyService({ db, logger });
   const sourceObservationService = createAlbumSourceObservationService({

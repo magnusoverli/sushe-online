@@ -15,6 +15,7 @@ const COMMENT_FIELD_CONFIG = {
     logMessage: 'Comment 2 updated',
   },
 };
+const { withListTransaction } = require('./transaction');
 
 function createItemComments(deps = {}) {
   const { db, TransactionAbort, findListByIdOrThrow, logger } = deps;
@@ -38,7 +39,7 @@ function createItemComments(deps = {}) {
     const trimmedComment = comment ? comment.trim() : null;
     const now = new Date();
 
-    await db.withTransaction(async (client) => {
+    await withListTransaction(db, userId, async (client) => {
       const list = await findListByIdOrThrow(
         listId,
         userId,

@@ -78,7 +78,15 @@ function createAuthService(deps = {}) {
   }
 
   async function resetPasswordByToken(token, nowMs, newHash) {
-    return usersRepository.resetPasswordByToken(token, nowMs, newHash);
+    const user = await usersRepository.findByResetToken(token, nowMs);
+    const updated = await usersRepository.resetPasswordByToken(
+      token,
+      nowMs,
+      newHash
+    );
+    if (updated && user)
+      require('../utils/websocket').broadcast.invalidateUserSessions(user._id);
+    return updated;
   }
 
   // ── Registration ─────────────────────────────────────────────────────────
@@ -356,7 +364,8 @@ function createAuthService(deps = {}) {
     _unused,
     userId,
     userAgent,
-    generateToken
+    generateToken,
+    authVersion = '0'
   ) {
     const token = generateToken();
     const expiresAt = new Date(Date.now() + EXTENSION_TOKEN_EXPIRY_MS);
@@ -364,14 +373,15 @@ function createAuthService(deps = {}) {
     // Store only the hash + a short non-secret lookup prefix. The raw token is
     // returned to the caller once and is never recoverable from the database.
     await db.raw(
-      `INSERT INTO extension_tokens (user_id, token_hash, token_lookup, expires_at, user_agent)
-       VALUES ($1, $2, $3, $4, $5)`,
+      `INSERT INTO extension_tokens (user_id, token_hash, token_lookup, expires_at, user_agent, auth_version)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [
         userId,
         hashExtensionToken(token),
         extensionTokenLookup(token),
         expiresAt,
         userAgent,
+        String(authVersion),
       ],
       { name: 'extension-tokens-insert' }
     );

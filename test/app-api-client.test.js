@@ -74,9 +74,9 @@ describe('app-api-client module', () => {
       logger: { error: () => {} },
     });
 
-    const result = await client.apiCall('/api/protected');
-
-    assert.strictEqual(result, undefined);
+    await assert.rejects(client.apiCall('/api/protected'), {
+      code: 'SESSION_EXPIRED',
+    });
     assert.strictEqual(win.location.href, '/login');
   });
 
@@ -184,9 +184,9 @@ describe('app-api-client module', () => {
       logger,
     });
 
-    const result = await client.apiCall('/admin/restore/restore_1/status');
-
-    assert.strictEqual(result, undefined);
+    await assert.rejects(client.apiCall('/admin/restore/restore_1/status'), {
+      code: 'SESSION_EXPIRED',
+    });
     assert.strictEqual(win.location.href, '/login');
     assert.strictEqual(logger.error.mock.calls.length, 0);
   });

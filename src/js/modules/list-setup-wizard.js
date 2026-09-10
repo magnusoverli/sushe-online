@@ -273,6 +273,16 @@ function updateSaveButton() {
 /**
  * Handle save button click
  */
+export function assertBulkUpdateResult(result) {
+  if (!Array.isArray(result?.results))
+    throw new Error('Invalid list update response');
+  const failures = result.results.filter((item) => !item.success);
+  if (failures.length)
+    throw new Error(
+      `${failures.length} update(s) were not saved: ${failures[0].error || 'Update rejected'}`
+    );
+}
+
 async function handleSave() {
   const saveBtn = document.getElementById('listSetupSave');
   if (!saveBtn || saveBtn.disabled) return;
@@ -310,10 +320,11 @@ async function handleSave() {
   saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
 
   try {
-    await apiCall('/api/lists/bulk-update', {
+    const result = await apiCall('/api/lists/bulk-update', {
       method: 'POST',
       body: JSON.stringify({ updates }),
     });
+    assertBulkUpdateResult(result);
 
     showToast('Lists updated successfully!', 'success');
     hideWizard();

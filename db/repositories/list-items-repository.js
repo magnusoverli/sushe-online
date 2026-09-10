@@ -131,6 +131,17 @@ function calculateUpdatedTrackPicks(current, trackIdentifier, targetPriority) {
   return { primary: newPrimary, secondary: newSecondary };
 }
 
+/**
+ * @template T
+ * @param {import('../types').DbFacade} db
+ * @param {import('pg').PoolClient|null} client
+ * @param {(client: import('pg').PoolClient) => Promise<T>} callback
+ * @returns {Promise<T>}
+ */
+function inTransaction(db, client, callback) {
+  return client ? callback(client) : db.withTransaction(callback);
+}
+
 /** @param {{ db?: * }} [deps] - `db` is validated by ensureDb, which types the result. */
 function createListItemsRepository(deps = {}) {
   // ensureDb only guarantees `.raw` is callable; the cast pins the canonical
@@ -179,18 +190,21 @@ function createListItemsRepository(deps = {}) {
 
   /**
    * @param {string} listItemId - `list_items._id` (TEXT).
+   * @param {import('pg').PoolClient|null} [transactionClient]
    * @returns {Promise<{ list_item_id: string, list_id: string, user_id: string }|null>}
    */
-  async function findItemWithOwner(listItemId) {
-    const result = await db.raw(
-      `SELECT li._id AS list_item_id, li.list_id, l.user_id
-       FROM list_items li
-       JOIN lists l ON l._id = li.list_id
-       WHERE li._id = $1
-       LIMIT 1`,
-      [listItemId],
-      { name: 'list-items-repo-item-owner', retryable: true }
-    );
+  async function findItemWithOwner(listItemId, transactionClient = null) {
+    const sql = `SELECT li._id AS list_item_id, li.list_id, l.user_id
+        FROM list_items li
+        JOIN lists l ON l._id = li.list_id
+        WHERE li._id = $1
+        LIMIT 1`;
+    const result = transactionClient
+      ? await transactionClient.query(sql, [listItemId])
+      : await db.raw(sql, [listItemId], {
+          name: 'list-items-repo-item-owner',
+          retryable: true,
+        });
     return result.rows[0] || null;
   }
 
@@ -198,10 +212,16 @@ function createListItemsRepository(deps = {}) {
    * @param {string} listItemId - `list_items._id` (TEXT).
    * @param {string} trackIdentifier
    * @param {number} targetPriority - 1 = primary, anything else = secondary.
+   * @param {import('pg').PoolClient|null} [transactionClient]
    * @returns {Promise<TrackPicks|null>} null when the list item does not exist.
    */
-  async function setTrackPick(listItemId, trackIdentifier, targetPriority) {
-    return db.withTransaction(async (client) => {
+  async function setTrackPick(
+    listItemId,
+    trackIdentifier,
+    targetPriority,
+    transactionClient = null
+  ) {
+    return inTransaction(db, transactionClient, async (client) => {
       const current = await client.query(
         `SELECT primary_track, secondary_track FROM list_items WHERE _id = $1 FOR UPDATE`,
         [listItemId]
@@ -234,10 +254,15 @@ function createListItemsRepository(deps = {}) {
    * @param {string} listItemId - `list_items._id` (TEXT).
    * @param {string|null} [trackIdentifier] - When null/omitted, both picks are
    *   cleared; otherwise only the pick(s) matching it are cleared.
+   * @param {import('pg').PoolClient|null} [transactionClient]
    * @returns {Promise<TrackPicks|null>} null when the list item does not exist.
    */
-  async function removeTrackPick(listItemId, trackIdentifier = null) {
-    return db.withTransaction(async (client) => {
+  async function removeTrackPick(
+    listItemId,
+    trackIdentifier = null,
+    transactionClient = null
+  ) {
+    return inTransaction(db, transactionClient, async (client) => {
       const current = await client.query(
         `SELECT primary_track, secondary_track FROM list_items WHERE _id = $1 FOR UPDATE`,
         [listItemId]

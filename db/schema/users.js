@@ -5,6 +5,7 @@ const USER_SELECT_COLUMNS = `
   email,
   username,
   hash,
+  auth_version,
   accent_color,
   time_format,
   date_format,
@@ -42,6 +43,7 @@ const USER_SELECT_COLUMNS = `
  * @property {string} email
  * @property {string} username
  * @property {string} hash
+ * @property {string|number} [auth_version]
  * @property {string|null} accent_color
  * @property {string|null} time_format
  * @property {string|null} date_format
@@ -79,6 +81,7 @@ function mapUserRow(row) {
     email: row.email,
     username: row.username,
     hash: row.hash,
+    authVersion: String(row.auth_version || 0),
     accentColor: row.accent_color,
     timeFormat: row.time_format,
     dateFormat: row.date_format,

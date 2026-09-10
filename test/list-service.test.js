@@ -7,6 +7,20 @@ const { createMockLogger, asMockDb } = require('./helpers');
 
 function createServiceDeps(pool) {
   const db = asMockDb(pool);
+  const run = db.withTransaction.bind(db);
+  db.withTransaction = (fn) =>
+    run((client) =>
+      fn({
+        ...client,
+        query: async (sql, params) => {
+          if (sql.startsWith('SELECT revision FROM lists'))
+            return { rows: [{ revision: '1' }] };
+          if (sql.startsWith('SELECT _id, position FROM list_items'))
+            return { rows: [] };
+          return client.query(sql, params);
+        },
+      })
+    );
   return {
     db,
     logger: createMockLogger(),
@@ -146,7 +160,7 @@ describe('list-service reorderItems', () => {
     const service = createListService(createServiceDeps(pool));
 
     await assert.rejects(
-      () => service.reorderItems('list1', 'user1', ['album1']),
+      () => service.reorderItems('list1', 'user1', ['album1'], '0'),
       (err) => {
         assert.ok(err instanceof TransactionAbort);
         assert.strictEqual(err.statusCode, 400);
@@ -202,10 +216,12 @@ describe('list-service reorderItems', () => {
     };
 
     const service = createListService(createServiceDeps(pool));
-    const result = await service.reorderItems('list1', 'user1', [
-      'album2',
-      'album1',
-    ]);
+    const result = await service.reorderItems(
+      'list1',
+      'user1',
+      ['album2', 'album1'],
+      '0'
+    );
 
     assert.strictEqual(result.itemCount, 2);
     assert.deepStrictEqual(updateParams[1], ['item2', 'item1']);
@@ -254,7 +270,12 @@ describe('list-service reorderItems', () => {
 
     await assert.rejects(
       () =>
-        service.reorderItems('list1', 'user1', [{ _id: 'item1' }, 'album2']),
+        service.reorderItems(
+          'list1',
+          'user1',
+          [{ _id: 'item1' }, 'album2'],
+          '0'
+        ),
       (err) => {
         assert.ok(err instanceof TransactionAbort);
         assert.strictEqual(err.statusCode, 400);
