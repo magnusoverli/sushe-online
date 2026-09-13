@@ -41,7 +41,7 @@
     /* Responsive layout system */
     .app-layout {
       display: grid;
-      grid-template-rows: auto 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
       height: 100vh;
       height: 100dvh;
     }
@@ -49,6 +49,8 @@
     .main-content {
       display: grid;
       grid-template-columns: 0 1fr; /* Mobile: no sidebar */
+      grid-template-rows: minmax(0, 1fr);
+      min-height: 0;
       overflow: hidden;
     }
     
@@ -72,6 +74,7 @@
     /* Sidebar responsive behavior */
     .sidebar {
       width: 0;
+      min-height: 0;
       overflow: hidden;
       border-right: none; /* Hide border on mobile */
     }
@@ -204,13 +207,10 @@
         </button>
       </div>
       
-      <nav class="flex-1 overflow-y-auto p-2 flex flex-col min-h-0">
-        <div class="flex-1 overflow-y-auto">
-          <ul id="listNav" class="space-y-px pr-1">
-            <!-- Lists will be populated here -->
-          </ul>
-        </div>
-        
+      <nav class="flex-1 min-h-0 overflow-y-auto p-2">
+        <ul id="listNav" class="space-y-px pr-1">
+          <!-- Lists will be populated here -->
+        </ul>
       </nav>
       
       <!-- Sidebar action buttons -->
@@ -367,7 +367,7 @@
     </aside>
       
       <!-- Album Display Area -->
-      <main class="flex-1 overflow-hidden flex flex-col">
+      <main class="flex-1 min-h-0 overflow-hidden flex flex-col">
         <div id="albumContainer" class="flex-1 overflow-y-auto flex flex-col min-h-0">
           <!-- Albums will be displayed here -->
           <div class="text-center text-gray-500 mt-20">
