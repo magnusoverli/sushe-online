@@ -2,6 +2,11 @@
   {
     "date": "2026-09-14",
     "category": "fix",
+    "description": "Corrected extension ZIP packaging and added root-manifest validation for Chrome Web Store uploads."
+  },
+  {
+    "date": "2026-09-14",
+    "category": "fix",
     "description": "Fixed extension album saves and enrichment failing while signed into the website, and made API errors readable."
   },
   {
