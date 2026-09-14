@@ -34,6 +34,7 @@ echo "  ✓ rym-presence-badges.js"
 echo "  ✓ content-script.js"
 echo "  ✓ auth-listener.js"
 echo "  ✓ auth-state.js"
+echo "  ✓ login-flow.js"
 echo "  ✓ shared-utils.js"
 echo "  ✓ options.html"
 echo "  ✓ options.js"
@@ -60,6 +61,7 @@ zip -q "$OUTPUT_FILE" \
     content-script.js \
     auth-listener.js \
     auth-state.js \
+    login-flow.js \
     shared-utils.js \
     options.html \
     options.js \

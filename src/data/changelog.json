@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-14",
+    "category": "fix",
+    "description": "Fixed extension album saves and enrichment failing while signed into the website, and made API errors readable."
+  },
+  {
     "date": "2026-09-10",
     "category": "security",
     "description": "Hardened URL previews, account recovery, OAuth linking, and extension sign-in."

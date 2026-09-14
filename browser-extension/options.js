@@ -2,7 +2,7 @@
 // Uses shared auth-state.js and shared-utils.js (loaded via options.html)
 
 // Access shared modules from globalThis
-const { fetchWithTimeout } = globalThis.SharedUtils;
+const { fetchApiWithTimeout } = globalThis.SharedUtils;
 const { getAuthState } = globalThis.AuthState;
 const { ACTIONS, API, STORAGE_KEYS } = globalThis.ExtensionConstants;
 
@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
       // Try to fetch from the API
-      const response = await fetchWithTimeout(
+      const response = await fetchApiWithTimeout(
         `${apiUrl}${API.LISTS}`,
         {
           headers: {
@@ -81,7 +81,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const listCount = Object.keys(data).length;
         resultEl.innerHTML = `<span style="color: #10b981;">Connected successfully! Found ${listCount} list(s).</span>`;
       } else if (response.status === 401) {
-        resultEl.innerHTML = `<span style="color: #f59e0b;">Connected to SuShe Online, but you're not logged in. Please login at: <a href="${apiUrl}" target="_blank" style="color: #60a5fa;">${apiUrl}</a></span>`;
+        resultEl.innerHTML =
+          '<span style="color: #10b981;">SuShe Online is reachable. Extension sign-in status is shown under Authentication.</span>';
       } else {
         resultEl.innerHTML = `<span style="color: #ef4444;">Server responded with status ${response.status}</span>`;
       }
@@ -221,7 +222,7 @@ async function updateAuthStatus() {
 
   // Verify token is valid by checking with API (for options page, we do full validation)
   try {
-    const response = await fetchWithTimeout(
+    const response = await fetchApiWithTimeout(
       `${authState.apiUrl}${API.LISTS}`,
       {
         headers: {

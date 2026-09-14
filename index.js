@@ -240,9 +240,9 @@ app.use(passport.session());
 // CSRF Protection (must be after session middleware)
 const csrfProtection = createCsrfProtection();
 
-// Record user activity for every authenticated request
+// API activity is recorded after ensureAuthAPI selects the request identity.
 app.use((req, res, next) => {
-  recordActivity(req);
+  if (!req.path.startsWith('/api/')) recordActivity(req);
   next();
 });
 

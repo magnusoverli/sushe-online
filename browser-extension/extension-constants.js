@@ -13,6 +13,7 @@
     LAST_USED_LIST: 'lastUsedList',
     ALBUM_PRESENCE_INDEX: 'albumPresenceIndex',
     ALBUM_PRESENCE_LAST_FETCHED: 'albumPresenceLastFetched',
+    API_CACHE_VERSION: 'apiCacheVersion',
   };
 
   const LIST_CACHE_DURATION_MS = 60 * 1000;

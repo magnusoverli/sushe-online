@@ -46,17 +46,16 @@ const {
 
 // Use shared utilities
 const {
-  fetchWithTimeout,
+  fetchApiWithTimeout,
+  readApiError,
   classifyFetchError,
   showNotification,
   showNotificationWithImage,
 } = globalThis.SharedUtils;
-const {
-  loadFullState,
-  clearAllAuthData,
-  validateAndCleanToken,
-  handleUnauthorized,
-} = globalThis.AuthState;
+const { loadFullState, clearAllAuthData, validateAndCleanToken } =
+  globalThis.AuthState;
+
+const handleUnauthorized = () => performLogout(false);
 
 const contextMenuService =
   globalThis.ContextMenuService.createContextMenuService({
@@ -70,7 +69,8 @@ const albumPresenceService =
     chrome,
     constants: globalThis.ExtensionConstants,
     albumIdentity: globalThis.AlbumIdentity,
-    fetchWithTimeout,
+    fetchWithTimeout: fetchApiWithTimeout,
+    handleUnauthorized,
     ensureStateLoaded,
     getApiBase: () => SUSHE_API_BASE,
     getAuthHeaders,
@@ -87,7 +87,7 @@ const susheTabNavigation =
 const albumAddService = globalThis.AlbumAddService.createAlbumAddService({
   chrome,
   constants: globalThis.ExtensionConstants,
-  fetchWithTimeout,
+  fetchWithTimeout: fetchApiWithTimeout,
   showNotification,
   showNotificationWithImage,
   validateAndCleanToken,
@@ -103,7 +103,7 @@ const albumAddService = globalThis.AlbumAddService.createAlbumAddService({
 const loginFlow = globalThis.ExtensionLoginFlow.createLoginFlow({
   chrome,
   getApiBase: () => SUSHE_API_BASE,
-  fetch: fetchWithTimeout,
+  fetch: fetchApiWithTimeout,
 });
 
 // Get authorization headers for API requests (uses in-memory token for performance)
@@ -401,7 +401,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
 
   await loadSettings();
-  createContextMenus();
+  if (details.reason === 'update') await fetchUserLists(false);
+  await createContextMenus();
 });
 
 // Recreate context menus on startup
@@ -593,14 +594,20 @@ async function fetchUserListsInternal(forceRefresh = false) {
     return { fromCache: false };
   }
 
+  const requestApiBase = SUSHE_API_BASE;
+  const requestToken = AUTH_TOKEN;
+  const isCurrentRequest = () =>
+    SUSHE_API_BASE === requestApiBase && AUTH_TOKEN === requestToken;
+
   try {
-    const response = await fetchWithTimeout(
-      `${SUSHE_API_BASE}${API.LISTS}`,
+    const response = await fetchApiWithTimeout(
+      `${requestApiBase}${API.LISTS}`,
       { headers: getAuthHeaders() },
       10000 // 10 second timeout
     );
 
     log('API response status:', response.status);
+    if (!isCurrentRequest()) return { fromCache: false };
 
     if (response.status === 401) {
       log('Not authenticated (401), clearing auth and showing login menu');
@@ -611,10 +618,11 @@ async function fetchUserListsInternal(forceRefresh = false) {
     }
 
     if (!response.ok) {
-      throw new Error(`API returned ${response.status}`);
+      throw await readApiError(response, 'Failed to load lists');
     }
 
     const listsData = await response.json();
+    if (!isCurrentRequest()) return { fromCache: false };
 
     // Group lists by year for submenu structure
     // NOTE: listsData is now keyed by list ID, not list name
@@ -646,6 +654,17 @@ async function fetchUserListsInternal(forceRefresh = false) {
       userListsByYear[year].sort((a, b) => a.name.localeCompare(b.name));
     }
 
+    if (lastUsedList) {
+      const list = findListById(lastUsedList.id);
+      if (list) {
+        await saveLastUsedList(list);
+      } else {
+        lastUsedList = null;
+        await chrome.storage.local.remove(STORAGE_KEYS.LAST_USED_LIST);
+      }
+    }
+
+    if (!isCurrentRequest()) return { fromCache: false };
     listsLastFetched = now;
 
     // Store in chrome.storage for persistence
@@ -667,6 +686,7 @@ async function fetchUserListsInternal(forceRefresh = false) {
     return { fromCache: false };
   } catch (error) {
     console.error('Failed to fetch lists:', error);
+    if (!isCurrentRequest()) return { fromCache: false };
 
     // Classify error type for better user feedback
     const errorType = classifyFetchError(error);

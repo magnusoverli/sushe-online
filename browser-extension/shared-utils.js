@@ -31,12 +31,40 @@
     }
   }
 
+  function fetchApiWithTimeout(url, options = {}, timeout = 30000) {
+    // Chromium host permissions can attach website cookies even with
+    // same-origin credentials. SuShe API calls use explicit bearer auth only.
+    return fetchWithTimeout(url, { ...options, credentials: 'omit' }, timeout);
+  }
+
+  async function readApiError(response, fallback = 'API request failed') {
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      // Proxies may return HTML or an empty body instead of the API envelope.
+    }
+    const message =
+      typeof data?.error === 'string' ? data.error : data?.error?.message;
+    const error = new Error(
+      typeof message === 'string' && message.trim()
+        ? message
+        : `${fallback} (HTTP ${response.status})`
+    );
+    error.status = response.status;
+    if (typeof data?.code === 'string') error.code = data.code;
+    return error;
+  }
+
   /**
    * Classify fetch errors to provide better user feedback
    * @param {Error} error - The error to classify
    * @returns {string} - Error type: 'network', 'cors', 'auth', 'server', 'client', 'timeout', 'unknown'
    */
   function classifyFetchError(error) {
+    if (error.status === 401) return 'auth';
+    if (error.status >= 500) return 'server';
+    if (error.status >= 400) return 'client';
     const errorMsg = error.message.toLowerCase();
 
     // Network connectivity issues
@@ -136,6 +164,8 @@
   // Export to globalThis for use by other scripts
   globalThis.SharedUtils = {
     fetchWithTimeout,
+    fetchApiWithTimeout,
+    readApiError,
     classifyFetchError,
     showNotification,
     showNotificationWithImage,

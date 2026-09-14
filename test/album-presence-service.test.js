@@ -1,5 +1,6 @@
 const { describe, it, beforeEach, afterEach, mock } = require('node:test');
 const assert = require('node:assert');
+require('../browser-extension/shared-utils');
 
 const STORAGE_KEYS = {
   ALBUM_PRESENCE_INDEX: 'albumPresenceIndex',
@@ -19,7 +20,12 @@ function loadServices() {
   require('../browser-extension/album-presence-service.js');
 }
 
-function createHarness({ stored = {}, items = [], fetchError = null } = {}) {
+function createHarness({
+  stored = {},
+  items = [],
+  fetchError = null,
+  responseStatus = 200,
+} = {}) {
   const storage = { ...stored };
   const chrome = {
     storage: {
@@ -35,11 +41,12 @@ function createHarness({ stored = {}, items = [], fetchError = null } = {}) {
   const fetchWithTimeout = mock.fn(async () => {
     if (fetchError) throw fetchError;
     return {
-      ok: true,
-      status: 200,
+      ok: responseStatus === 200,
+      status: responseStatus,
       json: async () => ({ items }),
     };
   });
+  const handleUnauthorized = mock.fn(async () => {});
   const service = globalThis.AlbumPresenceService.createAlbumPresenceService({
     albumIdentity: globalThis.AlbumIdentity,
     chrome,
@@ -50,12 +57,13 @@ function createHarness({ stored = {}, items = [], fetchError = null } = {}) {
     },
     ensureStateLoaded: async () => {},
     fetchWithTimeout,
+    handleUnauthorized,
     getApiBase: () => 'https://sushe.example',
     getAuthHeaders: () => ({ Authorization: 'Bearer token' }),
     logger: { warn: mock.fn() },
   });
 
-  return { fetchWithTimeout, service, storage };
+  return { fetchWithTimeout, handleUnauthorized, service, storage };
 }
 
 describe('extension album presence identity index', () => {
@@ -65,6 +73,55 @@ describe('extension album presence identity index', () => {
     delete globalThis.AlbumIdentity;
     delete globalThis.AlbumPresenceService;
     mock.reset();
+  });
+
+  for (const status of [401, 403]) {
+    it(`${status === 401 ? 'clears' : 'retains'} cached presence after HTTP ${status}`, async () => {
+      const harness = createHarness({
+        responseStatus: status,
+        stored: {
+          albumPresenceIndex: {
+            version: 2,
+            entries: { 'name:artist::album': [{ listId: 'old-list' }] },
+          },
+          albumPresenceLastFetched: Date.now(),
+        },
+      });
+      const matches = await harness.service.getPresenceForAlbums(
+        [{ key: 'album', artist: 'Artist', album: 'Album' }],
+        { forceRefresh: true }
+      );
+      assert.strictEqual(
+        harness.handleUnauthorized.mock.calls.length,
+        status === 401 ? 1 : 0
+      );
+      assert.strictEqual(Boolean(matches.album), status === 403);
+      assert.strictEqual(
+        Boolean(harness.storage.albumPresenceIndex),
+        status === 403
+      );
+    });
+  }
+
+  it('cannot repopulate the old account cache when a fetch finishes after logout', async () => {
+    const harness = createHarness({
+      items: [{ artist: 'Artist', album: 'Album', listId: 'old-list' }],
+    });
+    let release;
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    const originalFetch = harness.fetchWithTimeout;
+    const response = await originalFetch();
+    originalFetch.mock.mockImplementation(async () => pending);
+    const reading = harness.service.getPresenceForAlbums([
+      { key: 'album', artist: 'Artist', album: 'Album' },
+    ]);
+    while (originalFetch.mock.calls.length < 2) await Promise.resolve();
+    await harness.service.clear();
+    release(response);
+    assert.deepStrictEqual(await reading, {});
+    assert.strictEqual(harness.storage.albumPresenceIndex, undefined);
   });
 
   it('matches numeric identity before canonical path and normalized names', async () => {

@@ -46,7 +46,10 @@ function recordActivity(req, queryable) {
   if (!req.user || !queryable) return;
 
   const now = Date.now();
-  const lastUpdate = req.session?.lastActivityUpdatedAt || 0;
+  // A bearer request must not borrow another account's session debounce or
+  // modify its activity timestamp when both credentials arrive together.
+  const activitySession = req.authMethod === 'token' ? null : req.session;
+  const lastUpdate = activitySession?.lastActivityUpdatedAt || 0;
 
   // Always update in-memory timestamp for current request context
   req.user.lastActivity = new Date(now);
@@ -54,8 +57,8 @@ function recordActivity(req, queryable) {
   // Only write to database if debounce interval has passed
   if (now - lastUpdate > ACTIVITY_UPDATE_INTERVAL) {
     // Update session timestamp (in-memory, no DB write)
-    if (req.session) {
-      req.session.lastActivityUpdatedAt = now;
+    if (activitySession) {
+      activitySession.lastActivityUpdatedAt = now;
     }
 
     // Fire-and-forget DB update using the canonical repository/datastore path.
@@ -119,20 +122,17 @@ function createEnsureAuthAPI(deps) {
   }
 
   return async function ensureAuthAPI(req, res, next) {
-    // First check if authenticated via session
-    if (req.isAuthenticated && req.isAuthenticated()) {
-      req.authMethod = 'session';
-      recordActivityFn(req, db);
-      return csrfProtection ? csrfProtection(req, res, next) : next();
-    }
-
-    // Check for bearer token
+    // Explicit credentials select the API identity. Never fall back to a
+    // browser session if the supplied bearer is malformed, expired or revoked.
     const authHeader = req.get('Authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
+    if (authHeader != null) {
+      delete req.user;
+      delete req.authMethod;
+      const bearer = /^Bearer +(\S+)$/i.exec(authHeader);
+      if (!bearer) return res.status(401).json({ error: 'Unauthorized' });
 
       try {
-        const userId = await validateExtensionToken(token, db);
+        const userId = await validateExtensionToken(bearer[1], db);
 
         if (userId) {
           // Load user and attach to request
@@ -144,6 +144,7 @@ function createEnsureAuthAPI(deps) {
             req.user = user;
             // Mark this as token-based auth for logging
             req.authMethod = 'token';
+            recordActivityFn(req, db);
             return next();
           }
         }
@@ -152,6 +153,10 @@ function createEnsureAuthAPI(deps) {
           error: error.message,
         });
       }
+    } else if (req.isAuthenticated && req.isAuthenticated()) {
+      req.authMethod = 'session';
+      recordActivityFn(req, db);
+      return csrfProtection ? csrfProtection(req, res, next) : next();
     }
 
     res.status(401).json({ error: 'Unauthorized' });

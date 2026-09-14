@@ -4,6 +4,39 @@
 
 (function () {
   const { STORAGE_KEYS } = globalThis.ExtensionConstants;
+  const API_CACHE_VERSION = 1;
+  let cacheMigration;
+
+  const ACCOUNT_CACHE_KEYS = [
+    STORAGE_KEYS.USER_LISTS,
+    STORAGE_KEYS.USER_LISTS_BY_YEAR,
+    STORAGE_KEYS.LISTS_LAST_FETCHED,
+    STORAGE_KEYS.LAST_USED_LIST,
+    STORAGE_KEYS.ALBUM_PRESENCE_INDEX,
+    STORAGE_KEYS.ALBUM_PRESENCE_LAST_FETCHED,
+  ];
+
+  function ensureApiCacheVersion() {
+    if (!cacheMigration) {
+      cacheMigration = (async () => {
+        const stored = await chrome.storage.local.get(
+          STORAGE_KEYS.API_CACHE_VERSION
+        );
+        if (stored[STORAGE_KEYS.API_CACHE_VERSION] === API_CACHE_VERSION)
+          return;
+        // Older caches may belong to the website session rather than the
+        // extension token. Discard them before any consumer reads them.
+        await chrome.storage.local.remove(ACCOUNT_CACHE_KEYS);
+        await chrome.storage.local.set({
+          [STORAGE_KEYS.API_CACHE_VERSION]: API_CACHE_VERSION,
+        });
+      })().catch((error) => {
+        cacheMigration = null;
+        throw error;
+      });
+    }
+    return cacheMigration;
+  }
 
   /**
    * Storage keys used for authentication:
@@ -18,13 +51,8 @@
   const AUTH_STORAGE_KEYS = [
     STORAGE_KEYS.AUTH_TOKEN,
     STORAGE_KEYS.TOKEN_EXPIRES_AT,
-    STORAGE_KEYS.USER_LISTS,
-    STORAGE_KEYS.USER_LISTS_BY_YEAR,
-    STORAGE_KEYS.LISTS_LAST_FETCHED,
     STORAGE_KEYS.HAS_EVER_AUTHENTICATED,
-    STORAGE_KEYS.LAST_USED_LIST,
-    STORAGE_KEYS.ALBUM_PRESENCE_INDEX,
-    STORAGE_KEYS.ALBUM_PRESENCE_LAST_FETCHED,
+    ...ACCOUNT_CACHE_KEYS,
   ];
 
   /**
@@ -112,6 +140,7 @@
    * @returns {Promise<{apiUrl: string|null, authToken: string|null, userLists: Array, userListsByYear: Object, listsLastFetched: number, isValid: boolean}>}
    */
   async function loadFullState() {
+    await ensureApiCacheVersion();
     const data = await chrome.storage.local.get([
       STORAGE_KEYS.API_URL,
       STORAGE_KEYS.AUTH_TOKEN,

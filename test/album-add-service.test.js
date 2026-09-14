@@ -1,6 +1,7 @@
 const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
 
+require('../browser-extension/shared-utils.js');
 require('../browser-extension/album-add-enrichment.js');
 require('../browser-extension/album-add-service.js');
 
@@ -74,6 +75,70 @@ function createDeps(overrides = {}) {
 }
 
 describe('album-add-service', () => {
+  for (const { status, body, message } of [
+    {
+      status: 403,
+      body: { code: 'CSRF_INVALID', error: { message: 'Invalid CSRF token' } },
+      message: 'Invalid CSRF token',
+    },
+    {
+      status: 403,
+      body: { error: 'List is locked' },
+      message: 'List is locked',
+    },
+    {
+      status: 502,
+      body: '<html>Bad gateway</html>',
+      message: 'Failed to add album (HTTP 502)',
+    },
+    {
+      status: 401,
+      body: { error: 'Unauthorized' },
+      message:
+        'Not authenticated. Please click the extension icon and login again.',
+    },
+  ]) {
+    it(`reports a ${status} save failure without retrying or running post-save work: ${message}`, async () => {
+      const deps = createDeps({
+        albumApi: {
+          saveAlbum: mock.fn(
+            async () =>
+              new globalThis.Response(
+                typeof body === 'string' ? body : JSON.stringify(body),
+                { status }
+              )
+          ),
+        },
+      });
+      const service = globalThis.AlbumAddService.createAlbumAddService(deps);
+      await service.addAlbumToList(
+        { linkUrl: albumUrl },
+        { id: 7 },
+        'list-1',
+        'Albums'
+      );
+      assert.deepStrictEqual(deps.showNotification.mock.calls[0].arguments, [
+        '❌ Error',
+        message,
+      ]);
+      assert.strictEqual(deps.albumApi.saveAlbum.mock.calls.length, 1);
+      assert.strictEqual(
+        deps.handleUnauthorized.mock.calls.length,
+        status === 401 ? 1 : 0
+      );
+      assert.strictEqual(deps.showNotificationWithImage.mock.calls.length, 0);
+      assert.strictEqual(
+        deps.albumApi.updateAlbumMetadata.mock.calls.length,
+        0
+      );
+      assert.strictEqual(
+        deps.albumApi.updateSourceObservation.mock.calls.length,
+        0
+      );
+      assert.strictEqual(deps.onAlbumAdded.mock.calls.length, 0);
+    });
+  }
+
   it('starts identity lookup before page extraction and avoids a second detail request', async () => {
     const extraction = deferred();
     const deps = createDeps();

@@ -41,7 +41,11 @@
         throw new Error('Authentication failed. Please login again.');
       }
 
-      if (!mbResponse.ok) throw new Error('Failed to search MusicBrainz');
+      if (!mbResponse.ok)
+        throw await globalThis.SharedUtils.readApiError(
+          mbResponse,
+          'Failed to search MusicBrainz'
+        );
 
       const mbData = await mbResponse.json();
       const releaseGroups = mbData['release-groups'] || [];
@@ -76,6 +80,7 @@
           15000
         );
 
+        if (artistResponse.status === 401) await handleUnauthorized();
         if (!artistResponse.ok) return '';
 
         const artistData = await artistResponse.json();

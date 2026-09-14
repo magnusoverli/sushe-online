@@ -16,12 +16,14 @@
     const { fetchWithTimeout, getApiBase, getAuthHeaders, ensureStateLoaded } =
       deps;
     const findListById = deps.findListById || (() => null);
+    const handleUnauthorized = deps.handleUnauthorized || (async () => {});
 
     let presenceIndex = {};
     let lastFetched = 0;
     let fetchInFlight = null;
     let storageLoaded = false;
     let cacheNeedsRebuild = false;
+    let cacheGeneration = 0;
 
     function isFresh() {
       return (
@@ -36,6 +38,7 @@
 
     async function loadStoredCache() {
       if (storageLoaded) return;
+      const generation = cacheGeneration;
 
       const data = await chromeApi.storage.local.get([
         STORAGE_KEYS.ALBUM_PRESENCE_INDEX,
@@ -44,6 +47,7 @@
 
       const storedIndex = data[STORAGE_KEYS.ALBUM_PRESENCE_INDEX];
       const storedFetchedAt = data[STORAGE_KEYS.ALBUM_PRESENCE_LAST_FETCHED];
+      if (generation !== cacheGeneration) return;
 
       if (
         storedIndex?.version === CACHE_VERSION &&
@@ -206,13 +210,14 @@
     }
 
     async function fetchPresenceIndex(forceRefresh = false) {
+      await ensureStateLoaded();
       await loadStoredCache();
 
       if (!forceRefresh && isFresh()) return presenceIndex;
       if (fetchInFlight) return fetchInFlight;
 
-      fetchInFlight = (async () => {
-        await ensureStateLoaded();
+      const generation = cacheGeneration;
+      const pendingFetch = (async () => {
         const apiBase = getApiBase();
         const headers = getAuthHeaders();
 
@@ -226,11 +231,22 @@
 
         const { response, source } = await fetchPresenceData(apiBase, headers);
 
+        if (generation !== cacheGeneration) return presenceIndex;
+        if (response.status === 401) {
+          await clear();
+          await handleUnauthorized();
+          return presenceIndex;
+        }
+
         if (!response.ok) {
-          throw new Error(`Presence lookup failed (${response.status})`);
+          throw await globalThis.SharedUtils.readApiError(
+            response,
+            'Presence lookup failed'
+          );
         }
 
         const data = await response.json();
+        if (generation !== cacheGeneration) return presenceIndex;
         presenceIndex =
           source === 'full-lists'
             ? buildPresenceIndexFromFullLists(data)
@@ -240,11 +256,12 @@
         await persistPresenceIndex();
         return presenceIndex;
       })().finally(() => {
-        fetchInFlight = null;
+        if (fetchInFlight === pendingFetch) fetchInFlight = null;
       });
+      fetchInFlight = pendingFetch;
 
       try {
-        return await fetchInFlight;
+        return await pendingFetch;
       } catch (error) {
         logger.warn('Could not refresh album presence index:', error);
         return presenceIndex;
@@ -252,6 +269,7 @@
     }
 
     async function getPresenceForAlbums(albums = [], options = {}) {
+      await ensureStateLoaded();
       await loadStoredCache();
 
       if (options.forceRefresh || cacheNeedsRebuild) {
@@ -295,12 +313,13 @@
     }
 
     function clear() {
+      cacheGeneration += 1;
       presenceIndex = {};
       lastFetched = 0;
       fetchInFlight = null;
       storageLoaded = true;
       cacheNeedsRebuild = false;
-      chromeApi.storage.local.remove([
+      return chromeApi.storage.local.remove([
         STORAGE_KEYS.ALBUM_PRESENCE_INDEX,
         STORAGE_KEYS.ALBUM_PRESENCE_LAST_FETCHED,
       ]);

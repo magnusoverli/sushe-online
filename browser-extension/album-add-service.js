@@ -25,6 +25,8 @@
     const albumApi =
       deps.albumApi || globalThis.AlbumApiService.createAlbumApiService(deps);
     const albumIdentity = deps.albumIdentity || globalThis.AlbumIdentity;
+    const readApiError =
+      deps.readApiError || globalThis.SharedUtils.readApiError;
     const enrichment =
       deps.enrichment ||
       globalThis.AlbumAddEnrichment.createAlbumAddEnrichment({
@@ -198,8 +200,8 @@
         logger.log('Save response status:', saveResponse.status);
 
         if (!saveResponse.ok) {
-          const errorText = await saveResponse.text();
-          logger.error('Save failed:', errorText);
+          const error = await readApiError(saveResponse, 'Failed to add album');
+          logger.error('Save failed:', error);
 
           if (saveResponse.status === 401) {
             await handleUnauthorized();
@@ -209,15 +211,7 @@
             );
           }
 
-          let errorData;
-          try {
-            errorData = JSON.parse(errorText);
-          } catch {
-            throw new Error(
-              `Failed to add album (HTTP ${saveResponse.status})`
-            );
-          }
-          throw new Error(errorData.error || 'Failed to add album');
+          throw error;
         }
 
         const result = await saveResponse.json();

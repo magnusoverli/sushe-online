@@ -159,7 +159,7 @@ test('real Spotify callback rejects absent state before exchanging a code', asyn
   assert.equal(exchange.mock.callCount(), 0);
 });
 
-test('session plus bearer header still requires CSRF; verified bearer-only calls remain supported', async () => {
+test('a verified bearer selects its own identity even when a browser session is present', async () => {
   const auth = createEnsureAuthAPI({
     authService: { getUserById: async () => ({ _id: 'u' }) },
     db: {},
@@ -170,19 +170,20 @@ test('session plus bearer header still requires CSRF; verified bearer-only calls
   });
   for (const session of [false, true]) {
     const req = {
-      user: session ? { _id: 'u' } : null,
+      user: session ? { _id: 'different-session-user' } : null,
       isAuthenticated: () => session,
       session: { csrfSecret: 'secret' },
       method: 'POST',
       headers: {},
-      get: () => 'Bearer ignored',
+      get: () => 'Bearer valid-token',
     };
     let error;
     await auth(req, {}, (value) => {
       error = value;
     });
-    assert.equal(error?.code, session ? 'EBADCSRFTOKEN' : undefined);
-    assert.equal(req.authMethod, session ? 'session' : 'token');
+    assert.equal(error, undefined);
+    assert.equal(req.authMethod, 'token');
+    assert.equal(req.user._id, 'u');
   }
 });
 
