@@ -2,6 +2,11 @@
   {
     "date": "2026-09-14",
     "category": "fix",
+    "description": "Fixed CI validation for extension releases."
+  },
+  {
+    "date": "2026-09-14",
+    "category": "fix",
     "description": "Corrected extension ZIP packaging and added root-manifest validation for Chrome Web Store uploads."
   },
   {

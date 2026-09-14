@@ -37,7 +37,7 @@
     return fetchWithTimeout(url, { ...options, credentials: 'omit' }, timeout);
   }
 
-  async function readApiError(response, fallback = 'API request failed') {
+  async function readApiError(response, defaultMessage = 'API request failed') {
     let data;
     try {
       data = await response.json();
@@ -49,7 +49,7 @@
     const error = new Error(
       typeof message === 'string' && message.trim()
         ? message
-        : `${fallback} (HTTP ${response.status})`
+        : `${defaultMessage} (HTTP ${response.status})`
     );
     error.status = response.status;
     if (typeof data?.code === 'string') error.code = data.code;
