@@ -9,7 +9,11 @@ const {
 } = require('../helpers/extension-auth-app');
 const { stageExtensionPackage } = require('../helpers/extension-package');
 
-async function startExtension(testInfo, overrides) {
+async function startExtension(
+  testInfo,
+  overrides,
+  { authenticate = true } = {}
+) {
   const fixture = createExtensionAuthApp(overrides);
   const server = fixture.app.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -25,7 +29,9 @@ async function startExtension(testInfo, overrides) {
     context = await chromium.launchPersistentContext(
       testInfo.outputPath('profile'),
       {
-        channel: process.env.EXTENSION_BROWSER_CHANNEL || 'chromium',
+        ...(process.env.EXTENSION_BROWSER_EXECUTABLE
+          ? { executablePath: process.env.EXTENSION_BROWSER_EXECUTABLE }
+          : { channel: process.env.EXTENSION_BROWSER_CHANNEL || 'chromium' }),
         headless: true,
         args: [
           `--disable-extensions-except=${packageDir}`,
@@ -37,33 +43,34 @@ async function startExtension(testInfo, overrides) {
       context.serviceWorkers()[0] ||
       (await context.waitForEvent('serviceworker'));
     await context.request.post(`${apiBase}/test/session/${SESSION_USER}`);
-    await worker.evaluate(
-      async ({ apiBase, token }) => {
-        await chrome.storage.local.set({ apiUrl: apiBase });
-        await globalThis.ensureStateLoaded(true);
-        // Exercise the packaged login module and its pending-tab/origin checks.
-        const flow = globalThis.ExtensionLoginFlow.createLoginFlow({
-          chrome,
-          getApiBase: () => apiBase,
-          fetch: globalThis.SharedUtils.fetchApiWithTimeout,
-        });
-        await flow.begin();
-        const { pendingExtensionLogin } = await chrome.storage.session.get(
-          'pendingExtensionLogin'
-        );
-        await flow.complete(
-          { token, expiresAt: new Date(Date.now() + 600000).toISOString() },
-          {
-            tab: { id: pendingExtensionLogin.tabId },
-            frameId: 0,
-            url: `${apiBase}/extension/auth`,
-          }
-        );
-        await globalThis.ensureStateLoaded(true);
-        await globalThis.fetchUserLists(true);
-      },
-      { apiBase, token: VALID_TOKEN }
-    );
+    if (authenticate) {
+      const options = await context.newPage();
+      await options.goto(new URL('options.html', worker.url()).href);
+      await options.locator('#apiUrl').fill(`${apiBase}/`);
+      // Use the real tab sender, background handlers, content script and handshake.
+      // Login also saves the visible URL without requiring a separate Save click.
+      const authPagePromise = context.waitForEvent('page');
+      await options.locator('#loginBtn').click();
+      const authPage = await authPagePromise;
+      await authPage.waitForURL(`${apiBase}/extension/auth`);
+      await authPage.locator('#authorizeBtn').click();
+      await expect(authPage.locator('#status')).toContainText(
+        'Extension authorized!'
+      );
+      await expect(options.locator('#authStatus')).toContainText('Logged in');
+      await expect
+        .poll(() =>
+          worker.evaluate(async (token) => {
+            const state = await chrome.storage.local.get([
+              'authToken',
+              'userLists',
+            ]);
+            return state.authToken === token && state.userLists?.length === 1;
+          }, VALID_TOKEN)
+        )
+        .toBe(true);
+      await options.close();
+    }
     return { ...fixture, context, worker, apiBase, close };
   } catch (error) {
     await close();
@@ -183,19 +190,26 @@ test('packaged extension saves and enriches using its token with any website ses
 test('a failed token clears extension state while the website session stays signed in', async ({
   browserName: _browserName,
 }, testInfo) => {
-  const fixture = await startExtension(testInfo);
+  let tokenValid = true;
+  const fixture = await startExtension(testInfo, {
+    validateExtensionToken: async () => (tokenValid ? EXTENSION_USER : null),
+  });
   try {
     await fixture.context.request.post(
       `${fixture.apiBase}/test/session/${SESSION_USER}`
     );
+    tokenValid = false;
     await fixture.worker.evaluate(async () => {
       await chrome.storage.local.set({
-        authToken: 'invalid-token',
         lastUsedList: { id: 'old-list', name: 'Old account' },
       });
-      await globalThis.ensureStateLoaded(true);
-      await globalThis.fetchUserLists(true);
+      globalThis.clearListCacheInMemory();
+      await globalThis.clearStoredListCache();
     });
+    const popup = await fixture.context.newPage();
+    await popup.goto(new URL('popup.html', fixture.worker.url()).href);
+    await expect(popup.locator('#status')).toContainText('Not logged in');
+    await expect(popup.locator('#loginBtn')).toBeVisible();
     await expect
       .poll(async () =>
         fixture.worker.evaluate(async () => {
@@ -254,6 +268,287 @@ test('a late list response cannot restore account caches after logout', async ({
   } finally {
     releaseRead?.();
     await reading?.catch(() => {});
+    await fixture.close();
+  }
+});
+
+test('settings saves survive reload, invalid URLs preserve auth, and later errors remain visible', async ({
+  browserName: _browserName,
+}, testInfo) => {
+  const fixture = await startExtension(testInfo);
+  try {
+    const page = await fixture.context.newPage();
+    await page.goto(new URL('options.html', fixture.worker.url()).href);
+    await expect(page.locator('#authStatus')).toContainText('Logged in');
+    await page.locator('#settingsForm button[type=submit]').click();
+    await expect(page.locator('#status')).toContainText(
+      'Settings saved successfully'
+    );
+    await page.reload();
+    await expect(page.locator('#apiUrl')).toHaveValue(fixture.apiBase);
+    await expect(page.locator('#authStatus')).toContainText('Logged in');
+    await page.clock.install();
+    await page.locator('#settingsForm button[type=submit]').click();
+    await expect(page.locator('#status')).toContainText(
+      'Settings saved successfully'
+    );
+    await page.locator('#apiUrl').fill('http://insecure.example');
+    await page.locator('#settingsForm button[type=submit]').click();
+    await expect(page.locator('#status')).toContainText('Use HTTPS');
+    await page.clock.fastForward(4000);
+    await expect(page.locator('#status')).toBeVisible();
+    const state = await fixture.worker.evaluate(() =>
+      chrome.storage.local.get(['apiUrl', 'authToken'])
+    );
+    expect(state).toEqual({ apiUrl: fixture.apiBase, authToken: VALID_TOKEN });
+    const otherBase = fixture.apiBase.replace('127.0.0.1', 'localhost');
+    await page.locator('#apiUrl').fill(otherBase);
+    await page.locator('#settingsForm button[type=submit]').click();
+    await expect(page.locator('#authStatus')).toContainText('Not logged in');
+    const switched = await fixture.worker.evaluate(() =>
+      chrome.storage.local.get(null)
+    );
+    expect(switched.apiUrl).toBe(otherBase);
+    for (const key of [
+      'authToken',
+      'userLists',
+      'lastUsedList',
+      'albumPresenceIndex',
+    ]) {
+      expect(switched[key]).toBeUndefined();
+    }
+    // Transport errors must not be reported as successful saves either.
+    await page.locator('#apiUrl').fill(fixture.apiBase);
+    await page.evaluate(() => {
+      chrome.runtime.sendMessage = async () => {
+        throw new Error('Worker unavailable');
+      };
+    });
+    await page.locator('#settingsForm button[type=submit]').click();
+    await expect(page.locator('#status')).toContainText('Worker unavailable');
+    await page.screenshot({
+      path: testInfo.outputPath('settings-error.png'),
+      fullPage: true,
+    });
+  } finally {
+    await fixture.close();
+  }
+});
+
+test('logout cancels pending login and the authorization page displays rejection instead of success', async ({
+  browserName: _browserName,
+}, testInfo) => {
+  const fixture = await startExtension(testInfo, undefined, {
+    authenticate: false,
+  });
+  try {
+    const page = await fixture.context.newPage();
+    await page.goto(new URL('options.html', fixture.worker.url()).href);
+    await page.locator('#apiUrl').fill(fixture.apiBase);
+    const authPagePromise = fixture.context.waitForEvent('page');
+    await page.locator('#loginBtn').click();
+    const authPage = await authPagePromise;
+    await authPage.waitForURL(`${fixture.apiBase}/extension/auth`);
+    const result = await page.evaluate(() =>
+      chrome.runtime.sendMessage({ action: 'logout' })
+    );
+    expect(result.success).toBe(true);
+    await authPage.locator('#authorizeBtn').click();
+    await expect(authPage.locator('#status')).toContainText(
+      'No matching login request'
+    );
+    await expect(authPage.locator('#authorizeBtn')).toHaveText('Retry');
+    expect(
+      (
+        await fixture.worker.evaluate(() =>
+          chrome.storage.local.get('authToken')
+        )
+      ).authToken
+    ).toBeUndefined();
+    await authPage.screenshot({
+      path: testInfo.outputPath('authorization-rejected.png'),
+      fullPage: true,
+    });
+  } finally {
+    await fixture.close();
+  }
+});
+
+test('content scripts cannot change settings or logout, and popup login errors are shown', async ({
+  browserName: _browserName,
+}, testInfo) => {
+  const fixture = await startExtension(testInfo);
+  try {
+    const webPage = await fixture.context.newPage();
+    await webPage.goto(`${fixture.apiBase}/extension/auth`);
+    const results = await fixture.worker.evaluate(async (url) => {
+      const tabs = await chrome.tabs.query({ url });
+      return chrome.scripting.executeScript({
+        target: { tabId: tabs.at(-1).id },
+        func: async () =>
+          Promise.all(
+            ['updateApiUrl', 'startExtensionLogin', 'logout', 'getLists'].map(
+              (action) =>
+                chrome.runtime.sendMessage({
+                  action,
+                  apiUrl: 'https://other.test',
+                })
+            )
+          ),
+      });
+    }, `${fixture.apiBase}/extension/auth`);
+    expect(results[0].result.every((result) => result.success === false)).toBe(
+      true
+    );
+    const popup = await fixture.context.newPage();
+    await popup.goto(new URL('popup.html', fixture.worker.url()).href);
+    await expect(popup.locator('#logoutBtn')).toBeVisible();
+    await popup.locator('#logoutBtn').click();
+    await expect(popup.locator('#loginBtn')).toBeVisible();
+    await popup.evaluate(() => {
+      const original = chrome.runtime.sendMessage.bind(chrome.runtime);
+      chrome.runtime.sendMessage = async (message) =>
+        message.action === 'startExtensionLogin'
+          ? { success: false, error: '<b>Login failed</b>' }
+          : original(message);
+    });
+    await popup.locator('#loginBtn').click();
+    await expect(popup.locator('#status')).toHaveText('<b>Login failed</b>');
+    await expect(popup.locator('#status b')).toHaveCount(0);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test('authorization without an active content script times out with actionable feedback', async ({
+  browserName: _browserName,
+}, testInfo) => {
+  const fixture = await startExtension(testInfo, undefined, {
+    authenticate: false,
+  });
+  try {
+    // /test/authorize deliberately does not match the extension's content scripts.
+    fixture.app.get('/test/authorize', (_req, res) =>
+      res.send(
+        require('../../templates/extension-auth-template').extensionAuthTemplate()
+      )
+    );
+    const page = await fixture.context.newPage();
+    await page.goto(`${fixture.apiBase}/test/authorize`);
+    await page.clock.install();
+    await page.locator('#authorizeBtn').click();
+    await expect(page.locator('#authorizeBtn')).toHaveText(
+      'Connecting to extension...'
+    );
+    await page.clock.fastForward(16000);
+    await expect(page.locator('#status')).toContainText(
+      'No response from the extension'
+    );
+    await expect(page.locator('#authorizeBtn')).toBeEnabled();
+  } finally {
+    await fixture.close();
+  }
+});
+
+test('a fresh login expiry is applied before requests start with the replacement token', async ({
+  browserName: _browserName,
+}, testInfo) => {
+  const fixture = await startExtension(testInfo, {
+    validateExtensionToken: async () => EXTENSION_USER,
+  });
+  try {
+    await fixture.worker.evaluate(() =>
+      chrome.storage.local.set({ tokenExpiresAt: Date.now() - 1000 })
+    );
+    await expect
+      .poll(() =>
+        fixture.worker.evaluate(
+          () => globalThis.getAuthStatusResponse().isExpired
+        )
+      )
+      .toBe(true);
+    await fixture.worker.evaluate(() =>
+      chrome.storage.local.set({
+        authToken: 'r'.repeat(43),
+        tokenExpiresAt: Date.now() + 600000,
+      })
+    );
+    await expect
+      .poll(() =>
+        fixture.worker.evaluate(() => {
+          const state = globalThis.getAuthStatusResponse();
+          return state.isAuthenticated && !state.isExpired;
+        })
+      )
+      .toBe(true);
+    const state = await fixture.worker.evaluate(() =>
+      chrome.storage.local.get('authToken')
+    );
+    expect(state.authToken).toBe('r'.repeat(43));
+  } finally {
+    await fixture.close();
+  }
+});
+
+test('manual list refresh displays server failures instead of reporting an empty successful result', async ({
+  browserName: _browserName,
+}, testInfo) => {
+  let failRead = false;
+  const fixture = await startExtension(testInfo, {
+    listService: {
+      getAllLists: async (userId) => {
+        if (failRead) throw new Error('List backend unavailable');
+        return { [`${userId}-list`]: { name: 'My list', count: 0 } };
+      },
+    },
+  });
+  try {
+    const page = await fixture.context.newPage();
+    await page.goto(new URL('popup.html', fixture.worker.url()).href);
+    await expect(page.locator('#status')).toContainText('1 list(s) loaded');
+    failRead = true;
+    await page.locator('#refreshBtn').click();
+    await expect(page.locator('#status .error')).toBeVisible();
+    await expect(page.locator('#refreshBtn')).toBeEnabled();
+  } finally {
+    await fixture.close();
+  }
+});
+
+test('expiry of the previous token does not cancel a replacement authorization in progress', async ({
+  browserName: _browserName,
+}, testInfo) => {
+  const fixture = await startExtension(testInfo);
+  try {
+    const options = await fixture.context.newPage();
+    await options.goto(new URL('options.html', fixture.worker.url()).href);
+    await expect(options.locator('#authStatus')).toContainText('Logged in');
+    const authPagePromise = fixture.context.waitForEvent('page');
+    expect(
+      (
+        await options.evaluate(() =>
+          chrome.runtime.sendMessage({ action: 'startExtensionLogin' })
+        )
+      ).success
+    ).toBe(true);
+    const authPage = await authPagePromise;
+    await authPage.waitForURL(`${fixture.apiBase}/extension/auth`);
+    await fixture.worker.evaluate(() =>
+      chrome.storage.local.set({ tokenExpiresAt: Date.now() - 1000 })
+    );
+    await expect
+      .poll(() =>
+        fixture.worker.evaluate(
+          () => globalThis.getAuthStatusResponse().isAuthenticated
+        )
+      )
+      .toBe(false);
+    await authPage.locator('#authorizeBtn').click();
+    await expect(authPage.locator('#status')).toContainText(
+      'Extension authorized!'
+    );
+    await expect(options.locator('#authStatus')).toContainText('Logged in');
+  } finally {
     await fixture.close();
   }
 });

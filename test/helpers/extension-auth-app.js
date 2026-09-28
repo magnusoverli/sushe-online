@@ -60,6 +60,18 @@ function createExtensionAuthApp(overrides = {}) {
       lastActivityUpdatedAt: req.session.lastActivityUpdatedAt,
     })
   );
+  app.get('/extension/auth', (_req, res) => {
+    res.send(
+      require('../../templates/extension-auth-template').extensionAuthTemplate()
+    );
+  });
+  app.post('/api/auth/extension-token', (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+    res.json({
+      token: VALID_TOKEN,
+      expiresAt: new Date(Date.now() + 600000).toISOString(),
+    });
+  });
   app.use('/api', (req, res, next) => {
     const observed = {
       path: req.originalUrl.split('?')[0],

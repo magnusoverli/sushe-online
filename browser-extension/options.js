@@ -1,281 +1,154 @@
-// Options page script for SuShe Online extension
-// Uses shared auth-state.js and shared-utils.js (loaded via options.html)
-
-// Access shared modules from globalThis
-const { fetchApiWithTimeout } = globalThis.SharedUtils;
-const { getAuthState } = globalThis.AuthState;
+// Settings and authentication use the background worker as their source of truth.
+const { fetchApiWithTimeout, normalizeApiUrl, sendCheckedMessage } =
+  globalThis.SharedUtils;
 const { ACTIONS, API, STORAGE_KEYS } = globalThis.ExtensionConstants;
+let statusTimer;
+let authStatusRequest = 0;
 
-// Store interval reference for cleanup
-let authCheckInterval = null;
+async function saveSettings() {
+  const input = document.getElementById('apiUrl');
+  const { apiUrl } = await sendCheckedMessage(ACTIONS.UPDATE_API_URL, {
+    apiUrl: normalizeApiUrl(input.value),
+  });
+  input.value = apiUrl;
+  return apiUrl;
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load saved settings on page load
-  const authState = await getAuthState();
-
-  // No default - force user to configure
-  const apiUrl = authState.apiUrl || '';
-  document.getElementById('apiUrl').value = apiUrl;
-
-  // Update authentication status
-  await updateAuthStatus();
-
-  // Handle form submission
   document
     .getElementById('settingsForm')
-    .addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const apiUrl = document.getElementById('apiUrl').value.trim();
-
-      // Validate URL
+    .addEventListener('submit', async (event) => {
+      event.preventDefault();
       try {
-        new URL(apiUrl);
-      } catch (_err) {
-        showStatus('Invalid URL format. Please enter a valid URL.', 'error');
-        return;
-      }
-
-      // Remove trailing slash if present
-      const cleanUrl = apiUrl.replace(/\/$/, '');
-
-      // Notify background script to persist the URL and rebuild extension state.
-      await chrome.runtime.sendMessage({
-        action: ACTIONS.UPDATE_API_URL,
-        apiUrl: cleanUrl,
-      });
-
-      showStatus(
-        'Settings saved successfully! The extension will now use: ' + cleanUrl,
-        'success'
-      );
-    });
-
-  // Test connection button
-  document.getElementById('testBtn').addEventListener('click', async () => {
-    const apiUrl = document
-      .getElementById('apiUrl')
-      .value.trim()
-      .replace(/\/$/, '');
-    const resultEl = document.getElementById('testResult');
-    const btn = document.getElementById('testBtn');
-
-    btn.disabled = true;
-    btn.textContent = 'Testing...';
-    resultEl.innerHTML = '';
-
-    try {
-      // Try to fetch from the API
-      const response = await fetchApiWithTimeout(
-        `${apiUrl}${API.LISTS}`,
-        {
-          headers: {
-            Accept: 'application/json',
-          },
-        },
-        10000 // 10 second timeout
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const listCount = Object.keys(data).length;
-        resultEl.innerHTML = `<span style="color: #10b981;">Connected successfully! Found ${listCount} list(s).</span>`;
-      } else if (response.status === 401) {
-        resultEl.innerHTML =
-          '<span style="color: #10b981;">SuShe Online is reachable. Extension sign-in status is shown under Authentication.</span>';
-      } else {
-        resultEl.innerHTML = `<span style="color: #ef4444;">Server responded with status ${response.status}</span>`;
-      }
-    } catch (error) {
-      resultEl.innerHTML = `<span style="color: #ef4444;">Connection failed: ${error.message}<br><small>Make sure SuShe Online is running and accessible.</small></span>`;
-    }
-
-    btn.disabled = false;
-    btn.textContent = 'Test Connection';
-  });
-
-  // Login button handler
-  document.getElementById('loginBtn').addEventListener('click', async () => {
-    const apiUrl = document
-      .getElementById('apiUrl')
-      .value.trim()
-      .replace(/\/$/, '');
-
-    if (!apiUrl) {
-      showStatus('Please enter your SuShe Online URL first.', 'error');
-      return;
-    }
-
-    const result = await chrome.runtime.sendMessage({
-      action: ACTIONS.START_LOGIN,
-    });
-    if (!result?.success) {
-      showStatus(result?.error || 'Unable to start login', 'error');
-      return;
-    }
-
-    // Show message
-    showStatus(
-      'Opening login page... Close this tab and return here after logging in.',
-      'success'
-    );
-
-    // Clear any existing interval
-    if (authCheckInterval) {
-      clearInterval(authCheckInterval);
-      authCheckInterval = null;
-    }
-
-    // Poll for auth token changes
-    authCheckInterval = setInterval(async () => {
-      const authState = await getAuthState();
-      if (authState.isValid) {
-        clearInterval(authCheckInterval);
-        authCheckInterval = null;
+        const apiUrl = await saveSettings();
+        showStatus(
+          `Settings saved successfully! The extension will now use: ${apiUrl}`,
+          'success'
+        );
         await updateAuthStatus();
-        showStatus('Successfully logged in!', 'success');
+      } catch (error) {
+        showStatus(error.message, 'error');
       }
-    }, 1000);
-
-    // Stop checking after 5 minutes
-    setTimeout(() => {
-      if (authCheckInterval) {
-        clearInterval(authCheckInterval);
-        authCheckInterval = null;
-      }
-    }, 300000);
+    });
+  document.getElementById('testBtn').addEventListener('click', testConnection);
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const button = document.getElementById('loginBtn');
+    button.disabled = true;
+    try {
+      // Persist the visible URL first so login cannot silently use an old server.
+      await saveSettings();
+      await sendCheckedMessage(ACTIONS.START_LOGIN);
+      showStatus(
+        'Opening login page. Authorize the extension there, then return here.',
+        'info'
+      );
+    } catch (error) {
+      showStatus(error.message, 'error');
+    } finally {
+      button.disabled = false;
+    }
   });
-
-  // Logout button handler
   document.getElementById('logoutBtn').addEventListener('click', async () => {
     if (
-      confirm('Are you sure you want to logout? You will need to login again.')
-    ) {
-      // Use centralized logout in background script (fixes Issue #6)
-      await chrome.runtime.sendMessage({ action: ACTIONS.LOGOUT });
-
+      !confirm('Are you sure you want to logout? You will need to login again.')
+    )
+      return;
+    try {
+      await sendCheckedMessage(ACTIONS.LOGOUT);
       await updateAuthStatus();
       showStatus('Logged out successfully', 'success');
+    } catch (error) {
+      showStatus(error.message, 'error');
     }
   });
+  try {
+    const state = await sendCheckedMessage(ACTIONS.GET_API_URL);
+    document.getElementById('apiUrl').value = state?.apiUrl || '';
+    await updateAuthStatus();
+  } catch (error) {
+    showStatus(error.message, 'error');
+  }
 });
 
+async function testConnection() {
+  const result = document.getElementById('testResult');
+  const button = document.getElementById('testBtn');
+  button.disabled = true;
+  button.textContent = 'Testing...';
+  result.textContent = '';
+  try {
+    const apiUrl = normalizeApiUrl(document.getElementById('apiUrl').value);
+    const response = await fetchApiWithTimeout(
+      `${apiUrl}${API.LISTS}`,
+      { headers: { Accept: 'application/json' } },
+      10000
+    );
+    if (!response.ok && response.status !== 401) {
+      throw new Error(`Server responded with status ${response.status}`);
+    }
+    // A redirect to an HTML login page is not a successful API response.
+    if (response.ok) await response.json();
+    result.style.color = '#10b981';
+    result.textContent =
+      'SuShe Online is reachable. Extension sign-in status is shown under Authentication.';
+  } catch (error) {
+    result.style.color = '#ef4444';
+    result.textContent = `Connection failed: ${error.message}`;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Test Connection';
+  }
+}
+
 function showStatus(message, type) {
-  const statusEl = document.getElementById('status');
-
-  // Add icon based on type
-  const icons = {
-    success: '✓',
-    error: '✕',
-    info: 'ℹ',
-  };
-  const icon = icons[type] || '';
-
-  statusEl.innerHTML = `<span style="font-weight: 600;">${icon}</span> ${message}`;
-  statusEl.className = 'status ' + type;
-
-  // Auto-hide success messages after 3 seconds
+  const element = document.getElementById('status');
+  clearTimeout(statusTimer);
+  element.textContent = message;
+  element.className = `status ${type}`;
+  // A previous success timer must not hide later errors or login progress.
+  element.style.display = 'block';
   if (type === 'success') {
-    setTimeout(() => {
-      statusEl.style.display = 'none';
+    statusTimer = setTimeout(() => {
+      element.style.display = 'none';
     }, 3000);
   }
 }
 
-// Update authentication status display
-// Uses shared auth state module for consistent validation (fixes Issue #5)
 async function updateAuthStatus() {
-  const authStatusEl = document.getElementById('authStatus');
-  const loginBtn = document.getElementById('loginBtn');
-  const logoutBtn = document.getElementById('logoutBtn');
-
-  // Get auth state from shared module
-  const authState = await getAuthState();
-
-  // Check if token is expired (client-side check - fixes Issue #3)
-  if (authState.token && authState.isExpired) {
-    authStatusEl.innerHTML =
-      '<span style="color: #f59e0b;">⚠ Session expired - please login again</span>';
-    loginBtn.style.display = 'inline-block';
-    logoutBtn.style.display = 'none';
-
-    // Trigger cleanup via centralized logout
-    await chrome.runtime.sendMessage({ action: ACTIONS.LOGOUT });
-    return;
-  }
-
-  if (!authState.token) {
-    authStatusEl.innerHTML =
-      '<span style="color: #f59e0b;">○ Not logged in</span>';
-    loginBtn.style.display = 'inline-block';
-    logoutBtn.style.display = 'none';
-    return;
-  }
-
-  if (!authState.apiUrl) {
-    authStatusEl.innerHTML =
-      '<span style="color: #6b7280;">○ Configure URL above first</span>';
-    loginBtn.style.display = 'none';
-    logoutBtn.style.display = 'none';
-    return;
-  }
-
-  // Verify token is valid by checking with API (for options page, we do full validation)
+  const request = ++authStatusRequest;
+  const status = document.getElementById('authStatus');
   try {
-    const response = await fetchApiWithTimeout(
-      `${authState.apiUrl}${API.LISTS}`,
-      {
-        headers: {
-          Authorization: `Bearer ${authState.token}`,
-          Accept: 'application/json',
-        },
-      },
-      10000 // 10 second timeout
-    );
-
-    if (response.ok) {
-      const data = await response.json();
-      const listCount = Object.keys(data).length;
-      authStatusEl.innerHTML = `<span style="color: #10b981;">● Logged in</span> <span style="color: #6b7280;">(${listCount} list${listCount !== 1 ? 's' : ''})</span>`;
-      loginBtn.style.display = 'none';
-      logoutBtn.style.display = 'inline-block';
-    } else if (response.status === 401) {
-      authStatusEl.innerHTML =
-        '<span style="color: #f59e0b;">⚠ Session expired</span>';
-      loginBtn.style.display = 'inline-block';
-      logoutBtn.style.display = 'none';
-
-      // Trigger cleanup via centralized logout
-      await chrome.runtime.sendMessage({ action: ACTIONS.LOGOUT });
-    } else {
-      authStatusEl.innerHTML = `<span style="color: #6b7280;">○ Unable to verify (HTTP ${response.status})</span>`;
-      loginBtn.style.display = 'inline-block';
-      logoutBtn.style.display = 'none';
-    }
+    const state = await sendCheckedMessage(ACTIONS.GET_POPUP_STATE);
+    if (request !== authStatusRequest) return;
+    const loggedIn = state.auth?.isAuthenticated;
+    status.textContent = loggedIn
+      ? `● Logged in (${state.count} list${state.count !== 1 ? 's' : ''})`
+      : '○ Not logged in';
+    status.style.color = loggedIn ? '#10b981' : '#f59e0b';
+    document.getElementById('loginBtn').style.display = loggedIn
+      ? 'none'
+      : 'inline-block';
+    document.getElementById('logoutBtn').style.display = loggedIn
+      ? 'inline-block'
+      : 'none';
   } catch (error) {
-    authStatusEl.innerHTML = `<span style="color: #6b7280;">○ Unable to verify (${error.message})</span>`;
-    // On network error, show both buttons - user might need to login or might already be logged in
-    loginBtn.style.display = 'inline-block';
-    logoutBtn.style.display = 'none';
+    if (request !== authStatusRequest) return;
+    status.textContent = `Unable to check authentication: ${error.message}`;
   }
 }
 
-// Listen for storage changes to update UI
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === 'local') {
-    if (
-      changes[STORAGE_KEYS.AUTH_TOKEN] ||
-      changes[STORAGE_KEYS.TOKEN_EXPIRES_AT]
-    ) {
-      updateAuthStatus();
+  if (
+    areaName === 'local' &&
+    [
+      STORAGE_KEYS.AUTH_TOKEN,
+      STORAGE_KEYS.TOKEN_EXPIRES_AT,
+      STORAGE_KEYS.API_URL,
+    ].some((key) => changes[key])
+  ) {
+    updateAuthStatus();
+    if (changes[STORAGE_KEYS.AUTH_TOKEN]?.newValue) {
+      showStatus('Successfully logged in!', 'success');
     }
-  }
-});
-
-// Cleanup on page unload to prevent memory leaks
-window.addEventListener('beforeunload', () => {
-  if (authCheckInterval) {
-    clearInterval(authCheckInterval);
-    authCheckInterval = null;
   }
 });

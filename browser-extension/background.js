@@ -5,6 +5,7 @@
 // eslint-disable-next-line no-undef
 importScripts(
   'extension-constants.js',
+  'message-policy.js',
   'album-identity-service.js',
   'shared-utils.js',
   'auth-state.js',
@@ -55,7 +56,8 @@ const {
 const { loadFullState, clearAllAuthData, validateAndCleanToken } =
   globalThis.AuthState;
 
-const handleUnauthorized = () => performLogout(false);
+// Expiry/401 cleanup must not cancel a replacement login already in progress.
+const handleUnauthorized = () => performLogout(false, { cancelLogin: false });
 
 const contextMenuService =
   globalThis.ContextMenuService.createContextMenuService({
@@ -154,7 +156,8 @@ async function getHasEverAuthenticated() {
 function getListStateResponse(fetchResult = {}) {
   const meta = getListResponseMeta(fetchResult);
   return {
-    success: true,
+    success: !fetchResult.error,
+    error: fetchResult.error,
     lists: userListsByYear,
     flatLists: userLists,
     count: userLists.length,
@@ -281,7 +284,7 @@ async function ensureStateLoaded(forceReload = false) {
   if (stateLoaded && !forceReload) {
     if (AUTH_TOKEN && isTokenExpired(TOKEN_EXPIRES_AT)) {
       console.log('[ensureStateLoaded] Token expired, clearing auth data');
-      await performLogout(false);
+      await handleUnauthorized();
     }
 
     return {
@@ -314,7 +317,7 @@ async function ensureStateLoaded(forceReload = false) {
   // If token was expired, clear all auth data (fixes Issue #3)
   if (state.isExpired) {
     console.log('[ensureStateLoaded] Token expired, clearing auth data');
-    await performLogout(false); // Don't show notification, just clean up
+    await handleUnauthorized();
   }
 
   console.log('[ensureStateLoaded] State loaded:', {
@@ -331,7 +334,11 @@ async function ensureStateLoaded(forceReload = false) {
 
 // Centralized logout function (fixes Issue #6)
 // All logout operations should go through this function
-async function performLogout(showNotificationMsg = true) {
+async function performLogout(
+  showNotificationMsg = true,
+  { cancelLogin = true } = {}
+) {
+  if (cancelLogin) await loginFlow.cancel();
   console.log('[performLogout] Clearing all auth data');
 
   // Clear in-memory state
@@ -444,8 +451,8 @@ if (chrome.contextMenus.onShown) {
     [STORAGE_KEYS.AUTO_REFRESH_SUPPORTED]: !!chrome.contextMenus.onHidden,
   });
 } else {
-  console.warn(
-    '[Extension] chrome.contextMenus.onShown not supported - automatic refresh disabled'
+  console.debug(
+    '[Extension] Menu-open refresh unavailable; page-load and manual refresh remain enabled'
   );
   // Store this information for UI to potentially display a notice
   chrome.storage.local.set({ [STORAGE_KEYS.AUTO_REFRESH_SUPPORTED]: false });
@@ -454,6 +461,11 @@ if (chrome.contextMenus.onShown) {
 // Listen for storage changes to update token and invalidate cache
 chrome.storage.onChanged.addListener(async (changes, areaName) => {
   if (areaName === 'local') {
+    // Apply expiry before a token change starts requests using the new token.
+    if (changes[STORAGE_KEYS.TOKEN_EXPIRES_AT]) {
+      TOKEN_EXPIRES_AT =
+        changes[STORAGE_KEYS.TOKEN_EXPIRES_AT]?.newValue || null;
+    }
     if (changes[STORAGE_KEYS.AUTH_TOKEN]) {
       const hadToken = !!changes[STORAGE_KEYS.AUTH_TOKEN].oldValue;
       const hasToken = !!changes[STORAGE_KEYS.AUTH_TOKEN].newValue;
@@ -489,11 +501,6 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
         // Update context menu to show logged-out state immediately
         await showErrorMenu('Not logged in');
       }
-    }
-
-    if (changes[STORAGE_KEYS.TOKEN_EXPIRES_AT]) {
-      TOKEN_EXPIRES_AT =
-        changes[STORAGE_KEYS.TOKEN_EXPIRES_AT]?.newValue || null;
     }
 
     if (changes[STORAGE_KEYS.API_URL]) {
@@ -612,7 +619,7 @@ async function fetchUserListsInternal(forceRefresh = false) {
     if (response.status === 401) {
       log('Not authenticated (401), clearing auth and showing login menu');
       // Handle 401 - clear everything (fixes Issue #3, #4)
-      await performLogout(false);
+      await handleUnauthorized();
       await showErrorMenu('Not logged in');
       return { fromCache: false };
     }
@@ -693,7 +700,7 @@ async function fetchUserListsInternal(forceRefresh = false) {
 
     // FIXED: Don't keep stale cache on auth errors (Issue #4)
     if (errorType === 'auth') {
-      await performLogout(false);
+      await handleUnauthorized();
       await showErrorMenu('Not logged in');
     } else if (userLists.length === 0) {
       // Show appropriate error message based on error type
@@ -712,10 +719,10 @@ async function fetchUserListsInternal(forceRefresh = false) {
         error.message
       );
       await updateContextMenuWithLists();
-      return { fromCache: true };
+      return { fromCache: true, error: error.message };
     }
 
-    return { fromCache: false };
+    return { fromCache: false, error: error.message };
   }
 }
 
@@ -763,7 +770,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   // Handle login redirect
   if (info.menuItemId === MENU.LOGIN_ID) {
     // Use the loaded API URL (already loaded by ensureStateLoaded above)
-    await loginFlow.begin();
+    try {
+      await loginFlow.begin();
+    } catch (error) {
+      await showNotification('Login failed', error.message);
+    }
     return;
   }
 
@@ -818,6 +829,19 @@ chrome.notifications.onClicked.addListener((notificationId) => {
 // Listen for messages from content script or popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (
+    !globalThis.ExtensionMessagePolicy.isAllowedMessage(
+      message,
+      sender,
+      chrome.runtime
+    )
+  ) {
+    sendResponse({
+      success: false,
+      error: 'This action is not allowed from this page',
+    });
+    return false;
+  }
+  if (
     message.action === ACTIONS.START_LOGIN ||
     message.action === ACTIONS.COMPLETE_LOGIN
   ) {
@@ -825,15 +849,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         await ensureStateLoaded();
         if (message.action === ACTIONS.START_LOGIN) {
-          if (
-            sender.tab ||
-            ![
-              chrome.runtime.getURL('popup.html'),
-              chrome.runtime.getURL('options.html'),
-            ].includes(sender.url)
-          ) {
-            throw new Error('Login must be initiated from the extension');
-          }
           sendResponse(await loginFlow.begin());
         } else sendResponse(await loginFlow.complete(message, sender));
       } catch (error) {
@@ -847,8 +862,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Async operation - keep channel open
     (async () => {
       try {
-        await fetchUserLists(true); // Force refresh
-        sendResponse({ success: true });
+        const result = await fetchUserLists(true); // Force refresh
+        sendResponse({ success: !result.error, error: result.error });
       } catch (error) {
         console.error('Error refreshing lists:', error);
         sendResponse({ success: false, error: error.message });
@@ -862,20 +877,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         await ensureStateLoaded();
-        if (sender.tab)
-          throw new Error('Settings must be changed from the extension');
-        if (SUSHE_API_BASE !== message.apiUrl) {
-          await loginFlow.cancel();
+        const apiUrl = globalThis.SharedUtils.normalizeApiUrl(message.apiUrl);
+        if (SUSHE_API_BASE !== apiUrl) {
           await performLogout(false);
+          await chrome.storage.local.set({ [STORAGE_KEYS.API_URL]: apiUrl });
+          SUSHE_API_BASE = apiUrl;
+          await clearStoredListCache();
         }
-        SUSHE_API_BASE = message.apiUrl;
-        console.log('API URL updated to:', SUSHE_API_BASE);
-        clearListCacheInMemory();
-        await chrome.storage.local.set({
-          [STORAGE_KEYS.API_URL]: message.apiUrl,
-        });
-        await clearStoredListCache();
-        sendResponse({ success: true });
+        sendResponse({ success: true, apiUrl });
       } catch (error) {
         console.error('Error updating API URL:', error);
         sendResponse({ success: false, error: error.message });
@@ -889,10 +898,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         await ensureStateLoaded();
-        sendResponse({ apiUrl: SUSHE_API_BASE });
+        sendResponse({ success: true, apiUrl: SUSHE_API_BASE });
       } catch (error) {
         console.error('Error getting API URL:', error);
-        sendResponse({ apiUrl: null });
+        sendResponse({ success: false, apiUrl: null, error: error.message });
       }
     })();
     return true;
@@ -902,6 +911,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === ACTIONS.LOGOUT) {
     (async () => {
       try {
+        await ensureStateLoaded();
         await performLogout(true);
         sendResponse({ success: true });
       } catch (error) {
@@ -918,6 +928,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const state = await ensureStateLoaded();
         sendResponse({
+          success: true,
           isAuthenticated: state.isValid,
           hasToken: !!state.authToken,
           isExpired: state.isExpired,
@@ -925,7 +936,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
       } catch (error) {
         console.error('Error getting auth status:', error);
-        sendResponse({ isAuthenticated: false, error: error.message });
+        sendResponse({
+          success: false,
+          isAuthenticated: false,
+          error: error.message,
+        });
       }
     })();
     return true;
@@ -960,7 +975,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         const fetchResult = await fetchUserLists(false);
-        sendResponse({ auth, ...getListStateResponse(fetchResult) });
+        sendResponse({
+          auth: getAuthStatusResponse(),
+          ...getListStateResponse(fetchResult),
+        });
       } catch (error) {
         console.error('[getPopupState] Error:', error);
         sendResponse({ success: false, error: error.message });
@@ -982,16 +1000,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await ensureStateLoaded();
 
         if (!message.forceRefresh && AUTH_TOKEN && userLists.length > 0) {
-          const meta = getListResponseMeta({ fromCache: true });
-          sendResponse({
-            success: true,
-            lists: userListsByYear,
-            flatLists: userLists,
-            count: userLists.length,
-            fromCache: meta.fromCache,
-            stale: meta.stale,
-            lastFetched: meta.lastFetched,
-          });
+          sendResponse(getListStateResponse({ fromCache: true }));
 
           fetchUserLists(false).catch((error) => {
             console.error('[getLists] Background refresh failed:', error);
@@ -1002,18 +1011,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Fetch lists (and update context menu as a side effect)
         // forceRefresh bypasses cache to get fresh data
         const fetchResult = await fetchUserLists(message.forceRefresh || false);
-        const meta = getListResponseMeta(fetchResult);
-
         // Return the lists data that's now cached in background
-        sendResponse({
-          success: true,
-          lists: userListsByYear,
-          flatLists: userLists,
-          count: userLists.length,
-          fromCache: meta.fromCache,
-          stale: meta.stale,
-          lastFetched: meta.lastFetched,
-        });
+        sendResponse(getListStateResponse(fetchResult));
 
         console.log('[getLists] Returned', userLists.length, 'lists to popup');
       } catch (error) {

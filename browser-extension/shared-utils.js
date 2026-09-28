@@ -2,6 +2,47 @@
 // These are common utilities used across multiple components
 
 (function () {
+  function normalizeApiUrl(value) {
+    let url;
+    try {
+      url = new URL(typeof value === 'string' ? value.trim() : '');
+    } catch {
+      throw new Error('Enter a valid SuShe Online URL');
+    }
+    if (
+      url.protocol !== 'https:' &&
+      !(
+        url.protocol === 'http:' &&
+        ['localhost', '127.0.0.1'].includes(url.hostname)
+      )
+    ) {
+      throw new Error('Use HTTPS, or HTTP with localhost or 127.0.0.1');
+    }
+    if (
+      url.username ||
+      url.password ||
+      url.pathname !== '/' ||
+      url.search ||
+      url.hash
+    ) {
+      throw new Error(
+        'Enter only the instance origin, without credentials, a path, query or fragment'
+      );
+    }
+    return url.origin;
+  }
+
+  async function sendCheckedMessage(action, data = {}) {
+    const response = await chrome.runtime.sendMessage({ ...data, action });
+    if (!response?.success) {
+      throw new Error(
+        response?.error ||
+          'The extension did not complete the request. Please try again.'
+      );
+    }
+    return response;
+  }
+
   /**
    * Fetch with timeout wrapper to prevent hung requests
    * @param {string} url - The URL to fetch
@@ -163,6 +204,8 @@
 
   // Export to globalThis for use by other scripts
   globalThis.SharedUtils = {
+    normalizeApiUrl,
+    sendCheckedMessage,
     fetchWithTimeout,
     fetchApiWithTimeout,
     readApiError,

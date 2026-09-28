@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-28",
+    "category": "fix",
+    "description": "Fixed browser extension setup and sign-in in Brave/Chromium, surfaced authorization failures, and hardened settings and logout handling."
+  },
+  {
     "date": "2026-09-14",
     "category": "fix",
     "description": "Fixed CI validation for extension releases."

@@ -111,6 +111,26 @@ const extensionAuthTemplate = (csrfToken = '') => `
   </div>
 
   <script>
+    function connectExtension(data) {
+      return new Promise(function(resolve, reject) {
+        var timeout;
+        function complete(event) {
+          clearTimeout(timeout);
+          window.removeEventListener('sushe-auth-result', complete);
+          if (event.detail && event.detail.success) resolve();
+          else reject(new Error(event.detail && event.detail.error || 'Extension authorization failed'));
+        }
+        window.addEventListener('sushe-auth-result', complete);
+        timeout = setTimeout(function() {
+          window.removeEventListener('sushe-auth-result', complete);
+          reject(new Error('No response from the extension. Open its Settings, start login again, and check that it has access to this site.'));
+        }, 15000);
+        window.dispatchEvent(new CustomEvent('sushe-auth-complete', {
+          detail: { token: data.token, expiresAt: data.expiresAt }
+        }));
+      });
+    }
+
     async function generateToken() {
       var btn = document.getElementById('authorizeBtn');
       var status = document.getElementById('status');
@@ -135,37 +155,15 @@ const extensionAuthTemplate = (csrfToken = '') => `
 
         var data = await response.json();
 
-        status.innerHTML =
-          '<div class="success">' +
-          '\\u2713 Authorization successful!<br><br>Connecting to extension...' +
-          '</div>';
-
-        btn.innerHTML = 'Authorization Complete';
-
-        window.dispatchEvent(new CustomEvent('sushe-auth-complete', {
-          detail: {
-            token: data.token,
-            expiresAt: data.expiresAt
-          }
-        }));
-
-        setTimeout(function() {
-          status.innerHTML =
-            '<div class="success">' +
-            '\\u2713 Extension should now be authorized!<br><br>You can close this window.' +
-            '</div>';
-
-          setTimeout(function() {
-            window.close();
-          }, 2000);
-        }, 500);
+        btn.textContent = 'Connecting to extension...';
+        await connectExtension(data);
+        btn.textContent = 'Authorization Complete';
+        status.innerHTML = '<div class="success">\\u2713 Extension authorized! You can close this window.</div>';
+        setTimeout(function() { window.close(); }, 2000);
 
       } catch (error) {
         console.error('Error generating token:', error);
-        status.innerHTML =
-          '<div style="padding: 16px; background: #7f1d1d; border-radius: 8px; margin-bottom: 24px; color: #fecaca;">' +
-          '\\u2717 Failed to generate token. Please try again.' +
-          '</div>';
+        status.textContent = error.message || 'Authorization failed. Please try again.';
         btn.disabled = false;
         btn.innerHTML = 'Retry';
       }

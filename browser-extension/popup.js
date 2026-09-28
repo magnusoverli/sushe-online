@@ -2,12 +2,21 @@
 // Renders background-owned extension state.
 
 const { ACTIONS, STORAGE_KEYS } = globalThis.ExtensionConstants;
+const { sendCheckedMessage } = globalThis.SharedUtils;
+let stateRequest = 0;
+
+function showError(message) {
+  const status = document.createElement('div');
+  status.className = 'status error';
+  status.textContent = message;
+  document.getElementById('status').replaceChildren(status);
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Load state and update UI
   // NOTE: loadLists() now uses background as single source of truth.
   // It shows cached lists immediately and only refreshes when the cache is stale.
-  await loadLists();
+  loadLists();
 
   // Set up event listeners
   document.getElementById('refreshBtn').addEventListener('click', refreshLists);
@@ -21,6 +30,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'local') {
     if (
       changes[STORAGE_KEYS.AUTH_TOKEN] ||
+      changes[STORAGE_KEYS.API_URL] ||
       changes[STORAGE_KEYS.TOKEN_EXPIRES_AT] ||
       changes[STORAGE_KEYS.LISTS_LAST_FETCHED]
     ) {
@@ -31,6 +41,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 async function loadLists() {
+  const request = ++stateRequest;
   const statusEl = document.getElementById('status');
   const listsEl = document.getElementById('lists');
   const listItemsEl = document.getElementById('listItems');
@@ -38,13 +49,8 @@ async function loadLists() {
   const logoutBtn = document.getElementById('logoutBtn');
 
   try {
-    const response = await chrome.runtime.sendMessage({
-      action: ACTIONS.GET_POPUP_STATE,
-    });
-
-    if (!response.success) {
-      throw new Error(response.error || 'Failed to get extension state');
-    }
+    const response = await sendCheckedMessage(ACTIONS.GET_POPUP_STATE);
+    if (request !== stateRequest) return;
 
     const authState = {
       apiUrl: response.auth?.apiUrl || null,
@@ -120,21 +126,9 @@ async function loadLists() {
     const cacheNotice = response.stale ? ' (cached)' : '';
     statusEl.innerHTML = `<div class="status success">${response.count} list(s) loaded${cacheNotice}</div>`;
   } catch (error) {
+    if (request !== stateRequest) return;
     console.error('[Popup] Failed to load lists:', error);
-
-    // Handle specific error cases
-    if (error.message && error.message.includes('401')) {
-      // Token is invalid - trigger centralized logout
-      await chrome.runtime.sendMessage({ action: ACTIONS.LOGOUT });
-      statusEl.innerHTML =
-        '<div class="status error">Session expired. Please login again.</div>';
-      loginBtn.style.display = 'block';
-      logoutBtn.style.display = 'none';
-      listsEl.style.display = 'none';
-      return;
-    }
-
-    statusEl.innerHTML = `<div class="status error">${error.message}</div>`;
+    showError(error.message);
     listsEl.style.display = 'none';
   }
 }
@@ -144,37 +138,42 @@ async function refreshLists() {
   btn.disabled = true;
   btn.innerHTML = '<span class="icon">↻</span> Refreshing...';
 
-  // Tell background script to refresh
-  chrome.runtime.sendMessage({ action: ACTIONS.REFRESH_LISTS }, (_response) => {
+  try {
+    await sendCheckedMessage(ACTIONS.REFRESH_LISTS);
+    await loadLists();
+  } catch (error) {
+    showError(error.message);
+  } finally {
     btn.disabled = false;
     btn.innerHTML = '<span class="icon">↻</span> Refresh Lists';
-    loadLists();
-  });
+  }
 }
 
 function openOptions() {
   // Open the extension options page
-  chrome.runtime.openOptionsPage();
+  return chrome.runtime
+    .openOptionsPage()
+    .catch((error) => showError(error.message));
 }
 
 async function openLogin() {
-  const authState = await chrome.runtime.sendMessage({
-    action: ACTIONS.GET_API_URL,
-  });
-
-  if (!authState.apiUrl) {
-    alert('Please configure your SuShe Online URL in Settings first.');
-    openOptions();
-    return;
+  try {
+    const authState = await sendCheckedMessage(ACTIONS.GET_API_URL);
+    if (!authState?.apiUrl) {
+      await openOptions();
+      return;
+    }
+    await sendCheckedMessage(ACTIONS.START_LOGIN);
+  } catch (error) {
+    showError(error.message);
   }
-  // Open login page
-  await chrome.runtime.sendMessage({ action: ACTIONS.START_LOGIN });
 }
 
 async function logout() {
-  // Use centralized logout in background script (fixes Issue #6)
-  await chrome.runtime.sendMessage({ action: ACTIONS.LOGOUT });
-
-  // UI will update via storage.onChanged listener, but also refresh immediately
-  await loadLists();
+  try {
+    await sendCheckedMessage(ACTIONS.LOGOUT);
+    await loadLists();
+  } catch (error) {
+    showError(error.message);
+  }
 }

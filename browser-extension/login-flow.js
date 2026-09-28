@@ -1,8 +1,13 @@
 (function () {
   const PENDING_KEY = 'pendingExtensionLogin';
   const LOGIN_TTL_MS = 10 * 60 * 1000;
+  const VALIDATION_TIMEOUT_MS = 10000;
 
-  function createLoginFlow({ chrome, getApiBase, fetch = globalThis.fetch }) {
+  function createLoginFlow({
+    chrome,
+    getApiBase,
+    fetch = globalThis.SharedUtils.fetchApiWithTimeout,
+  }) {
     let pendingOperation = Promise.resolve();
     const serialize = (fn) => {
       const operation = pendingOperation.then(fn);
@@ -10,17 +15,10 @@
       return operation;
     };
     function loginUrl() {
-      const url = new URL('/extension/auth', getApiBase());
-      if (
-        url.protocol !== 'https:' &&
-        !(
-          url.protocol === 'http:' &&
-          ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
-        )
-      ) {
-        throw new Error('Login requires HTTPS or a local development server');
-      }
-      return url;
+      return new URL(
+        '/extension/auth',
+        globalThis.SharedUtils.normalizeApiUrl(getApiBase())
+      );
     }
 
     async function begin() {
@@ -33,7 +31,12 @@
           expiresAt: Date.now() + LOGIN_TTL_MS,
         },
       });
-      await chrome.tabs.update(tab.id, { url: url.href });
+      try {
+        await chrome.tabs.update(tab.id, { url: url.href });
+      } catch (error) {
+        await chrome.storage.session.remove(PENDING_KEY);
+        throw error;
+      }
       return { success: true };
     }
 
@@ -51,7 +54,9 @@
         url.origin !== loginUrl().origin ||
         url.pathname !== '/extension/auth'
       ) {
-        throw new Error('No matching login request');
+        throw new Error(
+          'No matching login request. Start login again from the extension.'
+        );
       }
       if (
         typeof message.token !== 'string' ||
@@ -68,8 +73,8 @@
         {
           headers: { Authorization: `Bearer ${message.token}` },
           credentials: 'omit',
-          signal: globalThis.AbortSignal.timeout(10000),
-        }
+        },
+        VALIDATION_TIMEOUT_MS
       );
       if (!response.ok || !(await response.json()).valid)
         throw new Error('Login token was rejected');

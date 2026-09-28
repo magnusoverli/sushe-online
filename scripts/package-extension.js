@@ -6,6 +6,7 @@ const extensionDir = path.resolve(__dirname, '../browser-extension');
 const PACKAGE_FILES = [
   'manifest.json',
   'extension-constants.js',
+  'message-policy.js',
   'album-identity-service.js',
   'rym-album-extractor.js',
   'background.js',

@@ -189,6 +189,7 @@ test('a verified bearer selects its own identity even when a browser session is 
 
 test('extension completion requires configured origin, pending top-level tab, and single-use completion', async () => {
   require('../browser-extension/extension-constants');
+  require('../browser-extension/shared-utils');
   require('../browser-extension/login-flow');
   const stored = {};
   let tokenWrites = 0;
