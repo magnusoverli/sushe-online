@@ -1,233 +1,122 @@
-// Context menu rendering and lookup for the SuShe Online extension.
-
+// Serialize the entire remove/create transaction; failed renders remain retryable.
 (function () {
-  function createContextMenuService(deps = {}) {
-    const chromeApi = deps.chrome || chrome;
-    const logger = deps.logger || console;
-    const { MENU } = deps.constants || globalThis.ExtensionConstants;
+  function createContextMenuService({
+    chrome,
+    constants = globalThis.ExtensionConstants,
+  }) {
+    const { MENU } = constants;
+    const { createSerialQueue, sortListYears } = globalThis.SharedUtils;
+    const enqueue = createSerialQueue();
+    let signature = null;
 
-    let lastMenuSignature = null;
-    let activeMenuKind = null;
-    let menuListById = {};
-
-    function resetSignature() {
-      lastMenuSignature = null;
-      activeMenuKind = null;
-      menuListById = {};
-    }
-
-    function getSignature(kind, data = null) {
-      return JSON.stringify({ kind, data });
-    }
-
-    function buildListSignatureData(userListsByYear, lastUsedList) {
-      const years = Object.keys(userListsByYear).sort((a, b) => {
-        if (a === 'Uncategorized') return 1;
-        if (b === 'Uncategorized') return -1;
-        return parseInt(b) - parseInt(a);
+    function call(method, ...args) {
+      return new Promise((resolve, reject) => {
+        chrome.contextMenus[method](...args, () => {
+          const error = chrome.runtime.lastError;
+          if (error) reject(new Error(error.message));
+          else resolve();
+        });
       });
+    }
 
+    function child(id, title, options = {}) {
       return {
-        lastUsedList: lastUsedList
-          ? { id: lastUsedList._id, name: lastUsedList.name }
-          : null,
-        years: years.map((year) => ({
-          year,
-          lists: (userListsByYear[year] || []).map((list) => ({
-            id: list._id,
-            name: list.name,
-            count: list.count,
-          })),
-        })),
-      };
-    }
-
-    async function removeAllMenus() {
-      return new Promise((resolve) => {
-        chromeApi.contextMenus.removeAll(() => {
-          if (chromeApi.runtime.lastError) {
-            logger.log(
-              'Remove all menus error (ignored):',
-              chromeApi.runtime.lastError
-            );
-          }
-          resolve();
-        });
-      });
-    }
-
-    function createMenu(options) {
-      chromeApi.contextMenus.create(options, () => {
-        if (chromeApi.runtime.lastError) {
-          logger.log(
-            'Menu creation error (ignored):',
-            chromeApi.runtime.lastError
-          );
-        }
-      });
-    }
-
-    function createMainMenu() {
-      createMenu({
-        id: MENU.MAIN_ID,
-        title: 'Add to SuShe Online',
-        contexts: MENU.CONTEXTS,
-        documentUrlPatterns: MENU.DOCUMENT_URL_PATTERNS,
-      });
-    }
-
-    function createChildMenu(id, title, options = {}) {
-      const menuOptions = {
         id,
-        parentId: options.parentId || MENU.MAIN_ID,
         title,
+        parentId: MENU.MAIN_ID,
         contexts: MENU.CONTEXTS,
+        ...options,
       };
-
-      if (Object.prototype.hasOwnProperty.call(options, 'enabled')) {
-        menuOptions.enabled = options.enabled;
-      }
-
-      createMenu(menuOptions);
     }
 
-    function findListById(listId, userLists, userListsByYear) {
-      return (
-        userLists.find((list) => list._id === listId) ||
-        Object.values(userListsByYear)
-          .flat()
-          .find((list) => list._id === listId) ||
-        null
-      );
+    function render(children) {
+      const menus = [
+        {
+          id: MENU.MAIN_ID,
+          title: 'Add to SuShe Online',
+          contexts: MENU.CONTEXTS,
+          documentUrlPatterns: MENU.DOCUMENT_URL_PATTERNS,
+        },
+        ...children,
+      ];
+      const next = JSON.stringify(menus);
+      return enqueue(async () => {
+        if (signature === next) return;
+        signature = null;
+        await call('removeAll');
+        for (const menu of menus) await call('create', menu);
+        signature = next;
+      });
     }
 
-    async function updateWithLists(userListsByYear, userLists, lastUsedList) {
-      const activeLastUsedList = lastUsedList?.id
-        ? findListById(lastUsedList.id, userLists, userListsByYear)
-        : null;
-      const menuSignature = getSignature(
-        'lists',
-        buildListSignatureData(userListsByYear, activeLastUsedList)
-      );
-      if (activeMenuKind === 'lists' && lastMenuSignature === menuSignature) {
-        return;
-      }
-
-      try {
-        await removeAllMenus();
-        menuListById = {};
-        createMainMenu();
-
-        if (userLists.length === 0) {
-          createChildMenu(
-            MENU.NO_LISTS_ID,
-            'No lists found - Create one first!',
-            { enabled: false }
-          );
-          activeMenuKind = 'lists';
-          lastMenuSignature = menuSignature;
-          return;
-        }
-
-        if (activeLastUsedList) {
-          const lastUsedYear = activeLastUsedList.year || 'Uncategorized';
-          menuListById[MENU.LAST_USED_ID] = activeLastUsedList;
-          createChildMenu(
+    function updateWithLists(groups, lists, lastUsed) {
+      const children = [];
+      const recent = lists.find((list) => list._id === lastUsed?.id);
+      if (!lists.length)
+        children.push(
+          child(MENU.NO_LISTS_ID, 'No lists found - Create one first!', {
+            enabled: false,
+          })
+        );
+      if (recent) {
+        children.push(
+          child(
             MENU.LAST_USED_ID,
-            `Last used: ${lastUsedYear} - ${activeLastUsedList.name}`
-          );
-        }
-
-        const years = Object.keys(userListsByYear).sort((a, b) => {
-          if (a === 'Uncategorized') return 1;
-          if (b === 'Uncategorized') return -1;
-          return parseInt(b) - parseInt(a);
-        });
-
-        for (const year of years) {
-          const lists = userListsByYear[year];
-          const yearId = `sushe-year-${year}`;
-          createChildMenu(yearId, `${year} (${lists.length})`);
-
-          lists.forEach((list) => {
-            const listMenuId = `${MENU.LIST_PREFIX}${list._id}`;
-            menuListById[listMenuId] = list;
-            createChildMenu(listMenuId, list.name, { parentId: yearId });
-          });
-        }
-
-        activeMenuKind = 'lists';
-        lastMenuSignature = menuSignature;
-      } catch (error) {
-        logger.error('Error updating context menu:', error);
+            `Last used: ${recent.year || 'Uncategorized'} - ${recent.name}`
+          )
+        );
       }
+      for (const year of sortListYears(groups)) {
+        const yearId = `sushe-year-${year}`;
+        children.push(child(yearId, `${year} (${groups[year].length})`));
+        for (const list of groups[year]) {
+          const id = `${MENU.LIST_PREFIX}${list._id}`;
+          children.push(child(id, list.name, { parentId: yearId }));
+        }
+      }
+      return render(children);
     }
 
-    async function showWelcome() {
-      try {
-        await removeAllMenus();
-        resetSignature();
-        createMainMenu();
-        createChildMenu(MENU.WELCOME_ID, 'Welcome! Click to get started', {
-          enabled: false,
-        });
-        createChildMenu(MENU.SETUP_ID, 'Open Settings & Login');
-
-        activeMenuKind = 'welcome';
-        lastMenuSignature = getSignature('welcome');
-      } catch (error) {
-        logger.error('Error showing welcome menu:', error);
-      }
+    function findListForMenuId(menuId, lists, lastUsed) {
+      // Chrome retains menu items when a service worker suspends. Resolve their
+      // stable IDs against the current account, without a prior in-memory render.
+      const id =
+        menuId === MENU.LAST_USED_ID
+          ? lastUsed?.id
+          : String(menuId).startsWith(MENU.LIST_PREFIX)
+            ? menuId.slice(MENU.LIST_PREFIX.length)
+            : null;
+      return lists.find((list) => list._id === id) || null;
     }
 
-    async function showError(message) {
-      try {
-        await removeAllMenus();
-        resetSignature();
-        createMainMenu();
-
-        const isAuthError =
-          message === 'Not logged in' ||
-          message.includes('401') ||
-          message.includes('authenticated');
-        const errorTitle = isAuthError
-          ? 'Not logged in to SuShe Online'
-          : `Error: ${message.substring(0, 50)}`;
-
-        createChildMenu(MENU.ERROR_ID, errorTitle, { enabled: false });
-
-        if (isAuthError) {
-          createChildMenu(MENU.LOGIN_ID, 'Click to login');
-        } else {
-          createChildMenu(MENU.REFRESH_ID, 'Try again');
-        }
-
-        activeMenuKind = 'error';
-        lastMenuSignature = getSignature('error', message);
-      } catch (error) {
-        logger.error('Error showing error menu:', error);
-      }
-    }
-
-    function findListForMenuId(menuItemId, userLists, userListsByYear) {
-      const clickedListId = menuItemId.replace(MENU.LIST_PREFIX, '');
-      return (
-        menuListById[menuItemId] ||
-        findListById(clickedListId, userLists, userListsByYear)
-      );
+    function showError(message) {
+      const isAuth = message === 'Not logged in';
+      const isConfig = message === 'Not configured';
+      return render([
+        child(
+          MENU.ERROR_ID,
+          isAuth ? 'Not logged in to SuShe Online' : message.slice(0, 70),
+          { enabled: false }
+        ),
+        child(
+          isAuth ? MENU.LOGIN_ID : isConfig ? MENU.SETUP_ID : MENU.REFRESH_ID,
+          isAuth ? 'Click to login' : isConfig ? 'Open Settings' : 'Try again'
+        ),
+      ]);
     }
 
     return {
-      findListForMenuId,
-      removeAllMenus,
-      resetSignature,
-      showError,
-      showWelcome,
       updateWithLists,
+      showError,
+      showWelcome: () =>
+        render([
+          child(MENU.WELCOME_ID, 'Welcome! Click to get started', {
+            enabled: false,
+          }),
+          child(MENU.SETUP_ID, 'Open Settings & Login'),
+        ]),
+      findListForMenuId,
     };
   }
-
-  globalThis.ContextMenuService = {
-    createContextMenuService,
-  };
+  globalThis.ContextMenuService = { createContextMenuService };
 })();

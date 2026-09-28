@@ -9,26 +9,44 @@
     );
   }
 
+  function buildSourceObservation(observation) {
+    if (!observation) return null;
+    const { identity = {}, taxonomy = {}, platformLinks = [] } = observation;
+    return {
+      schemaVersion: 1,
+      identity: {
+        numericId:
+          identity.numericId == null ? null : String(identity.numericId),
+        canonicalUrl: identity.canonicalUrl || null,
+        canonicalPath: identity.canonicalPath || null,
+        artist: identity.artist || '',
+        title: identity.title || '',
+      },
+      platformLinks: platformLinks.map(({ service, url }) => ({
+        service,
+        url,
+      })),
+      taxonomy: {
+        complete: taxonomy.complete === true,
+        primaryGenres: taxonomy.primaryGenres || [],
+        secondaryGenres: taxonomy.secondaryGenres || [],
+        descriptors: taxonomy.descriptors || [],
+        ...copyOptionalTaxonomyFields(taxonomy),
+        sourceUrl: taxonomy.sourceUrl || null,
+        extractorVersion: taxonomy.extractorVersion || '',
+        capturedAt: taxonomy.capturedAt || null,
+      },
+    };
+  }
+
   function createAlbumApiService(deps = {}) {
     const logger = deps.logger || console;
     const { API } = deps.constants || globalThis.ExtensionConstants;
     const { fetchWithTimeout, getAuthHeaders, handleUnauthorized } = deps;
 
-    const artistCountryCache = new Map();
-    const maxArtistCountryCacheSize = 100;
-
-    function rememberArtistCountry(artistId, country) {
-      if (!artistId) return;
-      if (artistCountryCache.size >= maxArtistCountryCacheSize) {
-        const oldestKey = artistCountryCache.keys().next().value;
-        artistCountryCache.delete(oldestKey);
-      }
-      artistCountryCache.set(artistId, country || '');
-    }
-
     async function searchMusicBrainz(apiBase, albumData) {
       const searchQuery = `${albumData.artist} ${albumData.album}`;
-      const mbEndpoint = `release-group/?query=${searchQuery}&type=album|ep&fmt=json&limit=5`;
+      const mbEndpoint = `release-group/?query=${encodeURIComponent(searchQuery)}&type=album|ep&fmt=json&limit=5`;
 
       const mbResponse = await fetchWithTimeout(
         `${apiBase}${API.MUSICBRAINZ_PROXY}?endpoint=${encodeURIComponent(mbEndpoint)}&priority=high`,
@@ -56,7 +74,31 @@
         );
       }
 
-      return releaseGroups[0];
+      const normalize = globalThis.AlbumIdentity.normalizeForMatch;
+      const matches = releaseGroups.filter((group) => {
+        const credits = group['artist-credit'] || [];
+        const artist = credits
+          .map(
+            (credit) =>
+              `${credit.name || credit.artist?.name || ''}${credit.joinphrase || ''}`
+          )
+          .join('');
+        return (
+          group.id &&
+          normalize(group.title) === normalize(albumData.album) &&
+          normalize(artist) === normalize(albumData.artist)
+        );
+      });
+      const unique = [
+        ...new Map(matches.map((group) => [group.id, group])).values(),
+      ];
+      if (unique.length !== 1)
+        throw new Error(
+          unique.length
+            ? 'Ambiguous MusicBrainz match. Choose the album manually in SuShe Online.'
+            : 'No matching MusicBrainz album. Choose the album manually in SuShe Online.'
+        );
+      return unique[0];
     }
 
     async function fetchArtistCountry(apiBase, releaseGroup) {
@@ -67,12 +109,9 @@
         return '';
       }
 
-      const artistId = releaseGroup['artist-credit'][0].artist.id;
+      const artistId = releaseGroup['artist-credit'][0]?.artist?.id;
+      if (!artistId) return '';
       try {
-        if (artistCountryCache.has(artistId)) {
-          return artistCountryCache.get(artistId);
-        }
-
         const artistEndpoint = `artist/${artistId}?fmt=json`;
         const artistResponse = await fetchWithTimeout(
           `${apiBase}${API.MUSICBRAINZ_PROXY}?endpoint=${encodeURIComponent(artistEndpoint)}&priority=normal`,
@@ -84,11 +123,7 @@
         if (!artistResponse.ok) return '';
 
         const artistData = await artistResponse.json();
-        const artistCountry = artistData.country || '';
-        rememberArtistCountry(artistId, artistCountry);
-        if (artistCountry)
-          logger.log(`Got artist country code: ${artistCountry}`);
-        return artistCountry;
+        return artistData.country || '';
       } catch (error) {
         logger.warn('Could not fetch artist country:', error);
         return '';
@@ -96,44 +131,9 @@
     }
 
     function buildAlbumPayload(albumData, releaseGroup, artistCountry) {
-      const sourceObservation = albumData.sourceObservation
-        ? {
-            schemaVersion: 1,
-            identity: {
-              numericId:
-                albumData.sourceObservation.identity?.numericId == null
-                  ? null
-                  : String(albumData.sourceObservation.identity.numericId),
-              canonicalUrl:
-                albumData.sourceObservation.identity?.canonicalUrl || null,
-              canonicalPath:
-                albumData.sourceObservation.identity?.canonicalPath || null,
-              artist: albumData.sourceObservation.identity?.artist || '',
-              title: albumData.sourceObservation.identity?.title || '',
-            },
-            platformLinks: (
-              albumData.sourceObservation.platformLinks || []
-            ).map((link) => ({ service: link.service, url: link.url })),
-            taxonomy: {
-              complete: albumData.sourceObservation.taxonomy?.complete === true,
-              primaryGenres:
-                albumData.sourceObservation.taxonomy?.primaryGenres || [],
-              secondaryGenres:
-                albumData.sourceObservation.taxonomy?.secondaryGenres || [],
-              descriptors:
-                albumData.sourceObservation.taxonomy?.descriptors || [],
-              ...copyOptionalTaxonomyFields(
-                albumData.sourceObservation.taxonomy
-              ),
-              sourceUrl:
-                albumData.sourceObservation.taxonomy?.sourceUrl || null,
-              extractorVersion:
-                albumData.sourceObservation.taxonomy?.extractorVersion || '',
-              capturedAt:
-                albumData.sourceObservation.taxonomy?.capturedAt || null,
-            },
-          }
-        : null;
+      const sourceObservation = buildSourceObservation(
+        albumData.sourceObservation
+      );
 
       return {
         artist: albumData.artist,

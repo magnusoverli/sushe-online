@@ -233,9 +233,13 @@ export default [
     },
     rules: {
       'no-console': 'off', // Console logging is normal in extensions for debugging
-      complexity: 'off', // Extension code can be complex
-      'max-depth': 'off', // Allow deeper nesting in extension code
-      'max-lines-per-function': 'off', // Allow longer functions in extension
+      complexity: ['warn', { max: 25 }],
+      'max-depth': ['warn', { max: 6 }],
+      // Service factories include their small nested operations; IIFEs are module boundaries.
+      'max-lines-per-function': [
+        'warn',
+        { max: 300, skipBlankLines: true, skipComments: true, IIFEs: false },
+      ],
     },
   },
 ];

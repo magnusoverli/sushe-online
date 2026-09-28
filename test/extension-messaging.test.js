@@ -95,7 +95,7 @@ test('privileged messages reject content scripts, other extensions, subframes an
       'updateApiUrl',
       'startExtensionLogin',
       'logout',
-      'getLists',
+      'getPopupState',
     ]) {
       assert.equal(
         context.ExtensionMessagePolicy.isAllowedMessage(
@@ -107,7 +107,14 @@ test('privileged messages reject content scripts, other extensions, subframes an
       );
     }
   }
-  for (const message of [null, {}, { action: 1 }, { action: 'unknown' }]) {
+  for (const message of [
+    null,
+    {},
+    { action: 1 },
+    { action: 'unknown' },
+    { action: 'getAuthStatus' },
+    { action: 'getLists' },
+  ]) {
     assert.equal(
       context.ExtensionMessagePolicy.isAllowedMessage(message, good, runtime),
       false
@@ -220,6 +227,21 @@ test('failed tab navigation clears pending login and can be retried', async () =
   chrome.tabs.update = async () => {};
   await flow.begin();
   assert.equal(session.pendingExtensionLogin.tabId, 42);
+});
+
+test('transient validation failure leaves login retryable but success is single use', async () => {
+  let attempt = 0;
+  const { flow, local } = harness({
+    fetch: async () => {
+      if (++attempt === 1) throw new Error('offline');
+      return { ok: true, json: async () => ({ valid: true }) };
+    },
+  });
+  await flow.begin();
+  await assert.rejects(flow.complete(completion, authSender), /offline/);
+  await flow.complete(completion, authSender);
+  assert.equal(local.authToken, completion.token);
+  await assert.rejects(flow.complete(completion, authSender), /No matching/);
 });
 
 test('login validation uses the configured origin, bearer-only auth and a timeout shorter than the page handshake', async () => {

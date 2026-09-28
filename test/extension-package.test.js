@@ -37,6 +37,12 @@ test('the release package includes every worker, content-script, and extension-p
         (match) => match[1]
       )
     );
+    dependencies.push(
+      ...Array.from(
+        html.matchAll(/<link[^>]+href="([^"]+)"/g),
+        (match) => match[1]
+      )
+    );
   }
   for (const file of dependencies)
     assert.ok(files.includes(file), `Missing packaged dependency: ${file}`);

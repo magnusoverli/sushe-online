@@ -1,10 +1,7 @@
 // Background-side album presence index for RYM page badges.
 
 (function () {
-  const CACHE_VERSION = 2;
-  const NUMERIC_KEY_PREFIX = 'rym-id:';
-  const CANONICAL_KEY_PREFIX = 'rym-path:';
-  const NAME_KEY_PREFIX = 'name:';
+  const CACHE_VERSION = 4;
 
   function createAlbumPresenceService(deps = {}) {
     const chromeApi = deps.chrome || chrome;
@@ -24,6 +21,9 @@
     let storageLoaded = false;
     let cacheNeedsRebuild = false;
     let cacheGeneration = 0;
+    let storageLoading = null;
+    let additions = [];
+    let additionRevision = 0;
 
     function isFresh() {
       return (
@@ -38,6 +38,14 @@
 
     async function loadStoredCache() {
       if (storageLoaded) return;
+      if (storageLoading) return storageLoading;
+      storageLoading = readStoredCache().finally(() => {
+        storageLoading = null;
+      });
+      return storageLoading;
+    }
+
+    async function readStoredCache() {
       const generation = cacheGeneration;
 
       const data = await chromeApi.storage.local.get([
@@ -57,11 +65,8 @@
         presenceIndex = storedIndex.entries;
         lastFetched = Number(storedFetchedAt) || 0;
       } else if (storedIndex && typeof storedIndex === 'object') {
-        presenceIndex = Object.fromEntries(
-          Object.entries(storedIndex)
-            .filter(([, entries]) => Array.isArray(entries))
-            .map(([key, entries]) => [`${NAME_KEY_PREFIX}${key}`, entries])
-        );
+        // Older entries lack the identity evidence needed to reject conflicts.
+        presenceIndex = {};
         lastFetched = 0;
         cacheNeedsRebuild = true;
       }
@@ -69,82 +74,35 @@
       storageLoaded = true;
     }
 
-    async function persistPresenceIndex() {
-      await chromeApi.storage.local.set({
+    async function persistPresenceIndex(scope) {
+      const updates = {
         [STORAGE_KEYS.ALBUM_PRESENCE_INDEX]: {
           version: CACHE_VERSION,
           entries: presenceIndex,
         },
         [STORAGE_KEYS.ALBUM_PRESENCE_LAST_FETCHED]: lastFetched,
-      });
+      };
+      if (deps.persistCache) return deps.persistCache(scope, updates);
+      await chromeApi.storage.local.set(updates);
     }
 
     function addPresenceEntry(index, key, entry) {
       if (!key) return;
       if (!index[key]) index[key] = [];
 
-      const alreadyTracked = index[key].some(
-        (item) => item.listId === entry.listId
+      const alreadyTracked = index[key].findIndex(
+        (item) => item.listId === entry.listId && item.albumId === entry.albumId
       );
-      if (!alreadyTracked) index[key].push(entry);
+      if (alreadyTracked < 0) index[key].push(entry);
+      else index[key][alreadyTracked] = entry;
     }
 
-    function normalizeNumericId(value) {
-      if (value == null) return null;
-      const numericId = String(value).trim();
-      return /^\d+$/.test(numericId) ? numericId : null;
-    }
-
-    function getCanonicalPath(album) {
-      const identity =
-        album?.sourceObservation?.identity || album?.identity || {};
-      const candidates = [
-        album?.rymCanonicalUrl,
-        album?.canonicalUrl,
-        album?.canonicalPath,
-        album?.albumUrl,
-        identity.canonicalUrl,
-        identity.canonicalPath,
-      ];
-
-      for (const candidate of candidates) {
-        if (!candidate) continue;
-        const value = String(candidate);
-        const canonical = albumIdentity.canonicalizeRymAlbumUrl(
-          value.startsWith('/') ? `https://rateyourmusic.com${value}` : value
-        );
-        if (canonical) return canonical.canonicalPath;
-      }
-      return null;
-    }
-
-    function getNameKey(album) {
-      const identity =
-        album?.sourceObservation?.identity || album?.identity || {};
-      const key = albumIdentity.getAlbumKey({
-        artist: album?.artist || identity.artist,
-        album: album?.album || album?.title || identity.title,
-      });
-      return key ? `${NAME_KEY_PREFIX}${key}` : null;
-    }
-
-    function getIdentityKeys(album) {
-      const identity =
-        album?.sourceObservation?.identity || album?.identity || {};
-      const numericId = normalizeNumericId(
-        album?.rymNumericId ?? album?.numericId ?? identity.numericId
-      );
-      const canonicalPath = getCanonicalPath(album);
-      return [
-        numericId ? `${NUMERIC_KEY_PREFIX}${numericId}` : null,
-        canonicalPath ? `${CANONICAL_KEY_PREFIX}${canonicalPath}` : null,
-        getNameKey(album),
-      ].filter(Boolean);
-    }
+    const { getIdentityKeys, identityKeysMatch } = albumIdentity;
 
     function addAlbumPresence(index, album, entry) {
-      for (const key of getIdentityKeys(album)) {
-        addPresenceEntry(index, key, entry);
+      const identityKeys = getIdentityKeys(album);
+      for (const key of identityKeys) {
+        addPresenceEntry(index, key, { ...entry, identityKeys });
       }
     }
 
@@ -185,8 +143,12 @@
       return index;
     }
 
-    async function fetchPresenceData(apiBase, headers) {
-      const response = await fetchWithTimeout(
+    async function fetchPresenceData(
+      apiBase,
+      headers,
+      request = fetchWithTimeout
+    ) {
+      const response = await request(
         `${apiBase}${API.LIST_ALBUM_PRESENCE}`,
         { headers },
         15000
@@ -200,7 +162,7 @@
         'Album presence endpoint unavailable; falling back to full lists'
       );
 
-      const fallbackResponse = await fetchWithTimeout(
+      const fallbackResponse = await request(
         `${apiBase}${API.LISTS}?full=true`,
         { headers },
         15000
@@ -217,6 +179,8 @@
       if (fetchInFlight) return fetchInFlight;
 
       const generation = cacheGeneration;
+      const revision = additionRevision;
+      const scope = deps.captureScope?.();
       const pendingFetch = (async () => {
         const apiBase = getApiBase();
         const headers = getAuthHeaders();
@@ -225,16 +189,22 @@
           presenceIndex = {};
           lastFetched = 0;
           cacheNeedsRebuild = false;
-          await persistPresenceIndex();
           return presenceIndex;
         }
 
-        const { response, source } = await fetchPresenceData(apiBase, headers);
+        const { response, source } = await fetchPresenceData(
+          apiBase,
+          headers,
+          scope?.request
+        );
 
         if (generation !== cacheGeneration) return presenceIndex;
         if (response.status === 401) {
-          await clear();
-          await handleUnauthorized();
+          if (scope) await scope.unauthorized();
+          else {
+            await clear();
+            await handleUnauthorized();
+          }
           return presenceIndex;
         }
 
@@ -247,25 +217,33 @@
 
         const data = await response.json();
         if (generation !== cacheGeneration) return presenceIndex;
+        if (source === 'presence' && !Array.isArray(data.items))
+          throw new Error('Invalid presence response');
         presenceIndex =
           source === 'full-lists'
             ? buildPresenceIndexFromFullLists(data)
             : buildPresenceIndex(data.items);
+        for (const addition of additions.filter(
+          (item) => item.revision > revision
+        )) {
+          addAlbumPresence(presenceIndex, addition.album, addition.entry);
+        }
+        additions = [];
         lastFetched = Date.now();
         cacheNeedsRebuild = false;
-        await persistPresenceIndex();
+        await persistPresenceIndex(scope);
         return presenceIndex;
-      })().finally(() => {
-        if (fetchInFlight === pendingFetch) fetchInFlight = null;
-      });
+      })()
+        .catch((error) => {
+          logger.warn('Could not refresh album presence index:', error);
+          return presenceIndex;
+        })
+        .finally(() => {
+          if (fetchInFlight === pendingFetch) fetchInFlight = null;
+        });
       fetchInFlight = pendingFetch;
 
-      try {
-        return await pendingFetch;
-      } catch (error) {
-        logger.warn('Could not refresh album presence index:', error);
-        return presenceIndex;
-      }
+      return pendingFetch;
     }
 
     async function getPresenceForAlbums(albums = [], options = {}) {
@@ -288,37 +266,62 @@
 
       for (const album of albums) {
         const responseKey = album.key || albumIdentity.getAlbumKey(album);
-        const matchKey = getIdentityKeys(album).find(
-          (key) => presenceIndex[key]?.length
-        );
-        if (responseKey && matchKey) {
-          matches[responseKey] = presenceIndex[matchKey];
+        if (!responseKey) continue;
+        const keys = getIdentityKeys(album);
+        for (const key of keys) {
+          const candidates = (presenceIndex[key] || []).filter((entry) =>
+            identityKeysMatch(keys, entry.identityKeys || [])
+          );
+          if (!candidates.length) continue;
+          matches[responseKey] = candidates.map(
+            ({ identityKeys: _keys, ...entry }) => entry
+          );
+          break;
         }
       }
 
       return matches;
     }
 
-    async function rememberAlbumInList(albumData, list) {
+    async function rememberAlbumInList(
+      albumData,
+      list,
+      scope = deps.captureScope?.()
+    ) {
+      const generation = cacheGeneration;
       await loadStoredCache();
-      addAlbumPresence(presenceIndex, albumData, {
+      if (generation !== cacheGeneration) return;
+      scope?.assertCurrent();
+      const entry = {
         albumId: albumData.album_id || '',
         listId: list.id,
         listName: list.name,
         year: list.year || null,
         isMain: !!list.isMain,
-      });
-      lastFetched = Date.now();
-      await persistPresenceIndex();
+      };
+      addAlbumPresence(presenceIndex, albumData, entry);
+      if (fetchInFlight)
+        additions.push({
+          album: albumData,
+          entry,
+          revision: ++additionRevision,
+        });
+      // A local addition says nothing about the completeness/freshness of other entries.
+      await persistPresenceIndex(scope);
     }
 
-    function clear() {
+    function reset() {
       cacheGeneration += 1;
       presenceIndex = {};
       lastFetched = 0;
       fetchInFlight = null;
       storageLoaded = true;
       cacheNeedsRebuild = false;
+      additions = [];
+    }
+
+    function clear() {
+      reset();
       return chromeApi.storage.local.remove([
         STORAGE_KEYS.ALBUM_PRESENCE_INDEX,
         STORAGE_KEYS.ALBUM_PRESENCE_LAST_FETCHED,
@@ -326,6 +329,7 @@
     }
 
     return {
+      reset,
       clear,
       getPresenceForAlbums,
       rememberAlbumInList,

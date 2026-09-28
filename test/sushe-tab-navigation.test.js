@@ -1,5 +1,6 @@
 const { describe, it, beforeEach, afterEach, mock } = require('node:test');
 const assert = require('node:assert');
+require('../browser-extension/shared-utils');
 
 describe('SuShe tab navigation', () => {
   let createSusheTabNavigation;

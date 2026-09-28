@@ -14,6 +14,7 @@
     ALBUM_PRESENCE_INDEX: 'albumPresenceIndex',
     ALBUM_PRESENCE_LAST_FETCHED: 'albumPresenceLastFetched',
     API_CACHE_VERSION: 'apiCacheVersion',
+    CACHE_OWNER: 'cacheOwner',
   };
 
   const LIST_CACHE_DURATION_MS = 60 * 1000;
@@ -39,15 +40,11 @@
     START_LOGIN: 'startExtensionLogin',
     COMPLETE_LOGIN: 'completeExtensionLogin',
     EXTRACT_ALBUM_IDENTITY: 'extractAlbumIdentity',
-    FETCH_GENRES_FOR_ALBUM: 'fetchGenresForAlbum',
-    EXTRACT_ALBUM_DATA: 'extractAlbumData',
     REFRESH_LISTS: 'refreshLists',
     UPDATE_API_URL: 'updateApiUrl',
     GET_API_URL: 'getApiUrl',
     LOGOUT: 'logout',
-    GET_AUTH_STATUS: 'getAuthStatus',
     GET_POPUP_STATE: 'getPopupState',
-    GET_LISTS: 'getLists',
     RYM_PAGE_LOADED: 'rymPageLoaded',
     GET_ALBUM_PRESENCE: 'getAlbumPresence',
     ALBUM_ADDED_TO_LIST: 'albumAddedToList',
@@ -60,7 +57,6 @@
     LIST_ALBUM_PRESENCE: '/api/lists/presence',
     ALBUM_BATCH_UPDATE: '/api/albums/batch-update',
     MUSICBRAINZ_PROXY: '/api/proxy/musicbrainz',
-    EXTENSION_AUTH: '/extension/auth',
   };
 
   const NOTIFICATIONS = {

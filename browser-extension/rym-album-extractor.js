@@ -3,7 +3,7 @@
 (function () {
   const SCHEMA_VERSION = 1;
   const SOURCE = 'rateyourmusic';
-  const EXTRACTOR_VERSION = 'rym-extension/1.10.0';
+  const EXTRACTOR_VERSION = 'rym-extension/1.10.2';
   const primaryGenreSelectors = [
     '.release_pri_genres .genre',
     '.release_pri_genres a[href*="/genre/"]',
@@ -296,24 +296,47 @@
     return null;
   }
 
+  function isAppleAlbumLink(parsed) {
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    const albumIndex = segments[0]?.toLowerCase() === 'album' ? 0 : 1;
+    const albumSegments = segments.slice(albumIndex + 1);
+    return (
+      (albumIndex === 0 || /^[a-z]{2}$/i.test(segments[0])) &&
+      segments[albumIndex]?.toLowerCase() === 'album' &&
+      albumSegments.length >= 1 &&
+      albumSegments.length <= 2 &&
+      (parsed.hostname === 'itunes.apple.com'
+        ? /^id\d+$/i
+        : /^(?:id)?\d+$/i
+      ).test(albumSegments.at(-1) || '')
+    );
+  }
+
+  function isYoutubeLink(parsed) {
+    const playlistId = parsed.searchParams.get('list');
+    if (
+      playlistId &&
+      /^[A-Za-z0-9_-]{10,128}$/.test(playlistId) &&
+      /^\/(?:playlist|watch)\/?$/.test(parsed.pathname)
+    )
+      return true;
+    const videoId =
+      parsed.hostname === 'youtu.be'
+        ? parsed.pathname.match(/^\/([A-Za-z0-9_-]{11})\/?$/)?.[1]
+        : /^\/watch\/?$/.test(parsed.pathname)
+          ? parsed.searchParams.get('v')
+          : parsed.pathname.match(
+              /^\/(?:shorts|embed)\/([A-Za-z0-9_-]{11})\/?$/
+            )?.[1];
+    return /^[A-Za-z0-9_-]{11}$/.test(videoId || '');
+  }
+
   function isPlatformAlbumLink(parsed, service) {
     switch (service) {
       case 'spotify':
         return /^\/album\/[A-Za-z0-9]{22}\/?$/.test(parsed.pathname);
-      case 'itunes': {
-        const segments = parsed.pathname.split('/').filter(Boolean);
-        const albumIndex = segments[0]?.toLowerCase() === 'album' ? 0 : 1;
-        const albumSegments = segments.slice(albumIndex + 1);
-        return (
-          (albumIndex === 0 || /^[a-z]{2}$/i.test(segments[0])) &&
-          segments[albumIndex]?.toLowerCase() === 'album' &&
-          albumSegments.length >= 1 &&
-          albumSegments.length <= 2 &&
-          (parsed.hostname.endsWith('itunes.apple.com')
-            ? /^id\d+$/i.test(albumSegments.at(-1) || '')
-            : /^(?:id)?\d+$/i.test(albumSegments.at(-1) || ''))
-        );
-      }
+      case 'itunes':
+        return isAppleAlbumLink(parsed);
       case 'qobuz':
         return (
           /^\/album\/[A-Za-z0-9]+\/?$/.test(parsed.pathname) ||
@@ -338,25 +361,8 @@
             !soundCloudReservedSegments.has(match[2].toLowerCase())
           );
         }
-      case 'youtube': {
-        const playlistId = parsed.searchParams.get('list');
-        if (
-          playlistId &&
-          /^[A-Za-z0-9_-]{10,128}$/.test(playlistId) &&
-          /^\/(?:playlist|watch)\/?$/.test(parsed.pathname)
-        ) {
-          return true;
-        }
-        const videoId =
-          parsed.hostname === 'youtu.be'
-            ? parsed.pathname.match(/^\/([A-Za-z0-9_-]{11})\/?$/)?.[1]
-            : /^\/watch\/?$/.test(parsed.pathname)
-              ? parsed.searchParams.get('v')
-              : parsed.pathname.match(
-                  /^\/(?:shorts|embed)\/([A-Za-z0-9_-]{11})\/?$/
-                )?.[1];
-        return /^[A-Za-z0-9_-]{11}$/.test(videoId || '');
-      }
+      case 'youtube':
+        return isYoutubeLink(parsed);
       default:
         return false;
     }
@@ -415,11 +421,64 @@
     return !!queryOne(documentLike, selector);
   }
 
+  function titleIdentity(documentLike) {
+    const title = normalizeText(documentLike?.title).replace(
+      /\s+-\s+Rate Your Music\s*$/i,
+      ''
+    );
+    const separator = title.toLowerCase().lastIndexOf(' by ');
+    if (separator <= 0) return null;
+    const album = title.slice(0, separator).trim();
+    const artist = title
+      .slice(separator + 4)
+      .replace(
+        /\s+\((?:album|ep|single|mixtape|compilation|soundtrack)\b.*$/i,
+        ''
+      )
+      .trim();
+    return album && artist ? { album, artist } : null;
+  }
+
+  function displayIdentity(documentLike) {
+    const album = normalizeText(
+      queryOne(documentLike, 'h1.album_title')?.textContent
+    );
+    const artists = collectOrderedText(documentLike, [
+      '[itemprop="byArtist"] [itemprop="name"]',
+    ]);
+    // Multi-artist credits need their join phrase, which the document title retains.
+    if (album && artists.length === 1) return { album, artist: artists[0] };
+    return titleIdentity(documentLike);
+  }
+
+  function extractIdentity(documentLike, url) {
+    const identity = globalThis.AlbumIdentity.getAlbumIdentityFromUrl(url);
+    if (!identity) return null;
+    for (const selector of [
+      'link[rel="canonical"]',
+      'meta[property="og:url"]',
+    ]) {
+      const element = queryOne(documentLike, selector);
+      const value =
+        element?.href ||
+        element?.getAttribute?.('href') ||
+        element?.getAttribute?.('content');
+      if (!value) continue;
+      const declared = globalThis.AlbumIdentity.canonicalizeRymAlbumUrl(value);
+      if (declared?.canonicalUrl !== identity.albumUrl) return null;
+    }
+    const names = displayIdentity(documentLike) || identity;
+    return {
+      numericId: extractAlbumId(documentLike),
+      canonicalPath: identity.canonicalPath,
+      canonicalUrl: identity.albumUrl,
+      artist: names.artist,
+      title: names.album,
+    };
+  }
+
   function extract(documentLike, url) {
-    const canonical = globalThis.AlbumIdentity?.canonicalizeRymAlbumUrl(url);
-    const compatibleIdentity =
-      globalThis.AlbumIdentity?.getAlbumIdentityFromUrl(url);
-    const albumId = extractAlbumId(documentLike);
+    const identity = extractIdentity(documentLike, url);
     const primaryGenres = collectOrderedText(
       documentLike,
       primaryGenreSelectors
@@ -458,22 +517,13 @@
     const catalogNumbers = extractRowTerms(catalogNumbersRow, ['td']);
     const credits = extractCredits(documentLike);
     const platformResult = collectPlatformLinks(documentLike);
-    const identity = canonical
-      ? {
-          numericId: albumId,
-          canonicalPath: canonical.canonicalPath,
-          canonicalUrl: canonical.canonicalUrl,
-          artist: compatibleIdentity?.artist || '',
-          title: compatibleIdentity?.album || '',
-        }
-      : null;
-
     const primarySection = hasSection(documentLike, '.release_pri_genres');
     const secondarySection = hasSection(documentLike, '.release_sec_genres');
     const descriptorSection = hasSection(documentLike, '.release_descriptors');
+    // Missing sections can be a partially rendered page, not authoritative emptiness.
     const authoritativeTaxonomy =
-      primarySection || secondarySection || descriptorSection;
-    const complete = !!canonical && authoritativeTaxonomy;
+      primarySection && secondarySection && descriptorSection;
+    const complete = !!identity && authoritativeTaxonomy;
 
     return {
       schemaVersion: SCHEMA_VERSION,
@@ -492,7 +542,7 @@
           ? { labels: extractLabels(labelsRow, catalogNumbers) }
           : {}),
         ...(credits.found ? { credits: credits.credits } : {}),
-        sourceUrl: canonical?.canonicalUrl || null,
+        sourceUrl: identity?.canonicalUrl || null,
         extractorVersion: EXTRACTOR_VERSION,
         capturedAt: new Date().toISOString(),
       },
@@ -504,6 +554,7 @@
     SCHEMA_VERSION,
     SOURCE,
     extract,
+    extractIdentity,
     getPlatformService,
   };
 })();

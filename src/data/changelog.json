@@ -2,6 +2,16 @@
   {
     "date": "2026-09-28",
     "category": "fix",
+    "description": "Extension 1.9.11 fixes album selection, cross-album genre leakage, punctuation-sensitive matching, and badges with conflicting RYM identities."
+  },
+  {
+    "date": "2026-09-28",
+    "category": "fix",
+    "description": "Hardened extension account isolation, album matching, caches, menus, RYM badges and retries, and simplified UI and messaging by removing obsolete handlers."
+  },
+  {
+    "date": "2026-09-28",
+    "category": "fix",
     "description": "Fixed browser extension setup and sign-in in Brave/Chromium, surfaced authorization failures, and hardened settings and logout handling."
   },
   {

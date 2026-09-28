@@ -62,7 +62,6 @@ test('the first state load discards session-derived caches but retains extension
     assert.equal(state.authToken, 'token');
     assert.equal(state.apiUrl, 'https://sushe.test');
     assert.equal(state.userLists.length, 0);
-    assert.equal(Object.keys(state.userListsByYear).length, 0);
     assert.equal(state.listsLastFetched, 0);
     assert.equal(state.lastUsedList, null);
   }
@@ -97,9 +96,10 @@ test('a failed cache migration blocks stale reads and can retry', async () => {
 test('unauthorized cleanup removes credentials and all account caches but preserves the configured server', async () => {
   const storage = { ...oldStorage(), apiCacheVersion: 1 };
   const { auth } = loadAuthState(storage);
-  await auth.handleUnauthorized();
+  await auth.clearAllAuthData();
   assert.deepEqual(storage, {
     apiUrl: 'https://sushe.test',
     apiCacheVersion: 1,
+    hasEverAuthenticated: true,
   });
 });

@@ -5,14 +5,7 @@
     const chromeApi = deps.chrome || chrome;
     const getApiBase = deps.getApiBase;
 
-    function buildAlbumUrl(apiBase, listId, albumId) {
-      if (!apiBase || !listId || !albumId) return null;
-
-      const url = new URL('/', apiBase);
-      url.searchParams.set('listId', listId);
-      url.searchParams.set('albumId', albumId);
-      return url.toString();
-    }
+    const { buildAlbumUrl } = globalThis.SharedUtils;
 
     function getTabUrl(tab) {
       return tab.url || tab.pendingUrl || '';

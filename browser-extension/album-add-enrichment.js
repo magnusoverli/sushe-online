@@ -20,6 +20,8 @@
       state.promise = retryExtraction()
         .then((retryData) => {
           if (!hasCompleteObservation(retryData)) return null;
+          const identity = globalThis.AlbumIdentity;
+          if (!identity.identitiesMatch(retryData, albumData)) return null;
           state.value = retryData;
           return retryData;
         })

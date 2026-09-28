@@ -2,7 +2,9 @@
 /* global MutationObserver, location */
 
 (function () {
-  const { ACTIONS } = globalThis.ExtensionConstants;
+  if (globalThis.RymPresenceBadges) return;
+  globalThis.RymPresenceBadges = { installed: true };
+  const { ACTIONS, STORAGE_KEYS } = globalThis.ExtensionConstants;
   const albumIdentity = globalThis.AlbumIdentity;
   const rymExtractor = globalThis.RymAlbumExtractor;
   const badgeAttribute = 'data-sushe-presence-badge';
@@ -21,6 +23,9 @@
   let scanTimer = null;
   let validationInFlight = false;
   let lastValidationAt = 0;
+  let scanInFlight = false;
+  let scanAgain = false;
+  let accountRevision = 0;
 
   function injectBadgeStyles() {
     if (document.getElementById('sushe-presence-badge-styles')) return;
@@ -101,7 +106,7 @@
   }
 
   function addTarget(targetByContainer, identity, anchor, container) {
-    const key = albumIdentity.getAlbumKey(identity);
+    const key = albumIdentity.getIdentityKeys(identity)[0];
     if (!key || !anchor || !container) return;
 
     const existing = targetByContainer.get(container);
@@ -123,7 +128,6 @@
     );
 
     for (const anchor of anchors) {
-      if (targetByContainer.size >= maxAlbumsPerScan) break;
       if (!isTextAlbumLink(anchor)) continue;
 
       const identity = getBadgeAlbumIdentityFromUrl(anchor.href);
@@ -255,7 +259,7 @@
       ensureFallbackPlatformRow(cover);
     removeAlbumDetailDuplicates(platformRow);
 
-    const key = albumIdentity.getAlbumKey(identity);
+    const key = albumIdentity.getIdentityKeys(identity)[0];
     if (!key) return [];
 
     return [
@@ -274,12 +278,14 @@
     if (!pageIdentity) return collectListingTargets();
 
     try {
-      const extractedIdentity = rymExtractor?.extract(
+      const extractedIdentity = rymExtractor?.extractIdentity(
         document,
         location.href
-      )?.identity;
-      if (extractedIdentity?.numericId) {
-        pageIdentity.numericId = String(extractedIdentity.numericId);
+      );
+      if (extractedIdentity) {
+        pageIdentity.numericId = extractedIdentity.numericId;
+        pageIdentity.artist = extractedIdentity.artist;
+        pageIdentity.album = extractedIdentity.title;
       }
     } catch (_error) {
       // URL identity still provides canonical-path and normalized-name matching.
@@ -375,16 +381,11 @@
   }
 
   function buildAlbumLink(apiBase, match) {
-    if (!apiBase || !match?.listId || !match?.albumId) return null;
-
-    try {
-      const url = new URL('/', apiBase);
-      url.searchParams.set('listId', match.listId);
-      url.searchParams.set('albumId', match.albumId);
-      return url.toString();
-    } catch (_error) {
-      return null;
-    }
+    return globalThis.SharedUtils.buildAlbumUrl(
+      apiBase,
+      match?.listId,
+      match?.albumId
+    );
   }
 
   function updateBadgeLink(badge, matches, options = {}) {
@@ -405,7 +406,18 @@
     const apiBase =
       options.apiBase || badge.getAttribute(badgeApiBaseAttribute);
     const href = buildAlbumLink(apiBase, preferred);
-    if (!href) return;
+    if (!href) {
+      if (options.replaceExisting) {
+        for (const attribute of [
+          'href',
+          badgeLinkListAttribute,
+          badgeLinkAlbumAttribute,
+          badgeApiBaseAttribute,
+        ])
+          badge.removeAttribute(attribute);
+      }
+      return;
+    }
 
     badge.href = href;
     badge.setAttribute('target', '_blank');
@@ -418,6 +430,7 @@
   }
 
   function handleBadgeClick(event, badge) {
+    if (badge.getAttribute('data-sushe-native-link') === 'true') return;
     if (
       event.button !== 0 ||
       event.metaKey ||
@@ -439,8 +452,15 @@
         listId,
         albumId,
       })
-      .catch((error) => {
-        console.debug('Could not open SuShe album link:', error.message);
+      .then((response) => {
+        if (!response?.success)
+          throw new Error(response?.error || 'Navigation unavailable');
+      })
+      .catch(() => {
+        badge.setAttribute('data-sushe-native-link', 'true');
+        badge.title =
+          'Could not reuse the SuShe tab. Click again to open the album in a new tab.';
+        badge.setAttribute('aria-label', badge.title);
       });
   }
 
@@ -466,7 +486,10 @@
     if (!matches || matches.length === 0) return;
 
     const existingBadge = findBadgeForTarget(target);
-    if (target.container.getAttribute(albumAttribute) === target.key) {
+    if (
+      existingBadge &&
+      target.container.getAttribute(albumAttribute) === target.key
+    ) {
       if (existingBadge) {
         updateBadgeListNames(existingBadge, matches, target.variant, options);
         updateBadgeLink(existingBadge, matches, options);
@@ -522,6 +545,12 @@
 
   function applyPresenceMatches(targets, matches, options = {}) {
     for (const target of targets) {
+      for (const badge of target.container.querySelectorAll(
+        `[${badgeAttribute}]`
+      )) {
+        if (badge.getAttribute(badgeKeyAttribute) !== target.key)
+          badge.remove();
+      }
       const targetMatches = matches?.[target.key];
       if (targetMatches?.length) {
         renderBadge(target, targetMatches, {
@@ -540,20 +569,8 @@
 
     validationInFlight = true;
     try {
-      const response = await chrome.runtime.sendMessage({
-        action: ACTIONS.GET_ALBUM_PRESENCE,
-        albums: getUniqueAlbums(targets),
-        forceRefresh: true,
-      });
-
-      if (response?.success) {
-        applyPresenceMatches(targets, response.matches, {
-          removeMissing: true,
-          replaceExisting: true,
-          apiBase: response.apiBase,
-        });
-        lastValidationAt = Date.now();
-      }
+      await requestPresence(targets, true);
+      lastValidationAt = Date.now();
     } catch (error) {
       console.debug(
         'Fresh SuShe presence validation unavailable:',
@@ -564,32 +581,53 @@
     }
   }
 
+  async function requestPresence(targets, forceRefresh = false) {
+    const revision = accountRevision;
+    // Refresh the shared index once, then read subsequent batches from that index.
+    for (let offset = 0; offset < targets.length; offset += maxAlbumsPerScan) {
+      const batch = targets.slice(offset, offset + maxAlbumsPerScan);
+      const response = await chrome.runtime.sendMessage({
+        action: ACTIONS.GET_ALBUM_PRESENCE,
+        albums: getUniqueAlbums(batch),
+        forceRefresh: forceRefresh && offset === 0,
+      });
+      if (revision !== accountRevision) return;
+      if (!response?.success)
+        throw new Error(response?.error || 'Presence unavailable');
+      applyPresenceMatches(batch, response.matches, {
+        removeMissing: true,
+        replaceExisting: true,
+        apiBase: response.apiBase,
+      });
+    }
+  }
+
   async function scanForPresence() {
+    if (scanInFlight) {
+      scanAgain = true;
+      return;
+    }
     injectBadgeStyles();
 
     const targets = collectAlbumTargets();
     if (targets.length === 0) return;
-
+    scanInFlight = true;
     try {
-      const response = await chrome.runtime.sendMessage({
-        action: ACTIONS.GET_ALBUM_PRESENCE,
-        albums: getUniqueAlbums(targets),
-      });
-
-      if (!response?.success) return;
-
-      applyPresenceMatches(targets, response.matches, {
-        apiBase: response.apiBase,
-      });
-      validateVisiblePresence(targets);
+      await requestPresence(targets);
+      await validateVisiblePresence(targets);
     } catch (error) {
       console.debug('SuShe presence lookup unavailable:', error.message);
+    } finally {
+      scanInFlight = false;
+      if (scanAgain) {
+        scanAgain = false;
+        scheduleScan();
+      }
     }
   }
 
   function renderAddedAlbumBadge(album, list, apiBase) {
-    const key = albumIdentity.getAlbumKey(album);
-    if (!key) return;
+    if (!albumIdentity.getIdentityKeys(album).length) return;
 
     injectBadgeStyles();
 
@@ -604,7 +642,8 @@
     ];
 
     for (const target of collectAlbumTargets()) {
-      if (target.key === key) renderBadge(target, matches, { apiBase });
+      if (albumIdentity.identitiesMatch(target.identity, album))
+        renderBadge(target, matches, { apiBase });
     }
   }
 
@@ -619,15 +658,44 @@
   scheduleScan();
 
   chrome.runtime.onMessage.addListener((message) => {
-    if (message.action !== ACTIONS.ALBUM_ADDED_TO_LIST) return false;
+    if (message?.action !== ACTIONS.ALBUM_ADDED_TO_LIST) return false;
 
+    accountRevision++;
     renderAddedAlbumBadge(message.album, message.list, message.apiBase);
     return false;
   });
 
+  chrome.storage?.onChanged?.addListener((changes, area) => {
+    if (
+      area !== 'local' ||
+      ![STORAGE_KEYS.AUTH_TOKEN, STORAGE_KEYS.API_URL].some(
+        (key) => changes[key]
+      )
+    )
+      return;
+    accountRevision++;
+    lastValidationAt = 0;
+    for (const badge of document.querySelectorAll(`[${badgeAttribute}]`))
+      badge.remove();
+    scheduleScan();
+  });
   const observer = new MutationObserver(scheduleScan);
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
+  });
+  const interval = setInterval(() => {
+    if (document.visibilityState !== 'hidden') scheduleScan();
+  }, freshValidationIntervalMs);
+  interval.unref?.();
+  document.addEventListener?.('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden') scheduleScan();
+  });
+  globalThis.addEventListener?.('pagehide', (event) => {
+    if (!event.persisted) {
+      clearInterval(interval);
+      clearTimeout(scanTimer);
+      observer.disconnect();
+    }
   });
 })();

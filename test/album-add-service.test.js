@@ -2,6 +2,7 @@ const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
 
 require('../browser-extension/shared-utils.js');
+require('../browser-extension/album-identity-service.js');
 require('../browser-extension/album-add-enrichment.js');
 require('../browser-extension/album-add-service.js');
 
@@ -51,13 +52,11 @@ function createDeps(overrides = {}) {
     ...overrides.chrome,
   };
 
-  return {
+  const deps = {
     constants: {
       ACTIONS: { EXTRACT_ALBUM_IDENTITY: 'extractAlbumIdentity' },
     },
-    albumIdentity: {
-      getAlbumIdentityFromUrl: (url) => (url === albumUrl ? identity : null),
-    },
+    albumIdentity: globalThis.AlbumIdentity,
     showNotification: mock.fn(),
     showNotificationWithImage: mock.fn(),
     validateAndCleanToken: mock.fn(async () => ({ valid: true })),
@@ -72,9 +71,104 @@ function createDeps(overrides = {}) {
     albumApi,
     chrome,
   };
+  deps.captureScope = () => {
+    const apiBase = deps.getApiBase();
+    const authorization = deps.getAuthHeaders().Authorization;
+    const isCurrent = () =>
+      apiBase === deps.getApiBase() &&
+      authorization === deps.getAuthHeaders().Authorization;
+    return {
+      apiBase,
+      isCurrent,
+      assertCurrent: () => {
+        if (!isCurrent()) throw new Error('Account changed');
+      },
+      unauthorized: async () => {
+        if (isCurrent()) await deps.handleUnauthorized();
+      },
+    };
+  };
+  return deps;
 }
 
 describe('album-add-service', () => {
+  it('rejects an unsupported clicked release before extraction or lookup, even on an album page', async () => {
+    const deps = createDeps();
+    await globalThis.AlbumAddService.createAlbumAddService(deps).addAlbumToList(
+      { linkUrl: albumUrl.replace('/album/', '/ep/'), pageUrl: albumUrl },
+      { id: 7 },
+      'list',
+      'List'
+    );
+    assert.equal(deps.albumApi.searchMusicBrainz.mock.calls.length, 0);
+    assert.equal(deps.chrome.tabs.sendMessage.mock.calls.length, 0);
+    assert.equal(deps.albumApi.saveAlbum.mock.calls.length, 0);
+    assert.match(
+      deps.showNotification.mock.calls[0].arguments[1],
+      /Only album releases/
+    );
+  });
+
+  for (const extraction of [
+    { error: 'Selected release is unsupported' },
+    {
+      ...identity,
+      albumUrl: albumUrl.replace('test-album', 'different-album'),
+      canonicalPath: undefined,
+    },
+  ]) {
+    it(`does not override an extraction rejection or conflicting identity: ${extraction.error || extraction.albumUrl}`, async () => {
+      const deps = createDeps();
+      deps.chrome.tabs.sendMessage = mock.fn(async () => extraction);
+      await globalThis.AlbumAddService.createAlbumAddService(
+        deps
+      ).addAlbumToList({ linkUrl: albumUrl }, { id: 7 }, 'list', 'List');
+      assert.equal(deps.albumApi.saveAlbum.mock.calls.length, 0);
+      assert.equal(deps.showNotificationWithImage.mock.calls.length, 0);
+      assert.equal(deps.showNotification.mock.calls.length, 1);
+    });
+  }
+
+  it('does not save or clear replacement auth when an account changes during extraction', async () => {
+    const extraction = deferred();
+    let token = 'old';
+    const deps = createDeps({
+      getAuthHeaders: () => ({ Authorization: token }),
+    });
+    deps.chrome.tabs.sendMessage = mock.fn(() => extraction.promise);
+    const adding = globalThis.AlbumAddService.createAlbumAddService(
+      deps
+    ).addAlbumToList({ linkUrl: albumUrl }, { id: 7 }, 'list', 'List');
+    while (!deps.chrome.tabs.sendMessage.mock.calls.length)
+      await Promise.resolve();
+    token = 'new';
+    extraction.resolve({ ...identity });
+    await adding;
+    assert.equal(deps.albumApi.saveAlbum.mock.calls.length, 0);
+    assert.equal(deps.handleUnauthorized.mock.calls.length, 0);
+  });
+
+  it('duplicate additions reconcile badges and last-used state without incrementing counts', async () => {
+    const deps = createDeps({
+      albumApi: {
+        saveAlbum: async () => ({
+          ok: true,
+          json: async () => ({ duplicates: [{ album_id: 'canonical' }] }),
+        }),
+      },
+    });
+    await globalThis.AlbumAddService.createAlbumAddService(deps).addAlbumToList(
+      { linkUrl: albumUrl },
+      { id: 7 },
+      'list',
+      'List'
+    );
+    assert.equal(deps.onAlbumAdded.mock.calls[0].arguments[0].added, false);
+    assert.equal(
+      deps.onAlbumAdded.mock.calls[0].arguments[0].album.album_id,
+      'canonical'
+    );
+  });
   for (const { status, body, message } of [
     {
       status: 403,

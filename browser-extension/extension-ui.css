@@ -1,0 +1,169 @@
+:root {
+  color-scheme: dark;
+  --accent-color: #dc2626;
+  --accent-hover: #b91c1c;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #111;
+  color: #e5e7eb;
+  font:
+    14px/1.5 system-ui,
+    sans-serif;
+}
+body.popup {
+  width: 320px;
+  min-height: 280px;
+}
+body.options {
+  padding: 24px;
+}
+.card {
+  max-width: 500px;
+  margin: 24px auto;
+  border: 1px solid #374151;
+  border-radius: 8px;
+}
+.header {
+  padding: 20px;
+  border-bottom: 1px solid #374151;
+}
+h1 {
+  margin: 0;
+  font-size: 22px;
+}
+.subtitle,
+.help-text {
+  color: #9ca3af;
+}
+.content {
+  padding: 20px;
+}
+.section {
+  margin-bottom: 24px;
+}
+.section:last-child {
+  margin-bottom: 0;
+}
+h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+p {
+  margin: 0 0 16px;
+}
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #6b7280;
+  border-radius: 4px;
+  background: #1f2937;
+  color: inherit;
+  font: inherit;
+}
+button {
+  padding: 10px 16px;
+  border: 1px solid #4b5563;
+  border-radius: 4px;
+  background: #374151;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+button:hover {
+  background: #4b5563;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid #e5e7eb;
+  outline-offset: 2px;
+}
+.popup button {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+}
+.btn-accent {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: #fff;
+}
+.btn-accent:hover {
+  background: var(--accent-hover);
+}
+.btn-danger {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+.auth-buttons {
+  display: flex;
+  gap: 8px;
+}
+.auth-buttons button {
+  flex: 1;
+}
+.help-text {
+  font-size: 12px;
+  margin: 8px 0 12px;
+}
+.status {
+  padding: 12px;
+  border: 1px solid #374151;
+  border-radius: 4px;
+  margin: 16px 0;
+}
+.status:empty {
+  display: none;
+}
+.status.success {
+  border-color: #065f46;
+  color: #6ee7b7;
+}
+.status.error {
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+.status.info {
+  color: #d1d5db;
+}
+.lists {
+  margin-top: 16px;
+  max-height: 200px;
+  overflow: auto;
+  border: 1px solid #374151;
+  border-radius: 4px;
+}
+.lists-header,
+.list-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid #374151;
+}
+.lists-header {
+  font-weight: 600;
+}
+.list-item:last-child {
+  border-bottom: 0;
+}
+.example-code {
+  display: block;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+#testResult {
+  margin-top: 12px;
+}
+#authStatus {
+  margin-bottom: 12px;
+}

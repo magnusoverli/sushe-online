@@ -13,9 +13,6 @@ function showError(message) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load state and update UI
-  // NOTE: loadLists() now uses background as single source of truth.
-  // It shows cached lists immediately and only refreshes when the cache is stale.
   loadLists();
 
   // Set up event listeners
@@ -32,9 +29,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       changes[STORAGE_KEYS.AUTH_TOKEN] ||
       changes[STORAGE_KEYS.API_URL] ||
       changes[STORAGE_KEYS.TOKEN_EXPIRES_AT] ||
-      changes[STORAGE_KEYS.LISTS_LAST_FETCHED]
+      changes[STORAGE_KEYS.LISTS_LAST_FETCHED] ||
+      changes[STORAGE_KEYS.USER_LISTS]
     ) {
-      console.log('Auth state changed, reloading lists');
       loadLists();
     }
   }
@@ -59,7 +56,6 @@ async function loadLists() {
       token: response.auth?.hasToken ? 'present' : null,
     };
 
-    // Show/hide buttons based on auth state (fixes Issue #5 - consistent validation)
     if (authState.isValid) {
       loginBtn.style.display = 'none';
       logoutBtn.style.display = 'block';
@@ -93,9 +89,13 @@ async function loadLists() {
     }
 
     statusEl.innerHTML = '<div class="status info">Loading your lists...</div>';
-    console.log('[Popup] Received', response.count, 'lists from background');
 
     if (response.count === 0) {
+      if (response.warning) {
+        showError(response.warning);
+        listsEl.style.display = 'none';
+        return;
+      }
       statusEl.innerHTML =
         '<div class="status error">No lists found. Create a list in SuShe Online first!</div>';
       listsEl.style.display = 'none';
@@ -106,11 +106,7 @@ async function loadLists() {
     listItemsEl.innerHTML = '';
 
     // Get years sorted: numeric years descending, then 'Uncategorized' at the end
-    const years = Object.keys(response.lists).sort((a, b) => {
-      if (a === 'Uncategorized') return 1;
-      if (b === 'Uncategorized') return -1;
-      return parseInt(b) - parseInt(a);
-    });
+    const years = globalThis.SharedUtils.sortListYears(response.lists);
 
     years.forEach((year) => {
       const lists = response.lists[year];

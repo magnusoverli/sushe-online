@@ -41,6 +41,44 @@ function loadExtractor() {
 describe('RateYourMusic album observation extractor', () => {
   beforeEach(loadExtractor);
 
+  it('prefers structured display names and preserves punctuation, Unicode and meaningful digits', () => {
+    const document = documentFrom({
+      'h1.album_title': [element({ text: '音楽: Volume 2' })],
+      '[itemprop="byArtist"] [itemprop="name"]': [
+        element({ text: 'blink-182' }),
+      ],
+    });
+    document.title = 'Incorrect name by Incorrect artist - Rate Your Music';
+    const identity = globalThis.RymAlbumExtractor.extractIdentity(
+      document,
+      'https://rateyourmusic.com/release/album/blink-182/music-volume-2-3/'
+    );
+    assert.equal(identity.artist, 'blink-182');
+    assert.equal(identity.title, '音楽: Volume 2');
+    assert.equal(
+      identity.canonicalPath,
+      '/release/album/blink-182/music-volume-2-3/'
+    );
+  });
+
+  it('retains multi-artist join phrases from the detail title rather than choosing one credit', () => {
+    const document = documentFrom({
+      'h1.album_title': [element({ text: 'Bookends' })],
+      '[itemprop="byArtist"] [itemprop="name"]': [
+        element({ text: 'Simon' }),
+        element({ text: 'Garfunkel' }),
+      ],
+    });
+    document.title =
+      'Bookends by Simon & Garfunkel (Album, Folk Rock) - Rate Your Music';
+    const identity = globalThis.RymAlbumExtractor.extractIdentity(
+      document,
+      'https://rateyourmusic.com/release/album/simon-and-garfunkel/bookends/'
+    );
+    assert.equal(identity.artist, 'Simon & Garfunkel');
+    assert.equal(identity.title, 'Bookends');
+  });
+
   it('extracts canonical identity, ordered taxonomy, descriptors, and all platforms', () => {
     const primary = [
       element({ text: 'Art Rock' }),
@@ -195,7 +233,7 @@ describe('RateYourMusic album observation extractor', () => {
     );
     assert.strictEqual(
       observation.taxonomy.extractorVersion,
-      'rym-extension/1.10.0'
+      'rym-extension/1.10.2'
     );
     assert.ok(!Number.isNaN(Date.parse(observation.taxonomy.capturedAt)));
     assert.deepStrictEqual(Object.keys(observation).sort(), [

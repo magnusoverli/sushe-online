@@ -1,292 +1,236 @@
+// Album additions hold one immutable account scope through save and enrichment.
 (function () {
-  function identityKey(album) {
-    return `${album?.artist || ''}\u0000${album?.album || ''}`
-      .normalize('NFKC')
-      .toLocaleLowerCase()
-      .replace(/\s+/g, ' ')
-      .trim();
+  async function extractIdentity(chrome, actions, info, tab) {
+    const message = {
+      action: actions.EXTRACT_ALBUM_IDENTITY,
+      srcUrl: info.srcUrl,
+      linkUrl: info.linkUrl,
+      pageUrl: info.pageUrl,
+    };
+    try {
+      return await chrome.tabs.sendMessage(tab.id, message);
+    } catch {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: [
+            'extension-constants.js',
+            'shared-utils.js',
+            'album-identity-service.js',
+            'rym-album-extractor.js',
+            'rym-presence-badges.js',
+            'content-script.js',
+          ],
+        });
+        return await chrome.tabs.sendMessage(tab.id, message);
+      } catch (cause) {
+        throw new Error(
+          'Could not communicate with page. Try refreshing RateYourMusic.',
+          { cause }
+        );
+      }
+    }
+  }
+
+  async function resolveRelease(
+    api,
+    apiBase,
+    album,
+    clicked,
+    speculative,
+    logger
+  ) {
+    const key = (value) => globalThis.AlbumIdentity.getAlbumKey(value);
+    if (speculative && key(clicked) === key(album)) {
+      const result = await speculative;
+      if (!result.error) return result.releaseGroup;
+      logger.warn(
+        'Speculative lookup failed; retrying extracted identity:',
+        result.error.message
+      );
+    }
+    return api.searchMusicBrainz(apiBase, album);
+  }
+
+  function validateExtractedAlbum(album, selected, identity) {
+    if (album?.error || !album?.artist || !album?.album)
+      throw new Error(
+        album?.error ||
+          'Could not identify this album. Open its RYM album page and try again.'
+      );
+    if (!identity.identitiesMatch(selected, album))
+      throw new Error(
+        'The extracted album does not match the selected link. Please try again.'
+      );
+  }
+
+  async function finishAddition({
+    deps,
+    enrichment,
+    scope,
+    album,
+    result,
+    retry,
+    country,
+    info,
+    tab,
+    listId,
+    listName,
+  }) {
+    scope.assertCurrent();
+    const duplicate = !!result.duplicates?.length;
+    const canonical = {
+      ...album,
+      ...(result.addedItems?.[0] || result.duplicates?.[0] || {}),
+    };
+    const tasks = [
+      enrichment.enrichCountry(scope.apiBase, country, canonical.album_id),
+    ];
+    if (retry)
+      tasks.push(
+        enrichment.persistObservation({
+          apiBase: scope.apiBase,
+          albumId: canonical.album_id,
+          retryPromise: retry.promise,
+        })
+      );
+    if (deps.onAlbumAdded)
+      tasks.push(
+        deps.onAlbumAdded({
+          album: canonical,
+          listId,
+          listName,
+          tabId: tab.id,
+          added: !duplicate,
+          scope,
+        })
+      );
+    tasks.push(
+      deps.showNotificationWithImage(
+        duplicate
+          ? `⚠️   Already in ${listName}   ⚠️`
+          : `✅   Added to ${listName}   ✅`,
+        `${canonical.album} by ${canonical.artist}`,
+        info.srcUrl || 'icons/icon128.png'
+      )
+    );
+    const outcomes = await Promise.allSettled(tasks);
+    for (const outcome of outcomes)
+      if (outcome.status === 'rejected')
+        (deps.logger || console).warn(
+          'Post-add update failed:',
+          outcome.reason
+        );
   }
 
   function createAlbumAddService(deps = {}) {
-    const chromeApi = deps.chrome || chrome;
+    const chrome = deps.chrome || globalThis.chrome;
     const logger = deps.logger || console;
     const { ACTIONS } = deps.constants || globalThis.ExtensionConstants;
-    const {
-      showNotification,
-      showNotificationWithImage,
-      validateAndCleanToken,
-      handleUnauthorized,
-      ensureStateLoaded,
-      getApiBase,
-      getAuthHeaders,
-      showErrorMenu,
-      onAlbumAdded,
-    } = deps;
-    const albumApi =
-      deps.albumApi || globalThis.AlbumApiService.createAlbumApiService(deps);
-    const albumIdentity = deps.albumIdentity || globalThis.AlbumIdentity;
-    const readApiError =
-      deps.readApiError || globalThis.SharedUtils.readApiError;
-    const enrichment =
-      deps.enrichment ||
-      globalThis.AlbumAddEnrichment.createAlbumAddEnrichment({
-        albumApi,
-        handleUnauthorized,
-        logger,
-      });
-
-    async function extractAlbumIdentity(info, tab) {
-      try {
-        return await chromeApi.tabs.sendMessage(tab.id, {
-          action: ACTIONS.EXTRACT_ALBUM_IDENTITY,
-          srcUrl: info.srcUrl,
-          linkUrl: info.linkUrl,
-          pageUrl: info.pageUrl,
-        });
-      } catch (err) {
-        logger.log('Content script not ready, injecting...', err.message);
-        try {
-          await chromeApi.scripting.executeScript({
-            target: { tabId: tab.id },
-            files: [
-              'extension-constants.js',
-              'album-identity-service.js',
-              'rym-album-extractor.js',
-              'rym-presence-badges.js',
-              'content-script.js',
-            ],
-          });
-          await new Promise((resolve) => setTimeout(resolve, 200));
-          return await chromeApi.tabs.sendMessage(tab.id, {
-            action: ACTIONS.EXTRACT_ALBUM_IDENTITY,
-            srcUrl: info.srcUrl,
-            linkUrl: info.linkUrl,
-            pageUrl: info.pageUrl,
-          });
-        } catch (injectErr) {
-          logger.error('Failed to inject content script:', injectErr.message);
-          throw new Error(
-            'Could not communicate with page. Try refreshing RateYourMusic.',
-            { cause: injectErr }
-          );
-        }
-      }
-    }
-
-    function getClickedIdentity(info) {
-      for (const url of [info.linkUrl, info.pageUrl]) {
-        const identity = albumIdentity?.getAlbumIdentityFromUrl?.(url);
-        if (identity) return identity;
-      }
-      return null;
-    }
+    const identity = deps.albumIdentity || globalThis.AlbumIdentity;
 
     async function addAlbumToList(info, tab, listId, listName) {
-      await ensureStateLoaded();
-      const apiBase = getApiBase();
-      logger.log('In-memory state:', {
-        apiUrl: apiBase,
-        hasToken: !!getAuthHeaders().Authorization,
-      });
-
-      if (!apiBase) {
-        showNotification(
-          'Not configured',
-          'Please click the extension icon and configure your SuShe Online URL.'
-        );
-        return;
-      }
-
-      const validation = await validateAndCleanToken();
-      if (!validation.valid) {
-        showNotification(
-          'Not logged in',
-          'Please click the extension icon and login to SuShe Online.'
-        );
-        await showErrorMenu('Not logged in');
-        return;
-      }
-
       try {
-        const rymCoverUrl = info.srcUrl || 'icons/icon128.png';
-        logger.log('Sending message to content script...');
-
-        const clickedIdentity = getClickedIdentity(info);
-        const speculativeMusicBrainz = clickedIdentity
-          ? albumApi
-              .searchMusicBrainz(apiBase, clickedIdentity)
+        await deps.ensureStateLoaded();
+        const validation = await deps.validateAndCleanToken();
+        if (!validation.valid) {
+          await deps.showErrorMenu('Not logged in');
+          throw new Error('Please login to SuShe Online.');
+        }
+        const scope = deps.captureScope();
+        scope.assertCurrent();
+        const api =
+          deps.albumApi ||
+          globalThis.AlbumApiService.createAlbumApiService({
+            ...deps,
+            fetchWithTimeout: scope.request,
+            getAuthHeaders: () => scope.headers,
+            handleUnauthorized: scope.unauthorized,
+          });
+        const enrichment =
+          deps.enrichment ||
+          globalThis.AlbumAddEnrichment.createAlbumAddEnrichment({
+            albumApi: api,
+            handleUnauthorized: scope.unauthorized,
+            logger,
+          });
+        const clicked = identity.getAlbumIdentityFromUrl(
+          info.linkUrl || info.pageUrl
+        );
+        // Only the content script can prove that a linked image is this page's cover.
+        if (!clicked && !info.srcUrl) identity.getContextAlbumIdentity(info);
+        const speculative = clicked
+          ? api
+              .searchMusicBrainz(scope.apiBase, clicked)
               .then((releaseGroup) => ({ releaseGroup }))
               .catch((error) => ({ error }))
           : null;
-        let albumData = await extractAlbumIdentity(info, tab);
-
-        if (!albumData || albumData.error) {
-          const urlIdentity = clickedIdentity;
-          if (urlIdentity) {
-            albumData = {
-              ...urlIdentity,
-              genre_1: '',
-              genre_2: '',
-            };
-          } else {
-            logger.error('Content script returned error:', albumData?.error);
-            throw new Error(
-              albumData?.error ||
-                'Failed to extract album data. Make sure you are on an album page.'
-            );
-          }
-        }
-
-        if (!albumData.artist || !albumData.album) {
-          logger.error('Invalid album data received:', albumData);
-          throw new Error(
-            `Could not extract album information from page. Artist: "${albumData?.artist}", Album: "${albumData?.album}"`
-          );
-        }
-
-        logger.log('Extracted album data:', albumData);
-        const observationRetry = enrichment.startObservationRetry(
-          albumData,
-          () => extractAlbumIdentity(info, tab)
+        let album = await extractIdentity(chrome, ACTIONS, info, tab);
+        scope.assertCurrent();
+        const selected =
+          clicked ||
+          identity.getContextAlbumIdentity({ pageUrl: info.pageUrl });
+        validateExtractedAlbum(album, selected, identity);
+        const retry = enrichment.startObservationRetry(album, () =>
+          extractIdentity(chrome, ACTIONS, info, tab)
         );
-
-        logger.log('Searching MusicBrainz for album...');
-        let releaseGroup;
-        if (
-          speculativeMusicBrainz &&
-          identityKey(clickedIdentity) === identityKey(albumData)
-        ) {
-          const speculativeResult = await speculativeMusicBrainz;
-          if (speculativeResult.error) {
-            logger.warn(
-              'Speculative MusicBrainz lookup failed; retrying with extracted data:',
-              speculativeResult.error
-            );
-            releaseGroup = await albumApi.searchMusicBrainz(apiBase, albumData);
-          } else {
-            releaseGroup = speculativeResult.releaseGroup;
-          }
-        } else {
-          releaseGroup = await albumApi.searchMusicBrainz(apiBase, albumData);
-        }
-        logger.log('Found release group:', releaseGroup);
-        let observationAppliedBeforeSave = false;
-        if (observationRetry?.value) {
-          albumData = { ...albumData, ...observationRetry.value };
-          observationAppliedBeforeSave = true;
-        }
-        const countryPromise = albumApi.fetchArtistCountry(
-          apiBase,
-          releaseGroup
+        const release = await resolveRelease(
+          api,
+          scope.apiBase,
+          album,
+          clicked,
+          speculative,
+          logger
         );
-
-        const newAlbum = albumApi.buildAlbumPayload(
-          albumData,
-          releaseGroup,
-          ''
-        );
-
-        logger.log('Album genres from RYM:', {
-          genre_1: albumData.genre_1,
-          genre_2: albumData.genre_2,
-        });
-
-        logger.log('Adding album to list via PATCH...');
-        const saveResponse = await albumApi.saveAlbum(
-          apiBase,
-          listId,
-          newAlbum
-        );
-        logger.log('Save response status:', saveResponse.status);
-
-        if (!saveResponse.ok) {
-          const error = await readApiError(saveResponse, 'Failed to add album');
-          logger.error('Save failed:', error);
-
-          if (saveResponse.status === 401) {
-            await handleUnauthorized();
-            await showErrorMenu('Not logged in');
+        scope.assertCurrent();
+        const appliedRetry = !!retry?.value;
+        if (appliedRetry) album = { ...album, ...retry.value };
+        const country = api
+          .fetchArtistCountry(scope.apiBase, release)
+          .catch((error) => {
+            logger.warn('Artist country unavailable:', error.message);
+            return '';
+          });
+        const payload = api.buildAlbumPayload(album, release, '');
+        const response = await api.saveAlbum(scope.apiBase, listId, payload);
+        scope.assertCurrent();
+        if (!response.ok) {
+          if (response.status === 401) {
+            await scope.unauthorized();
+            await deps.showErrorMenu('Not logged in');
             throw new Error(
               'Not authenticated. Please click the extension icon and login again.'
             );
           }
-
-          throw error;
-        }
-
-        const result = await saveResponse.json();
-        logger.log('Add result:', result);
-        const canonicalAlbumId =
-          result.addedItems?.[0]?.album_id ||
-          result.duplicates?.[0]?.album_id ||
-          newAlbum.album_id;
-        const observationPersistenceTask =
-          observationRetry?.promise && !observationAppliedBeforeSave
-            ? enrichment.persistObservation({
-                apiBase,
-                albumId: canonicalAlbumId,
-                retryPromise: observationRetry.promise,
-              })
-            : null;
-
-        if (result.duplicates && result.duplicates.length > 0) {
-          logger.log('Album already exists in list');
-          showNotificationWithImage(
-            `⚠️   Already in ${listName}   ⚠️`,
-            `${albumData.album} by ${albumData.artist}`,
-            rymCoverUrl
-          );
-          await observationPersistenceTask?.catch((error) => {
-            logger.warn('Post-add RYM observation retry failed:', error);
-          });
-          return;
-        }
-
-        await showNotificationWithImage(
-          `✅   Added to ${listName}   ✅`,
-          `${albumData.album} by ${albumData.artist}`,
-          rymCoverUrl
-        );
-
-        const canonicalAlbum = {
-          ...newAlbum,
-          ...(result.addedItems?.[0] || {}),
-        };
-        const postAddTasks = [
-          enrichment.enrichCountry(
-            apiBase,
-            countryPromise,
-            canonicalAlbum.album_id
-          ),
-        ];
-        if (observationPersistenceTask) {
-          postAddTasks.push(observationPersistenceTask);
-        }
-        if (typeof onAlbumAdded === 'function') {
-          postAddTasks.push(
-            onAlbumAdded({
-              album: canonicalAlbum,
-              listId,
-              listName,
-              tabId: tab.id,
-            })
+          throw await globalThis.SharedUtils.readApiError(
+            response,
+            'Failed to add album'
           );
         }
-        const postAddResults = await Promise.allSettled(postAddTasks);
-        postAddResults.forEach((postAddResult) => {
-          if (postAddResult.status === 'rejected') {
-            logger.warn('Post-add enrichment failed:', postAddResult.reason);
-          }
+        const result = await response.json();
+        if (!result.addedItems?.length && !result.duplicates?.length)
+          throw new Error('Server did not confirm an album addition');
+        await finishAddition({
+          deps,
+          enrichment,
+          scope,
+          album: payload,
+          result,
+          retry: appliedRetry ? null : retry,
+          country,
+          info,
+          tab,
+          listId,
+          listName,
         });
       } catch (error) {
-        logger.error('Error adding album:', error);
-        showNotification(
+        logger.warn('Album addition failed:', error.message);
+        await deps.showNotification(
           '❌ Error',
           error.message || 'Failed to add album to list'
         );
       }
     }
-
     return { addAlbumToList };
   }
   globalThis.AlbumAddService = { createAlbumAddService };

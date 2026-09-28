@@ -108,16 +108,23 @@ function createExtensionAuthApp(overrides = {}) {
   );
   app.get('/api/proxy/musicbrainz', ensureAuthAPI, (req, res) => {
     res.json(
-      String(req.query.endpoint).startsWith('artist/')
-        ? { country: 'CL' }
-        : {
-            'release-groups': [
-              {
-                id: 'album-1',
-                'artist-credit': [{ artist: { id: 'artist-1' } }],
-              },
-            ],
-          }
+      overrides.musicBrainzResponse?.(req) ??
+        (String(req.query.endpoint).startsWith('artist/')
+          ? { country: 'CL' }
+          : {
+              'release-groups': [
+                {
+                  id: 'album-1',
+                  title: 'Album',
+                  'artist-credit': [
+                    {
+                      name: 'Artist',
+                      artist: { id: 'artist-1', name: 'Artist' },
+                    },
+                  ],
+                },
+              ],
+            })
     );
   });
   const albumService = {

@@ -1,181 +1,36 @@
-# SuShe Online - RateYourMusic Integration
+# SuShe Online — RateYourMusic integration
 
-Chrome extension that allows you to add albums from RateYourMusic.com directly to your SuShe Online lists using MusicBrainz lookup.
+This Manifest V3 Chromium extension adds albums from RateYourMusic to your configured SuShe Online instance and shows badges for albums already in your lists.
 
-## 🚀 Publishing to Chrome Web Store
+## Setup and use
 
-**Ready to publish?** See these guides:
+1. Open `chrome://extensions`, enable developer mode, choose **Load unpacked**, and select `browser-extension`.
+2. Open extension Settings and enter your instance origin, such as `https://sushe.example.com`. HTTP is supported only for `localhost` and `127.0.0.1`.
+3. Choose **Login**, sign in to your instance, and authorize the extension in the tab it opens. Website login alone does not authenticate the extension.
+4. On RYM, right-click an album image or album link and choose a SuShe list. The popup provides manual list refresh and logout.
 
-- **[SUBMISSION_CHECKLIST.md](SUBMISSION_CHECKLIST.md)** - Quick checklist of what you need to do
-- **[CHROME_STORE_SUBMISSION.md](CHROME_STORE_SUBMISSION.md)** - Complete step-by-step guide
-- **[PRIVACY_POLICY.md](PRIVACY_POLICY.md)** - Privacy policy for the store listing
+The connection test checks server reachability; the Authentication section separately reports extension sign-in status.
 
-**Quick package for submission:**
+## Data flow
 
-```bash
-./package-for-store.sh
-```
+- The content script reads RYM album URLs and detail-page content. From listings it may fetch the selected album's RYM detail page to collect identity, genres, descriptors, release metadata, and platform links.
+- The background worker searches MusicBrainz through your SuShe server. It requires a unique artist/title match; uncertain matches should be added manually in SuShe.
+- Album additions use `PATCH /api/lists/:id/items`. Optional metadata and source observations are sent to the album endpoints. Cover/tracks enrichment may also be performed by the server.
+- Presence badges use `/api/lists/presence`, with a full-list fallback for older servers. Badge links can reuse a tab of the configured SuShe instance.
+- SuShe API calls use the extension's bearer token and explicitly omit website cookies. Account changes invalidate ongoing operations and account-specific caches.
 
-This creates `sushe-online-extension.zip` ready to upload to the Chrome Web Store.
+Only RYM `release/album` URLs are currently supported. See [PRIVACY_POLICY.md](PRIVACY_POLICY.md) for access, storage, and retention details.
 
-## Features
+## Caches and recovery
 
-- 🎸 Right-click on album images/links on RateYourMusic to add them to your lists
-- 📋 Dynamic context menu showing all your SuShe Online lists
-- 🔍 **Uses MusicBrainz search** - No scraping of RateYourMusic data
-- 🎨 **Full metadata** - Cover art, release dates, MusicBrainz IDs, artist country
-- 🔔 Browser notifications for progress and completion
-- 🚫 Duplicate detection - won't add the same album twice
-- ⚡ Follows the same flow as manually adding albums in SuShe Online
+Lists are normally fresh for one minute and presence indexes for five minutes; visible pages periodically validate membership. Cached results remain available during temporary failures. Cache expiry triggers refresh, not automatic deletion. Incomplete detail observations can be retried.
 
-## How It Works
+If page communication fails after an extension update, reload the RYM page. For rejected or expired authorization, start Login again from Settings. For an ambiguous MusicBrainz match, select the album manually in SuShe rather than accepting a guessed identity.
 
-1. **Extract artist & album name** from RateYourMusic URL (e.g., `/release/album/metallica/ride_the_lightning/`)
-2. **Search MusicBrainz** via SuShe Online's proxy API
-3. **Fetch cover art** from Deezer (via proxy)
-4. **Add to list** with full metadata (same as manual addition)
+## Development and packaging
 
-**No RateYourMusic scraping!** The extension only reads the URL to get artist/album names, then uses your SuShe Online instance's APIs.
+The worker composes account state, list cache, presence, menu, navigation, and album-add services. Popup/settings pages obtain state through authorized worker messages. Scripts are packaged without a bundling step.
 
-## Installation (Development)
+From the repository root, run `npm run package:extension`, or run `./package-for-store.sh` from this directory. The archive is `browser-extension/sushe-online-extension-<manifest-version>.zip`, with `manifest.json` at its root.
 
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable "Developer mode" in the top-right corner
-3. Click "Load unpacked"
-4. Select the `/browser-extension` directory from this project
-5. Configure your SuShe Online URL in Options (right-click extension icon → Options)
-
-## Usage
-
-1. **Login to SuShe Online** - Open your instance and login
-2. **Browse RateYourMusic** - Go to https://rateyourmusic.com
-3. **Right-click on album images** - You'll see "Add to SuShe Online" with your lists as submenus
-4. **Select a list** - Click on the list you want to add the album to
-5. **Wait for completion** - Extension searches MusicBrainz, fetches cover art, and adds album
-6. **Done!** - You'll get a notification confirming the album was added
-
-## Configuration
-
-### Set Your SuShe Online URL
-
-1. Right-click the extension icon in Chrome toolbar
-2. Select **"Options"**
-3. Enter your SuShe Online URL:
-   - Local dev: `http://localhost:3000`
-   - Production: `https://your-domain.com`
-4. Click **"Save Settings"**
-5. Optional: Click **"Test Connection"** to verify
-
-The extension will remember your URL and use it for all API calls.
-
-## What Data Is Extracted?
-
-From **RateYourMusic URL only**:
-
-- Artist name (from URL path)
-- Album name (from URL path)
-
-From **MusicBrainz** (via SuShe Online):
-
-- MusicBrainz release group ID
-- Release date
-- Artist country
-
-From **Deezer** (via SuShe Online):
-
-- Album cover art (converted to base64)
-
-**Result:** Albums have the same data quality as manually added albums!
-
-## Troubleshooting
-
-### Context menu not appearing
-
-- Make sure you're logged into SuShe Online
-- Check API URL in Options
-- Try refreshing RateYourMusic page
-
-### "Album not found in MusicBrainz"
-
-- The album might not be in MusicBrainz database
-- Try adding it manually in SuShe Online
-- Check if artist/album name in RYM URL is correct
-
-### "Not logged in to SuShe Online"
-
-- Open your SuShe instance and login
-- Click extension icon and "Refresh Lists"
-
-## Privacy & RateYourMusic ToS
-
-This extension is **RateYourMusic-friendly**:
-
-- ✅ Only reads URL path (publicly visible)
-- ✅ No scraping of page content
-- ✅ No automated requests to RateYourMusic servers
-- ✅ Uses MusicBrainz as authoritative source
-
-All album data comes from MusicBrainz and Deezer, not from RateYourMusic.
-
-## Development
-
-Files:
-
-- `manifest.json` - Extension configuration
-- `background.js` - Service worker (context menus, MusicBrainz search, API calls)
-- `content-script.js` - Extracts artist/album from URL
-- `options.html` / `options.js` - Settings page
-- `popup.html` / `popup.js` - Extension popup UI
-
-## Technical Details
-
-### API Flow
-
-```
-1. User right-clicks album on RYM
-2. Extract: artist="Metallica", album="Ride the Lightning" (from URL)
-3. Search MusicBrainz via /api/proxy/musicbrainz
-4. Get cover art from Deezer via /api/proxy/deezer
-5. Convert image to base64 via /api/proxy/image
-6. Add to list via POST /api/lists/:name
-```
-
-### Respects Rate Limits
-
-- Uses SuShe Online's MusicBrainz queue (1 req/sec)
-- Proxies all external requests through your server
-- No direct calls to RateYourMusic, MusicBrainz, or Deezer
-
-## Future Enhancements
-
-- [ ] Show preview of matched album before adding
-- [ ] Bulk import from RYM lists
-- [ ] Support for other music sites
-- [ ] Visual indicator for albums already in SuShe
-
-## Changelog
-
-### v1.2.1 (2025-11-21)
-
-**Bug Fixes:**
-
-- Fixed critical bug where albums were being added to `http://localhost:3000` instead of the configured production URL
-- Issue occurred after Chrome service worker restarts - the API URL from storage was not properly reloaded
-- Updated `ensureStateLoaded()` function to always reload API URL from storage when default localhost URL is detected
-
-### v1.2.0
-
-**Features:**
-
-- Token-based authentication for browser extension
-- Persistent login state across browser restarts
-- Settings page with connection testing
-
-### v1.0.0
-
-**Initial Release:**
-
-- RateYourMusic integration
-- MusicBrainz album lookup
-- Deezer cover art fetching
-- Context menu for adding albums to lists
+Use the repository's specified Node version. Run strict lint and the extension unit/package tests, then `PLAYWRIGHT_SKIP_SERVER=1 npx playwright test test/e2e/extension-auth.spec.js` after installing Playwright Chromium. The extension E2E suite starts an isolated local fixture server; it needs no production account.

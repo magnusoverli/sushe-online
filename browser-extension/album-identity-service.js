@@ -13,7 +13,6 @@
     if (!name) return '';
 
     let cleaned = decodePathPart(name).replace(/[-_]/g, ' ').trim();
-    cleaned = cleaned.replace(/\s+\d+$/, '');
 
     if (typeof cleaned.normalize === 'function') {
       cleaned = cleaned.normalize('NFC');
@@ -45,7 +44,7 @@
 
     return normalized
       .replace(/&/g, ' and ')
-      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
       .replace(/\s+/g, ' ')
       .trim();
   }
@@ -138,11 +137,72 @@
     return `${artist}::${album}`;
   }
 
+  function getContextAlbumIdentity({ linkUrl, pageUrl }) {
+    // An explicit link is the selection, even when its release type is unsupported.
+    const identity = getAlbumIdentityFromUrl(linkUrl || pageUrl);
+    if (!identity)
+      throw new Error(
+        'Select a RYM album link or open its album page. Only album releases are supported.'
+      );
+    return identity;
+  }
+
+  function getIdentityKeys(album) {
+    const identity =
+      album?.sourceObservation?.identity || album?.identity || {};
+    const value = album?.rymNumericId ?? album?.numericId ?? identity.numericId;
+    const numeric = value == null ? '' : String(value).trim();
+    const paths = [
+      album?.rymCanonicalUrl,
+      album?.canonicalUrl,
+      album?.canonicalPath,
+      album?.albumUrl,
+      identity.canonicalUrl,
+      identity.canonicalPath,
+    ];
+    const canonical = paths
+      .filter(Boolean)
+      .map((value) =>
+        canonicalizeRymAlbumUrl(
+          String(value).startsWith('/')
+            ? `https://rateyourmusic.com${value}`
+            : value
+        )
+      )
+      .find(Boolean);
+    const name = getAlbumKey({
+      artist: album?.artist || identity.artist,
+      album: album?.album || album?.title || identity.title,
+    });
+    return [
+      /^\d+$/.test(numeric) ? `rym-id:${numeric}` : null,
+      canonical ? `rym-path:${canonical.canonicalPath}` : null,
+      name ? `name:${name}` : null,
+    ].filter(Boolean);
+  }
+
+  function identityKeysMatch(a, b) {
+    for (const prefix of ['rym-id:', 'rym-path:', 'name:']) {
+      const x = a.find((key) => key.startsWith(prefix));
+      const y = b.find((key) => key.startsWith(prefix));
+      if (x && y) return x === y;
+    }
+    return false;
+  }
+
+  function identitiesMatch(left, right) {
+    return identityKeysMatch(getIdentityKeys(left), getIdentityKeys(right));
+  }
+
   globalThis.AlbumIdentity = {
     canonicalizeRymAlbumUrl,
     cleanName,
     getAlbumIdentityFromUrl,
+    getContextAlbumIdentity,
     getAlbumKey,
+    getIdentityKeys,
+    identityKeysMatch,
+    identitiesMatch,
     normalizeForMatch,
   };
 })();

@@ -274,7 +274,9 @@ function installBrowserGlobals(document, options = {}) {
   const messageListeners = [];
   const observerCallbacks = [];
   const matches = options.matches || {
-    'horn::apokalyps': [{ listId: 'list-2026', listName: '2026', year: 2026 }],
+    'horn::apokalyps 1618': [
+      { listId: 'list-2026', listName: '2026', year: 2026 },
+    ],
   };
 
   globalThis.document = document;
@@ -286,9 +288,18 @@ function installBrowserGlobals(document, options = {}) {
       getURL: (path) => `chrome-extension://test/${path}`,
       sendMessage: mock.fn(async (message) => {
         sentMessages.push(message);
+        const result = options.getMatches
+          ? options.getMatches(message)
+          : matches;
         return {
           success: true,
-          matches: options.getMatches ? options.getMatches(message) : matches,
+          matches: Object.fromEntries(
+            (message.albums || []).map((album) => [
+              album.key,
+              result[album.key] ||
+                result[globalThis.AlbumIdentity.getAlbumKey(album)],
+            ])
+          ),
           apiBase: options.apiBase || 'https://sushe.example',
         };
       }),
@@ -309,6 +320,8 @@ function installBrowserGlobals(document, options = {}) {
 }
 
 function loadBadgeScripts() {
+  delete globalThis.RymPresenceBadges;
+  require('../browser-extension/shared-utils.js');
   delete globalThis.ExtensionConstants;
   delete globalThis.AlbumIdentity;
   delete globalThis.RymAlbumExtractor;
@@ -337,6 +350,82 @@ async function waitForBadgeScan() {
 }
 
 describe('RYM presence badges', () => {
+  it('restores a badge removed by page rendering even when its container marker remains', async () => {
+    const page = buildArtistReleaseRow();
+    const { observerCallbacks } = installBrowserGlobals(page.document);
+    loadBadgeScripts();
+    await waitForBadgeScan();
+    page.document.querySelector(badgeSelector).remove();
+    observerCallbacks[0]();
+    await waitForBadgeScan();
+    assert.equal(page.document.querySelectorAll(badgeSelector).length, 1);
+  });
+
+  it('reinjection does not install duplicate observers or listeners', async () => {
+    const page = buildArtistReleaseRow();
+    const { messageListeners, observerCallbacks } = installBrowserGlobals(
+      page.document
+    );
+    loadBadgeScripts();
+    delete require.cache[
+      require.resolve('../browser-extension/rym-presence-badges.js')
+    ];
+    require('../browser-extension/rym-presence-badges.js');
+    await waitForBadgeScan();
+    assert.equal(messageListeners.length, 1);
+    assert.equal(observerCallbacks.length, 1);
+  });
+
+  it('failed tab reuse leaves an actionable native link for the next click', async () => {
+    const page = buildAlbumDetailPage();
+    installBrowserGlobals(page.document, {
+      locationHref: detailAlbumUrl,
+      matches: {
+        [detailAlbumKey]: [
+          { listId: 'list', albumId: detailAlbumId, listName: 'List' },
+        ],
+      },
+    });
+    loadBadgeScripts();
+    await waitForBadgeScan();
+    globalThis.chrome.runtime.sendMessage.mock.mockImplementation(async () => ({
+      success: false,
+      error: 'Tab closed',
+    }));
+    const badge = page.document.querySelector(badgeSelector);
+    const event = { type: 'click', button: 0, preventDefault: mock.fn() };
+    badge.dispatchEvent(event);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(badge.getAttribute('data-sushe-native-link'), 'true');
+    assert.match(badge.title, /Click again/);
+    badge.dispatchEvent(event);
+    assert.equal(event.preventDefault.mock.calls.length, 1);
+  });
+
+  it('processes listings beyond the first batch of 100 albums', async () => {
+    const root = new FakeElement('html');
+    for (let index = 0; index < 205; index++) {
+      const row = root.appendChild(new FakeElement('div'));
+      row.appendChild(
+        new FakeElement('a', {
+          href: `https://rateyourmusic.com/release/album/artist/album-${index}/`,
+          text: `Album ${index}`,
+        })
+      );
+    }
+    const { sentMessages } = installBrowserGlobals(new FakeDocument(root), {
+      matches: {},
+    });
+    loadBadgeScripts();
+    await waitForBadgeScan();
+    const passive = sentMessages.filter((message) => !message.forceRefresh);
+    assert.ok(
+      passive.some((message) =>
+        message.albums.some((album) => album.album === 'Album 204')
+      )
+    );
+    assert.ok(sentMessages.every((message) => message.albums.length <= 100));
+  });
   beforeEach(() => {
     mock.reset();
   });
@@ -418,7 +507,7 @@ describe('RYM presence badges', () => {
       0
     );
     assert.strictEqual(sentMessages[0].albums.length, 1);
-    assert.strictEqual(sentMessages[0].albums[0].key, detailAlbumKey);
+    assert.strictEqual(sentMessages[0].albums[0].key, 'rym-id:123');
     assert.strictEqual(sentMessages[0].albums[0].numericId, '123');
     assert.strictEqual(
       sentMessages[0].albums[0].canonicalPath,
@@ -506,7 +595,7 @@ describe('RYM presence badges', () => {
     const page = buildAlbumDetailPage();
     const { sentMessages } = installBrowserGlobals(page.document, {
       locationHref: detailAlbumUrl,
-      apiBase: 'https://sushe.example/app',
+      apiBase: 'https://sushe.example',
       matches: {
         [detailAlbumKey]: [
           {

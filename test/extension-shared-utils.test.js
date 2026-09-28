@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 require('../browser-extension/shared-utils');
 require('../browser-extension/extension-constants');
 require('../browser-extension/album-api-service');
+require('../browser-extension/album-identity-service');
 const { fetchApiWithTimeout, fetchWithTimeout, readApiError } =
   globalThis.SharedUtils;
 
@@ -36,7 +37,16 @@ test('all album API requests retain bearer auth and omit browser credentials', a
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     calls.push({ url, options });
     return new globalThis.Response(
-      JSON.stringify({ 'release-groups': [{ id: 'album-1' }], country: 'CL' })
+      JSON.stringify({
+        'release-groups': [
+          {
+            id: 'album-1',
+            title: 'Album',
+            'artist-credit': [{ name: 'Artist' }],
+          },
+        ],
+        country: 'CL',
+      })
     );
   });
   const service = globalThis.AlbumApiService.createAlbumApiService({

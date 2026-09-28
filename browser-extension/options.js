@@ -4,6 +4,7 @@ const { fetchApiWithTimeout, normalizeApiUrl, sendCheckedMessage } =
 const { ACTIONS, API, STORAGE_KEYS } = globalThis.ExtensionConstants;
 let statusTimer;
 let authStatusRequest = 0;
+let urlEdited = false;
 
 async function saveSettings() {
   const input = document.getElementById('apiUrl');
@@ -15,6 +16,9 @@ async function saveSettings() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  document.getElementById('apiUrl').addEventListener('input', () => {
+    urlEdited = true;
+  });
   document
     .getElementById('settingsForm')
     .addEventListener('submit', async (event) => {
@@ -63,7 +67,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   try {
     const state = await sendCheckedMessage(ACTIONS.GET_API_URL);
-    document.getElementById('apiUrl').value = state?.apiUrl || '';
+    if (!urlEdited)
+      document.getElementById('apiUrl').value = state?.apiUrl || '';
     await updateAuthStatus();
   } catch (error) {
     showStatus(error.message, 'error');

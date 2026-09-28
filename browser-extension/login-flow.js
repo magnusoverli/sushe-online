@@ -7,13 +7,9 @@
     chrome,
     getApiBase,
     fetch = globalThis.SharedUtils.fetchApiWithTimeout,
+    saveAuth,
   }) {
-    let pendingOperation = Promise.resolve();
-    const serialize = (fn) => {
-      const operation = pendingOperation.then(fn);
-      pendingOperation = operation.catch(() => {});
-      return operation;
-    };
+    const serialize = globalThis.SharedUtils.createSerialQueue();
     function loginUrl() {
       return new URL(
         '/extension/auth',
@@ -67,7 +63,6 @@
       const expiresAt = Date.parse(message.expiresAt);
       if (!Number.isFinite(expiresAt) || expiresAt <= Date.now())
         throw new Error('Expired login token');
-      await chrome.storage.session.remove(PENDING_KEY);
       const response = await fetch(
         new URL('/api/auth/validate-token', url.origin).href,
         {
@@ -76,13 +71,23 @@
         },
         VALIDATION_TIMEOUT_MS
       );
-      if (!response.ok || !(await response.json()).valid)
+      if (!response.ok || !(await response.json()).valid) {
+        if (response.status >= 500 || response.status === 429)
+          throw new Error('Login validation unavailable. Please retry.');
+        await chrome.storage.session.remove(PENDING_KEY);
         throw new Error('Login token was rejected');
+      }
+      // Only successful validation consumes the handshake; network failures can retry.
+      if (url.origin !== loginUrl().origin || pending.expiresAt <= Date.now())
+        throw new Error('Login request expired or server changed');
       const keys = globalThis.ExtensionConstants.STORAGE_KEYS;
-      await chrome.storage.local.set({
-        [keys.AUTH_TOKEN]: message.token,
-        [keys.TOKEN_EXPIRES_AT]: expiresAt,
-      });
+      if (saveAuth) await saveAuth(message.token, expiresAt);
+      else
+        await chrome.storage.local.set({
+          [keys.AUTH_TOKEN]: message.token,
+          [keys.TOKEN_EXPIRES_AT]: expiresAt,
+        });
+      await chrome.storage.session.remove(PENDING_KEY);
       return { success: true };
     }
     return {

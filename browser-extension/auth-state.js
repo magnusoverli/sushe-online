@@ -1,188 +1,81 @@
-// Centralized authentication state management for SuShe Online extension
-// This module provides a single source of truth for authentication state
-// All components should use these functions instead of maintaining their own state
-
+// Storage schema and expiry policy. Account transitions belong to ExtensionState.
 (function () {
-  const { STORAGE_KEYS } = globalThis.ExtensionConstants;
+  const { STORAGE_KEYS: K } = globalThis.ExtensionConstants;
   const API_CACHE_VERSION = 1;
-  let cacheMigration;
-
+  const EXPIRY_BUFFER_MS = 30000;
   const ACCOUNT_CACHE_KEYS = [
-    STORAGE_KEYS.USER_LISTS,
-    STORAGE_KEYS.USER_LISTS_BY_YEAR,
-    STORAGE_KEYS.LISTS_LAST_FETCHED,
-    STORAGE_KEYS.LAST_USED_LIST,
-    STORAGE_KEYS.ALBUM_PRESENCE_INDEX,
-    STORAGE_KEYS.ALBUM_PRESENCE_LAST_FETCHED,
+    K.USER_LISTS,
+    K.USER_LISTS_BY_YEAR,
+    K.LISTS_LAST_FETCHED,
+    K.LAST_USED_LIST,
+    K.ALBUM_PRESENCE_INDEX,
+    K.ALBUM_PRESENCE_LAST_FETCHED,
+    K.CACHE_OWNER,
   ];
+  let migration;
 
-  function ensureApiCacheVersion() {
-    if (!cacheMigration) {
-      cacheMigration = (async () => {
-        const stored = await chrome.storage.local.get(
-          STORAGE_KEYS.API_CACHE_VERSION
-        );
-        if (stored[STORAGE_KEYS.API_CACHE_VERSION] === API_CACHE_VERSION)
-          return;
-        // Older caches may belong to the website session rather than the
-        // extension token. Discard them before any consumer reads them.
-        await chrome.storage.local.remove(ACCOUNT_CACHE_KEYS);
+  function isTokenExpired(expiresAt) {
+    if (expiresAt == null) return false;
+    return (
+      !Number.isFinite(expiresAt) || Date.now() >= expiresAt - EXPIRY_BUFFER_MS
+    );
+  }
+
+  function clearAccountCache() {
+    return chrome.storage.local.remove(ACCOUNT_CACHE_KEYS);
+  }
+  function clearAllAuthData() {
+    return chrome.storage.local.remove([
+      K.AUTH_TOKEN,
+      K.TOKEN_EXPIRES_AT,
+      ...ACCOUNT_CACHE_KEYS,
+    ]);
+  }
+
+  function migrate() {
+    if (!migration)
+      migration = (async () => {
+        const data = await chrome.storage.local.get(K.API_CACHE_VERSION);
+        if (data[K.API_CACHE_VERSION] === API_CACHE_VERSION) return;
+        await clearAccountCache();
         await chrome.storage.local.set({
-          [STORAGE_KEYS.API_CACHE_VERSION]: API_CACHE_VERSION,
+          [K.API_CACHE_VERSION]: API_CACHE_VERSION,
         });
       })().catch((error) => {
-        cacheMigration = null;
+        migration = null;
         throw error;
       });
-    }
-    return cacheMigration;
+    return migration;
   }
 
-  /**
-   * Storage keys used for authentication:
-   * - authToken: The bearer token for API authentication
-   * - tokenExpiresAt: Timestamp when the token expires (milliseconds since epoch)
-   * - userLists: Cached array of list names
-   * - listsLastFetched: Timestamp when lists were last fetched
-   * - hasEverAuthenticated: Flag indicating user has logged in at least once
-   * - apiUrl: The configured SuShe Online instance URL
-   */
-
-  const AUTH_STORAGE_KEYS = [
-    STORAGE_KEYS.AUTH_TOKEN,
-    STORAGE_KEYS.TOKEN_EXPIRES_AT,
-    STORAGE_KEYS.HAS_EVER_AUTHENTICATED,
-    ...ACCOUNT_CACHE_KEYS,
-  ];
-
-  /**
-   * Check if a token has expired based on the expiresAt timestamp
-   * @param {number|null} expiresAt - Timestamp in milliseconds
-   * @returns {boolean} - True if token is expired
-   */
-  function isTokenExpired(expiresAt) {
-    if (!expiresAt) return false; // Unknown expiry, let server decide
-    // Add 30 second buffer to avoid edge cases
-    return Date.now() >= expiresAt - 30000;
-  }
-
-  /**
-   * Get the current authentication state from storage
-   * This is the primary function for checking auth state - always reads from storage
-   * @returns {Promise<{token: string|null, expiresAt: number|null, apiUrl: string|null, isValid: boolean, isExpired: boolean}>}
-   */
-  async function getAuthState() {
-    const data = await chrome.storage.local.get([
-      STORAGE_KEYS.AUTH_TOKEN,
-      STORAGE_KEYS.TOKEN_EXPIRES_AT,
-      STORAGE_KEYS.API_URL,
-    ]);
-
-    const token = data[STORAGE_KEYS.AUTH_TOKEN] || null;
-    const expiresAt = data[STORAGE_KEYS.TOKEN_EXPIRES_AT] || null;
-    const apiUrl = data[STORAGE_KEYS.API_URL] || null;
-    const expired = isTokenExpired(expiresAt);
-
-    return {
-      token,
-      expiresAt,
-      apiUrl,
-      isExpired: expired,
-      isValid: !!token && !expired,
-    };
-  }
-
-  /**
-   * Validate token and clean up if expired
-   * Call this before any API operation
-   * @returns {Promise<{valid: boolean, token?: string, reason?: string}>}
-   */
-  async function validateAndCleanToken() {
-    const state = await getAuthState();
-
-    if (!state.token) {
-      return { valid: false, reason: 'no_token' };
-    }
-
-    if (state.isExpired) {
-      console.log('Token expired, clearing auth data');
-      await clearAllAuthData();
-      return { valid: false, reason: 'expired' };
-    }
-
-    return { valid: true, token: state.token };
-  }
-
-  /**
-   * Clear all authentication-related data from storage
-   * This should be called on logout, token expiry, or 401 errors
-   * @returns {Promise<void>}
-   */
-  async function clearAllAuthData() {
-    console.log('Clearing all auth data');
-    await chrome.storage.local.remove(AUTH_STORAGE_KEYS);
-  }
-
-  /**
-   * Handle a 401 Unauthorized response from the API
-   * Clears auth state and returns info for UI update
-   * @returns {Promise<{cleared: boolean}>}
-   */
-  async function handleUnauthorized() {
-    console.log('Received 401 - clearing auth data');
-    await clearAllAuthData();
-    return { cleared: true };
-  }
-
-  /**
-   * Load all state needed by background service worker
-   * Always reads from storage - never trusts in-memory state
-   * @returns {Promise<{apiUrl: string|null, authToken: string|null, userLists: Array, userListsByYear: Object, listsLastFetched: number, isValid: boolean}>}
-   */
   async function loadFullState() {
-    await ensureApiCacheVersion();
+    await migrate();
     const data = await chrome.storage.local.get([
-      STORAGE_KEYS.API_URL,
-      STORAGE_KEYS.AUTH_TOKEN,
-      STORAGE_KEYS.TOKEN_EXPIRES_AT,
-      STORAGE_KEYS.USER_LISTS,
-      STORAGE_KEYS.USER_LISTS_BY_YEAR,
-      STORAGE_KEYS.LISTS_LAST_FETCHED,
-      STORAGE_KEYS.LAST_USED_LIST,
+      K.API_URL,
+      K.AUTH_TOKEN,
+      K.TOKEN_EXPIRES_AT,
+      K.USER_LISTS,
+      K.LISTS_LAST_FETCHED,
+      K.LAST_USED_LIST,
     ]);
-
-    const token = data[STORAGE_KEYS.AUTH_TOKEN] || null;
-    const expiresAt = data[STORAGE_KEYS.TOKEN_EXPIRES_AT] || null;
+    const expiresAt = data[K.TOKEN_EXPIRES_AT] ?? null;
     const expired = isTokenExpired(expiresAt);
-
-    // If token is expired, don't return it as valid
-    if (token && expired) {
-      console.log(
-        'Token expired during state load, will clear on next operation'
-      );
-    }
-
+    const token = data[K.AUTH_TOKEN] || null;
     return {
-      apiUrl: data[STORAGE_KEYS.API_URL] || null,
+      apiUrl: data[K.API_URL] || null,
       authToken: expired ? null : token,
       tokenExpiresAt: expiresAt,
-      userLists: Array.isArray(data[STORAGE_KEYS.USER_LISTS])
-        ? data[STORAGE_KEYS.USER_LISTS]
-        : [],
-      userListsByYear: data[STORAGE_KEYS.USER_LISTS_BY_YEAR] || {},
-      listsLastFetched: data[STORAGE_KEYS.LISTS_LAST_FETCHED] || 0,
-      lastUsedList: data[STORAGE_KEYS.LAST_USED_LIST] || null,
+      userLists: Array.isArray(data[K.USER_LISTS]) ? data[K.USER_LISTS] : [],
+      listsLastFetched: data[K.LISTS_LAST_FETCHED] || 0,
+      lastUsedList: data[K.LAST_USED_LIST] || null,
       isValid: !!token && !expired,
       isExpired: expired,
     };
   }
-
-  // Export to globalThis for use by other scripts
   globalThis.AuthState = {
-    getAuthState,
-    validateAndCleanToken,
+    isTokenExpired,
+    clearAccountCache,
     clearAllAuthData,
-    handleUnauthorized,
     loadFullState,
   };
 })();
