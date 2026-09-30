@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const logger = require('../../utils/logger');
+const { acceptsHistoricalChecksum } = require('./historical-checksums');
 
 // Postgres advisory-lock key. Stable across deployments so concurrent pods
 // serialize on the same lock. Fits in JS safe-integer range.
@@ -310,11 +311,20 @@ class MigrationManager {
       `SELECT version, checksum FROM ${this.migrationTableName}`
     );
     const files = await this.getMigrationFiles();
+    const executed = new Set(rows.rows.map((row) => row.version));
     for (const row of rows.rows) {
       const file = files.find((entry) => entry.version === row.version);
+      const current = file ? await this.calculateChecksum(file.filePath) : null;
       if (
         !file ||
-        row.checksum !== (await this.calculateChecksum(file.filePath))
+        (row.checksum !== current &&
+          !(await acceptsHistoricalChecksum({
+            version: row.version,
+            recorded: row.checksum,
+            current,
+            executed,
+            query: (sql, values) => this.query(sql, values),
+          })))
       ) {
         throw new Error(
           `Migration checksum mismatch: ${row.version}. Applied migrations are immutable; restore matching migration files.`

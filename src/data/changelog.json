@@ -2,6 +2,11 @@
   {
     "date": "2026-09-30",
     "category": "fix",
+    "description": "Allowed verified historical migration checksums during upgrades while retaining checks against unknown migration changes."
+  },
+  {
+    "date": "2026-09-30",
+    "category": "fix",
     "description": "Preserved the published application's access, proxy trust, forwarding and metrics behavior through automatic upgrades."
   },
   {

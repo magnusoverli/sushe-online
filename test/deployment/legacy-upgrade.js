@@ -5,6 +5,7 @@ const request = require('supertest');
 const { setTimeout: delay } = require('node:timers/promises');
 const { createHash } = require('node:crypto');
 const { databaseUrlFor } = require('../../config/database-connection');
+const historicalMigrations = require('../fixtures/historical-migrations');
 
 const api = request('http://app:3000');
 const email = 'upgrade@example.test';
@@ -81,6 +82,14 @@ async function seed() {
         "SELECT checksum FROM schema_migrations WHERE version='081_list_revisions'"
       )
     ).rows[0].checksum;
+    // Freshly seeded databases otherwise miss the historical ledger drift
+    // carried by real long-lived installations of this same published image.
+    for (const [version, recorded] of historicalMigrations) {
+      await db.query(
+        'UPDATE schema_migrations SET checksum=$1 WHERE version=$2',
+        [recorded, version]
+      );
+    }
     await fs.writeFile(
       '/state/fixture.json',
       JSON.stringify({
