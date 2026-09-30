@@ -66,7 +66,10 @@ services:
         max-file: '3'
 
   db:
-    image: postgres:18.4
+    image: sushe-postgres:local
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     container_name: sushe-db-local
     ports:
       - '5433:5432'

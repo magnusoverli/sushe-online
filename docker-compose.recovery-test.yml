@@ -24,7 +24,10 @@ x-runtime: &runtime
 
 services:
   db:
-    image: postgres:18.4
+    image: sushe-postgres:local
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     environment:
       POSTGRES_DB: sushe
       POSTGRES_PASSWORD: synthetic-provision-password-only

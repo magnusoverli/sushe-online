@@ -1,9 +1,9 @@
 # ----- Common base stage -----
 # Shared setup for both builder and runtime stages
 # This layer is cached and reused, saving ~8-9 seconds per build
-ARG NODE_VERSION=26.7.0
-ARG NPM_VERSION=12.0.2
-FROM node:${NODE_VERSION}-trixie-slim@sha256:4ebb5ace66f15a24c14c492e01a8beeed4fddf970a856109f5126e703e5fe503 AS base
+ARG NODE_VERSION=26.10.0
+ARG NPM_VERSION=12.1.0
+FROM node:${NODE_VERSION}-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 AS base
 
 # Update npm to specific version (done once, inherited by both stages)
 ARG NPM_VERSION
@@ -55,6 +55,7 @@ COPY --chown=node:node package*.json .npmrc ./
 # Add PGDG repository for PostgreSQL 18 client
 # Install build-time dependencies, add repo, install pg client, then remove build-time deps
 RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
     && install -d /usr/share/postgresql-common/pgdg \
     && curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc \
@@ -88,10 +89,13 @@ RUN if [ "$INSTALL_DEV_DEPS" != "true" ]; then \
       done; \
     fi
 
+# Production starts directly with Node; do not ship npm's separate dependency
+# tree (including advisories outside the application's package-lock audit).
 RUN if [ "$INSTALL_DEV_DEPS" != "true" ]; then \
       node -e "const sharp = require('sharp'); process.stdout.write(sharp.versions.sharp + '\n')" \
       && rm -rf node_modules/tslib \
-      && npm cache clean --force; \
+      && npm cache clean --force \
+      && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx; \
     fi
 
 # The image-only upgrade coordinator owns code and private deployment state;

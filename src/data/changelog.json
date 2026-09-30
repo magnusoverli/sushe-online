@@ -1,6 +1,11 @@
 [
   {
     "date": "2026-09-30",
+    "category": "security",
+    "description": "Updated runtimes, database and dependencies, migrated metrics, and added automated dependency and container security checks."
+  },
+  {
+    "date": "2026-09-30",
     "category": "improvement",
     "description": "Added backup transfer progress and clear browser-save guidance; download dialogs stay open until dismissed."
   },

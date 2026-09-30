@@ -1,25 +1,9 @@
-/**
- * ESLint 10 Upgrade Workaround
- *
- * One temporary workaround is in place to support eslint 10 with a plugin
- * that hasn't fully caught up yet. Remove it when the upstream fix ships —
- * the steps are noted inline.
- *
- * 1. eslint-plugin-import (v2.32.0)
- *    Declares peerDependencies: { eslint: "^9" } but works correctly with
- *    eslint 10 at runtime. An npm `overrides` entry in package.json forces
- *    npm to accept the mismatch.
- *    - Config:    "overrides" section in package.json
- *    - Upstream:  https://github.com/import-js/eslint-plugin-import/issues/3227
- *    - To remove: Once eslint-plugin-import publishes a version whose
- *                 peerDependencies include eslint 10 (or ^10), remove the
- *                 "overrides" section from package.json.
- */
 import js from '@eslint/js';
 import prettier from 'eslint-plugin-prettier';
 import prettierConfig from 'eslint-config-prettier';
 import security from 'eslint-plugin-security';
-import importPlugin from 'eslint-plugin-import';
+// import-x supports ESLint 10; preserve rule names without peer overrides.
+import importPlugin from 'eslint-plugin-import-x';
 
 export default [
   js.configs.recommended,

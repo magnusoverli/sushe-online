@@ -11,7 +11,10 @@ x-test-image: &test-image
 
 services:
   db:
-    image: postgres:18.4
+    image: sushe-postgres:local
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     environment:
       POSTGRES_DB: sushe_test
       # Disposable, internal-only test network; no published ports or volumes.

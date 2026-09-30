@@ -70,7 +70,8 @@ services:
           cpus: '0.5'
 
   db:
-    image: postgres:18.4
+    image: ghcr.io/magnusoverli/sushe-online-postgres:18
+    pull_policy: always
     ports:
       - '5433:5432' # Expose PostgreSQL for local development
     environment:

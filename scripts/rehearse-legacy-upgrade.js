@@ -1,9 +1,16 @@
 const { execFileSync } = require('node:child_process');
 
 const compose = ['compose', '-f', 'docker-compose.upgrade-test.yml'];
+// The old server is deliberate test input, not a deployment recommendation.
+let databaseImage =
+  'postgres:18.4@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636';
 function run(args, image) {
   execFileSync('docker', [...compose, ...args], {
-    env: { ...process.env, ...(image ? { UPGRADE_IMAGE: image } : {}) },
+    env: {
+      ...process.env,
+      UPGRADE_DATABASE_IMAGE: databaseImage,
+      ...(image ? { UPGRADE_IMAGE: image } : {}),
+    },
     stdio: 'inherit',
     timeout: 300000,
   });
@@ -31,6 +38,8 @@ try {
   run(['up', '-d', '--wait', 'app']);
   check('seed');
   check('initial-damage');
+  // Exercise the production Compose update of both the app and PostgreSQL.
+  databaseImage = 'sushe-postgres:local';
   run(['up', '-d', 'app'], 'sushe-upgrade-candidate:local');
   check('initial-failed');
   check('initial-repair');

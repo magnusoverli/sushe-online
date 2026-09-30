@@ -1,14 +1,14 @@
 name: sushe-upgrade-test
 services:
   db:
-    image: postgres:18.4
+    image: ${UPGRADE_DATABASE_IMAGE:-sushe-postgres:local}
     environment:
       POSTGRES_DB: sushe
       POSTGRES_PASSWORD: example
       POSTGRES_INITDB_ARGS: '--auth-host=md5'
-    tmpfs:
-      - /var/lib/postgresql:size=2g
     volumes:
+      # A real disposable volume survives database image replacement.
+      - database:/var/lib/postgresql
       - socket:/var/run/postgresql
       - ./scripts/docker-entrypoint-upgrade.sh:/usr/local/bin/docker-entrypoint-upgrade.sh:ro
     entrypoint: ['/usr/local/bin/docker-entrypoint-upgrade.sh']
@@ -60,6 +60,7 @@ services:
     tmpfs: [/tmp]
     command: ['test/deployment/legacy-upgrade.js', 'verify']
 volumes:
+  database:
   data:
   socket:
 networks:

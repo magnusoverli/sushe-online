@@ -1,4 +1,4 @@
-const { Counter, Gauge } = require('prom-client');
+const { Counter, Gauge } = require('@prometheus-io/client');
 const { register } = require('./metrics');
 const events = new Counter({
   name: 'sushe_outbound_events_total',
