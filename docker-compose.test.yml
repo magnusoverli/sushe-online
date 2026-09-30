@@ -1,0 +1,86 @@
+name: sushe-backend-test
+
+x-test-image: &test-image
+  image: sushe-backend-test:local
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: runtime
+    args:
+      INSTALL_DEV_DEPS: 'true'
+
+services:
+  db:
+    image: postgres:18.4
+    environment:
+      POSTGRES_DB: sushe_test
+      # Disposable, internal-only test network; no published ports or volumes.
+      POSTGRES_HOST_AUTH_METHOD: trust
+    tmpfs:
+      - /var/lib/postgresql:size=512m
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d sushe_test']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  app:
+    <<: *test-image
+    user: node
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      NODE_ENV: test
+      DB_AUTO_MIGRATE: 'true'
+      CI: 'true'
+      DATABASE_URL: postgres://postgres@db:5432/sushe_test
+      SESSION_SECRET: synthetic-backend-test-signing-secret-only
+      BASE_URL: http://localhost:3000
+      DATA_DIR: /tmp/sushe-data
+      PG_MAJOR: '18'
+      DISABLE_RATE_LIMITING: 'true'
+    command: ['node', 'index.js']
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://localhost:3000/api/health', r => { r.resume(); process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))"
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  app2:
+    extends:
+      service: app
+    depends_on:
+      app:
+        condition: service_healthy
+
+  tests:
+    <<: *test-image
+    user: node
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Existing integration tests use localhost:3000.
+    network_mode: service:app
+    environment:
+      NODE_ENV: test
+      CI: 'true'
+      DATABASE_URL: postgres://postgres@db:5432/sushe_test
+      SECOND_APP_URL: http://app2:3000
+    command: ['npm', 'test']
+    depends_on:
+      app:
+        condition: service_healthy
+      app2:
+        condition: service_healthy
+
+networks:
+  default:
+    internal: true

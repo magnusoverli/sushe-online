@@ -1,264 +1,81 @@
-const { describe, it } = require('node:test');
-const assert = require('node:assert');
-const { EventEmitter } = require('node:events');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
 const {
   createAdminBackupService,
 } = require('../services/admin-backup-service');
-const { RESTORE_ERROR_CODES } = require('../services/restore-errors');
+const { pgEnvironment } = require('../config/database-connection');
 
-function createLogger() {
-  return {
-    info() {},
-    warn() {},
-    error() {},
-    debug() {},
+test('backup credentials honor URL/socket configuration and never enter arguments', async () => {
+  const env = {
+    DATABASE_URL:
+      'postgres://reader:private-password@/fixture?host=/var/run/postgresql',
+    NODE_ENV: 'test',
   };
-}
-
-function createSpawnWithExit(exitCode, stderrText = '') {
-  return () => {
-    const processEmitter = new EventEmitter();
-    processEmitter.stdout = new EventEmitter();
-    processEmitter.stderr = new EventEmitter();
-    processEmitter.stdin = { on() {}, end() {} };
-    processEmitter.kill = () => {};
-
-    process.nextTick(() => {
-      if (stderrText) {
-        processEmitter.stderr.emit('data', Buffer.from(stderrText));
-      }
-      processEmitter.emit('exit', exitCode);
-    });
-
-    return processEmitter;
-  };
-}
-
-function createNeverEndingSpawn() {
-  return () => {
-    const processEmitter = new EventEmitter();
-    processEmitter.stdout = new EventEmitter();
-    processEmitter.stderr = new EventEmitter();
-    processEmitter.stdin = {
-      on() {},
-      pipe() {},
-      end() {},
-    };
-    processEmitter.kill = () => {
-      process.nextTick(() => {
-        processEmitter.emit('exit', 143, 'SIGTERM');
-      });
-    };
-    return processEmitter;
-  };
-}
-
-describe('admin-backup-service', () => {
-  it('validateDumpFile returns true for PostgreSQL dump header', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sushe-backup-test-'));
-    const filePath = path.join(tmpDir, 'valid.dump');
-    fs.writeFileSync(filePath, Buffer.from('PGDMP test backup bytes'));
-
-    const service = createAdminBackupService({
-      db: { raw: async () => ({ rows: [] }) },
-      logger: createLogger(),
-    });
-
-    assert.strictEqual(service.validateDumpFile(filePath), true);
-
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+  const service = createAdminBackupService({
+    env,
+    runProcess: async (_cmd, args, options) => {
+      assert.ok(!args.join(' ').includes('private-password'));
+      assert.equal(options.env.PGUSER, 'reader');
+      assert.equal(options.env.PGHOST, '/var/run/postgresql');
+      await new Promise((resolve) =>
+        options.output.end('PGDMPsynthetic', resolve)
+      );
+    },
   });
+  const backup = await service.createBackup();
+  try {
+    assert.equal((await fs.stat(backup.filePath)).mode & 0o777, 0o600);
+    assert.equal(backup.size, 14);
+  } finally {
+    await backup.cleanup();
+  }
+  await assert.rejects(fs.stat(backup.filePath), { code: 'ENOENT' });
+  assert.equal(
+    pgEnvironment('postgres://user:pass@db:5433/fixture').PGPORT,
+    '5433'
+  );
+});
 
-  it('validateDumpFile returns false for invalid file header', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sushe-backup-test-'));
-    const filePath = path.join(tmpDir, 'invalid.dump');
-    fs.writeFileSync(filePath, Buffer.from('NOTPG backup bytes'));
-
+test('preflight validates actual bytes and always applies a process deadline', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'backup-test-'));
+  const file = path.join(dir, 'backup.dump');
+  try {
+    await fs.writeFile(file, 'PGDMPsynthetic');
+    let ran = false;
     const service = createAdminBackupService({
-      db: { raw: async () => ({ rows: [] }) },
-      logger: createLogger(),
-    });
-
-    assert.strictEqual(service.validateDumpFile(filePath), false);
-
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('getRuntimeConfig falls back to default pg binaries when custom bin is absent', () => {
-    const service = createAdminBackupService({
-      db: { raw: async () => ({ rows: [] }) },
-      logger: createLogger(),
-      process: {
-        env: {
-          PG_MAJOR: '99',
-          PG_BIN: '/does/not/exist',
-          DATABASE_URL: 'postgres://localhost:5432/sushe',
-        },
-        exit() {},
-      },
-      fs: {
-        ...fs,
-        existsSync() {
-          return false;
-        },
+      runProcess: async (_cmd, args, opts) => {
+        ran = true;
+        assert.ok(opts.timeoutMs > 0);
+        assert.deepEqual(args, ['--list', file]);
       },
     });
-
-    const config = service.getRuntimeConfig();
-
-    assert.strictEqual(config.pgDumpCmd, 'pg_dump');
-    assert.strictEqual(config.pgRestoreCmd, 'pg_restore');
-    assert.strictEqual(config.isDocker, false);
-  });
-
-  it('validateRestoreFile throws FILE_TOO_LARGE when file exceeds configured limit', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sushe-backup-test-'));
-    const filePath = path.join(tmpDir, 'large.dump');
-    fs.writeFileSync(filePath, Buffer.from('PGDMP test backup bytes'));
-
-    const service = createAdminBackupService({
-      db: { raw: async () => ({ rows: [] }) },
-      logger: createLogger(),
+    await service.runRestorePreflight({ tmpFile: file });
+    assert.ok(ran);
+    await fs.writeFile(file, 'not a dump');
+    assert.throws(() => service.validateRestoreFile(file), {
+      code: 'RESTORE_INVALID_DUMP',
     });
-
+    await fs.writeFile(file, 'PGDMP' + 'a'.repeat(100));
     assert.throws(
-      () =>
-        service.validateRestoreFile(filePath, 4096, {
-          restoreMaxFileBytes: 1024,
-        }),
-      (error) => error.code === RESTORE_ERROR_CODES.FILE_TOO_LARGE
+      () => service.validateRestoreFile(file, 1, { restoreMaxFileBytes: 16 }),
+      { code: 'RESTORE_FILE_TOO_LARGE' }
     );
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
 
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+test('production backups require the explicit backup-reader credential', async () => {
+  const service = createAdminBackupService({
+    env: {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://runtime@db/source',
+    },
   });
-
-  it('runRestorePreflight succeeds for valid pg_restore --list execution', async () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sushe-backup-test-'));
-    const filePath = path.join(tmpDir, 'valid.dump');
-    fs.writeFileSync(filePath, Buffer.from('PGDMP test backup bytes'));
-
-    const service = createAdminBackupService({
-      db: { raw: async () => ({ rows: [] }) },
-      logger: createLogger(),
-      spawn: createSpawnWithExit(0),
-    });
-
-    const result = await service.runRestorePreflight({
-      tmpFile: filePath,
-      restoreId: 'restore_test',
-      config: {
-        pgRestoreCmd: 'pg_restore',
-        isDocker: false,
-        restorePreflightEnabled: true,
-      },
-    });
-
-    assert.strictEqual(result.code, 0);
-    assert.ok(result.durationMs >= 0);
-
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('runRestorePreflight throws PRECHECK_FAILED for invalid dumps', async () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sushe-backup-test-'));
-    const filePath = path.join(tmpDir, 'invalid.dump');
-    fs.writeFileSync(filePath, Buffer.from('PGDMP test backup bytes'));
-
-    const service = createAdminBackupService({
-      db: { raw: async () => ({ rows: [] }) },
-      logger: createLogger(),
-      spawn: createSpawnWithExit(
-        1,
-        'input file does not appear to be a valid archive'
-      ),
-    });
-
-    await assert.rejects(
-      () =>
-        service.runRestorePreflight({
-          tmpFile: filePath,
-          restoreId: 'restore_test',
-          config: {
-            pgRestoreCmd: 'pg_restore',
-            isDocker: false,
-            restorePreflightEnabled: true,
-          },
-        }),
-      (error) => error.code === RESTORE_ERROR_CODES.PRECHECK_FAILED
-    );
-
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('runRestoreProcess reports timeout when process hangs', async () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sushe-backup-test-'));
-    const filePath = path.join(tmpDir, 'valid.dump');
-    fs.writeFileSync(filePath, Buffer.from('PGDMP test backup bytes'));
-
-    const service = createAdminBackupService({
-      db: { raw: async () => ({ rows: [] }) },
-      logger: createLogger(),
-      spawn: createNeverEndingSpawn(),
-      fs,
-    });
-
-    const result = await service.runRestoreProcess({
-      tmpFile: filePath,
-      restoreId: 'restore_timeout',
-      config: {
-        pgRestoreCmd: 'pg_restore',
-        isDocker: false,
-        databaseUrl: 'postgres://localhost:5432/sushe',
-        restoreTimeoutMs: 20,
-      },
-    });
-
-    assert.strictEqual(result.timedOut, true);
-    assert.ok(result.stderrData.includes('Restore timed out'));
-
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('uses a watched nodemon trigger file for development restarts', () => {
-    const timers = [];
-    const exitCodes = [];
-    let triggerPath = null;
-    const service = createAdminBackupService({
-      db: { raw: async () => ({ rows: [] }) },
-      logger: createLogger(),
-      process: {
-        env: { NODE_ENV: 'development' },
-        exit: (code) => exitCodes.push(code),
-      },
-      fs: {
-        ...fs,
-        utimesSync() {},
-        writeFileSync() {},
-      },
-      path: {
-        ...path,
-        join: (...parts) => {
-          triggerPath = path.join(...parts);
-          return triggerPath;
-        },
-      },
-      setTimeout: (fn, delay) => {
-        timers.push({ fn, delay });
-        return timers.length;
-      },
-    });
-
-    service.scheduleRestart('restore_restart_test', 10);
-    assert.strictEqual(timers.length, 1);
-    assert.strictEqual(timers[0].delay, 10);
-
-    timers.shift().fn();
-    assert.ok(triggerPath.endsWith('restart-trigger.json'));
-    assert.strictEqual(exitCodes.length, 0);
-    assert.strictEqual(timers.length, 0);
-  });
+  await assert.rejects(service.createBackup(), /BACKUP_DATABASE_URL/);
+  assert.equal(service.dropPublicTablesForRestore, undefined);
+  assert.equal(service.runRestoreProcess, undefined);
 });

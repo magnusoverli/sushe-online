@@ -74,58 +74,61 @@ function createAvailabilityFetchQueue(deps = {}) {
     if (!albumId || !artist || !album) return;
     if (!externalIdentityService || !resolutionService) return;
 
-    return queue.add(async () => {
-      try {
-        const state =
-          await externalIdentityService.getAlbumAvailabilityResolutionState(
-            albumId
-          );
-        if (state.version >= AVAILABILITY_RESOLUTION_VERSION) return;
-      } catch (err) {
-        log.warn('Availability pre-check failed', {
-          albumId,
-          error: err.message,
-        });
-        return;
-      }
-
-      try {
-        const result = await resolutionService.resolveAvailability({
-          albumId,
-          artist,
-          album,
-        });
-        if (result.action === 'resolved') {
-          log.info('Resolved album availability', {
+    return queue.addBackground(
+      async () => {
+        try {
+          const state =
+            await externalIdentityService.getAlbumAvailabilityResolutionState(
+              albumId
+            );
+          if (state.version >= AVAILABILITY_RESOLUTION_VERSION) return;
+        } catch (err) {
+          log.warn('Availability pre-check failed', {
             albumId,
-            services: result.services,
+            error: err.message,
           });
-          if (db && responseCache) {
-            await invalidateResponseCacheForAlbumUsers({
+          return;
+        }
+
+        try {
+          const result = await resolutionService.resolveAvailability({
+            albumId,
+            artist,
+            album,
+          });
+          if (result.action === 'resolved') {
+            log.info('Resolved album availability', {
+              albumId,
+              services: result.services,
+            });
+            if (db && responseCache) {
+              await invalidateResponseCacheForAlbumUsers({
+                db,
+                responseCache,
+                logger: log,
+                albumIds: albumId,
+                operation: 'availability-fetch-queue',
+              });
+            }
+            await publishAlbumAvailabilityUpdate({
               db,
-              responseCache,
+              broadcast,
               logger: log,
-              albumIds: albumId,
+              albumId,
               operation: 'availability-fetch-queue',
             });
           }
-          await publishAlbumAvailabilityUpdate({
-            db,
-            broadcast,
-            logger: log,
+        } catch (err) {
+          log.warn('Availability resolution failed', {
             albumId,
-            operation: 'availability-fetch-queue',
+            error: err.message,
           });
+        } finally {
+          await pace(); // only reached when an actual resolution was attempted
         }
-      } catch (err) {
-        log.warn('Availability resolution failed', {
-          albumId,
-          error: err.message,
-        });
-      } finally {
-        await pace(); // only reached when an actual resolution was attempted
-      }
-    });
+      },
+      { logger: log, kind: 'availability', albumId }
+    );
   }
 
   return {

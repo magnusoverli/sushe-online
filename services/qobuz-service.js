@@ -81,7 +81,9 @@ function pickBestCandidate(candidates, artist, album) {
 }
 
 function createQobuzService(deps = {}) {
-  const fetch = deps.fetch || globalThis.fetch;
+  const fetch = require('../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+  });
   const logger = deps.logger || require('../utils/logger');
 
   async function searchAlbum(artist, album, options = {}) {

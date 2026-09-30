@@ -1,0 +1,67 @@
+name: sushe-upgrade-test
+services:
+  db:
+    image: postgres:18.4
+    environment:
+      POSTGRES_DB: sushe
+      POSTGRES_PASSWORD: example
+      POSTGRES_INITDB_ARGS: '--auth-host=md5'
+    tmpfs:
+      - /var/lib/postgresql:size=2g
+    volumes:
+      - socket:/var/run/postgresql
+      - ./scripts/docker-entrypoint-upgrade.sh:/usr/local/bin/docker-entrypoint-upgrade.sh:ro
+    entrypoint: ['/usr/local/bin/docker-entrypoint-upgrade.sh']
+    command: ['postgres']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d sushe']
+      interval: 1s
+      timeout: 3s
+      retries: 30
+  app:
+    image: ${UPGRADE_IMAGE:-ghcr.io/magnusoverli/sushe-online@sha256:e897f354c5eb33a5dfde501a29ed4650b67e89e64a096c5ba68c6ea528affae0}
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:example@/sushe?host=/var/run/postgresql
+      DATA_DIR: /app/data
+      BASE_URL: http://app:3000
+      SESSION_SECRET: synthetic-upgrade-rehearsal-session-secret-0123456789
+    volumes:
+      - data:/app/data
+      - socket:/var/run/postgresql
+    tmpfs: [/tmp]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 90
+  checks:
+    image: sushe-backend-test:local
+    profiles: [checks]
+    user: '0:0'
+    entrypoint: [node]
+    environment:
+      DEPLOYMENT_REHEARSAL: disposable
+      DATABASE_URL: postgres://postgres:example@/sushe?host=/var/run/postgresql
+    volumes:
+      - data:/state
+      - socket:/var/run/postgresql
+      - ./test/deployment:/app/test/deployment:ro
+      - ./services/deployment:/app/services/deployment:ro
+    tmpfs: [/tmp]
+    command: ['test/deployment/legacy-upgrade.js', 'verify']
+volumes:
+  data:
+  socket:
+networks:
+  default:
+    internal: true

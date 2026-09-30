@@ -16,24 +16,24 @@ const {
 
 const FALLBACK_SESSION_SECRET = 'your-secret-key';
 
+/** @param {NodeJS.ProcessEnv} [env] @param {Pick<typeof logger, 'error'>} [log] */
 function resolveSessionSettings(env = process.env, log = logger) {
   const isProduction = env.NODE_ENV === 'production';
-  const strictSecretRequired = env.SESSION_SECRET_REQUIRED === 'true';
   const secretFromEnv = env.SESSION_SECRET;
   const sessionSecret = secretFromEnv || FALLBACK_SESSION_SECRET;
-  const usingFallbackSecret =
-    !secretFromEnv || secretFromEnv === FALLBACK_SESSION_SECRET;
-
-  if (isProduction && usingFallbackSecret) {
-    log.error('Insecure SESSION_SECRET configuration detected in production', {
-      strictMode: strictSecretRequired,
-    });
-
-    if (strictSecretRequired) {
-      throw new Error(
-        'SESSION_SECRET is required in production when SESSION_SECRET_REQUIRED=true'
-      );
-    }
+  if (
+    isProduction &&
+    (typeof secretFromEnv !== 'string' ||
+      Buffer.byteLength(secretFromEnv) < 32 ||
+      /your.secret|change.?me|change.in.production|test.secret|placeholder|example/i.test(
+        secretFromEnv
+      ) ||
+      new Set(secretFromEnv).size < 12)
+  ) {
+    log.error('Insecure SESSION_SECRET configuration detected in production');
+    throw new Error(
+      'SESSION_SECRET must be a non-placeholder random secret of at least 32 bytes in production'
+    );
   }
 
   return {
@@ -53,7 +53,7 @@ function createSessionMiddleware(pool) {
   const pgStore = new pgSession({
     pool: pool,
     tableName: 'session',
-    createTableIfMissing: true,
+    createTableIfMissing: false,
     // Skip the per-request expiry UPDATE that otherwise blocks the tail of
     // every authenticated response. recordActivity modifies the session at
     // least every 5 minutes for active users, and that store.set refreshes
@@ -121,6 +121,7 @@ function flashMiddleware() {
 }
 
 module.exports = {
+  resolveSessionSettings,
   createSessionMiddleware,
   flashMiddleware,
 };

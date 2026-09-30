@@ -352,6 +352,14 @@ describe('background worker preservation', () => {
           db: { raw },
           fetch,
           coverCache,
+          publicRequest: async (url) => {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Image unavailable');
+            return {
+              buffer: Buffer.from(await response.arrayBuffer()),
+              contentType: 'image/jpeg',
+            };
+          },
           responseCache,
           broadcast,
           logger: createMockLogger(),

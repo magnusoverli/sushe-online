@@ -28,6 +28,7 @@ const THUMBNAIL_JPEG_QUALITY = 80;
 
 /** Maximum decoded bytes accepted for manual cover uploads (5 MB). */
 const MAX_UPLOAD_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_INPUT_PIXELS = 40 * 1000 * 1000;
 
 /** iTunes artwork request size (larger than TARGET_SIZE for quality) */
 const ITUNES_IMAGE_SIZE = 600;
@@ -39,7 +40,7 @@ const ITUNES_IMAGE_SIZE = 600;
  * @returns {Promise<Buffer>} - Processed JPEG buffer
  */
 async function processImage(buffer) {
-  return sharp(Buffer.from(buffer))
+  return sharp(Buffer.from(buffer), { limitInputPixels: MAX_INPUT_PIXELS })
     .resize(TARGET_SIZE, TARGET_SIZE, {
       fit: 'inside',
       withoutEnlargement: true,
@@ -49,7 +50,7 @@ async function processImage(buffer) {
 }
 
 async function processThumbnailImage(buffer) {
-  return sharp(Buffer.from(buffer))
+  return sharp(Buffer.from(buffer), { limitInputPixels: MAX_INPUT_PIXELS })
     .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
       fit: 'inside',
       withoutEnlargement: true,
@@ -142,6 +143,7 @@ module.exports = {
   THUMBNAIL_JPEG_QUALITY,
   ITUNES_IMAGE_SIZE,
   MAX_UPLOAD_IMAGE_BYTES,
+  MAX_INPUT_PIXELS,
   processImage,
   processThumbnailImage,
   processCoverImageVariants,

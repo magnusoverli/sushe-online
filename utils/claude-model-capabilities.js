@@ -115,8 +115,16 @@ async function listModels(anthropic) {
   if (cache && Date.now() - cachedAt < CACHE_TTL_MS) return cache;
 
   const models = [];
-  for await (const model of anthropic.models.list({ limit: 100 })) {
+  const signal = AbortSignal.any([
+    AbortSignal.timeout(10000),
+    require('./outbound-lifecycle').shutdownSignal,
+  ]);
+  for await (const model of anthropic.models.list(
+    { limit: 100 },
+    { signal, maxRetries: 0 }
+  )) {
     models.push(model);
+    if (models.length > 1000) throw new Error('Model list exceeds limit');
   }
 
   cache = models;

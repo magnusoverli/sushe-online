@@ -16,7 +16,8 @@ function createFetchResponse({
     ok,
     status,
     json: async () => jsonData,
-    text: async () => textData,
+    text: async () =>
+      jsonData === undefined ? textData : JSON.stringify(jsonData),
   };
 }
 

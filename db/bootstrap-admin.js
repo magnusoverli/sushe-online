@@ -79,7 +79,6 @@ function createEnsureAdminUser({ db, logger, bcrypt }) {
         const newUser = insertResult.rows[0];
 
         logger.info('Created admin user successfully', { userId: newUser._id });
-        logger.info('Admin login: email=admin@localhost.com, password=admin');
 
         const verifyResult = await db.raw(
           `SELECT _id

@@ -479,9 +479,10 @@ describe('MusicBrainzQueue', () => {
         maxRetries: 2,
       });
 
+      retryQueue.random = () => 0;
       await retryQueue.add('https://example.com', {});
 
-      // Should have 2 retry delays (1s, 2s)
+      // Should have 2 retry delays (1s, 2s), with jitter disabled in this fixture.
       assert.strictEqual(backoffDelays.length, 2);
       // First delay should be ~1000ms (with some tolerance)
       assert.ok(

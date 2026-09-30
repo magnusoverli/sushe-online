@@ -106,6 +106,7 @@ export default [
         requestAnimationFrame: 'readonly',
         cancelAnimationFrame: 'readonly',
         AbortController: 'readonly',
+        AbortSignal: 'readonly',
         DOMException: 'readonly',
         Image: 'readonly',
         showToast: 'readonly',

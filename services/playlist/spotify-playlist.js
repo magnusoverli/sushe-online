@@ -10,6 +10,7 @@ const {
   processTrackBatches,
 } = require('./playlist-helpers');
 const { findSpotifyPlaylist } = require('./bound-playlist');
+const { boundedFetch: fetch } = require('../../utils/bounded-fetch');
 
 /**
  * Create Spotify playlist service

@@ -39,13 +39,10 @@ const MB_FETCH_TIMEOUT_MS = 15000;
  * caller indefinitely (the live queue and the backfill both rely on this).
  */
 async function fetchWithTimeout(fetchFn, url, options, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetchFn(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
+  return require('../utils/bounded-fetch').createBoundedFetch({
+    fetch: fetchFn,
+    timeoutMs,
+  })(url, options);
 }
 
 /**

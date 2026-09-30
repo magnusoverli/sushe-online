@@ -28,6 +28,7 @@ function generateSecureCode(length = 8) {
 }
 
 function getLoggableCode(code) {
+  if (process.env.NODE_ENV === 'production') return '[redacted]';
   const mode = process.env.ADMIN_CODE_LOG_MODE || 'plaintext';
 
   if (mode === 'masked') {
@@ -51,7 +52,10 @@ function generateAdminCode() {
       code: getLoggableCode(adminCode),
       expiresAt: adminCodeExpiry.toISOString(),
       ttlSeconds: 300,
-      logMode: process.env.ADMIN_CODE_LOG_MODE || 'plaintext',
+      logMode:
+        process.env.NODE_ENV === 'production'
+          ? 'redacted'
+          : process.env.ADMIN_CODE_LOG_MODE || 'plaintext',
     };
 
     // Include previous usage info if available

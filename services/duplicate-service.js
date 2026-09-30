@@ -14,10 +14,15 @@
 const defaultLogger = require('../utils/logger');
 const { ensureDb } = require('../db/postgres');
 const { TransactionAbort } = require('../db/transaction');
+const { findPotentialDuplicates } = require('../utils/fuzzy-match');
 const {
-  findPotentialDuplicates,
-  normalizeForComparison,
-} = require('../utils/fuzzy-match');
+  buildBlockingBuckets,
+  getCandidateIndexes,
+} = require('./duplicates/candidate-matching');
+const {
+  acquireMergeLocks,
+  getExistingDependentMergeTables,
+} = require('../db/repositories/duplicate-merges');
 const {
   deriveGenreProjection,
   projectTaxonomyForRead,
@@ -35,18 +40,12 @@ const DEFAULT_CLUSTER_PAGE_SIZE = 25;
 const MAX_CLUSTER_PAGE_SIZE = 100;
 const RYM_SERVICE = 'rateyourmusic';
 const OPTIONAL_RYM_FIELDS = ['languages', 'scenes', 'movements'];
-const DEPENDENT_MERGE_TABLES = [
-  'recommendations',
-  'album_service_mappings',
-  'artist_service_aliases',
-  'user_album_stats',
-  'album_distinct_pairs',
-];
-
-function toRowCount(value) {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
+const {
+  toRowCount,
+  emptyDependentRemapStats,
+  sumDependentRemapStats,
+  mergeClusterMembers,
+} = require('./duplicates/merge-cluster');
 
 function clampNumber(value, min, max, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -461,84 +460,6 @@ function createDuplicateService(deps = {}) {
     });
   }
 
-  function getBlockingKeys(album) {
-    const normalizedArtist = normalizeForComparison(album.artist || '');
-    const normalizedAlbum = normalizeForComparison(album.album || '');
-    const artistTokens = normalizedArtist.split(' ').filter(Boolean);
-    const albumTokens = normalizedAlbum.split(' ').filter(Boolean);
-
-    const keys = new Set();
-    const artistFirstChar = normalizedArtist.charAt(0);
-    const albumFirstChar = normalizedAlbum.charAt(0);
-    const artistFirstToken = artistTokens[0] || '';
-    const albumFirstToken = albumTokens[0] || '';
-
-    if (artistFirstChar) keys.add(`artist1:${artistFirstChar}`);
-    if (albumFirstChar) keys.add(`album1:${albumFirstChar}`);
-
-    if (artistFirstChar && albumFirstChar) {
-      keys.add(`pair1:${artistFirstChar}|${albumFirstChar}`);
-    }
-
-    if (artistFirstToken) {
-      keys.add(`artist3:${artistFirstToken.slice(0, 3)}`);
-    }
-
-    if (albumFirstToken) {
-      keys.add(`album3:${albumFirstToken.slice(0, 3)}`);
-    }
-
-    if (artistFirstToken && albumFirstToken) {
-      keys.add(
-        `pair3:${artistFirstToken.slice(0, 3)}|${albumFirstToken.slice(0, 3)}`
-      );
-    }
-
-    return [...keys];
-  }
-
-  function buildBlockingBuckets(albums) {
-    const buckets = new Map();
-
-    for (let i = 0; i < albums.length; i++) {
-      const keys = getBlockingKeys(albums[i]);
-
-      for (const key of keys) {
-        if (!buckets.has(key)) {
-          buckets.set(key, []);
-        }
-
-        buckets.get(key).push(i);
-      }
-    }
-
-    return buckets;
-  }
-
-  function getCandidateIndexes(index, album, buckets, totalAlbums) {
-    const candidateIndexes = new Set();
-    const keys = getBlockingKeys(album);
-
-    for (const key of keys) {
-      const bucket = buckets.get(key) || [];
-
-      for (const candidateIndex of bucket) {
-        if (candidateIndex > index) {
-          candidateIndexes.add(candidateIndex);
-        }
-      }
-    }
-
-    if (candidateIndexes.size === 0) {
-      const fallbackWindow = Math.min(totalAlbums, index + 201);
-      for (let i = index + 1; i < fallbackWindow; i++) {
-        candidateIndexes.add(i);
-      }
-    }
-
-    return [...candidateIndexes].sort((a, b) => a - b);
-  }
-
   function buildDuplicateClusters(duplicatePairs) {
     if (duplicatePairs.length === 0) return [];
 
@@ -795,60 +716,6 @@ function createDuplicateService(deps = {}) {
     }
 
     return nextAlbum;
-  }
-
-  async function getExistingDependentMergeTables(client) {
-    const result = await client.query(
-      `SELECT tablename
-       FROM pg_tables
-       WHERE schemaname = 'public'
-         AND tablename = ANY($1::text[])`,
-      [DEPENDENT_MERGE_TABLES]
-    );
-
-    return new Set(result.rows.map((row) => row.tablename));
-  }
-
-  async function acquireMergeLocks(client, albumIds) {
-    const lockIds = [...new Set(albumIds.map(normalizeText).filter(Boolean))]
-      .sort()
-      .slice(0, 1000);
-
-    for (const albumId of lockIds) {
-      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
-        albumId,
-      ]);
-    }
-
-    if (lockIds.length > 0) {
-      await client.query(
-        `SELECT album_id, album_taxonomy, taxonomy_updated_at
-         FROM albums
-         WHERE album_id = ANY($1::text[])
-         ORDER BY album_id
-         FOR UPDATE`,
-        [lockIds]
-      );
-    }
-  }
-
-  function emptyDependentRemapStats() {
-    return {
-      recommendationsUpdated: 0,
-      recommendationsConflictsRemoved: 0,
-      albumMappingsUpdated: 0,
-      albumMappingsConflictsRemoved: 0,
-      artistAliasSourcesUpdated: 0,
-      userAlbumStatsUpdated: 0,
-      distinctPairsRemapped: 0,
-      distinctPairsRemoved: 0,
-    };
-  }
-
-  function sumDependentRemapStats(target, source) {
-    for (const [key, value] of Object.entries(source)) {
-      target[key] = (target[key] || 0) + toRowCount(value);
-    }
   }
 
   async function remapRecommendations(client, keepAlbumId, deleteAlbumId) {
@@ -1647,32 +1514,12 @@ function createDuplicateService(deps = {}) {
       DEFAULT_CLUSTER_PAGE_SIZE
     );
 
-    const albumsResult = await db.raw(`
-      SELECT
-        album_id,
-        artist,
-        album,
-        release_date,
-        country,
-        genre_1,
-        genre_2,
-        album_taxonomy,
-        taxonomy_updated_at,
-        tracks,
-        summary,
-        COALESCE(jsonb_array_length(tracks), 0) as track_count,
-        cover_image IS NOT NULL as has_cover,
-        created_at
-      FROM albums
-      WHERE artist IS NOT NULL AND artist != ''
-        AND album IS NOT NULL AND album != ''
-        AND album_id IS NOT NULL
-      ORDER BY artist, album
-    `);
-
-    const excludedPairsResult = await db.raw(
-      `SELECT album_id_1, album_id_2 FROM album_distinct_pairs`
-    );
+    const scanRepository =
+      require('../db/repositories/duplicate-scan').createDuplicateScanRepository(
+        db
+      );
+    const albumsResult = await scanRepository.listCandidates();
+    const excludedPairsResult = await scanRepository.listDistinctPairs();
 
     const excludePairs = new Set();
     for (const row of excludedPairsResult.rows) {
@@ -1702,13 +1549,7 @@ function createDuplicateService(deps = {}) {
 
     if (albums.length > 0) {
       const albumIds = albums.map((album) => album.album_id);
-      const refsResult = await db.raw(
-        `SELECT album_id, COUNT(*)::int AS list_refs
-         FROM list_items
-         WHERE album_id = ANY($1::text[])
-         GROUP BY album_id`,
-        [albumIds]
-      );
+      const refsResult = await scanRepository.countListReferences(albumIds);
 
       const refsByAlbumId = new Map(
         refsResult.rows.map((row) => [row.album_id, row.list_refs])
@@ -1998,79 +1839,13 @@ function createDuplicateService(deps = {}) {
       retireAlbumIds
     ).sort();
 
-    const result = await db.withTransaction(async (client) => {
-      const aggregate = {
-        canonicalAlbumId: canonicalId,
-        requestedRetireIds: retireIds,
-        mergedAlbums: 0,
-        missingAlbums: 0,
-        listItemsUpdated: 0,
-        albumsDeleted: 0,
-        metadataMerged: false,
-        mergedFieldNames: new Set(),
-        taxonomyConflict: false,
-        albumTaxonomy: null,
-        mappingConflicts: [],
-        collisionsResolved: 0,
-        collisionRowsDeleted: 0,
-        dependentRemaps: emptyDependentRemapStats(),
-        results: [],
-      };
-
-      for (const retireId of retireIds) {
-        const result = await mergeAlbumsWithinTransaction(
-          client,
-          canonicalId,
-          retireId,
-          { mergeMetadata: true }
-        );
-
-        aggregate.results.push({ retireAlbumId: retireId, ...result });
-        aggregate.listItemsUpdated += result.listItemsUpdated;
-        aggregate.albumsDeleted += result.albumsDeleted;
-        aggregate.collisionsResolved += result.collisionsResolved;
-        aggregate.collisionRowsDeleted += result.collisionRowsDeleted;
-        aggregate.taxonomyConflict ||= result.taxonomyConflict;
-        aggregate.albumTaxonomy = result.albumTaxonomy;
-        aggregate.mappingConflicts.push(...result.mappingConflicts);
-        sumDependentRemapStats(
-          aggregate.dependentRemaps,
-          result.dependentRemaps || emptyDependentRemapStats()
-        );
-
-        if (result.albumsDeleted > 0) {
-          aggregate.mergedAlbums++;
-        } else {
-          aggregate.missingAlbums++;
-        }
-
-        if (result.metadataMerged) {
-          aggregate.metadataMerged = true;
-        }
-
-        for (const fieldName of result.mergedFieldNames || []) {
-          aggregate.mergedFieldNames.add(fieldName);
-        }
-      }
-
-      return {
-        canonicalAlbumId: aggregate.canonicalAlbumId,
-        requestedRetireIds: aggregate.requestedRetireIds,
-        mergedAlbums: aggregate.mergedAlbums,
-        missingAlbums: aggregate.missingAlbums,
-        listItemsUpdated: aggregate.listItemsUpdated,
-        albumsDeleted: aggregate.albumsDeleted,
-        metadataMerged: aggregate.metadataMerged,
-        mergedFieldNames: [...aggregate.mergedFieldNames].sort(),
-        taxonomyConflict: aggregate.taxonomyConflict,
-        albumTaxonomy: aggregate.albumTaxonomy,
-        mappingConflicts: aggregate.mappingConflicts,
-        collisionsResolved: aggregate.collisionsResolved,
-        collisionRowsDeleted: aggregate.collisionRowsDeleted,
-        dependentRemaps: aggregate.dependentRemaps,
-        results: aggregate.results,
-      };
-    });
+    const result = await db.withTransaction((client) =>
+      mergeClusterMembers(canonicalId, retireIds, (retireId) =>
+        mergeAlbumsWithinTransaction(client, canonicalId, retireId, {
+          mergeMetadata: true,
+        })
+      )
+    );
     if (result.albumsDeleted > 0 || result.metadataMerged) {
       invalidateAlbumCoverCache(canonicalId);
       for (const retireId of retireIds) invalidateAlbumCoverCache(retireId);

@@ -25,11 +25,16 @@ const { updateAlbumIdentity } = require('./reidentify/update-album-id');
  *   Required at runtime: ensureDb() throws when it is absent.
  * @param {Object} [deps.logger] - Logger instance
  * @param {Function} [deps.fetchFn] - Fetch function (for testability)
+ * @param {typeof import('../utils/public-request').publicRequest} [deps.publicRequest] - Public cover metadata transport
  */
 function createReidentifyService(deps = {}) {
+  const requestPublic =
+    deps.publicRequest || require('../utils/public-request').publicRequest;
   const db = ensureDb(deps.db, 'reidentify-service');
   const logger = deps.logger || defaultLogger;
-  const fetchFn = deps.fetchFn || fetch;
+  const fetchFn = require('../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetchFn,
+  });
 
   const MB_HEADERS = { 'User-Agent': SUSHE_USER_AGENT };
 
@@ -71,15 +76,13 @@ function createReidentifyService(deps = {}) {
   /** Fetch cover art URL from Cover Art Archive */
   async function fetchCoverUrl(releaseGroupId) {
     try {
-      const coverResp = await fetchFn(
+      const { buffer } = await requestPublic(
         `https://coverartarchive.org/release-group/${releaseGroupId}`,
-        { headers: MB_HEADERS, redirect: 'follow' }
+        { headers: MB_HEADERS, contentTypes: ['application/json'] }
       );
-      if (coverResp.ok) {
-        const coverData = await coverResp.json();
-        const front = coverData.images?.find((img) => img.front);
-        return front?.thumbnails?.small || front?.image || null;
-      }
+      const coverData = JSON.parse(buffer.toString('utf8'));
+      const front = coverData.images?.find((img) => img.front);
+      return front?.thumbnails?.small || front?.image || null;
     } catch {
       // Cover art not available
     }

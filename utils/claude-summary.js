@@ -86,7 +86,7 @@ Do not put the album title on a line of its own or repeat it as a heading. The f
 /**
  * Run async operation with timeout.
  */
-async function withTimeout(operation, timeoutMs) {
+async function withTimeout(operation, timeoutMs, cancel = () => {}) {
   if (!timeoutMs || timeoutMs <= 0) {
     return operation;
   }
@@ -101,6 +101,7 @@ async function withTimeout(operation, timeoutMs) {
         );
       timeoutError.code = 'CLAUDE_TIMEOUT';
       timeoutError.status = 408;
+      cancel();
       reject(timeoutError);
     }, timeoutMs);
   });
@@ -112,6 +113,29 @@ async function withTimeout(operation, timeoutMs) {
       clearTimeout(timeoutId);
     }
   }
+}
+
+/** Only use streaming for watched requests; both paths cancel the actual SDK operation. */
+async function requestMessage(anthropic, params, timeoutMs, onProgress) {
+  const controller = new AbortController();
+  const options = {
+    signal: AbortSignal.any([
+      controller.signal,
+      require('./outbound-lifecycle').shutdownSignal,
+    ]),
+    maxRetries: 0,
+  };
+  if (!onProgress)
+    return withTimeout(
+      anthropic.messages.create(params, options),
+      timeoutMs,
+      () => controller.abort()
+    );
+  const stream = anthropic.messages.stream(params, options);
+  attachProgress(stream, onProgress);
+  return withTimeout(stream.finalMessage(), timeoutMs, () =>
+    controller.abort()
+  );
 }
 
 /**
@@ -791,13 +815,9 @@ async function retryWithBackoff(fn, maxRetries = 3, log) {
     } catch (err) {
       lastError = err;
 
-      // Don't retry client errors (except 429)
-      if (
-        err.status &&
-        err.status >= 400 &&
-        err.status < 500 &&
-        err.status !== 429
-      ) {
+      // Only explicit admission rejection is safe to repeat. A 5xx/network
+      // failure may already have generated (and billed) a message.
+      if (err.status !== 429) {
         throw err;
       }
 
@@ -825,11 +845,30 @@ async function retryWithBackoff(fn, maxRetries = 3, log) {
         isRateLimit: err.status === 429,
       });
 
-      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      backoffMs =
+        Math.min(
+          30000,
+          Math.max(0, Number.isFinite(backoffMs) ? backoffMs : 1000)
+        ) + Math.floor(Math.random() * 250);
+      await require('node:timers/promises').setTimeout(backoffMs, undefined, {
+        signal: require('./outbound-lifecycle').shutdownSignal,
+      });
     }
   }
 
   throw lastError;
+}
+
+function createSummaryClient(apiKey, timeoutMs) {
+  return new Anthropic({
+    apiKey,
+    maxRetries: 0,
+    fetch: require('./bounded-fetch').createBoundedFetch({
+      streaming: true,
+      timeoutMs,
+      maxBytes: 8 * 1024 * 1024,
+    }),
+  });
 }
 
 /**
@@ -855,7 +894,10 @@ function createClaudeSummaryService(deps = {}) {
       return null;
     }
 
-    anthropicClient = new Anthropic({ apiKey });
+    anthropicClient = createSummaryClient(
+      apiKey,
+      readSummaryConfig(log).requestTimeoutMs
+    );
     return anthropicClient;
   }
 
@@ -955,20 +997,12 @@ function createClaudeSummaryService(deps = {}) {
               ],
             });
 
-          // Only stream when someone is watching. finalMessage() resolves to
-          // the same Message a plain call returns, so nothing downstream
-          // changes — but streaming is a different transport, and the batch
-          // path has no use for progress and no reason to take on the risk.
-          if (!onProgress) {
-            return await withTimeout(
-              anthropic.messages.create(params),
-              requestTimeoutMs
-            );
-          }
-
-          const stream = anthropic.messages.stream(params);
-          attachProgress(stream, onProgress);
-          return await withTimeout(stream.finalMessage(), requestTimeoutMs);
+          return requestMessage(
+            anthropic,
+            params,
+            requestTimeoutMs,
+            onProgress
+          );
         },
         3,
         log

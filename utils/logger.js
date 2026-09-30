@@ -3,6 +3,7 @@
 // intentional; the db/* files that import it still typecheck cleanly.
 const pino = require('pino');
 const crypto = require('crypto');
+const { redactLogValue } = require('./log-redaction');
 
 const LogLevels = {
   ERROR: 0,
@@ -67,13 +68,39 @@ function createLogger(options = {}) {
     timestamp: pino.stdTimeFunctions.isoTime,
     formatters: {
       level: (label) => ({ level: label }),
+      bindings: (bindings) => redactLogValue(bindings),
     },
     ...options.pinoOptions,
+    hooks: {
+      logMethod(args, method) {
+        method.apply(
+          this,
+          args.map((value) => redactLogValue(value))
+        );
+      },
+    },
+    redact: {
+      paths: [
+        'password',
+        'hash',
+        'authorization',
+        'cookie',
+        'token',
+        '*.password',
+        '*.authorization',
+        '*.cookie',
+        '*.access_token',
+        '*.refresh_token',
+      ],
+      censor: '[redacted]',
+    },
   };
 
   let pinoLogger;
 
-  if (!enableConsole) {
+  if (options.stream) {
+    pinoLogger = pino(pinoConfig, options.stream);
+  } else if (!enableConsole) {
     pinoLogger = pino(
       pinoConfig,
       pino.destination({ sync: true, write: () => {} })
@@ -131,7 +158,7 @@ function createLogger(options = {}) {
         ...meta,
       };
 
-      return JSON.stringify(logEntry);
+      return JSON.stringify(redactLogValue(logEntry));
     },
 
     /**
@@ -201,7 +228,7 @@ function createLogger(options = {}) {
      * Create a child logger with bound context
      */
     child(bindings) {
-      const childPino = pinoLogger.child(bindings);
+      const childPino = pinoLogger.child(redactLogValue(bindings));
       return {
         _pino: childPino,
         error: (msg, meta = {}) => childPino.error(meta, msg),

@@ -24,12 +24,16 @@ class MigrationManager {
    */
   constructor(pool) {
     this.pool = pool;
+    /** @type {import('pg').PoolClient | null} */
+    this.lockClient = null;
+    /** @type {Error | undefined} */
+    this.lockClientError = undefined;
     this.migrationsDir = path.join(__dirname, 'migrations');
     this.migrationTableName = 'schema_migrations';
   }
 
   async ensureMigrationTable() {
-    await this.pool.query(`
+    await this.query(`
       CREATE TABLE IF NOT EXISTS ${this.migrationTableName} (
         id SERIAL PRIMARY KEY,
         version VARCHAR(255) UNIQUE NOT NULL,
@@ -45,7 +49,7 @@ class MigrationManager {
    */
   async getExecutedMigrations() {
     /** @type {import('pg').QueryResult<{ version: string }>} */
-    const result = await this.pool.query(
+    const result = await this.query(
       `SELECT version FROM ${this.migrationTableName} ORDER BY version`
     );
     return result.rows.map((row) => row.version);
@@ -90,7 +94,7 @@ class MigrationManager {
     const { version, filePath } = migration;
 
     // Acquire a dedicated client for transaction isolation
-    const client = await this.pool.connect();
+    const client = this.lockClient || (await this.pool.connect());
     let releaseError;
 
     try {
@@ -101,11 +105,8 @@ class MigrationManager {
 
       // Start transaction on dedicated client
       await client.query('BEGIN');
-      // Migrations may legitimately run long DDL/backfills and wait on locks;
-      // SET LOCAL lifts the pool's per-connection timeouts for this
-      // transaction only (resets automatically at COMMIT/ROLLBACK).
-      await client.query('SET LOCAL statement_timeout = 0');
-      await client.query('SET LOCAL lock_timeout = 0');
+      // The dedicated migration pool supplies bounded server timeouts without
+      // inheriting the runtime client's shorter query deadline.
 
       // Execute the migration using the same client
       if (typeof migrationModule.up === 'function') {
@@ -132,7 +133,7 @@ class MigrationManager {
       if (typeof migrationModule.postMigrate === 'function') {
         try {
           logger.info(`Running post-migration hook for ${version}...`);
-          await migrationModule.postMigrate(this.pool);
+          await migrationModule.postMigrate(client);
           logger.info(`Post-migration hook for ${version} completed`);
         } catch (postError) {
           // Log but don't fail - the migration itself succeeded
@@ -159,7 +160,8 @@ class MigrationManager {
       throw error;
     } finally {
       // Always release the client back to the pool
-      client.release(releaseError);
+      if (client !== this.lockClient) client.release(releaseError);
+      else if (releaseError) this.lockClientError = releaseError;
     }
   }
 
@@ -182,7 +184,7 @@ class MigrationManager {
     }
 
     // Acquire a dedicated client for transaction isolation
-    const client = await this.pool.connect();
+    const client = this.lockClient || (await this.pool.connect());
     let releaseError;
 
     try {
@@ -190,9 +192,6 @@ class MigrationManager {
 
       // Start transaction on dedicated client
       await client.query('BEGIN');
-      // Same timeout exemption as executeMigration (SET LOCAL ends with tx).
-      await client.query('SET LOCAL statement_timeout = 0');
-      await client.query('SET LOCAL lock_timeout = 0');
 
       // Execute the rollback using the same client
       if (typeof migrationModule.down === 'function') {
@@ -232,7 +231,8 @@ class MigrationManager {
       throw error;
     } finally {
       // Always release the client back to the pool
-      client.release(releaseError);
+      if (client !== this.lockClient) client.release(releaseError);
+      else if (releaseError) this.lockClientError = releaseError;
     }
   }
 
@@ -262,20 +262,19 @@ class MigrationManager {
   /**
    * Run all pending migrations under a Postgres advisory lock so two app
    * instances starting simultaneously don't race. The forward-schema guard
-   * runs before lock acquisition so a mis-versioned DB fails fast without
-   * blocking the lock holder.
+   * runs under the lock so it sees any preceding migrator's committed work.
    */
-  async runMigrations() {
-    await this.ensureMigrationTable();
-    await this._checkForwardSchemaGuard();
-
+  /** @param {() => Promise<void>} callback */
+  async withMigrationLock(callback) {
     const lockClient = await this.pool.connect();
     let heldLock = false;
     let lockClientError;
+    /** @param {Error} error */
+    const lost = (error) => {
+      this.lockClientError = error;
+    };
+    lockClient.on?.('error', lost);
     try {
-      // The wait for another pod's migration run can exceed the pool's
-      // lock_timeout — lift it for this client (RESET before release below).
-      await lockClient.query('SET lock_timeout = 0');
       // Acquire the advisory lock — blocks if another pod holds it, then
       // proceeds. The lock is released by pg_advisory_unlock() or on
       // client disconnect (in finally, on release).
@@ -283,7 +282,58 @@ class MigrationManager {
         MIGRATION_LOCK_KEY,
       ]);
       heldLock = true;
+      this.lockClient = lockClient;
+      this.lockClientError = undefined;
+      await this.ensureMigrationTable();
+      await this._checkForwardSchemaGuard();
+      await this.verifyChecksums();
+      await callback();
+    } finally {
+      if (heldLock) {
+        try {
+          await lockClient.query('SELECT pg_advisory_unlock($1)', [
+            MIGRATION_LOCK_KEY,
+          ]);
+        } catch (err) {
+          lockClientError = err;
+        }
+      }
+      lockClient.removeListener?.('error', lost);
+      lockClient.release(lockClientError || this.lockClientError);
+      this.lockClient = null;
+      this.lockClientError = undefined;
+    }
+  }
 
+  async verifyChecksums() {
+    const rows = await this.query(
+      `SELECT version, checksum FROM ${this.migrationTableName}`
+    );
+    const files = await this.getMigrationFiles();
+    for (const row of rows.rows) {
+      const file = files.find((entry) => entry.version === row.version);
+      if (
+        !file ||
+        row.checksum !== (await this.calculateChecksum(file.filePath))
+      ) {
+        throw new Error(
+          `Migration checksum mismatch: ${row.version}. Applied migrations are immutable; restore matching migration files.`
+        );
+      }
+    }
+  }
+
+  async validateSchema() {
+    await this._checkForwardSchemaGuard();
+    if ((await this.getMigrationStatus()).some((entry) => !entry.executed))
+      throw new Error(
+        'Database migrations are pending; run the deployment migration command before starting the app'
+      );
+    await this.verifyChecksums();
+  }
+
+  async runMigrations() {
+    await this.withMigrationLock(async () => {
       // Re-read executed migrations AFTER acquiring the lock — another pod
       // may have just finished running migrations we thought were pending.
       const executedMigrations = await this.getExecutedMigrations();
@@ -302,50 +352,30 @@ class MigrationManager {
         await this.executeMigration(migration);
       }
       logger.info('All migrations completed successfully');
-    } finally {
-      if (heldLock) {
-        try {
-          await lockClient.query('SELECT pg_advisory_unlock($1)', [
-            MIGRATION_LOCK_KEY,
-          ]);
-        } catch (err) {
-          logger.warn('Failed to release migration advisory lock', {
-            error: err.message,
-          });
-        }
-      }
-      try {
-        // Undo the session-level SET so the connection returns to the pool
-        // with the configured lock_timeout; discard it if RESET fails.
-        await lockClient.query('RESET lock_timeout');
-      } catch (err) {
-        lockClientError = err;
-      }
-      lockClient.release(lockClientError);
-    }
+    });
   }
 
   async rollbackLastMigration() {
-    await this.ensureMigrationTable();
+    await this.withMigrationLock(async () => {
+      const result = await this.query(
+        `SELECT version FROM ${this.migrationTableName} ORDER BY executed_at DESC LIMIT 1`
+      );
 
-    const result = await this.pool.query(
-      `SELECT version FROM ${this.migrationTableName} ORDER BY executed_at DESC LIMIT 1`
-    );
+      if (result.rows.length === 0) {
+        logger.info('No migrations to rollback');
+        return;
+      }
 
-    if (result.rows.length === 0) {
-      logger.info('No migrations to rollback');
-      return;
-    }
+      const lastVersion = result.rows[0].version;
+      const migrationFiles = await this.getMigrationFiles();
+      const migration = migrationFiles.find((m) => m.version === lastVersion);
 
-    const lastVersion = result.rows[0].version;
-    const migrationFiles = await this.getMigrationFiles();
-    const migration = migrationFiles.find((m) => m.version === lastVersion);
+      if (!migration) {
+        throw new Error(`Migration file for version ${lastVersion} not found`);
+      }
 
-    if (!migration) {
-      throw new Error(`Migration file for version ${lastVersion} not found`);
-    }
-
-    await this.rollbackMigration(migration);
+      await this.rollbackMigration(migration);
+    });
   }
 
   async getMigrationStatus() {
@@ -353,7 +383,7 @@ class MigrationManager {
     // CREATE TABLE IF NOT EXISTS here would take DDL locks — and a probe
     // firing mid-pg_restore can abort the entire --single-transaction
     // restore with "relation already exists".
-    const tableCheck = await this.pool.query(
+    const tableCheck = await this.query(
       `SELECT to_regclass($1) IS NOT NULL AS table_exists`,
       [this.migrationTableName]
     );
@@ -367,6 +397,12 @@ class MigrationManager {
       executed: executedMigrations.includes(migration.version),
       filePath: migration.filePath,
     }));
+  }
+
+  /** @param {string} sql @param {unknown[]} [params] */
+  query(sql, params) {
+    if (this.lockClientError) return Promise.reject(this.lockClientError);
+    return (this.lockClient || this.pool).query(sql, params);
   }
 }
 

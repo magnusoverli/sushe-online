@@ -37,6 +37,14 @@ const createMockPool = (mockData = {}) => {
   const users = mockData.users || [];
   let eventCounter = 0;
   const query = async (sql, params = []) => {
+    if (sql.includes('FROM users u')) {
+      return {
+        rows:
+          params[0] === 'admin-1'
+            ? [{ _id: 'admin-1', username: 'admin' }]
+            : [],
+      };
+    }
     // INSERT admin_events
     if (sql.includes('INSERT INTO admin_events')) {
       const newEvent = {
@@ -127,6 +135,7 @@ const createMockPool = (mockData = {}) => {
   return {
     query,
     raw: query,
+    withTransaction: (callback) => callback({ query }),
   };
 };
 
@@ -267,7 +276,7 @@ test('reject action should update user approval status to rejected', async () =>
     'event-2',
     'reject',
     adminUser,
-    'telegram'
+    'web'
   );
 
   assert.strictEqual(result.success, true);

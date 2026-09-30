@@ -48,9 +48,10 @@ const SLOW_QUERY_THRESHOLD_MS = Math.max(
  * Throws when `db` is missing entirely — callers use this to enforce the
  * "deps.db required" invariant at factory construction time.
  *
- * @param {*} db
+ * @template {{raw: Function}} T
+ * @param {T|null|undefined} db
  * @param {string} serviceName - used in the error message
- * @returns {{ raw: Function, withTransaction?: Function, withClient?: Function }}
+ * @returns {T}
  */
 function ensureDb(db, serviceName) {
   if (db && typeof db.raw === 'function') return db;
@@ -158,23 +159,9 @@ class PgDatastore {
    */
   _sanitizeParams(params) {
     if (!params || !Array.isArray(params)) return params;
-    return params.map((param) => {
-      // Handle Buffer (BYTEA) - show size instead of binary content
-      if (Buffer.isBuffer(param)) {
-        return `[BYTEA: ${param.length} bytes]`;
-      }
-      if (
-        typeof param === 'string' &&
-        param.length > 100 &&
-        /^[A-Za-z0-9+/=]+$/.test(param)
-      ) {
-        return `[base64 data: ${param.length} chars]`;
-      }
-      if (typeof param === 'string' && param.startsWith('data:image/')) {
-        return `[data URI: ${param.length} chars]`;
-      }
-      return param;
-    });
+    return params.map((param) =>
+      param === null ? 'null' : Buffer.isBuffer(param) ? 'binary' : typeof param
+    );
   }
 
   /**
@@ -190,8 +177,12 @@ class PgDatastore {
     }
     if (this.logQueries) {
       logger.debug('SQL', {
-        query: text,
-        params: this._sanitizeParams(params),
+        queryId: require('node:crypto')
+          .createHash('sha256')
+          .update(text)
+          .digest('hex')
+          .slice(0, 16),
+        parameterTypes: this._sanitizeParams(params),
       });
     }
     // Extract operation type from query for metrics
@@ -234,8 +225,12 @@ class PgDatastore {
     if (this.logQueries) {
       logger.debug('Prepared SQL', {
         name,
-        query: text,
-        params: this._sanitizeParams(params),
+        queryId: require('node:crypto')
+          .createHash('sha256')
+          .update(text)
+          .digest('hex')
+          .slice(0, 16),
+        parameterTypes: this._sanitizeParams(params),
       });
     }
     // Extract operation type from query for metrics
@@ -313,8 +308,12 @@ class PgDatastore {
       name: name || null,
       duration_ms: durationMs,
       threshold_ms: SLOW_QUERY_THRESHOLD_MS,
-      error: error?.message,
-      query: queryText,
+      errorCode: error ? classify(error).code : undefined,
+      queryId: require('node:crypto')
+        .createHash('sha256')
+        .update(queryText)
+        .digest('hex')
+        .slice(0, 16),
     });
   }
 

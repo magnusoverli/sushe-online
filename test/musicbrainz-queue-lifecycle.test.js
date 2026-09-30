@@ -9,6 +9,7 @@ function clock() {
   const timers = new Map();
   const flush = () => new Promise((resolve) => setImmediate(resolve));
   return {
+    random: () => 0,
     now: () => now,
     setTimeout(fn, delay) {
       assert.ok(delay >= 0 && delay <= 2_147_483_647, 'valid Node timer delay');
@@ -45,6 +46,31 @@ const networkError = () =>
   });
 
 describe('MusicBrainz queue lifecycle', () => {
+  it('jitters safe-read retries but never repeats a side-effecting request', async () => {
+    const time = clock();
+    let calls = 0;
+    const queue = new MusicBrainzQueue({
+      ...time,
+      random: () => 0.5,
+      minInterval: 0,
+      fetch: async () => {
+        calls++;
+        return new Response('{}', { status: calls === 1 ? 503 : 200 });
+      },
+    });
+    const result = queue.add('https://musicbrainz.org/read');
+    await time.advance(1124);
+    assert.equal(calls, 1);
+    await time.advance(1);
+    await result;
+    assert.equal(calls, 2);
+    calls = 0;
+    await assert.rejects(
+      queue.add('https://musicbrainz.org/write', { method: 'POST' }),
+      { status: 503 }
+    );
+    assert.equal(calls, 1);
+  });
   it('rate limits every outbound retry and lets high priority pass a backoff', async () => {
     const time = clock();
     const starts = [];

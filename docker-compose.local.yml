@@ -10,6 +10,7 @@ services:
       - '3000:3000'
     environment:
       - NODE_ENV=development
+      - DB_AUTO_MIGRATE=true
       - NO_COLOR=1
       - LOG_LEVEL=info
       - SESSION_SECRET=test-secret-change-in-production

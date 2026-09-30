@@ -183,6 +183,9 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     asyncHandler(async (req, res) => {
       const { name, groupId, year, data: albums } = req.body;
+      if (Object.hasOwn(req.body, 'albums')) {
+        return res.status(400).json({ error: 'Use the data field for albums' });
+      }
 
       const result = await listService.createList(req.user._id, {
         name,

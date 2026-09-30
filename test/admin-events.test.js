@@ -10,6 +10,14 @@ const createMockPool = (mockData = {}) => {
   let eventCounter = 0;
 
   const impl = async (sql, params = []) => {
+    if (sql.includes('FROM users u')) {
+      const admins = ['admin', 'admin-1'];
+      return {
+        rows: admins.includes(params[0])
+          ? [{ _id: params[0], username: 'admin' }]
+          : [],
+      };
+    }
     // INSERT admin_events
     if (sql.includes('INSERT INTO admin_events')) {
       const newEvent = {
@@ -110,6 +118,7 @@ const createMockPool = (mockData = {}) => {
   return {
     query: impl,
     raw: impl,
+    withTransaction: (callback) => callback({ query: impl }),
   };
 };
 

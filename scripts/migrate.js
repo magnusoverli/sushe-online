@@ -1,27 +1,44 @@
 #!/usr/bin/env node
 
-const { Pool } = require('pg');
+const { createMigrationPool } = require('../db/migration-policy');
+const { positiveInteger } = require('../config/limits');
 const MigrationManager = require('../db/migrations');
 const logger = require('../utils/logger');
 
 require('dotenv').config();
 
 async function main() {
-  const command = process.argv[2];
-
-  if (!process.env.DATABASE_URL) {
-    logger.error('DATABASE_URL environment variable is required');
-    process.exit(1);
-  }
-
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const command = process.argv[2] || 'up';
+  const pool = createMigrationPool();
   const migrationManager = new MigrationManager(pool);
+  const deadline = setTimeout(
+    () => {
+      logger.error('Migration deployment deadline exceeded');
+      process.exit(1); // Closing connections releases locks and rolls back active DDL.
+    },
+    positiveInteger(
+      process.env.MIGRATION_DEADLINE_MS,
+      1800000,
+      'MIGRATION_DEADLINE_MS'
+    )
+  );
+  deadline.unref();
 
   try {
     switch (command) {
       case 'up':
       case 'migrate':
         await migrationManager.runMigrations();
+        if (
+          process.env.BACKUP_DATABASE_URL &&
+          process.env.CONTROL_DATABASE_URL
+        ) {
+          const {
+            deploymentRoles,
+            grantApplicationAccess,
+          } = require('../db/deployment-roles');
+          await grantApplicationAccess(pool, deploymentRoles());
+        }
         break;
 
       case 'down':
@@ -77,8 +94,9 @@ async function main() {
         stack: error.stack,
       });
     }
-    process.exit(1);
+    process.exitCode = 1;
   } finally {
+    clearTimeout(deadline);
     await pool.end();
   }
 }
@@ -126,7 +144,10 @@ module.exports = {
 }
 
 if (require.main === module) {
-  main();
+  main().catch(() => {
+    logger.error('Migration configuration failed');
+    process.exitCode = 1;
+  });
 }
 
 module.exports = { main };

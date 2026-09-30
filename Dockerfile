@@ -82,7 +82,7 @@ RUN if [ "$INSTALL_DEV_DEPS" != "true" ]; then \
         [ -e "$path" ] || continue; \
         name="$(basename "$path")"; \
         case "$name" in \
-          config|db|middleware|node_modules|public|routes|services|templates|utils|views|index.js|package.json|templates.js) ;; \
+          config|db|middleware|node_modules|public|routes|scripts|services|templates|utils|views|index.js|package.json|templates.js) ;; \
           *) rm -rf "$path" ;; \
         esac; \
       done; \
@@ -94,10 +94,14 @@ RUN if [ "$INSTALL_DEV_DEPS" != "true" ]; then \
       && npm cache clean --force; \
     fi
 
+# The image-only upgrade coordinator owns code and private deployment state;
+# request handling and recovery run as separate unprivileged identities.
+RUN chown -R root:root /app && chmod -R go-w /app
+
 # Runtime configuration
 ENV NODE_ENV=production
-RUN mkdir -p /app/data /app/logs && \
-    chown node:node /app/data /app/logs
+RUN mkdir -p /app/data /app/logs /recovery/uploads && \
+    chown node:node /app/data /app/logs /recovery/uploads
 
 # Node.js runtime optimizations
 # - max-old-space-size: V8 heap limit (1GB)
@@ -114,7 +118,8 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
-USER node
+USER root
+ENTRYPOINT ["node", "scripts/container-entrypoint.js"]
 
 # Use exec form for better signal handling
 CMD ["node", "index.js"]

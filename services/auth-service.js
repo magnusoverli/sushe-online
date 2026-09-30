@@ -77,6 +77,13 @@ function createAuthService(deps = {}) {
     return usersRepository.setResetToken(userId, token, expiresMs);
   }
 
+  async function acquirePasswordResetCooldown(email) {
+    return require('../db/repositories/password-reset-cooldowns').acquirePasswordResetCooldown(
+      deps.db,
+      email
+    );
+  }
+
   async function resetPasswordByToken(token, nowMs, newHash) {
     const user = await usersRepository.findByResetToken(token, nowMs);
     const updated = await usersRepository.resetPasswordByToken(
@@ -462,6 +469,7 @@ function createAuthService(deps = {}) {
     getUserByEmail,
     getUserByResetToken,
     issuePasswordResetToken,
+    acquirePasswordResetCooldown,
     resetPasswordByToken,
   };
 }

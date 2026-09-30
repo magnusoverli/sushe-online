@@ -4,6 +4,11 @@
 
 const logger = require('../utils/logger');
 const { ensureDb } = require('../db/postgres');
+const {
+  findLinkedAdmin,
+  findWebAdmin,
+} = require('../db/repositories/admin-event-actors');
+const { getCallbackContext } = require('./telegram/webhook-handler');
 
 // ============================================
 // QUERY BUILDER HELPERS
@@ -61,7 +66,7 @@ async function updateEventStatus(
   resolvedVia
 ) {
   const status = action === 'dismiss' ? 'dismissed' : action;
-  const resolvedById = adminUser.source === 'telegram' ? null : adminUser._id;
+  const resolvedById = adminUser._id;
 
   const sql = `UPDATE admin_events
                SET status = $1, resolved_at = NOW(), resolved_by = $2, resolved_via = $3
@@ -400,25 +405,50 @@ function createAdminEventService(deps = {}) {
     eventId,
     action,
     adminUser,
-    resolvedVia = 'web'
+    resolvedVia = 'web',
+    callbackQuery = null
   ) {
     if (!db) throw new Error('Database datastore not configured');
 
     let updatedEvent;
     let handlerResult;
+    let authorizedAdmin;
+    const context =
+      resolvedVia === 'telegram' ? getCallbackContext(callbackQuery) : null;
+    if (
+      !['web', 'telegram'].includes(resolvedVia) ||
+      (resolvedVia === 'telegram' && !context)
+    ) {
+      return { success: false, message: 'Not authorized' };
+    }
 
     try {
-      const executeWithinTransaction = typeof db.withTransaction === 'function';
-      const run = executeWithinTransaction
-        ? (callback) => db.withTransaction(callback)
-        : async (callback) => callback(db);
-
-      await run(async (queryable) => {
+      // Authorization and event mutation share a transaction. Locks keep role,
+      // approval, linking and chat configuration valid until the action commits.
+      await db.withTransaction(async (queryable) => {
         const event = await getEventById(eventId, queryable, {
-          forUpdate: executeWithinTransaction,
+          forUpdate: true,
         });
         if (!event) {
           handlerResult = { success: false, message: 'Event not found' };
+          return;
+        }
+        const matchesMessage =
+          !context ||
+          (String(event.telegram_chat_id) === String(context.chatId) &&
+            String(event.telegram_message_id) === String(context.messageId));
+        authorizedAdmin = matchesMessage
+          ? context
+            ? await findLinkedAdmin(
+                queryable,
+                context.telegramUserId,
+                context.chatId
+              )
+            : await findWebAdmin(queryable, adminUser?._id)
+          : null;
+        if (!authorizedAdmin) {
+          log.warn('Admin event action denied', { eventId, resolvedVia });
+          handlerResult = { success: false, message: 'Not authorized' };
           return;
         }
         if (event.status !== 'pending') {
@@ -447,7 +477,12 @@ function createAdminEventService(deps = {}) {
           return;
         }
 
-        handlerResult = await handler(event.data, adminUser, event, queryable);
+        handlerResult = await handler(
+          event.data,
+          authorizedAdmin,
+          event,
+          queryable
+        );
         if (!handlerResult.success) {
           return;
         }
@@ -456,7 +491,7 @@ function createAdminEventService(deps = {}) {
           queryable,
           eventId,
           action,
-          adminUser,
+          authorizedAdmin,
           resolvedVia
         );
       });
@@ -464,16 +499,16 @@ function createAdminEventService(deps = {}) {
       log.error('Action handler error', {
         eventId,
         action,
-        error: err.message,
+        code: typeof err.code === 'string' ? err.code : 'ACTION_FAILED',
       });
-      return { success: false, message: `Action failed: ${err.message}` };
+      return { success: false, message: 'Action failed' };
     }
 
     if (!handlerResult?.success) return handlerResult;
 
     log.info(`Admin event resolved: ${updatedEvent.event_type}/${action}`, {
       eventId,
-      resolvedBy: adminUser.username,
+      resolvedBy: authorizedAdmin._id,
       resolvedVia,
     });
 
@@ -481,7 +516,7 @@ function createAdminEventService(deps = {}) {
       telegramNotifier,
       updatedEvent,
       action,
-      adminUser.username,
+      authorizedAdmin.username,
       log
     );
 

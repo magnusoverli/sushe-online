@@ -4,25 +4,23 @@ const { lookup: defaultLookup } = require('node:dns/promises');
 const { isIP } = require('node:net');
 const { isPublicAddress, normalizeHostname } = require('./public-address');
 const { validateUnfurlTarget } = require('./unfurl-url');
+const { shutdownSignal, callerSignal } = require('./outbound-lifecycle');
+const { withSignal: waitWithSignal } = require('./bounded-fetch');
 
 const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 10000;
 const MAX_REDIRECTS = 5;
 
-function waitWithSignal(promise, signal) {
-  return new Promise((resolve, reject) => {
-    const abort = () => reject(signal.reason);
-    signal.addEventListener('abort', abort, { once: true });
-    if (signal.aborted) abort();
-    promise
-      .then(resolve, reject)
-      .finally(() => signal.removeEventListener('abort', abort));
-  });
-}
-
 function createPublicRequest({ lookup = defaultLookup, request = null } = {}) {
   return async function publicRequest(rawUrl, options = {}) {
+    const headers = { ...options.headers };
+    if (
+      Object.keys(headers).some((key) =>
+        /^(authorization|cookie|proxy-authorization)$/i.test(key)
+      )
+    )
+      throw new Error('Public requests cannot carry credentials');
     const {
       timeoutMs = DEFAULT_TIMEOUT_MS,
       maxBytes = DEFAULT_MAX_BYTES,
@@ -30,9 +28,12 @@ function createPublicRequest({ lookup = defaultLookup, request = null } = {}) {
       contentTypes,
     } = options;
     const timeout = globalThis.AbortSignal.timeout(timeoutMs);
-    const signal = options.signal
-      ? globalThis.AbortSignal.any([timeout, options.signal])
-      : timeout;
+    const parent = options.signal || callerSignal();
+    const signal = AbortSignal.any([
+      timeout,
+      shutdownSignal,
+      ...(parent ? [parent] : []),
+    ]);
     let url = rawUrl;
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
       signal.throwIfAborted();
@@ -78,7 +79,7 @@ function createPublicRequest({ lookup = defaultLookup, request = null } = {}) {
             method: 'GET',
             agent: false,
             signal,
-            headers: { ...options.headers, 'Accept-Encoding': 'identity' },
+            headers: { ...headers, 'Accept-Encoding': 'identity' },
             // Preserve the original Host/SNI while pinning the validated IP.
             lookup: (_hostname, lookupOptions, callback) => {
               if (lookupOptions.all) callback(null, [selected]);

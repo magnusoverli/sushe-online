@@ -156,6 +156,8 @@ export function createSettingsAdminActions(deps = {}) {
         return 'Database restore timed out. Please try again with a smaller backup.';
       case 'RESTORE_PROCESS_FAILED':
         return 'Restore failed while applying the backup. Check server logs for details.';
+      case 'RESTORE_ROLLED_BACK':
+        return 'Restore failed. The original database is back online.';
       case 'RESTORE_UPLOAD_FAILED':
         return 'Upload failed before restore started. Please try again.';
       case 'RESTORE_IN_PROGRESS':
@@ -178,7 +180,18 @@ export function createSettingsAdminActions(deps = {}) {
       case 'dropping':
         return 'Preparing restore...';
       case 'restoring':
+      case 'staging':
         return 'Restoring data...';
+      case 'verifying':
+        return 'Checking the restored database...';
+      case 'quiescing':
+        return 'Pausing the app for the database switch...';
+      case 'switching':
+        return 'Switching to the restored database...';
+      case 'verifying-live':
+        return 'Checking the restarted app...';
+      case 'recovery-required':
+        return 'Retrying recovery of the original database...';
       case 'finalizing':
         return 'Restore completed successfully.';
       case 'logout_pending':
@@ -195,8 +208,7 @@ export function createSettingsAdminActions(deps = {}) {
   }
 
   async function waitForRestoreStatus(restoreId, progressText) {
-    const maxAttempts = 600;
-    let sawRestarting = false;
+    const maxAttempts = 5400;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
@@ -205,7 +217,7 @@ export function createSettingsAdminActions(deps = {}) {
         );
 
         if (!status) {
-          return;
+          throw new Error('Restore status is unavailable');
         }
 
         if (status?.status) {
@@ -220,19 +232,22 @@ export function createSettingsAdminActions(deps = {}) {
           throw restoreError;
         }
 
-        if (status?.status === 'restarting' || status?.status === 'completed') {
-          sawRestarting = true;
+        if (status?.status === 'completed') {
           return;
         }
       } catch (error) {
-        if (sawRestarting || error?.code === 'RESTORE_OPERATION_NOT_FOUND') {
-          return;
+        if (!error?.code && (!error?.status || error.status >= 500)) {
+          progressText.textContent = 'Waiting for recovery status...';
+        } else {
+          throw error;
         }
-        throw error;
       }
 
       await new Promise((resolve) => setTimeoutFn(resolve, 500));
     }
+    throw new Error(
+      'Recovery is still running. Check restore status before starting another restore.'
+    );
   }
 
   function scheduleRestoreLogoutFallback(progressText) {
@@ -444,13 +459,13 @@ export function createSettingsAdminActions(deps = {}) {
       bodyHtml: `
           <div class="bg-red-900/20 border border-red-800/50 rounded-lg p-4 mb-4">
             <p class="text-red-400 text-sm font-semibold mb-2">⚠️ Warning</p>
-            <p class="text-gray-300 text-sm">This will replace the entire database with the backup file. All current data will be permanently lost. The server will restart automatically after restoration.</p>
+            <p class="text-gray-300 text-sm">The app will return to the backup's data and sign everyone out. The current database is retained for rollback. Restart and health checks run automatically.</p>
           </div>
           <form id="restoreDatabaseForm">
             <div class="settings-form-group">
               <label class="settings-label" for="backupFileInput">Backup File (.dump)</label>
               <input type="file" id="backupFileInput" class="settings-input" accept=".dump" required />
-              <p class="settings-description">Select a PostgreSQL dump file to restore</p>
+              <p class="settings-description">Select a trusted PostgreSQL backup (up to 256 MiB). Changes since this backup remain only in the retained original database.</p>
             </div>
             <div id="restoreError" class="text-red-500 text-sm mt-2 hidden"></div>
             <div id="restoreProgress" class="hidden mt-4">

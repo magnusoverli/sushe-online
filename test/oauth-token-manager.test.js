@@ -2,6 +2,83 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { createOAuthTokenManager } = require('../utils/oauth-token-manager.js');
 const { createMockLogger } = require('./helpers');
+const { randomUUID } = require('node:crypto');
+const { Response, structuredClone } = globalThis;
+
+test('failed rotated-token persistence retries the save for a fresh user snapshot without another provider POST', async () => {
+  let calls = 0;
+  const manager = createTestManager(
+    {},
+    {
+      fetch: async () => {
+        calls++;
+        return Response.json({
+          access_token: 'rotated-access',
+          refresh_token: 'rotated-refresh',
+          expires_in: 3600,
+        });
+      },
+    }
+  );
+  const user = {
+    _id: randomUUID(),
+    testAuth: {
+      access_token: 'old-access',
+      refresh_token: 'old-refresh',
+      expires_at: 1,
+    },
+  };
+  const failed = await manager.ensureValidToken(structuredClone(user), {
+    saveOAuthToken: async () => {
+      throw new Error('Database unavailable');
+    },
+  });
+  assert.equal(failed.persisted, false);
+  let saved;
+  const result = await manager.ensureValidToken(structuredClone(user), {
+    saveOAuthToken: async (...args) => {
+      saved = args;
+      return true;
+    },
+  });
+  assert.equal(result.persisted, true);
+  assert.equal(calls, 1);
+  assert.equal(saved[2].refresh_token, 'rotated-refresh');
+  assert.equal(saved[3], 'old-refresh');
+});
+
+test('stalled refresh persistence releases single flight and a disconnected provider cannot be overwritten', async () => {
+  let calls = 0;
+  const manager = createTestManager(
+    {},
+    {
+      timeoutMs: 30,
+      fetch: async () => {
+        calls++;
+        return Response.json({ access_token: 'rotated', expires_in: 3600 });
+      },
+    }
+  );
+  const user = {
+    _id: randomUUID(),
+    testAuth: { access_token: 'old', refresh_token: 'refresh', expires_at: 1 },
+  };
+  // Keep a live timer in the fixture: AbortSignal.timeout timers are unref'ed.
+  const keepAlive = setInterval(() => {}, 1000);
+  try {
+    const outcome = await manager.ensureValidToken(structuredClone(user), {
+      saveOAuthToken: () => new Promise(() => {}),
+    });
+    assert.equal(outcome.persisted, false);
+    const reconnected = await manager.ensureValidToken(structuredClone(user), {
+      saveOAuthToken: async () => false,
+    });
+    assert.equal(reconnected.success, false);
+    assert.equal(calls, 1);
+  } finally {
+    clearInterval(keepAlive);
+  }
+});
 
 // Helper to create a manager with standard test config
 function createTestManager(overrides = {}, deps = {}) {

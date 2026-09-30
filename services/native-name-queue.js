@@ -53,59 +53,62 @@ function createNativeNameQueue(deps = {}) {
     if (!isMusicbrainzId(albumId)) return; // Spotify/other ids are already native
     if (NON_ASCII.test(artist) || NON_ASCII.test(album)) return; // already native
 
-    return queue.add(async () => {
-      try {
-        const res = await resolveName(
-          { albumId, artist, album },
-          { fetch: fetchFn, logger: log }
-        );
-
-        if (res.action === 'rewrite') {
-          if (db) {
-            const result = await db.raw(
-              `UPDATE albums SET artist = $1, album = $2, updated_at = NOW() WHERE album_id = $3`,
-              [res.artist, res.album, albumId],
-              { name: 'native-name-rewrite' }
-            );
-            if (result.rowCount > 0 && (responseCache || deps.broadcast)) {
-              await publishAlbumMetadataUpdate({
-                db,
-                responseCache,
-                broadcast,
-                logger: log,
-                albumId,
-                patch: { artist: res.artist, album: res.album },
-                operation: 'native-name-queue',
-              });
-            }
-          }
-          log.info('Restored native album spelling', {
-            albumId,
-            from: `${artist} — ${album}`,
-            to: `${res.artist} — ${res.album}`,
-          });
-        } else if (res.action === 'review') {
-          log.warn(
-            'Native-name resolution flagged for review (album_id may be wrong)',
-            {
-              albumId,
-              stored: `${artist} — ${album}`,
-              mb: `${res.native.artist} — ${res.native.album}`,
-            }
+    return queue.addBackground(
+      async () => {
+        try {
+          const res = await resolveName(
+            { albumId, artist, album },
+            { fetch: fetchFn, logger: log }
           );
+
+          if (res.action === 'rewrite') {
+            if (db) {
+              const result = await db.raw(
+                `UPDATE albums SET artist = $1, album = $2, updated_at = NOW() WHERE album_id = $3`,
+                [res.artist, res.album, albumId],
+                { name: 'native-name-rewrite' }
+              );
+              if (result.rowCount > 0 && (responseCache || deps.broadcast)) {
+                await publishAlbumMetadataUpdate({
+                  db,
+                  responseCache,
+                  broadcast,
+                  logger: log,
+                  albumId,
+                  patch: { artist: res.artist, album: res.album },
+                  operation: 'native-name-queue',
+                });
+              }
+            }
+            log.info('Restored native album spelling', {
+              albumId,
+              from: `${artist} — ${album}`,
+              to: `${res.artist} — ${res.album}`,
+            });
+          } else if (res.action === 'review') {
+            log.warn(
+              'Native-name resolution flagged for review (album_id may be wrong)',
+              {
+                albumId,
+                stored: `${artist} — ${album}`,
+                mb: `${res.native.artist} — ${res.native.album}`,
+              }
+            );
+          }
+        } catch (err) {
+          log.warn('Native-name resolution failed', {
+            albumId,
+            error: err.message,
+          });
+        } finally {
+          // Space out MusicBrainz calls regardless of outcome.
+          if (rateLimitMs > 0) {
+            await new Promise((resolve) => setTimeout(resolve, rateLimitMs));
+          }
         }
-      } catch (err) {
-        log.warn('Native-name resolution failed', {
-          albumId,
-          error: err.message,
-        });
-      } finally {
-        // Space out MusicBrainz calls regardless of outcome.
-        if (rateLimitMs > 0) {
-          await new Promise((resolve) => setTimeout(resolve, rateLimitMs));
-        }
-      }
-    });
+      },
+      { logger: log, kind: 'native-name', albumId }
+    );
   }
 
   return {

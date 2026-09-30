@@ -42,6 +42,8 @@ function createProcessHandlers(deps = {}) {
     }
 
     shuttingDown = true;
+    if (processRef === process)
+      require('../utils/outbound-lifecycle').stopOutboundRequests();
     logger.info('Shutdown initiated', { signal, exitCode });
 
     const forceExitTimer = setTimeout(() => {

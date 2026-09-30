@@ -24,6 +24,8 @@ function createTestApp(overrides = {}) {
   });
 
   const authService = {
+    acquirePasswordResetCooldown:
+      overrides.acquirePasswordResetCooldown || mock.fn(async () => true),
     getUserByEmail:
       overrides.getUserByEmail ||
       mock.fn(() =>
@@ -74,6 +76,40 @@ function createTestApp(overrides = {}) {
 }
 
 describe('password-reset routes', () => {
+  it('does not issue or replace tokens when the cooldown is held or storage fails', async () => {
+    for (const acquire of [
+      async () => false,
+      async () => {
+        throw new Error('offline');
+      },
+    ]) {
+      const { app, authService } = createTestApp({
+        acquirePasswordResetCooldown: acquire,
+      });
+      await request(app)
+        .post('/forgot')
+        .send({ email: 'user@example.com' })
+        .expect(302)
+        .expect('Location', '/forgot');
+      assert.equal(authService.getUserByEmail.mock.calls.length, 0);
+      assert.equal(authService.issuePasswordResetToken.mock.calls.length, 0);
+    }
+  });
+
+  it('acquires the same cooldown before looking up a nonexistent account', async () => {
+    const { app, authService } = createTestApp({
+      getUserByEmail: mock.fn(async () => null),
+    });
+    await request(app)
+      .post('/forgot')
+      .send({ email: 'Missing@example.com' })
+      .expect(302);
+    assert.equal(
+      authService.acquirePasswordResetCooldown.mock.calls[0].arguments[0],
+      'Missing@example.com'
+    );
+    assert.equal(authService.issuePasswordResetToken.mock.calls.length, 0);
+  });
   it('rejects weak password before hashing on reset', async () => {
     const { app, bcrypt, authService } = createTestApp({
       isValidPassword: () => false,

@@ -137,7 +137,12 @@ function registerHealthRoutes(app, pool, options = {}) {
   app.get('/ready', async (req, res) => {
     try {
       const { ready, readiness } = await getReadiness();
-      res.status(ready ? 200 : 503).json({ ready, ...readiness });
+      res.status(ready ? 200 : 503).json({
+        ready,
+        ...readiness,
+        activeDatabase: process.env.ACTIVE_DATABASE_NAME,
+        epoch: process.env.ACTIVE_DATABASE_EPOCH,
+      });
     } catch (error) {
       logger.error('Readiness check error', { error: error.message });
       res.status(503).json({ ready: false, error: error.message });

@@ -75,7 +75,9 @@ function dedupeCandidates(candidates) {
 }
 
 function createSpotifySource(deps = {}) {
-  const fetchFn = deps.fetch || fetch;
+  const fetchFn = require('../../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+  });
   const logger = deps.logger || defaultLogger;
   const env = deps.env || process.env;
   const clientId = deps.clientId || env.SPOTIFY_CLIENT_ID;

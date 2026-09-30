@@ -137,17 +137,9 @@ configurePassport(passport, { authService, bcrypt });
 // ============ EXPRESS APP SETUP ============
 
 const app = express();
+app.use(require('./utils/outbound-lifecycle').outboundRequestContext);
 
-// Trust proxy - REQUIRED when behind reverse proxy (nginx, cloudflare, etc.)
-if (process.env.TRUST_PROXY) {
-  app.set('trust proxy', process.env.TRUST_PROXY);
-  logger.info('Trust proxy enabled via TRUST_PROXY env var', {
-    value: process.env.TRUST_PROXY,
-  });
-} else if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
-  logger.info('Trust proxy auto-enabled for production environment');
-}
+require('./config/network-trust').configureProxyTrust(app);
 
 // Configure EJS view engine with caching
 app.set('views', path.join(__dirname, 'views'));
@@ -368,6 +360,18 @@ const httpServer = http.createServer(app);
 // handle is typed that loosely here rather than as the async cleanup it is.
 /** @type {Function} */
 let stopSyncServices = async () => {};
+let servicesActivated = false;
+function activateServices() {
+  if (servicesActivated) return;
+  servicesActivated = true;
+  initializeQueues(db, { coverCache, responseCache });
+  stopSyncServices = startSyncServices(db);
+}
+if (process.env.RECOVERY_MANAGED === 'true') {
+  process.on('message', (message) => {
+    if (message === 'activate-services') activateServices();
+  });
+}
 
 // Register process-level error and signal handlers
 registerProcessHandlers({
@@ -434,23 +438,30 @@ ready
     }
 
     // Initialize background queues
-    initializeQueues(db, { coverCache, responseCache });
+    if (process.env.RECOVERY_MANAGED !== 'true')
+      initializeQueues(db, { coverCache, responseCache });
 
     // Set up WebSocket server with session middleware
     setupWebSocket(httpServer, sessionMiddleware, { authService });
     app.locals.broadcast = broadcast;
 
-    httpServer.listen(PORT, () => {
-      logger.info('Server started', {
-        port: PORT,
-        environment: process.env.NODE_ENV || 'development',
-        url: `http://localhost:${PORT}`,
-        websocket: 'enabled',
-      });
+    httpServer.listen(
+      { port: Number(PORT), host: process.env.APP_LISTEN_HOST },
+      () => {
+        logger.info('Server started', {
+          port: PORT,
+          environment: process.env.NODE_ENV || 'development',
+          url: `http://localhost:${PORT}`,
+          websocket: 'enabled',
+        });
 
-      // Start background sync services
-      stopSyncServices = startSyncServices(db);
-    });
+        // Start background sync services
+        if (process.env.RECOVERY_MANAGED !== 'true') {
+          servicesActivated = true;
+          stopSyncServices = startSyncServices(db);
+        }
+      }
+    );
   })
   .catch((err) => {
     logger.error('Failed to initialize database', { error: err.message });

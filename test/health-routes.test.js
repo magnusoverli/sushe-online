@@ -77,3 +77,32 @@ test('GET /api/health reports unhealthy when db response time is missing', async
   assert.strictEqual(response.body.readiness.responseTimeMs, null);
   assert.strictEqual(response.body.readiness.latencyHealthy, false);
 });
+
+test('metrics retains published localhost/private-network and development access', async (t) => {
+  const previous = process.env.NODE_ENV;
+  try {
+    for (const [environment, ip, expected] of [
+      ['production', '127.0.0.1', 200],
+      ['production', '::1', 200],
+      ['production', '10.1.2.3', 200],
+      ['production', '172.16.1.2', 200],
+      ['production', '192.168.1.2', 200],
+      ['production', '100.64.1.2', 200],
+      ['production', '203.0.113.2', 403],
+      ['development', '203.0.113.2', 200],
+    ]) {
+      await t.test(`${environment} ${ip}`, async () => {
+        process.env.NODE_ENV = environment;
+        const app = createTestApp({ status: 'healthy' });
+        app.set('trust proxy', 1);
+        await request(app)
+          .get('/metrics')
+          .set('X-Forwarded-For', ip)
+          .expect(expected);
+      });
+    }
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previous;
+  }
+});

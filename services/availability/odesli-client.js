@@ -9,7 +9,9 @@ const defaultLogger = require('../../utils/logger');
 const { ODESLI_BASE_URL, ODESLI_USER_COUNTRY } = require('./platforms');
 
 function createOdesliClient(deps = {}) {
-  const fetchFn = deps.fetch || fetch;
+  const fetchFn = require('../../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+  });
   const logger = deps.logger || defaultLogger;
   const baseUrl = deps.baseUrl || ODESLI_BASE_URL;
 

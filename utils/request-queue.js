@@ -30,6 +30,7 @@
  * @returns {Promise<void>}
  */
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const queueMetrics = require('./outbound-metrics');
 
 /**
  * Rate-limited request queue for MusicBrainz API
@@ -47,9 +48,17 @@ class MusicBrainzQueue {
    * @param {Function} [deps.now] - Clock in milliseconds
    * @param {Function} [deps.setTimeout] - Timer implementation
    * @param {Function} [deps.clearTimeout] - Timer cancellation implementation
+   * @param {() => number} [deps.random] - Jitter source
    */
   constructor(deps = {}) {
     this.fetch = deps.fetch || globalThis.fetch;
+    this.boundedFetch = require('./bounded-fetch').createBoundedFetch({
+      fetch: (url, options) => this.fetch(url, options),
+      timeoutMs: deps.timeout || 10000,
+      discardErrorBody: true,
+    });
+    this.random = deps.random || Math.random;
+    this.maxPending = 200;
     this.minInterval = deps.minInterval !== undefined ? deps.minInterval : 1000;
     this.timeout = deps.timeout !== undefined ? deps.timeout : 10000;
     this.lowTimeout = deps.timeout !== undefined ? deps.timeout : 5000;
@@ -112,6 +121,19 @@ class MusicBrainzQueue {
    * @returns {Promise<Response>} - Fetch response
    */
   async add(url, options = {}, priority = 'normal') {
+    const { callerSignal, shutdownSignal } = require('./outbound-lifecycle');
+    const parent = options.signal || callerSignal();
+    options = {
+      ...options,
+      signal: AbortSignal.any([shutdownSignal, ...(parent ? [parent] : [])]),
+    };
+    if (this.queue.length >= this.maxPending) {
+      require('./outbound-metrics').events.inc({ kind: 'saturated' });
+      throw Object.assign(new Error('MusicBrainz queue is full'), {
+        code: 'QUEUE_FULL',
+        status: 503,
+      });
+    }
     return new Promise((resolve, reject) => {
       const signal = options.signal;
       if (signal?.aborted) {
@@ -141,6 +163,7 @@ class MusicBrainzQueue {
         this._settle(item, error);
       }, lifetime);
       this.queue.push(item);
+      queueMetrics.waiting.inc();
       this.process();
     });
   }
@@ -159,8 +182,19 @@ class MusicBrainzQueue {
     this.clearTimeout(item.deadlineTimer);
     item.options.signal?.removeEventListener('abort', item.onAbort);
     const index = this.queue.indexOf(item);
-    if (index !== -1) this.queue.splice(index, 1);
+    if (index !== -1) {
+      this.queue.splice(index, 1);
+      queueMetrics.waiting.dec();
+    }
     if (error !== undefined) {
+      queueMetrics.events.inc({
+        kind:
+          error.name === 'TimeoutError'
+            ? 'timeout'
+            : error.name === 'AbortError'
+              ? 'cancelled'
+              : 'failed',
+      });
       item.controller?.abort(error);
       item.reject(error);
     } else {
@@ -179,64 +213,13 @@ class MusicBrainzQueue {
     const timer = this.setTimeout(() => {
       controller.abort(this._timeoutError(item.url, duration));
     }, duration);
-    let onAbort;
-    let reader;
-    const aborted = new Promise((_, reject) => {
-      onAbort = () => {
-        reader?.cancel(controller.signal.reason).catch(() => {});
-        reject(controller.signal.reason);
-      };
-      controller.signal.addEventListener('abort', onAbort, { once: true });
-    });
     try {
-      // Race also bounds injected transports that fail to reject on abort.
-      return await Promise.race([
-        (async () => {
-          const response = await this.fetch(item.url, {
-            ...item.options,
-            signal: controller.signal,
-          });
-          if (controller.signal.aborted || !response.ok) {
-            response.body?.cancel().catch(() => {});
-            controller.signal.throwIfAborted();
-            return response;
-          }
-          // All MB consumers use small JSON. Buffer before resolving so json(),
-          // text() and clone() never perform an unbounded network body read.
-          if (typeof response.arrayBuffer !== 'function') return response;
-          let body = null;
-          if (response.body) {
-            reader = response.body.getReader();
-            const chunks = [];
-            try {
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value);
-              }
-              body = Buffer.concat(chunks);
-            } finally {
-              reader.releaseLock();
-              reader = null;
-            }
-          }
-          controller.signal.throwIfAborted();
-          const headers = new Headers(response.headers);
-          headers.delete('content-encoding');
-          headers.delete('transfer-encoding');
-          if (body !== null)
-            headers.set('content-length', String(body.byteLength));
-          return new globalThis.Response(body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers,
-          });
-        })(),
-        aborted,
-      ]);
+      return await this.boundedFetch(item.url, {
+        ...item.options,
+        signal: controller.signal,
+      });
     } finally {
       this.clearTimeout(timer);
-      controller.signal.removeEventListener('abort', onAbort);
       item.controller = null;
     }
   }
@@ -274,11 +257,13 @@ class MusicBrainzQueue {
       .filter((entry) => entry.readyAt <= now)
       .sort((a, b) => ranks[b.priority] - ranks[a.priority])[0];
     this.queue.splice(this.queue.indexOf(item), 1);
+    queueMetrics.waiting.dec();
     if (item.deadline <= now) {
       this._settle(item, this._timeoutError(item.url, 0));
       return;
     }
     this.processing = true;
+    queueMetrics.active.inc();
     this.lastRequestTime = now;
     this.nextStartTime = now + this.minInterval;
     let response;
@@ -310,18 +295,27 @@ class MusicBrainzQueue {
     } catch (error) {
       if (item.settled) return;
       if (
+        ['GET', 'HEAD'].includes(
+          (item.options.method || 'GET').toUpperCase()
+        ) &&
         item.retries < this.maxRetries &&
+        this.queue.length < this.maxPending &&
         this._isRetryableError(error, response)
       ) {
-        item.readyAt = this.now() + 2 ** item.retries * 1000;
+        item.readyAt =
+          this.now() +
+          2 ** item.retries * 1000 +
+          Math.floor(this.random() * 250);
         item.retries++;
         this.queue.push(item);
+        queueMetrics.waiting.inc();
       } else {
         error.retries = item.retries;
         this._settle(item, error);
       }
     } finally {
       this.processing = false;
+      queueMetrics.active.dec();
       this.process();
     }
   }
@@ -347,62 +341,7 @@ class MusicBrainzQueue {
  * Concurrent request queue with configurable concurrency limit.
  * Used for image proxy requests to prevent overwhelming external servers.
  */
-class RequestQueue {
-  /**
-   * @param {number} maxConcurrent - Maximum concurrent requests (default: 10)
-   */
-  constructor(maxConcurrent = 10) {
-    this.maxConcurrent = maxConcurrent;
-    this.running = 0;
-    this.queue = [];
-  }
-
-  /**
-   * Add a function to the queue for execution
-   * @param {Function} fn - Async function to execute
-   * @returns {Promise<*>} - Result of the function
-   */
-  async add(fn) {
-    return new Promise((resolve, reject) => {
-      this.queue.push({ fn, resolve, reject });
-      this.process();
-    });
-  }
-
-  /**
-   * Process queued functions respecting concurrency limit
-   */
-  process() {
-    while (this.running < this.maxConcurrent && this.queue.length > 0) {
-      const { fn, resolve, reject } = this.queue.shift();
-      this.running++;
-
-      fn()
-        .then(resolve)
-        .catch(reject)
-        .finally(() => {
-          this.running--;
-          this.process();
-        });
-    }
-  }
-
-  /**
-   * Get current queue length (for testing/monitoring)
-   * @returns {number}
-   */
-  get length() {
-    return this.queue.length;
-  }
-
-  /**
-   * Get current running count (for testing/monitoring)
-   * @returns {number}
-   */
-  get runningCount() {
-    return this.running;
-  }
-}
+const { RequestQueue } = require('./concurrent-request-queue');
 
 /**
  * Factory function to create a MusicBrainz fetch wrapper

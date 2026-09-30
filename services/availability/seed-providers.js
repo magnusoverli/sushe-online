@@ -26,7 +26,9 @@ function clean(value) {
 }
 
 function createSeedProviders(deps = {}) {
-  const fetchFn = deps.fetch || fetch;
+  const fetchFn = require('../../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+  });
   const logger = deps.logger || defaultLogger;
   const externalIdentityService = deps.externalIdentityService;
   const itunesTimeoutMs = deps.itunesTimeoutMs ?? ITUNES_SEED_TIMEOUT_MS;

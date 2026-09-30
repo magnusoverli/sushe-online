@@ -1,6 +1,8 @@
 name: Build and Push Docker Image
 
 on:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
   push:
     branches:
@@ -16,7 +18,56 @@ env:
   NODE_VERSION: '26.7.0'
   NPM_VERSION: '12.0.2'
 
+permissions:
+  contents: read
+
 jobs:
+  audit:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install --global "npm@${NPM_VERSION}" --no-audit --no-fund
+      - run: npm ci --ignore-scripts
+      # Registry errors also fail the gate: rerun after the outage, never ignore it.
+      - run: npm audit --audit-level=moderate
+      - run: npm audit --omit=dev --audit-level=moderate
+
+  recovery:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Build test harness
+        run: docker compose -f docker-compose.test.yml build tests
+      - name: Rehearse automatic recovery with production-only images
+        run: |
+          docker compose -f docker-compose.recovery-test.yml up --build -d --wait app recovery
+          docker compose -f docker-compose.recovery-test.yml run --rm --no-deps tests
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Rehearse image-only upgrade from the published baseline
+        run: |
+          docker tag sushe-recovery-test:local sushe-upgrade-candidate:local
+          node scripts/rehearse-legacy-upgrade.js
+      - name: Collect sanitized recovery logs
+        if: failure()
+        run: docker compose -f docker-compose.recovery-test.yml logs app recovery > recovery.log
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: failure()
+        with:
+          name: recovery-rehearsal
+          path: recovery.log
+          retention-days: 7
+      - name: Remove disposable databases
+        if: always()
+        run: |
+          docker compose -f docker-compose.recovery-test.yml down --volumes
+          docker compose -f docker-compose.upgrade-test.yml down --volumes
+
   test:
     runs-on: ubuntu-26.04
 
@@ -40,6 +91,8 @@ jobs:
       DATABASE_URL: postgres://postgres:example@localhost:5432/sushe
       SESSION_SECRET: ci-test-secret
       NODE_ENV: test
+      DB_AUTO_MIGRATE: 'true'
+      SECOND_APP_URL: http://localhost:3001
       DISABLE_RATE_LIMITING: 'true'
 
     steps:
@@ -72,9 +125,10 @@ jobs:
         run: |
           npm run build
           node index.js &
+          PORT=3001 node index.js &
           # Wait for server to be ready (up to 60 seconds)
           for i in $(seq 1 60); do
-            if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
+            if curl --fail --silent --max-time 2 http://localhost:3000/ready > /dev/null 2>&1 && curl --fail --silent --max-time 2 http://localhost:3001/ready > /dev/null 2>&1; then
               echo "Server is ready"
               break
             fi
@@ -120,6 +174,7 @@ jobs:
       DATABASE_URL: postgres://postgres:example@localhost:5432/sushe
       SESSION_SECRET: ci-test-secret
       NODE_ENV: test
+      DB_AUTO_MIGRATE: 'true'
       DISABLE_RATE_LIMITING: 'true'
       PLAYWRIGHT_SKIP_SERVER: '1'
 
@@ -158,7 +213,7 @@ jobs:
           node index.js &
           # Wait for server to be ready (up to 60 seconds)
           for i in $(seq 1 60); do
-            if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
+            if curl --fail --silent --max-time 2 http://localhost:3000/ready > /dev/null 2>&1; then
               echo "Server is ready"
               break
             fi
@@ -181,7 +236,8 @@ jobs:
           retention-days: 14
 
   build:
-    needs: [test, e2e]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [test, e2e, audit, recovery]
     runs-on: ubuntu-26.04
     permissions:
       contents: write

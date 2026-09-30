@@ -67,7 +67,9 @@ function buildSearchUrl({ baseUrl, store, artist, album }) {
 }
 
 function createQobuzSource(deps = {}) {
-  const fetchFn = deps.fetch || fetch;
+  const fetchFn = require('../../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+  });
   const logger = deps.logger || defaultLogger;
   const baseUrl = deps.baseUrl || QOBUZ_BASE_URL;
   const store = deps.store || process.env.QOBUZ_STORE || QOBUZ_STORE;

@@ -17,6 +17,10 @@ const {
 
 module.exports = (app, deps) => {
   const { ensureAuth, userService } = deps;
+  const fetch = require('../../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+    maxBytes: 65536,
+  });
 
   if (!userService) {
     throw new Error('spotify oauth routes require userService');
@@ -78,10 +82,8 @@ module.exports = (app, deps) => {
         body: params.toString(),
       });
       if (!resp.ok) {
-        const respText = await resp.text();
         logger.error('Spotify token request failed', {
           status: resp.status,
-          response: respText.substring(0, 200),
           userId: req.user._id,
         });
         throw new Error('Token request failed');

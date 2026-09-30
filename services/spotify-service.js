@@ -624,7 +624,9 @@ function scheduleSpotifyPlaycountRefresh(logger, params) {
  * @returns {Object} Spotify service methods
  */
 function createSpotifyService(deps = {}) {
-  const fetch = deps.fetch || globalThis.fetch;
+  const fetch = require('../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+  });
   const logger = deps.logger || require('../utils/logger');
   const externalIdentityService = deps.externalIdentityService || null;
   const serviceDeps = {

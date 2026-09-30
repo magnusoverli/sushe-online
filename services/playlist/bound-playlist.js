@@ -1,3 +1,4 @@
+const { boundedFetch: fetch } = require('../../utils/bounded-fetch');
 async function findSpotifyPlaylist(bindings, user, listId, profile, headers) {
   if (!bindings || !user?._id || !listId) return null;
   const id = await bindings.get(user._id, listId, 'spotify', profile.id);
@@ -18,7 +19,8 @@ async function findSpotifyPlaylist(bindings, user, listId, profile, headers) {
 
 async function findTidalPlaylist(playlistId, headers) {
   if (!playlistId) return null;
-  for (let offset = 0; ; offset += 50) {
+  const maximumPlaylists = 10000;
+  for (let offset = 0; offset < maximumPlaylists; offset += 50) {
     const response = await fetch(
       `https://openapi.tidal.com/v2/me/playlists?limit=50&offset=${offset}`,
       { headers }
@@ -34,6 +36,7 @@ async function findTidalPlaylist(playlistId, headers) {
     if (existing) return existing;
     if (playlists.data.length < 50) return null;
   }
+  throw new Error('Playlist lookup exceeded page limit');
 }
 
 module.exports = { findSpotifyPlaylist, findTidalPlaylist };

@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": { "strictNullChecks": true, "noImplicitAny": true },
+  "include": [
+    "services/duplicates/merge-cluster.js",
+    "utils/bounded-stream.js"
+  ],
+  "exclude": ["node_modules"]
+}

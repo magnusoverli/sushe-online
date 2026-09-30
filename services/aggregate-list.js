@@ -617,6 +617,8 @@ function createAggregateList(deps = {}) {
 
   /**
    * Aggregate all main lists for a year into an aggregate list
+   * @param {number} year
+   * @param {Pick<import('../db/types').DbFacade, 'raw'>} [queryable]
    */
   async function aggregateForYear(year, queryable = db) {
     log.info(`Aggregating list for year ${year}`);

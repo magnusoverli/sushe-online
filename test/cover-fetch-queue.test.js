@@ -6,10 +6,24 @@
 const { describe, it, mock, beforeEach } = require('node:test');
 const assert = require('node:assert');
 const {
-  createCoverFetchQueue,
+  createCoverFetchQueue: createQueue,
   initializeCoverFetchQueue,
   getCoverFetchQueue,
 } = require('../services/cover-fetch-queue.js');
+
+function createCoverFetchQueue(deps) {
+  return createQueue({
+    ...deps,
+    publicRequest: async (url, options) => {
+      const response = await deps.fetch(url, options);
+      if (!response.ok) throw new Error('Image unavailable');
+      return {
+        buffer: Buffer.from(await response.arrayBuffer()),
+        contentType: 'image/jpeg',
+      };
+    },
+  });
+}
 
 // Local wait helper for async operations
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

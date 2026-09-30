@@ -67,7 +67,9 @@ function sanitizeQuery(str = '') {
 function createTrackFetchQueue(deps = {}) {
   const maxConcurrent = deps.maxConcurrent || 2;
   const queue = new RequestQueue(maxConcurrent);
-  const fetchFn = deps.fetch || fetch;
+  const fetchFn = require('../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+  });
   const log = deps.logger || logger;
   const responseCache = deps.responseCache;
   const broadcast = deps.broadcast || require('../utils/websocket').broadcast;
@@ -97,21 +99,24 @@ function createTrackFetchQueue(deps = {}) {
     log.debug('Queueing track fetch', { albumId, artist, album });
     incQueueItems('track');
 
-    return queue.add(async () => {
-      try {
-        await fetchAndStoreTracks(albumId, artist, album);
-        incQueueItemsProcessed('track');
-      } catch (error) {
-        incQueueItemsFailed('track');
-        log.warn('Track fetch failed', {
-          albumId,
-          artist,
-          album,
-          error: error.message,
-        });
-        // Don't throw - track fetch failures shouldn't block the queue
-      }
-    });
+    return queue.addBackground(
+      async () => {
+        try {
+          await fetchAndStoreTracks(albumId, artist, album);
+          incQueueItemsProcessed('track');
+        } catch (error) {
+          incQueueItemsFailed('track');
+          log.warn('Track fetch failed', {
+            albumId,
+            artist,
+            album,
+            error: error.message,
+          });
+          // Don't throw - track fetch failures shouldn't block the queue
+        }
+      },
+      { logger: log, kind: 'tracks', albumId }
+    );
   }
 
   /**

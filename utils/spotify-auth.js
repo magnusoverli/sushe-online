@@ -275,7 +275,9 @@ function parseSpotifyError(errorText, statusCode) {
  */
 function createSpotifyAuth(deps = {}) {
   const log = deps.logger || logger;
-  const fetchFn = deps.fetch || global.fetch;
+  const fetchFn = require('./bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+  });
   const env = deps.env || process.env;
 
   // Create shared token management via the OAuth token manager factory
@@ -322,6 +324,13 @@ function createSpotifyAuth(deps = {}) {
     const url = endpoint.startsWith('http')
       ? endpoint
       : `${SPOTIFY_API_BASE}${endpoint}`;
+    const target = new URL(url);
+    if (
+      target.origin !== 'https://api.spotify.com' ||
+      target.username ||
+      target.password
+    )
+      throw new Error('Spotify API URL is not trusted');
 
     // Normalize endpoint for metrics (remove query params and dynamic parts)
     const metricsEndpoint = endpoint

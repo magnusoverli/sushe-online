@@ -277,7 +277,17 @@ describe('refetchAllImages', () => {
       exports: mock.fn(() => mockSharpInstance),
     };
 
-    ({ createImageRefetchService } = require('../services/image-refetch.js'));
+    const {
+      createImageRefetchService: createService,
+    } = require('../services/image-refetch.js');
+    createImageRefetchService = (deps) =>
+      createService({
+        ...deps,
+        fetchCoverArt: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return null;
+        },
+      });
   });
 
   it('should throw if a job is already running', async () => {
@@ -580,6 +590,7 @@ describe('refetchAllImages', () => {
         }),
       };
       const service = createFreshService({
+        fetchCoverArt: async () => MOCK_IMAGE_BUFFER,
         db: createMockPool([], { query: queryFn }),
         logger: createMockLogger(),
         coverCache,

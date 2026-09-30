@@ -184,7 +184,24 @@ function createUserService(deps = {}) {
     return updated > 0;
   }
 
-  async function saveOAuthToken(userId, authField, token) {
+  async function saveOAuthToken(
+    userId,
+    authField,
+    token,
+    expectedRefreshToken
+  ) {
+    if (expectedRefreshToken !== undefined) {
+      const saved =
+        await require('../db/repositories/oauth-refresh').saveRefreshedToken(
+          db,
+          userId,
+          authField,
+          token,
+          expectedRefreshToken
+        );
+      invalidateUserCacheDep(userId);
+      return saved;
+    }
     if (authField === 'spotifyAuth') {
       return setSpotifyAuth(userId, token);
     }

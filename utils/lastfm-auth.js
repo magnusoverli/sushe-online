@@ -839,7 +839,9 @@ function createWriteMethods(
  */
 function createLastfmAuth(deps = {}) {
   const log = deps.logger || logger;
-  const rawFetchFn = deps.fetch || global.fetch;
+  const rawFetchFn = require('./bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+  });
   // Wrap fetch with metrics tracking (unless disabled for testing)
   const fetchFn = deps.skipMetrics
     ? rawFetchFn

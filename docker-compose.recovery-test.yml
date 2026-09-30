@@ -1,0 +1,123 @@
+name: sushe-recovery-test
+
+x-environment: &environment
+  NODE_ENV: production
+  DATABASE_URL: postgres://sushe_runtime:synthetic-runtime-password-only@db/sushe
+  MIGRATION_DATABASE_URL: postgres://sushe_migration:synthetic-migration-password-only@db/sushe
+  BACKUP_DATABASE_URL: postgres://sushe_backup:synthetic-backup-password-only@db/sushe
+  CONTROL_DATABASE_URL: postgres://sushe_control:synthetic-control-password-only@db/control
+  RECOVERY_DATABASE_URL: postgres://sushe_recovery:synthetic-recovery-password-only@db/control
+  BOOTSTRAP_ADMIN_EMAIL: recovery@example.test
+  BOOTSTRAP_ADMIN_PASSWORD: synthetic-admin-password-only
+  RECOVERY_APP_URL: http://app:3000
+  RECOVERY_UPLOAD_DIR: /recovery/uploads
+  RECOVERY_CAPACITY_PATH: /database-capacity
+
+x-runtime: &runtime
+  image: sushe-recovery-test:local
+  build:
+    context: .
+    args:
+      INSTALL_DEV_DEPS: 'false'
+  read_only: true
+  tmpfs: [/tmp]
+
+services:
+  db:
+    image: postgres:18.4
+    environment:
+      POSTGRES_DB: sushe
+      POSTGRES_PASSWORD: synthetic-provision-password-only
+      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256'
+    tmpfs:
+      - /var/lib/postgresql:size=2g
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+  provision:
+    <<: *runtime
+    environment:
+      <<: *environment
+      PROVISION_DATABASE_URL: postgres://postgres:synthetic-provision-password-only@db/postgres
+    command: ['node', 'scripts/provision-database.js']
+    depends_on:
+      db:
+        condition: service_healthy
+  app:
+    <<: *runtime
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://sushe_runtime:synthetic-runtime-password-only@db/sushe
+      BACKUP_DATABASE_URL: postgres://sushe_backup:synthetic-backup-password-only@db/sushe
+      CONTROL_DATABASE_URL: postgres://sushe_control:synthetic-control-password-only@db/control
+      SESSION_SECRET: synthetic-recovery-session-signing-secret-64-characters-only-xxxxxx
+      DATA_DIR: /tmp/data
+      TRUST_PROXY: 172.16.0.0/12
+      BASE_URL: https://recovery.example.test
+      DISABLE_RATE_LIMITING: 'true'
+    volumes:
+      - uploads:/recovery/uploads
+    command: ['node', 'scripts/start-app.js']
+    depends_on:
+      provision:
+        condition: service_completed_successfully
+  recovery:
+    <<: *runtime
+    environment:
+      <<: *environment
+      TRUST_PROXY: 172.16.0.0/12
+    volumes:
+      - uploads:/recovery/uploads
+    tmpfs:
+      - /tmp
+      - /database-capacity:size=2g
+    command: ['node', 'scripts/recovery-server.js']
+    depends_on:
+      app:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+  tests:
+    image: sushe-backend-test:local
+    environment:
+      <<: *environment
+      RECOVERY_REHEARSAL: 'disposable'
+      RECOVERY_CAPACITY_PATH: /tmp
+      PROVISION_DATABASE_URL: postgres://postgres:synthetic-provision-password-only@db/postgres
+    read_only: true
+    tmpfs: [/tmp]
+    volumes:
+      - ./test/recovery:/app/test/recovery:ro
+      - ./services/recovery:/app/services/recovery:ro
+      - uploads:/recovery/uploads
+    command:
+      [
+        'node',
+        '--test',
+        '--test-concurrency=1',
+        'test/recovery/rehearsal.test.js',
+        'test/recovery/interrupted.test.js',
+        'test/recovery/failure.test.js',
+        'test/recovery/adoption.test.js',
+        'test/recovery/schema-proof.test.js',
+      ]
+    depends_on:
+      recovery:
+        condition: service_healthy
+
+volumes:
+  uploads:
+networks:
+  default:
+    internal: true

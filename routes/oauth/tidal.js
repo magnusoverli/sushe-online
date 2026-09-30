@@ -16,6 +16,10 @@ const {
 } = require('../../utils/oauth-state');
 
 module.exports = (app, deps) => {
+  const fetch = require('../../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+    maxBytes: 65536,
+  });
   const { ensureAuth, userService, crypto } = deps;
 
   if (!userService) {

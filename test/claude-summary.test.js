@@ -701,7 +701,7 @@ test('fetchClaudeSummary should retry on 429 with exponential backoff', async ()
   );
 });
 
-test('fetchClaudeSummary should retry on 500 errors', async () => {
+test('fetchClaudeSummary does not repeat paid generation after an ambiguous 500', async () => {
   const mockLogger = {
     info: mock.fn(),
     warn: mock.fn(),
@@ -739,9 +739,9 @@ test('fetchClaudeSummary should retry on 500 errors', async () => {
 
   const result = await service.fetchClaudeSummary('Artist', 'Album');
 
-  assert.ok(result.summary.startsWith('Success after server error retry'));
-  assert.strictEqual(result.found, true);
-  assert.strictEqual(mockAnthropic.messages.create.mock.calls.length, 2);
+  assert.strictEqual(result.summary, null);
+  assert.strictEqual(result.found, false);
+  assert.strictEqual(mockAnthropic.messages.create.mock.calls.length, 1);
 });
 
 test('fetchClaudeSummary should not retry on 400 errors', async () => {

@@ -69,19 +69,18 @@ module.exports = (app, deps) => {
     async (req, res) => {
       const { email } = req.body;
 
-      if (!email) {
+      if (typeof email !== 'string' || !email || email.length > 320) {
         req.flash('error', 'Please provide an email address');
         return res.redirect('/forgot');
       }
 
+      // All account outcomes, including cooldown/storage/provider failures, use
+      // the same response. Acquire before lookup so nonexistent accounts match.
+      req.flash('info', 'If that email exists, you will receive a reset link');
       try {
+        if (!(await authService.acquirePasswordResetCooldown(email)))
+          return res.redirect('/forgot');
         const user = await getUserByEmail(email);
-
-        // Always show the same message for security reasons
-        req.flash(
-          'info',
-          'If that email exists, you will receive a reset link'
-        );
 
         if (!user) {
           // Don't reveal that the email doesn't exist
@@ -136,7 +135,7 @@ module.exports = (app, deps) => {
             (error) => {
               logger.error(
                 `Failed to send password reset email via ${serviceName}:`,
-                error.message
+                { code: error.code || 'MAIL_FAILED' }
               );
             }
           );
@@ -147,11 +146,8 @@ module.exports = (app, deps) => {
         }
 
         res.redirect('/forgot');
-      } catch (err) {
-        logger.error('Database error during forgot password', {
-          error: err.message,
-        });
-        req.flash('error', 'An error occurred. Please try again.');
+      } catch (_err) {
+        logger.error('Password recovery request failed');
         return res.redirect('/forgot');
       }
     }

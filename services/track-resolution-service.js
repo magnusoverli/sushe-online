@@ -49,7 +49,9 @@ function sanitizeForSearch(str = '') {
  * @returns {Object} Track resolution service methods
  */
 function createTrackResolutionService(deps = {}) {
-  const fetch = deps.fetch || globalThis.fetch;
+  const fetch = require('../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+  });
   const mbFetch = deps.mbFetch;
   const logger = deps.logger || require('../utils/logger');
 

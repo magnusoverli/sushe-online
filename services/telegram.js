@@ -243,6 +243,7 @@ function createSetupHelpers(apiRequest, log) {
     try {
       await apiRequest(token, 'setWebhook', {
         url: webhookUrl,
+        secret_token: webhookSecret,
         allowed_updates: ['callback_query', 'message'],
         drop_pending_updates: true,
       });
@@ -377,7 +378,9 @@ function createTelegramNotifier(deps = {}) {
   const db = /** @type {import("../db/types").DbFacade} */ (
     ensureDb(deps.db, 'telegram-notifier')
   );
-  const fetchFn = deps.fetch || global.fetch;
+  const fetchFn = require('../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+  });
   const encryptionKey = deps.encryptionKey || process.env.SESSION_SECRET;
   const baseUrl = deps.baseUrl || process.env.BASE_URL;
 

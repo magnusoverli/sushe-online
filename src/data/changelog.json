@@ -1,5 +1,40 @@
 [
   {
+    "date": "2026-09-30",
+    "category": "fix",
+    "description": "Preserved the published application's access, proxy trust, forwarding and metrics behavior through automatic upgrades."
+  },
+  {
+    "date": "2026-09-29",
+    "category": "feature",
+    "description": "Added an automatic image-only upgrade for existing production Compose deployments, with retained database backups, protected credentials, and verified startup."
+  },
+  {
+    "date": "2026-09-29",
+    "category": "fix",
+    "description": "Bounded provider response reads and background queues, protected cover downloads and OAuth refresh recovery, and added operational-script typechecks."
+  },
+  {
+    "date": "2026-09-29",
+    "category": "feature",
+    "description": "Added automatic isolated backup recovery with durable progress, app restart, health verification, and rollback to the retained original database."
+  },
+  {
+    "date": "2026-09-29",
+    "category": "security",
+    "description": "Hardened database roles, password-reset throttling, session secrets, diagnostic logging, and production dependencies."
+  },
+  {
+    "date": "2026-09-29",
+    "category": "fix",
+    "description": "Added bounded migration and backup execution, authenticated API contract checks, and fail-closed database and recovery CI gates."
+  },
+  {
+    "date": "2026-09-29",
+    "category": "security",
+    "description": "Restricted Telegram approval actions to currently approved linked admins in the configured chat and original event message."
+  },
+  {
     "date": "2026-09-28",
     "category": "fix",
     "description": "Extension 1.9.11 fixes album selection, cross-album genre leakage, punctuation-sensitive matching, and badges with conflicting RYM identities."

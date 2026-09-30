@@ -26,7 +26,9 @@ const { generateQueryForms } = require('../utils/entity-matching');
  * @returns {Object} Tidal service methods
  */
 function createTidalService(deps = {}) {
-  const fetch = deps.fetch || globalThis.fetch;
+  const fetch = require('../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+  });
   const userService = deps.userService;
   const logger = deps.logger || require('../utils/logger');
 

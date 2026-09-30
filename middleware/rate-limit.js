@@ -96,7 +96,6 @@ const forgotPasswordRateLimit = createRateLimiter({
   defaultMax: 5,
   handlerMessage:
     'Too many password reset requests. Please try again in 1 hour.',
-  skipSuccessfulRequests: true,
 });
 
 // Very strict rate limiting for password reset token submission - 5 attempts per hour per IP

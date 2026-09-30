@@ -4,11 +4,16 @@
 
 const logger = require('./logger');
 
-// In-flight refreshes keyed by `${userId}:${authField}`, shared across every
+// In-flight refreshes keyed by user, provider and refresh-token fingerprint, shared across every
 // manager instance in the process. Concurrent requests that hit the refresh
 // window await one provider call instead of racing N refresh POSTs whose
 // last-writer-wins persist can strand a consumed refresh token.
 const inflightRefreshes = new Map();
+const pendingPersistence = new Map();
+const MAX_PENDING_REFRESHES = 500;
+const PENDING_TTL_MS = 10 * 60 * 1000;
+const { createHash } = require('node:crypto');
+const { withSignal } = require('./bounded-fetch');
 
 /**
  * Create OAuth token management utilities for a music service.
@@ -23,6 +28,7 @@ const inflightRefreshes = new Map();
  * @param {Object} [deps.logger] - Logger instance
  * @param {Function} [deps.fetch] - Fetch function
  * @param {Object} [deps.env] - Environment variables
+ * @param {number} [deps.timeoutMs] - Provider and persistence deadline
  * @returns {Object} Token management functions
  */
 function createOAuthTokenManager(config, deps = {}) {
@@ -35,7 +41,11 @@ function createOAuthTokenManager(config, deps = {}) {
   } = config;
 
   const log = deps.logger || logger;
-  const fetchFn = deps.fetch || global.fetch;
+  const fetchFn = require('./bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+    timeoutMs: deps.timeoutMs || 10000,
+    maxBytes: 65536,
+  });
   const env = deps.env || process.env;
 
   /**
@@ -85,10 +95,8 @@ function createOAuthTokenManager(config, deps = {}) {
       });
 
       if (!resp.ok) {
-        const errorText = await resp.text();
         log.error(`${serviceName} token refresh failed:`, {
           status: resp.status,
-          error: errorText,
         });
 
         // If refresh token is invalid/revoked, return null to trigger re-auth
@@ -100,6 +108,8 @@ function createOAuthTokenManager(config, deps = {}) {
       }
 
       const newToken = await resp.json();
+      if (typeof newToken.access_token !== 'string' || !newToken.access_token)
+        throw new Error('Invalid token response');
 
       // A missing/invalid expires_in would make expires_at NaN, which
       // tokenNeedsRefresh treats as "never expires" — fall back to 1 hour
@@ -177,12 +187,29 @@ function createOAuthTokenManager(config, deps = {}) {
 
     // Single-flight: concurrent callers for the same user+service share one
     // refresh + persist instead of each POSTing to the provider.
-    const flightKey = `${user._id}:${authField}`;
+    const flightKey = `${user._id}:${authField}:${createHash('sha256').update(auth.refresh_token).digest('hex')}`;
+    for (const [key, entry] of pendingPersistence)
+      if (entry.expires <= Date.now()) pendingPersistence.delete(key);
     let flight = inflightRefreshes.get(flightKey);
     if (!flight) {
-      flight = refreshAndPersist(user, userStore, auth);
+      if (
+        inflightRefreshes.size + pendingPersistence.size >=
+          MAX_PENDING_REFRESHES &&
+        !pendingPersistence.has(flightKey)
+      ) {
+        return {
+          success: false,
+          [authField]: null,
+          error: 'PROVIDER_BUSY',
+          message: 'Provider refresh capacity is exhausted. Try again later.',
+        };
+      }
+      flight = refreshAndPersist(user, userStore, auth, flightKey);
       inflightRefreshes.set(flightKey, flight);
-      flight.finally(() => inflightRefreshes.delete(flightKey));
+      flight.then(
+        () => inflightRefreshes.delete(flightKey),
+        () => inflightRefreshes.delete(flightKey)
+      );
     }
     const outcome = await flight;
 
@@ -212,20 +239,39 @@ function createOAuthTokenManager(config, deps = {}) {
    * Refresh the token and persist it. Never rejects — returns
    * { token, persisted } so awaiting callers can share one outcome.
    */
-  async function refreshAndPersist(user, userStore, auth) {
-    const newToken = await refreshToken(auth);
+  async function refreshAndPersist(user, userStore, auth, flightKey) {
+    for (const [key, entry] of pendingPersistence)
+      if (entry.expires <= Date.now()) pendingPersistence.delete(key);
+    const pending = pendingPersistence.get(flightKey);
+    if (!pending && pendingPersistence.size >= MAX_PENDING_REFRESHES)
+      return { token: null, persisted: false };
+    // Retain a rotated token across fresh user objects after storage failure.
+    // Retry only persistence, never repeat the provider's consumed-token POST.
+    const newToken = pending?.token || (await refreshToken(auth));
     if (!newToken) {
       return { token: null, persisted: false };
     }
+    pendingPersistence.set(flightKey, {
+      token: newToken,
+      expires: pending?.expires || Date.now() + PENDING_TTL_MS,
+    });
 
-    // Update the in-memory user BEFORE persistence: with refresh-token
-    // rotation the old stored token is already consumed, so a failed save
-    // must not leave the only live token visible to just this one request.
-    user[authField] = newToken;
-
+    // The shared pending entry retains the rotated token across save failures.
     try {
       if (typeof userStore?.saveOAuthToken === 'function') {
-        await userStore.saveOAuthToken(user._id, authField, newToken);
+        const saved = await withSignal(
+          userStore.saveOAuthToken(
+            user._id,
+            authField,
+            newToken,
+            auth.refresh_token
+          ),
+          AbortSignal.timeout(deps.timeoutMs || 10000)
+        );
+        if (saved === false) {
+          pendingPersistence.delete(flightKey);
+          return { token: null, persisted: false };
+        }
       } else {
         throw new Error('OAuth token persistence requires saveOAuthToken()');
       }
@@ -234,6 +280,7 @@ function createOAuthTokenManager(config, deps = {}) {
         `${serviceName} token refreshed and saved for user:`,
         user.email
       );
+      pendingPersistence.delete(flightKey);
       return { token: newToken, persisted: true };
     } catch (dbError) {
       // The refreshed token only lives in memory now; surface that loudly —

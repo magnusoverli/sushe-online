@@ -287,6 +287,7 @@ function createCoverProviders(fetchFn) {
  * @param {Object} [deps] - Dependencies
  * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore
  * @param {Function} [deps.fetch] - Fetch function (for testing)
+ * @param {Function} [deps.publicRequest] - Validated public image transport
  * @param {number} [deps.maxConcurrent] - Max concurrent fetches (default: 3)
  * @param {InstanceType<typeof import("./album-cover-cache").AlbumCoverCache>} [deps.coverCache] - RAM cover cache to invalidate after a fetch
  * @param {InstanceType<typeof import("../middleware/response-cache").ResponseCache>} [deps.responseCache] - Response cache to invalidate for affected users
@@ -296,7 +297,7 @@ function createCoverProviders(fetchFn) {
 function createCoverFetchQueue(deps = {}) {
   const maxConcurrent = deps.maxConcurrent || 3;
   const queue = new RequestQueue(maxConcurrent);
-  const fetchFn = deps.fetch || fetch;
+  const fetchFn = require('./cover-transport').createCoverTransport(deps);
   const coverCache = deps.coverCache;
   const responseCache = deps.responseCache;
   const broadcast = deps.broadcast || require('../utils/websocket').broadcast;
@@ -323,21 +324,24 @@ function createCoverFetchQueue(deps = {}) {
     logger.debug('Queueing cover fetch', { albumId, artist, album });
     incQueueItems('cover');
 
-    return queue.add(async () => {
-      try {
-        await fetchAndStoreCover(albumId, artist, album);
-        incQueueItemsProcessed('cover');
-      } catch (error) {
-        incQueueItemsFailed('cover');
-        logger.warn('Cover fetch failed', {
-          albumId,
-          artist,
-          album,
-          error: error.message,
-        });
-        // Don't throw - cover fetch failures shouldn't block the queue
-      }
-    });
+    return queue.addBackground(
+      async () => {
+        try {
+          await fetchAndStoreCover(albumId, artist, album);
+          incQueueItemsProcessed('cover');
+        } catch (error) {
+          incQueueItemsFailed('cover');
+          logger.warn('Cover fetch failed', {
+            albumId,
+            artist,
+            album,
+            error: error.message,
+          });
+          // Don't throw - cover fetch failures shouldn't block the queue
+        }
+      },
+      { logger, kind: 'cover', albumId }
+    );
   }
 
   /**

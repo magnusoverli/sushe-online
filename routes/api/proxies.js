@@ -72,13 +72,16 @@ module.exports = (app, deps) => {
   const {
     ensureAuthAPI,
     logger,
-    fetch,
+    fetch: rawFetch,
     sharp,
     mbFetch,
     imageProxyQueue,
     itunesProxyQueue,
     cacheConfigs,
   } = deps;
+  const fetch = require('../../utils/bounded-fetch').createBoundedFetch({
+    fetch: rawFetch,
+  });
 
   const asyncHandler = createAsyncHandler(logger);
   const publicRequest = deps.publicRequest || defaultPublicRequest;
@@ -90,7 +93,9 @@ module.exports = (app, deps) => {
       if (req.aborted || res.destroyed) controller.abort();
       return await publicRequest(url, {
         ...options,
-        signal: controller.signal,
+        signal: options?.signal
+          ? AbortSignal.any([controller.signal, options.signal])
+          : controller.signal,
       });
     } finally {
       res.removeListener('close', abort);
@@ -182,14 +187,14 @@ module.exports = (app, deps) => {
       }
 
       const url = `https://api.deezer.com/search/album?q=${encodeURIComponent(q)}&limit=5`;
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(`Deezer API responded with status ${response.status}`);
-      }
-
-      const data = await response.json();
-      res.json(data);
+      await publicJson(req, res, url, async (signal) => {
+        const response = await fetch(url, { signal });
+        if (!response.ok)
+          throw new Error(
+            `Deezer API responded with status ${response.status}`
+          );
+        return response.json();
+      });
     }, 'fetching from Deezer')
   );
 
@@ -511,32 +516,39 @@ module.exports = (app, deps) => {
       }
 
       // Use request queue to limit concurrent image fetches
-      const result = await imageProxyQueue.add(async () => {
-        const { buffer } = await requestPublicForClient(req, res, url, {
-          headers: { 'User-Agent': SUSHE_USER_AGENT },
-          allowedHosts,
-          contentTypes: ['image/'],
-          maxBytes: 10 * 1024 * 1024,
-        });
+      const result = await imageProxyQueue.add(
+        async (signal) => {
+          const { buffer } = await requestPublicForClient(req, res, url, {
+            headers: { 'User-Agent': SUSHE_USER_AGENT },
+            allowedHosts,
+            contentTypes: ['image/'],
+            maxBytes: 10 * 1024 * 1024,
+            signal,
+          });
 
-        // Resize image to 512x512 pixels using sharp
-        // Use 'inside' fit to maintain aspect ratio without cropping
-        // Convert to JPEG for consistent format and smaller file size
-        const resizedBuffer = await sharp(Buffer.from(buffer))
-          .resize(512, 512, {
-            fit: 'inside', // Maintain aspect ratio
-            withoutEnlargement: true, // Don't upscale small images
+          // Resize image to 512x512 pixels using sharp
+          // Use 'inside' fit to maintain aspect ratio without cropping
+          // Convert to JPEG for consistent format and smaller file size
+          const resizedBuffer = await sharp(Buffer.from(buffer), {
+            limitInputPixels: require('../../utils/image-processing')
+              .MAX_INPUT_PIXELS,
           })
-          .jpeg({ quality: 85, mozjpeg: true }) // Visually lossless at a fraction of the size
-          .toBuffer();
+            .resize(512, 512, {
+              fit: 'inside', // Maintain aspect ratio
+              withoutEnlargement: true, // Don't upscale small images
+            })
+            .jpeg({ quality: 85, mozjpeg: true }) // Visually lossless at a fraction of the size
+            .toBuffer();
 
-        const base64 = resizedBuffer.toString('base64');
+          const base64 = resizedBuffer.toString('base64');
 
-        return {
-          data: base64,
-          contentType: 'image/jpeg', // Always JPEG after processing
-        };
-      });
+          return {
+            data: base64,
+            contentType: 'image/jpeg', // Always JPEG after processing
+          };
+        },
+        { signal: require('../../utils/outbound-lifecycle').callerSignal() }
+      );
 
       res.set('Cache-Control', 'private, max-age=3600');
       res.json(result);

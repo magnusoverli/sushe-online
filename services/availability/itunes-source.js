@@ -32,7 +32,9 @@ function cleanAppleUrl(url) {
 }
 
 function createItunesSource(deps = {}) {
-  const fetchFn = deps.fetch || fetch;
+  const fetchFn = require('../../utils/bounded-fetch').createBoundedFetch({
+    fetch: deps.fetch,
+  });
   const logger = deps.logger || defaultLogger;
   const country = deps.country || ITUNES_COUNTRY;
   const timeoutMs = deps.timeoutMs ?? ITUNES_LOOKUP_TIMEOUT_MS;

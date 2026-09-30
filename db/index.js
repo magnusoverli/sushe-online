@@ -73,14 +73,24 @@ if (process.env.DATABASE_URL) {
     .then(async () => {
       // warmConnections logs its own start line, for every caller.
       await warmConnections(pool);
-      logger.info('Running database migrations...');
       const migrationManager = new MigrationManager(pool);
-      await migrationManager.runMigrations();
+      if (
+        process.env.DB_AUTO_MIGRATE === 'true' &&
+        process.env.NODE_ENV !== 'production'
+      ) {
+        const migrationPool =
+          require('./migration-policy').createMigrationPool();
+        try {
+          await new MigrationManager(migrationPool).runMigrations();
+        } finally {
+          await migrationPool.end();
+        }
+      }
+      await migrationManager.validateSchema();
       return migrationManager;
     })
     .then(() => {
-      logger.info('Ensuring admin user...');
-      return ensureAdminUser();
+      if (process.env.NODE_ENV !== 'production') return ensureAdminUser();
     })
     .then(() => {
       logger.info('Database ready');

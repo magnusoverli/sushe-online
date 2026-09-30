@@ -283,6 +283,7 @@ describe('settings admin actions', () => {
 
     const apiCalls = [];
     const locationState = { href: '' };
+    const phases = ['restarting', 'verifying-live', 'completed'];
     const actions = createSettingsAdminActions({
       doc: {
         body: {
@@ -308,10 +309,14 @@ describe('settings admin actions', () => {
               'Database restored successfully. Server will restart in 3 seconds...',
           };
         }
-
+        assert.strictEqual(
+          locationState.href,
+          '',
+          'Do not report completion during restart/verification'
+        );
         return {
           restoreId: 'restore_1',
-          status: 'restarting',
+          status: phases.shift(),
         };
       },
       win: {
@@ -334,6 +339,7 @@ describe('settings admin actions', () => {
 
     assert.ok(apiCalls.includes('/admin/restore'));
     assert.ok(apiCalls.includes('/admin/restore/restore_1/status'));
+    assert.strictEqual(phases.length, 0);
     assert.strictEqual(progressText.textContent, 'Logging out...');
     assert.strictEqual(locationState.href, '/logout');
   });

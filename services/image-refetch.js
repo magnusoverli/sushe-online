@@ -15,6 +15,7 @@ const { upscaleItunesArtworkUrl } = require('../utils/image-processing');
 const { wait } = require('../utils/request-queue');
 const { mbFetch } = require('../utils/mb-queue-singleton');
 const { createAlbumCoverService } = require('./album-cover-service');
+const fetch = require('./cover-transport').createCoverTransport();
 const {
   invalidateResponseCacheForAlbumUsers,
 } = require('./album-cache-invalidation');
@@ -217,6 +218,7 @@ async function fetchCoverArt(artist, album) {
  * @param {import("../db/types").DbFacade} [deps.db] - Canonical datastore
  *   (required at runtime; enforced by ensureDb)
  * @param {Object} [deps.logger] - Logger instance (defaults to the shared logger)
+ * @param {(artist: string, album: string) => Promise<Buffer|null>} [deps.fetchCoverArt] - Cover provider orchestration
  * @param {{invalidateAlbum?: (albumId: string) => void}} [deps.coverCache] -
  *   Cover cache invalidated when an album image is replaced
  * @param {Object} [deps.responseCache] - Response cache invalidated for the
@@ -229,6 +231,7 @@ async function fetchCoverArt(artist, album) {
 function createImageRefetchService(deps = {}) {
   const db = ensureDb(deps.db, 'image-refetch');
   const log = deps.logger || logger;
+  const fetchCover = deps.fetchCoverArt || fetchCoverArt;
   const coverCache = deps.coverCache;
   const responseCache = deps.responseCache;
   const albumCoverService =
@@ -493,7 +496,7 @@ function createImageRefetchService(deps = {}) {
 
           try {
             // Fetch new cover art
-            const imageBuffer = await fetchCoverArt(album.artist, album.album);
+            const imageBuffer = await fetchCover(album.artist, album.album);
 
             if (imageBuffer) {
               await albumCoverService.updateCoverImage(

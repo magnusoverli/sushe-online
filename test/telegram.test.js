@@ -406,11 +406,12 @@ test('parseCallbackData should parse event action callback', () => {
     db: { raw: async () => ({ rows: [] }) },
   });
 
-  const parsed = notifier.parseCallbackData('event:abc-123:approve');
+  const eventId = '11111111-1111-4111-8111-111111111111';
+  const parsed = notifier.parseCallbackData(`event:${eventId}:approve`);
 
   assert.ok(parsed);
   assert.strictEqual(parsed.type, 'event_action');
-  assert.strictEqual(parsed.eventId, 'abc-123');
+  assert.strictEqual(parsed.eventId, eventId);
   assert.strictEqual(parsed.action, 'approve');
 });
 

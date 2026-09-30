@@ -182,7 +182,7 @@ test.describe('Rate Limiting Middleware', () => {
         '/forgot-password',
         rateLimits.forgotPasswordRateLimit,
         (req, res) => {
-          // Simulate failed requests (skipSuccessfulRequests means only failures count)
+          // Both failed and successful requests consume the IP budget.
           res.status(400).json({ error: 'Invalid request' });
         }
       );
@@ -203,7 +203,7 @@ test.describe('Rate Limiting Middleware', () => {
       assert.ok(blockedRes.body.error.includes('password reset'));
     });
 
-    test('should not count successful password reset requests (skipSuccessfulRequests)', async () => {
+    test('should count successful password reset redirects', async () => {
       process.env.RATE_LIMIT_FORGOT_MAX = '2';
       delete require.cache[require.resolve('../middleware/rate-limit')];
       const rateLimits = require('../middleware/rate-limit');
@@ -214,18 +214,20 @@ test.describe('Rate Limiting Middleware', () => {
         '/forgot-password',
         rateLimits.forgotPasswordRateLimit,
         (req, res) => {
-          // Successful requests should not be counted
-          res.json({ success: true });
+          res.redirect('/forgot');
         }
       );
 
-      // Make many successful requests - should not be rate limited
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 2; i++) {
         const res = await request(app)
           .post('/forgot-password')
           .send({ email: 'test@test.com' });
-        assert.strictEqual(res.status, 200);
+        assert.strictEqual(res.status, 302);
       }
+      await request(app)
+        .post('/forgot-password')
+        .send({ email: 'test@test.com' })
+        .expect(429);
     });
 
     test('should enforce reset password token submission limits', async () => {

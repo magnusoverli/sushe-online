@@ -20,12 +20,15 @@ module.exports = (app, deps) => {
   const {
     ensureAuthAPI,
     logger,
-    fetch,
+    fetch: rawFetch,
     requireSpotifyAuth,
     db,
     refreshPlaycountsInBackground,
     externalIdentityService,
   } = deps;
+  const fetch = require('../../utils/bounded-fetch').createBoundedFetch({
+    fetch: rawFetch,
+  });
 
   const asyncHandler = createAsyncHandler(logger);
   const spotifyService = createSpotifyService({
