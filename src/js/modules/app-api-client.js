@@ -3,6 +3,7 @@
  */
 import { getListRevision, rememberListRevision } from './list-revisions.js';
 import { hasUnsavedLists, protectUnsavedLists } from './unsaved-lists.js';
+import { requestWithUploadProgress } from './upload-request.js';
 
 function sessionExpiredError() {
   return Object.assign(
@@ -17,6 +18,7 @@ export function createAppApiClient(deps = {}) {
   const {
     getRealtimeSyncModuleInstance,
     fetchImpl = fetch,
+    uploadImpl = requestWithUploadProgress,
     win = typeof window !== 'undefined' ? window : null,
     FormDataCtor = typeof FormData !== 'undefined' ? FormData : null,
     logger = console,
@@ -119,8 +121,11 @@ export function createAppApiClient(deps = {}) {
         headers['X-CSRF-Token'] = csrfToken;
       }
 
-      const response = await fetchImpl(url, {
-        ...options,
+      const { onUploadProgress, ...requestOptions } = options;
+      const request = onUploadProgress ? uploadImpl : fetchImpl;
+      const response = await request(url, {
+        ...requestOptions,
+        ...(onUploadProgress ? { onUploadProgress } : {}),
         headers,
         credentials: 'same-origin',
       });

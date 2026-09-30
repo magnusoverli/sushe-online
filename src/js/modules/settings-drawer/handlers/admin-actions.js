@@ -4,6 +4,8 @@
  * Owns admin event actions and restore-database modal workflow.
  */
 
+import { createTransferProgress } from '../../transfer-progress.js';
+
 export function createSettingsAdminActions(deps = {}) {
   const doc =
     deps.doc || (typeof document !== 'undefined' ? document : undefined);
@@ -66,42 +68,39 @@ export function createSettingsAdminActions(deps = {}) {
     return true;
   }
 
-  async function readBackupBlobWithProgress(response, progressText) {
+  async function readBackupBlobWithProgress(response, progress) {
     const reader = response?.body?.getReader?.();
     if (!reader) {
       return response.blob();
     }
 
     const contentLengthHeader = response.headers?.get?.('content-length');
-    const totalBytes = Number.parseInt(contentLengthHeader || '', 10);
-    const hasTotalBytes = Number.isFinite(totalBytes) && totalBytes > 0;
+    // Fetch exposes decoded bytes; a compressed Content-Length is not comparable.
+    const encoding = response.headers?.get?.('content-encoding');
+    const totalBytes =
+      !encoding || encoding === 'identity' ? Number(contentLengthHeader) : 0;
 
     const chunks = [];
     let receivedBytes = 0;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
 
-      if (!value) {
-        continue;
-      }
+        if (!value) {
+          continue;
+        }
 
-      chunks.push(value);
-      receivedBytes += value.byteLength;
+        chunks.push(value);
+        receivedBytes += value.byteLength;
 
-      const receivedMB = (receivedBytes / (1024 * 1024)).toFixed(1);
-      if (hasTotalBytes) {
-        const percent = Math.min(
-          100,
-          Math.round((receivedBytes / totalBytes) * 100)
-        );
-        progressText.textContent = `Downloading backup... ${percent}% (${receivedMB} MB)`;
-      } else {
-        progressText.textContent = `Downloading backup... ${receivedMB} MB`;
+        progress.update({ loaded: receivedBytes, total: totalBytes });
       }
+    } finally {
+      reader.releaseLock();
     }
 
     return new Blob(chunks, { type: 'application/octet-stream' });
@@ -364,9 +363,10 @@ export function createSettingsAdminActions(deps = {}) {
       bodyHtml: `
           <div id="downloadBackupProgress" class="mt-2">
             <div class="flex items-center gap-2 text-sm text-gray-400">
-              <i id="downloadBackupSpinner" class="fas fa-spinner fa-spin"></i>
-              <span id="downloadBackupProgressText">Preparing backup...</span>
+              <i id="downloadBackupSpinner" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+              <span id="downloadBackupProgressText">Generating backup...</span>
             </div>
+            <progress id="downloadBackupProgressBar" class="backup-transfer-progress" max="100" aria-label="Backup download" aria-describedby="downloadBackupProgressText"></progress>
           </div>
           <div id="downloadBackupError" class="text-red-500 text-sm mt-3 hidden"></div>`,
       footerHtml:
@@ -383,6 +383,11 @@ export function createSettingsAdminActions(deps = {}) {
     const spinnerEl = modal.querySelector('#downloadBackupSpinner');
     const progressText = modal.querySelector('#downloadBackupProgressText');
     const errorEl = modal.querySelector('#downloadBackupError');
+    const progress = createTransferProgress({
+      bar: modal.querySelector('#downloadBackupProgressBar'),
+      text: progressText,
+      action: 'Downloading backup',
+    });
 
     // The controller handles hide + element removal on close.
     const closeModal = () => close();
@@ -393,7 +398,7 @@ export function createSettingsAdminActions(deps = {}) {
     }
 
     try {
-      progressText.textContent = 'Generating backup...';
+      progress.waiting('Generating backup...');
 
       const response = await fetchBackupResponse(progressText);
 
@@ -408,7 +413,7 @@ export function createSettingsAdminActions(deps = {}) {
 
       progressText.textContent = 'Downloading backup...';
 
-      const blob = await readBackupBlobWithProgress(response, progressText);
+      const blob = await readBackupBlobWithProgress(response, progress);
       const contentDisposition = response.headers.get('content-disposition');
       const fileName = parseDownloadFilename(contentDisposition);
       const downloaded = triggerBlobDownload(blob, fileName);
@@ -418,14 +423,19 @@ export function createSettingsAdminActions(deps = {}) {
         return;
       }
 
-      progressText.textContent = 'Backup ready.';
-      spinnerEl?.classList.remove('fa-spinner', 'fa-spin');
-      spinnerEl?.classList.add('fa-check-circle', 'text-green-400');
-      setTimeoutFn(() => {
-        closeModal();
-      }, 1200);
+      progress.complete(
+        'Backup transferred to your browser. Check your downloads or choose a save location if prompted.'
+      );
+      spinnerEl?.remove();
+      if (closeBtn) {
+        closeBtn.textContent = 'Done';
+        closeBtn.disabled = false;
+      }
     } catch (error) {
       console.error('Error downloading backup:', error);
+      modal
+        .querySelector('#downloadBackupProgressBar')
+        ?.classList.add('hidden');
 
       if (isNetworkFetchError(error) && win?.location) {
         progressText.textContent =
@@ -473,6 +483,7 @@ export function createSettingsAdminActions(deps = {}) {
                 <i class="fas fa-spinner fa-spin"></i>
                 <span id="restoreProgressText">Uploading backup...</span>
               </div>
+              <progress id="restoreProgressBar" class="backup-transfer-progress" max="100" aria-label="Backup upload" aria-describedby="restoreProgressText"></progress>
             </div>
           </form>`,
       footerHtml: `
@@ -515,6 +526,8 @@ export function createSettingsAdminActions(deps = {}) {
     const progressText = modal.querySelector('#restoreProgressText');
     const confirmBtn = modal.querySelector('#confirmRestoreBtn');
 
+    if (confirmBtn.disabled) return;
+
     if (!fileInput.files || fileInput.files.length === 0) {
       errorEl.textContent = 'Please select a backup file';
       errorEl.classList.remove('hidden');
@@ -532,18 +545,34 @@ export function createSettingsAdminActions(deps = {}) {
     progressEl.classList.remove('hidden');
     confirmBtn.disabled = true;
     confirmBtn.textContent = 'Restoring...';
+    fileInput.disabled = true;
+    const progressBar = modal.querySelector('#restoreProgressBar');
+    progressBar?.classList.remove('hidden');
+    const progress = createTransferProgress({
+      bar: progressBar,
+      text: progressText,
+      action: 'Uploading backup',
+    });
 
     try {
       const formData = new FormData();
       formData.append('backup', file);
 
-      progressText.textContent = 'Uploading backup...';
+      progress.waiting('Uploading backup...');
 
       const result = await apiCall('/admin/restore', {
         method: 'POST',
         body: formData,
+        onUploadProgress: (event) => {
+          if (event.complete) {
+            progress.complete('Upload sent—waiting for server confirmation...');
+          } else {
+            progress.update(event);
+          }
+        },
       });
 
+      progressBar?.classList.add('hidden');
       if (result?.restoreId) {
         await waitForRestoreStatus(result.restoreId, progressText);
       }
@@ -556,6 +585,7 @@ export function createSettingsAdminActions(deps = {}) {
       progressEl.classList.add('hidden');
       confirmBtn.disabled = false;
       confirmBtn.textContent = 'Restore Database';
+      fileInput.disabled = false;
     }
   }
 

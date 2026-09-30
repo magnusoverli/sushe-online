@@ -1,6 +1,11 @@
 [
   {
     "date": "2026-09-30",
+    "category": "improvement",
+    "description": "Added backup transfer progress and clear browser-save guidance; download dialogs stay open until dismissed."
+  },
+  {
+    "date": "2026-09-30",
     "category": "fix",
     "description": "Fixed lost saves when quickly reordering multiple lists, coordinated reorders with other list edits, and restored the original order when a batch fails."
   },
