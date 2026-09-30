@@ -2,6 +2,11 @@
   {
     "date": "2026-09-30",
     "category": "fix",
+    "description": "Updated vulnerable dependencies and refreshed CI's structural baseline for automatic upgrade support."
+  },
+  {
+    "date": "2026-09-30",
+    "category": "fix",
     "description": "Allowed verified historical migration checksums during upgrades while retaining checks against unknown migration changes."
   },
   {
