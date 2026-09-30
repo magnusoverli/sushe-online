@@ -54,7 +54,6 @@ import { createListCrud } from './modules/list-crud.js';
 import { init as initColumnConfig } from './modules/column-config.js';
 import { createPlayback } from './modules/playback.js';
 import { createAlbumContextMenu } from './modules/album-context-menu.js';
-import { createListReorder } from './modules/list-reorder.js';
 import { createAppShellUi } from './modules/app-shell-ui.js';
 import { createListSelection } from './modules/list-selection.js';
 import { createYearLockStatusRefresh } from './modules/year-lock-status-refresh.js';
@@ -771,8 +770,6 @@ function makeComment2Editable(commentDiv, albumIndex) {
   return getEditableFieldsModule().makeComment2Editable(commentDiv, albumIndex);
 }
 
-const { saveReorder } = createListReorder({ apiCall, logger: console });
-
 /**
  * Get or initialize the sorting module
  * Uses lazy initialization to avoid dependency ordering issues
@@ -782,7 +779,8 @@ const getSortingModule = createLazyModule(() =>
     getListData,
     getCurrentList: () => getCurrentListId(),
     debouncedSaveList,
-    saveReorder,
+    debouncedSaveReorder: appListOperations.debouncedSaveReorder,
+    flushReorder: appListOperations.flushReorder,
     updatePositionNumbers,
     showToast,
   })

@@ -2,8 +2,8 @@
  * List loading, import, and persistence flows for app composition.
  */
 import { createListImporter } from './app-list-import.js';
-import { createKeyedTaskQueue } from '../utils/keyed-task-queue.js';
-import { markListUnsaved } from './unsaved-lists.js';
+import { createListWriteQueue } from './list-write-queue.js';
+import { createListReorder } from './list-reorder.js';
 import {
   buildListMetadataEntries,
   fetchCoreList,
@@ -38,16 +38,25 @@ export function createAppListOperations(deps = {}) {
     logger = console,
   } = deps;
   let metadataRefreshGeneration = 0;
-  const enqueueSave = createKeyedTaskQueue();
-  const saveStates = new Map();
+  const failedAdditions = new Map();
+  const writes = createListWriteQueue({
+    onIdle: (listId) => failedAdditions.delete(listId),
+  });
+  const { saveReorder } = createListReorder({ apiCall, logger });
 
-  function getListSaveState(listId) {
-    const state = saveStates.get(listId);
-    return {
-      pending: state?.pending || 0,
-      version: state?.version || 0,
-      dirty: state?.dirty || false,
-    };
+  function debouncedSaveReorder(listId, data) {
+    const order = data.map((item) => ({ album_id: item.album_id }));
+    return writes.schedule(
+      listId,
+      async () => {
+        markLocalSave(listId);
+        await saveReorder(listId, order);
+        const snapshot = createListSnapshot(order);
+        getLastSavedSnapshots().set(listId, snapshot);
+        saveSnapshotToStorage(listId, snapshot);
+      },
+      { kind: 'reorder' }
+    );
   }
 
   const importList = createListImporter({
@@ -208,174 +217,167 @@ export function createAppListOperations(deps = {}) {
       delete cleaned.rank;
       return cleaned;
     });
-    if (!saveStates.has(listId)) {
-      saveStates.set(listId, {
-        pending: 0,
-        version: 0,
-        failedAdditions: new Map(),
-      });
-    }
-    const saveState = saveStates.get(listId);
-    const queuedVersion = ++saveState.version;
-    saveState.pending++;
-    markListUnsaved(listId, true);
+    let addedIds = [];
 
-    return enqueueSave(listId, async () => {
-      let addedIds = [];
-      let saveResult;
-      try {
-        // Queued edits may include an optimistic addition whose earlier write
-        // failed. Do not silently retry it; an explicit later retry is allowed.
-        cleanedData = cleanedData.filter(
-          (album) =>
-            !(saveState.failedAdditions.get(album.album_id) > queuedVersion)
-        );
-        // A preceding save may have assigned IDs while this write was queued.
-        const liveIds = new Map(
-          (getLists()[listId]?._data || []).map((item) => [
-            item.album_id,
-            item._id,
-          ])
-        );
-        for (const album of cleanedData) {
-          if (!album._id && liveIds.get(album.album_id)) {
-            album._id = liveIds.get(album.album_id);
-          }
-        }
-
-        markLocalSave(listId);
-
-        const oldSnapshot = getLastSavedSnapshots().get(listId);
-        const previousCount = Array.isArray(oldSnapshot)
-          ? oldSnapshot.length
-          : getLists()[listId]?.count;
-        const diff = computeListDiff(oldSnapshot, cleanedData);
-        const previousIds = new Set(oldSnapshot || []);
-        addedIds = cleanedData
-          .filter((album) => !previousIds.has(album.album_id))
-          .map((album) => album.album_id);
-
-        if (diff && diff.totalChanges > 0) {
-          const result = await apiCall(
-            `/api/lists/${encodeURIComponent(listId)}/items`,
-            {
-              method: 'PATCH',
-              ...precondition,
-              body: JSON.stringify({
-                added: diff.added,
-                removed: diff.removed,
-                updated: diff.updated,
-              }),
-            }
+    return writes.schedule(
+      listId,
+      async (queuedVersion) => {
+        let saveResult;
+        try {
+          // Queued edits may include an optimistic addition whose earlier write
+          // failed. Do not silently retry it; an explicit later retry is allowed.
+          cleanedData = cleanedData.filter(
+            (album) =>
+              !(
+                failedAdditions.get(listId)?.get(album.album_id) > queuedVersion
+              )
           );
-          saveResult = result;
+          // A preceding save may have assigned IDs while this write was queued.
+          const liveIds = new Map(
+            (getLists()[listId]?._data || []).map((item) => [
+              item.album_id,
+              item._id,
+            ])
+          );
+          for (const album of cleanedData) {
+            if (!album._id && liveIds.get(album.album_id)) {
+              album._id = liveIds.get(album.album_id);
+            }
+          }
 
-          if (result.addedItems && result.addedItems.length > 0) {
-            for (const added of result.addedItems) {
-              const localItem = cleanedData.find(
-                (album) =>
-                  album.album_id === (added.inputAlbumId || added.album_id)
-              );
-              if (localItem) {
-                localItem._id = added._id;
-                localItem.album_id = added.album_id;
+          markLocalSave(listId);
+
+          const oldSnapshot = getLastSavedSnapshots().get(listId);
+          const previousCount = Array.isArray(oldSnapshot)
+            ? oldSnapshot.length
+            : getLists()[listId]?.count;
+          const diff = computeListDiff(oldSnapshot, cleanedData);
+          const previousIds = new Set(oldSnapshot || []);
+          addedIds = cleanedData
+            .filter((album) => !previousIds.has(album.album_id))
+            .map((album) => album.album_id);
+
+          if (diff && diff.totalChanges > 0) {
+            const result = await apiCall(
+              `/api/lists/${encodeURIComponent(listId)}/items`,
+              {
+                method: 'PATCH',
+                ...precondition,
+                body: JSON.stringify({
+                  added: diff.added,
+                  removed: diff.removed,
+                  updated: diff.updated,
+                }),
+              }
+            );
+            saveResult = result;
+
+            if (result.addedItems && result.addedItems.length > 0) {
+              for (const added of result.addedItems) {
+                const localItem = cleanedData.find(
+                  (album) =>
+                    album.album_id === (added.inputAlbumId || added.album_id)
+                );
+                if (localItem) {
+                  localItem._id = added._id;
+                  localItem.album_id = added.album_id;
+                }
               }
             }
-          }
-          if (result.duplicates?.length) {
-            const inserted = new Set(
-              (result.addedItems || []).map((item) => item.album_id)
-            );
-            const seen = new Set();
-            cleanedData = cleanedData.filter((album) => {
-              const duplicate = result.duplicates.some(
-                (item) =>
-                  item.album_id === album.album_id ||
-                  (item.artist === album.artist && item.album === album.album)
+            if (result.duplicates?.length) {
+              const inserted = new Set(
+                (result.addedItems || []).map((item) => item.album_id)
               );
-              if (
-                (duplicate &&
-                  !previousIds.has(album.album_id) &&
-                  !inserted.has(album.album_id)) ||
-                seen.has(album.album_id)
-              )
-                return false;
-              seen.add(album.album_id);
-              return true;
-            });
-          }
-
-          const listName = getLists()[listId]?.name || listId;
-          logger.log(
-            `List "${listName}" saved incrementally: +${diff.added.length} -${diff.removed.length} ~${diff.updated.length}`
-          );
-        } else {
-          saveResult = await apiCall(
-            `/api/lists/${encodeURIComponent(listId)}`,
-            {
-              method: 'PUT',
-              ...precondition,
-              body: JSON.stringify({ data: cleanedData }),
+              const seen = new Set();
+              cleanedData = cleanedData.filter((album) => {
+                const duplicate = result.duplicates.some(
+                  (item) =>
+                    item.album_id === album.album_id ||
+                    (item.artist === album.artist && item.album === album.album)
+                );
+                if (
+                  (duplicate &&
+                    !previousIds.has(album.album_id) &&
+                    !inserted.has(album.album_id)) ||
+                  seen.has(album.album_id)
+                )
+                  return false;
+                seen.add(album.album_id);
+                return true;
+              });
             }
-          );
-        }
 
-        const snapshot = createListSnapshot(cleanedData);
-        saveState.dirty = false;
-        getLastSavedSnapshots().set(listId, snapshot);
-        saveSnapshotToStorage(listId, snapshot);
-
-        const currentData = getLists()[listId]?._data;
-        if (
-          currentData === visibleData &&
-          JSON.stringify(currentData) === visibleFingerprint
-        ) {
-          setListData(listId, cleanedData, false);
-        } else if (currentData) {
-          // Never replace newer edits with this response. Only fill missing IDs.
-          const savedIds = new Map(
-            cleanedData
-              .filter((item) => item._id)
-              .map((item) => [item.album_id, item._id])
-          );
-          const withIds = currentData.map((item) =>
-            !item._id && savedIds.has(item.album_id)
-              ? { ...item, _id: savedIds.get(item.album_id) }
-              : item
-          );
-          if (withIds.some((item, index) => item !== currentData[index])) {
-            setListData(listId, withIds, false);
+            const listName = getLists()[listId]?.name || listId;
+            logger.log(
+              `List "${listName}" saved incrementally: +${diff.added.length} -${diff.removed.length} ~${diff.updated.length}`
+            );
+          } else {
+            saveResult = await apiCall(
+              `/api/lists/${encodeURIComponent(listId)}`,
+              {
+                method: 'PUT',
+                ...precondition,
+                body: JSON.stringify({ data: cleanedData }),
+              }
+            );
           }
-        }
-        if (previousCount !== cleanedData.length) {
-          updateListNav();
-        }
 
-        if (year !== undefined) {
-          updateListMetadata(listId, { year });
+          const snapshot = createListSnapshot(cleanedData);
+          getLastSavedSnapshots().set(listId, snapshot);
+          saveSnapshotToStorage(listId, snapshot);
+
+          const currentData = getLists()[listId]?._data;
+          if (
+            currentData === visibleData &&
+            JSON.stringify(currentData) === visibleFingerprint
+          ) {
+            setListData(listId, cleanedData, false);
+          } else if (currentData) {
+            // Never replace newer edits with this response. Only fill missing IDs.
+            const savedIds = new Map(
+              cleanedData
+                .filter((item) => item._id)
+                .map((item) => [item.album_id, item._id])
+            );
+            const withIds = currentData.map((item) =>
+              !item._id && savedIds.has(item.album_id)
+                ? { ...item, _id: savedIds.get(item.album_id) }
+                : item
+            );
+            if (withIds.some((item, index) => item !== currentData[index])) {
+              setListData(listId, withIds, false);
+            }
+          }
+          if (previousCount !== cleanedData.length) {
+            updateListNav();
+          }
+
+          if (year !== undefined) {
+            updateListMetadata(listId, { year });
+          }
+          return saveResult;
+        } catch (error) {
+          showToast(
+            error.code === 'LIST_CONFLICT' ||
+              error.code === 'LIST_REVISION_REQUIRED' ||
+              error.code === 'SESSION_EXPIRED'
+              ? error.message
+              : 'Error saving list',
+            'error'
+          );
+          throw error;
         }
-        return saveResult;
-      } catch (error) {
-        saveState.dirty = true;
-        const failedVersion = ++saveState.version;
-        for (const id of addedIds) {
-          saveState.failedAdditions.set(id, failedVersion);
-        }
-        showToast(
-          error.code === 'LIST_CONFLICT' ||
-            error.code === 'LIST_REVISION_REQUIRED' ||
-            error.code === 'SESSION_EXPIRED'
-            ? error.message
-            : 'Error saving list',
-          'error'
-        );
-        throw error;
-      } finally {
-        saveState.pending--;
-        markListUnsaved(listId, saveState.pending > 0 || saveState.dirty);
-        if (!saveState.pending) saveState.failedAdditions.clear();
+      },
+      {
+        onError: (_error, failedVersion) => {
+          if (!failedAdditions.has(listId))
+            failedAdditions.set(listId, new Map());
+          for (const id of addedIds) {
+            failedAdditions.get(listId).set(id, failedVersion);
+          }
+        },
       }
-    });
+    );
   }
 
   return {
@@ -383,7 +385,9 @@ export function createAppListOperations(deps = {}) {
     loadLists,
     importList,
     saveList,
-    getListSaveState,
-    waitForListSaves: (listId) => enqueueSave(listId, async () => {}),
+    debouncedSaveReorder,
+    flushReorder: writes.flush,
+    getListSaveState: writes.getState,
+    waitForListSaves: writes.wait,
   };
 }

@@ -55,8 +55,11 @@ function node(classes = [], parent = null) {
 
 describe('sorting lifecycle', () => {
   let createSorting;
+  let createListWriteQueue;
   before(async () => {
     ({ createSorting } = await import('../src/js/modules/sorting.js'));
+    ({ createListWriteQueue } =
+      await import('../src/js/modules/list-write-queue.js'));
   });
 
   function setup(t, { mobile = false, fallback = false } = {}) {
@@ -98,6 +101,16 @@ describe('sorting lifecycle', () => {
         return load.promise;
       },
     };
+    const writes = createListWriteQueue({ markUnsaved() {} });
+    if (!fallback) {
+      deps.debouncedSaveReorder = (id, list) => {
+        const order = [...list];
+        return writes.schedule(id, () => deps.saveReorder(id, order), {
+          kind: 'reorder',
+        });
+      };
+      deps.flushReorder = writes.flush;
+    }
     const sorting = createSorting(deps);
     t.after(() => sorting.destroySorting(container));
     return {
@@ -222,6 +235,77 @@ describe('sorting lifecycle', () => {
       'owner',
       ['b', 'c', 'a'],
     ]);
+  });
+
+  it('saves both lists when navigating and dragging again within the debounce window', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const h = setup(t);
+    const owner = await h.activate();
+    let settled = 0;
+    const first = owner.onEnd(h.event).then(() => settled++);
+    t.mock.timers.tick(250);
+    h.state.listId = 'other';
+    const other = await h.activate();
+    const second = other.onEnd(h.event).then(() => settled++);
+    t.mock.timers.tick(500);
+    await second;
+    assert.equal(h.deps.saveReorder.mock.callCount(), 2);
+    await first;
+    assert.equal(settled, 2);
+    assert.deepEqual(
+      h.deps.saveReorder.mock.calls.map((call) => call.arguments),
+      [
+        ['owner', ['b', 'c', 'a']],
+        ['other', ['y', 'z', 'x']],
+      ]
+    );
+  });
+
+  it('settles every rapid-drag caller when their shared order is saved', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const h = setup(t);
+    const options = await h.activate();
+    let settled = 0;
+    const first = options.onEnd(h.event).then(() => settled++);
+    t.mock.timers.tick(250);
+    const second = options.onEnd(h.event).then(() => settled++);
+    t.mock.timers.tick(500);
+    await second;
+    assert.equal(settled, 2);
+    await first;
+    assert.equal(h.deps.saveReorder.mock.callCount(), 1);
+  });
+
+  it('rolls back a failed coalesced batch to its pre-drag order and reports it once', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    t.mock.method(console, 'error', () => {});
+    const h = setup(t);
+    const options = await h.activate();
+    node(['album-card-wrapper'], h.rows);
+    node(['album-card-wrapper'], h.rows);
+    const originalRows = [...h.rows.children];
+    h.rows.appendChild = (row) => {
+      h.rows.children = h.rows.children.filter((child) => child !== row);
+      h.rows.children.push(row);
+    };
+    h.deps.saveReorder.mock.mockImplementation(async () => {
+      throw new Error('offline');
+    });
+    const drag = () => {
+      const [item] = h.rows.children.splice(0, 1);
+      h.rows.children.push(item);
+      return options.onEnd({ ...h.event, item });
+    };
+    const first = drag();
+    t.mock.timers.tick(250);
+    const second = drag();
+    assert.deepEqual(h.lists.owner, ['c', 'a', 'b']);
+    t.mock.timers.tick(500);
+    await Promise.all([first, second]);
+    assert.deepEqual(h.lists.owner, ['a', 'b', 'c']);
+    assert.deepEqual(h.rows.children, originalRows);
+    assert.equal(h.deps.showToast.mock.callCount(), 1);
+    assert.equal(h.deps.saveReorder.mock.callCount(), 1);
   });
 
   for (const change of ['destroy', 'list', 'readonly', 'reinit']) {

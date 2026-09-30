@@ -616,7 +616,7 @@ describe('saveList with real state and diff computation', () => {
       showToast,
       markLocalSave: mock.fn(),
       updateListNav: mock.fn(),
-      logger: { log() {} },
+      logger: { log() {}, error() {} },
     });
   });
 
@@ -708,6 +708,107 @@ describe('saveList with real state and diff computation', () => {
       'a',
       'b',
     ]);
+  });
+
+  it('queues reorders behind additions while tracking pending intent before its timer fires', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    state.setListData('list-1', [{ album_id: 'old', _id: 'item-old' }]);
+    const saving = Promise.withResolvers();
+    const started = Promise.withResolvers();
+    apiCall.mock.mockImplementationOnce(() => {
+      started.resolve();
+      return saving.promise;
+    });
+    const added = [{ album_id: 'old', _id: 'item-old' }, { album_id: 'new' }];
+    state.setListData('list-1', added, false);
+    const add = operations.saveList('list-1', added);
+    await started.promise;
+    const reordered = [added[1], added[0]];
+    state.setListData('list-1', reordered, false);
+    const reorder = operations.debouncedSaveReorder('list-1', reordered);
+    assert.strictEqual(operations.getListSaveState('list-1').pending, 2);
+    const drained = operations.waitForListSaves('list-1');
+    state.setListData('list-2', []);
+    await operations.saveList('list-2', []);
+    assert.strictEqual(apiCall.mock.callCount(), 2);
+    saving.resolve({ addedItems: [{ album_id: 'new', _id: 'item-new' }] });
+    await Promise.all([add, reorder, drained]);
+    assert.strictEqual(
+      apiCall.mock.calls[2].arguments[0],
+      '/api/lists/list-1/reorder'
+    );
+    assert.deepStrictEqual(
+      JSON.parse(apiCall.mock.calls[2].arguments[1].body),
+      {
+        order: ['new', 'old'],
+      }
+    );
+    assert.deepStrictEqual(state.getLastSavedSnapshots().get('list-1'), [
+      'new',
+      'old',
+    ]);
+    assert.deepStrictEqual(
+      state.getListData('list-1').map((item) => item.album_id),
+      ['new', 'old']
+    );
+    assert.strictEqual(operations.getListSaveState('list-1').pending, 0);
+  });
+
+  it('flushes a pending reorder before computing the following edit diff', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const a = { album_id: 'a', album: 'Original' };
+    const b = { album_id: 'b', album: 'Second' };
+    state.setListData('list-1', [a, b]);
+    const reorder = operations.debouncedSaveReorder('list-1', [b, a]);
+    const edited = [b, { ...a, album: 'Edited' }];
+    state.setListData('list-1', edited, false);
+    const save = operations.saveList('list-1', edited);
+    await Promise.all([reorder, save]);
+    assert.strictEqual(apiCall.mock.callCount(), 2);
+    assert.strictEqual(
+      apiCall.mock.calls[0].arguments[0],
+      '/api/lists/list-1/reorder'
+    );
+    // The position-only diff must not swallow the album edit.
+    assert.strictEqual(apiCall.mock.calls[1].arguments[1].method, 'PUT');
+    assert.deepStrictEqual(
+      JSON.parse(apiCall.mock.calls[1].arguments[1].body),
+      { data: edited }
+    );
+  });
+
+  it('retains the acknowledged snapshot and dirty state on reorder conflicts without retrying', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const a = { album_id: 'a' };
+    const b = { album_id: 'b' };
+    state.setListData('list-1', [a, b]);
+    const conflict = Object.assign(new Error('Reload and reconcile'), {
+      code: 'LIST_CONFLICT',
+    });
+    apiCall.mock.mockImplementation(async () => {
+      throw conflict;
+    });
+    const first = operations.debouncedSaveReorder('list-1', [b, a]);
+    const second = operations.debouncedSaveReorder('list-1', [b, a]);
+    assert.strictEqual(first, second);
+    const rejected = [first, second].map((result) =>
+      assert.rejects(result, { code: 'LIST_CONFLICT' })
+    );
+    await operations.waitForListSaves('list-1');
+    await Promise.all(rejected);
+    assert.strictEqual(apiCall.mock.callCount(), 1);
+    assert.deepStrictEqual(state.getLastSavedSnapshots().get('list-1'), [
+      'a',
+      'b',
+    ]);
+    assert.strictEqual(operations.getListSaveState('list-1').dirty, true);
+    assert.strictEqual(operations.getListSaveState('list-1').pending, 0);
+    // Explicit retry succeeds; the failed batch is not replayed automatically.
+    apiCall.mock.mockImplementation(async () => ({}));
+    const retry = operations.debouncedSaveReorder('list-1', [b, a]);
+    await operations.waitForListSaves('list-1');
+    await retry;
+    assert.strictEqual(operations.getListSaveState('list-1').dirty, false);
   });
 
   it('prunes a failed addition from an already-queued save but allows an explicit later retry', async () => {

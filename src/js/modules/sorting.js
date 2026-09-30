@@ -16,7 +16,8 @@ import { loadSortable as defaultLoadSortable } from './sortable-loader.js';
  * @param {Function} deps.getListData - Get album array for a list
  * @param {Function} deps.getCurrentList - Get current list name
  * @param {Function} deps.debouncedSaveList - Debounced save function (full data)
- * @param {Function} deps.saveReorder - Lightweight reorder function (only album IDs)
+ * @param {Function} deps.debouncedSaveReorder - Queue a lightweight reorder save
+ * @param {Function} deps.flushReorder - Dispatch pending intent when its view closes
  * @param {Function} deps.updatePositionNumbers - Update position numbers in UI
  * @param {Function} deps.showToast - Show toast notification
  * @param {Function} deps.loadSortable - Load the SortableJS constructor
@@ -27,50 +28,14 @@ export function createSorting(deps = {}) {
     getListData,
     getCurrentList,
     debouncedSaveList,
-    saveReorder,
+    debouncedSaveReorder,
+    flushReorder,
     updatePositionNumbers,
     showToast,
     loadSortable = defaultLoadSortable,
   } = deps;
   const initializationTokens = new WeakMap();
-
-  // Debounce state for rapid reorders (prevents API spam during quick successive drags)
-  let reorderDebounceTimeout = null;
-  let pendingReorder = null;
-
-  /**
-   * Debounced reorder save - batches rapid reorders into a single API call
-   * @param {string} listName - List name to reorder
-   * @param {Array} list - Album array in new order
-   * @param {number} delay - Debounce delay in ms (default 500ms)
-   */
-  async function debouncedSaveReorder(listName, list, delay = 500) {
-    // Store pending reorder data
-    pendingReorder = { listName, list: [...list] };
-
-    // Clear existing timeout
-    clearTimeout(reorderDebounceTimeout);
-
-    // Schedule save
-    return new Promise((resolve, reject) => {
-      reorderDebounceTimeout = setTimeout(async () => {
-        if (!pendingReorder) {
-          resolve();
-          return;
-        }
-
-        const { listName: name, list: data } = pendingReorder;
-        pendingReorder = null;
-
-        try {
-          await saveReorder(name, data);
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      }, delay);
-    });
-  }
+  const reorderBatches = new WeakMap();
 
   /**
    * Initialize unified sorting using SortableJS for both desktop and mobile
@@ -80,7 +45,7 @@ export function createSorting(deps = {}) {
   function initializeUnifiedSorting(container, isMobile) {
     destroySorting(container);
     const listId = getCurrentList();
-    const token = {};
+    const token = { listId };
     initializationTokens.set(container, token);
     const isCurrent = () =>
       initializationTokens.get(container) === token &&
@@ -199,7 +164,7 @@ export function createSorting(deps = {}) {
 
         if (oldIndex !== newIndex) {
           let list = null;
-          let appliedOrder = null;
+          let batch = null;
           try {
             // Update the data
             list = getListData(listId);
@@ -207,9 +172,12 @@ export function createSorting(deps = {}) {
               console.error('List data not found');
               return;
             }
+            const beforeOrder = [...list];
+            const beforeRows = Array.from(evt.to.children);
+            beforeRows.splice(newIndex, 1);
+            beforeRows.splice(oldIndex, 0, evt.item);
             const [movedItem] = list.splice(oldIndex, 1);
             list.splice(newIndex, 0, movedItem);
-            appliedOrder = [...list];
 
             // Immediate optimistic UI update
             updatePositionNumbers(sortableContainer, isMobile);
@@ -217,35 +185,45 @@ export function createSorting(deps = {}) {
             // Use lightweight reorder endpoint (only sends album IDs, not full data)
             // This prevents "payload too large" errors for lists with many albums
             // Debounced to prevent API spam during rapid successive drags
-            if (saveReorder) {
-              await debouncedSaveReorder(listId, list);
-            } else {
-              // Fallback to full save if reorder function not available
-              debouncedSaveList(listId, list);
+            const saving = Promise.resolve(
+              debouncedSaveReorder
+                ? debouncedSaveReorder(listId, list)
+                : debouncedSaveList(listId, list)
+            );
+            batch = reorderBatches.get(saving);
+            if (!batch) {
+              batch = { beforeOrder, beforeRows, handled: false };
+              reorderBatches.set(saving, batch);
             }
+            batch.appliedOrder = [...list];
+            await saving;
           } catch (error) {
+            if (batch?.handled) return;
+            if (batch) batch.handled = true;
             console.error('Error saving reorder:', error);
             // Roll back the captured owner's cache even after navigation, but
             // never undo newer edits or touch the replacement view's DOM.
             const unchanged =
               list &&
-              appliedOrder &&
-              list.length === appliedOrder.length &&
-              list.every((item, index) => item === appliedOrder[index]);
+              batch &&
+              getListData(listId) === list &&
+              list.length === batch.appliedOrder.length &&
+              list.every((item, index) => item === batch.appliedOrder[index]);
             if (unchanged) {
-              const [movedItem] = list.splice(newIndex, 1);
-              list.splice(oldIndex, 0, movedItem);
+              list.splice(0, list.length, ...batch.beforeOrder);
             }
-            if (!isCurrent() || !unchanged || getListData(listId) !== list)
-              return;
-            showToast?.('Error saving changes', 'error');
-            // Put the dragged element itself back at its original index;
-            // sibling indices have shifted, so compute the reference from
-            // the list without the dragged element
-            const others = Array.from(evt.to.children).filter(
-              (el) => el !== evt.item
+            if (!isCurrent()) return;
+            showToast?.(
+              error.code === 'LIST_CONFLICT' ||
+                error.code === 'LIST_REVISION_REQUIRED' ||
+                error.code === 'SESSION_EXPIRED'
+                ? error.message
+                : 'Error saving changes',
+              'error'
             );
-            evt.to.insertBefore(evt.item, others[oldIndex] || null);
+            if (!unchanged) return;
+            // Restore the whole coalesced batch, not just its final gesture.
+            batch.beforeRows.forEach((row) => evt.to.appendChild(row));
             updatePositionNumbers(sortableContainer, isMobile);
           }
         }
@@ -323,6 +301,7 @@ export function createSorting(deps = {}) {
     // Invalidate before destroy, which may itself dispatch drag callbacks.
     initializationTokens.delete(container);
     token?.cleanup?.();
+    if (token?.listId) flushReorder?.(token.listId);
     if (container._sortable) {
       container._sortable.destroy();
       container._sortable = null;

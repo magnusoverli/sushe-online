@@ -2,6 +2,11 @@
   {
     "date": "2026-09-30",
     "category": "fix",
+    "description": "Fixed lost saves when quickly reordering multiple lists, coordinated reorders with other list edits, and restored the original order when a batch fails."
+  },
+  {
+    "date": "2026-09-30",
+    "category": "fix",
     "description": "Updated vulnerable dependencies and refreshed CI's structural baseline for automatic upgrade support."
   },
   {
