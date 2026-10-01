@@ -387,6 +387,27 @@ describe('RateYourMusic listing observation fetch', () => {
     assert.strictEqual(album.album, 'Watching From a Distance');
   });
 
+  it('extracts the album from its cover image linking to the same release buy page', async () => {
+    const script = loadContentScript({
+      fetchResponse: response(),
+      parsedDocument: createDetailDocument(),
+      pageDocument: createDetailDocument({
+        title: 'Spirit of Eden by Talk Talk - Rate Your Music',
+        canonicalUrl: albumUrl,
+      }),
+      locationHref: albumUrl,
+    });
+    const album = await script.extractAlbumDataFromPage({
+      pageUrl: albumUrl,
+      linkUrl: `${albumUrl}buy/`,
+      srcUrl: 'https://cdn.sonemic.net/i/600/cover.png',
+      mediaType: 'image',
+    });
+    assert.equal(album.albumUrl, albumUrl);
+    assert.equal(album.sourceObservation.identity.title, 'Spirit of Eden');
+    assert.equal(globalThis.fetch.mock.calls.length, 0);
+  });
+
   it('does not copy the current album genres when a linked detail page is unavailable', async () => {
     const selectedUrl =
       'https://rateyourmusic.com/release/album/other-artist/other-album/';

@@ -4,6 +4,7 @@
     const message = {
       action: actions.EXTRACT_ALBUM_IDENTITY,
       srcUrl: info.srcUrl,
+      mediaType: info.mediaType,
       linkUrl: info.linkUrl,
       pageUrl: info.pageUrl,
     };
@@ -70,7 +71,7 @@
     );
     // An unsupported release link cannot be reinterpreted as album artwork.
     if (!clicked && (!info.srcUrl || /\/release\//i.test(info.linkUrl || '')))
-      identity.getContextAlbumIdentity(info);
+      return identity.getContextAlbumIdentity(info);
     return clicked;
   }
 

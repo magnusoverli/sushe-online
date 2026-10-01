@@ -49,7 +49,7 @@
       .trim();
   }
 
-  function canonicalizeRymAlbumUrl(value) {
+  function canonicalizeRymAlbumUrl(value, { buyLink = false } = {}) {
     if (!value) return null;
 
     const rawValue = String(value);
@@ -81,7 +81,9 @@
     if (parsed.username || parsed.password || parsed.port) return null;
 
     const pathMatch = parsed.pathname.match(
-      /^\/release\/album\/([^/]+)\/([^/]+)\/?$/i
+      buyLink
+        ? /^\/release\/album\/([^/]+)\/([^/]+)\/buy\/?$/i
+        : /^\/release\/album\/([^/]+)\/([^/]+)\/?$/i
     );
     if (!pathMatch) return null;
 
@@ -137,14 +139,18 @@
     return `${artist}::${album}`;
   }
 
-  function getContextAlbumIdentity({ linkUrl, pageUrl }) {
+  function getContextAlbumIdentity({ linkUrl, pageUrl, srcUrl, mediaType }) {
     // An explicit link is the selection, even when its release type is unsupported.
     const identity = getAlbumIdentityFromUrl(linkUrl || pageUrl);
-    if (!identity)
-      throw new Error(
-        'Right-click a RYM album link or a recognizable album cover. Only album releases are supported.'
-      );
-    return identity;
+    if (identity) return identity;
+    // RYM links the cover image to this album's /buy/ page on some releases.
+    const isImage = srcUrl && mediaType === 'image';
+    const page = isImage && getAlbumIdentityFromUrl(pageUrl);
+    const buy = isImage && canonicalizeRymAlbumUrl(linkUrl, { buyLink: true });
+    if (page && buy?.canonicalPath === page.canonicalPath) return page;
+    throw new Error(
+      'Right-click a RYM album link or a recognizable album cover. Only album releases are supported.'
+    );
   }
 
   function getIdentityKeys(album) {

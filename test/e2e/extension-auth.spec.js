@@ -739,6 +739,37 @@ test('unsupported release links never save the current album, while its linked c
   }
 });
 
+test('a release cover linked to its own buy page adds the album', async ({
+  browserName: _browserName,
+}, testInfo) => {
+  const fixture = await startExtension(testInfo);
+  try {
+    const url = 'https://rateyourmusic.com/release/album/artist/album/';
+    const page = await openRymFixture(fixture, url, {
+      [url]: rymDetailHtml({ canonicalUrl: url }).replace(
+        'https://images.test/full.jpg',
+        `${url}buy/`
+      ),
+    });
+    const srcUrl = await page.locator('img.coverart_img').getAttribute('src');
+    await addFromRym(fixture, {
+      pageUrl: url,
+      linkUrl: `${url}buy/`,
+      srcUrl,
+      mediaType: 'image',
+    });
+    const additions = fixture.mutations.filter(
+      (mutation) => mutation.operation === 'add'
+    );
+    expect(additions).toHaveLength(1);
+    expect(additions[0].added[0].sourceObservation.identity.canonicalUrl).toBe(
+      url
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
 test('an unavailable linked detail page cannot supply genres from the current album', async ({
   browserName: _browserName,
 }, testInfo) => {

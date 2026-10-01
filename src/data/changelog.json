@@ -2,6 +2,11 @@
   {
     "date": "2026-10-01",
     "category": "fix",
+    "description": "Extension 1.9.13 adds albums when their RYM cover image links to that same album's buy page."
+  },
+  {
+    "date": "2026-10-01",
+    "category": "fix",
     "description": "Fixed album artwork selection when adding albums via browser extension.",
     "hash": "99ccc6d76076bb30b365ca035d991b913f99b1e6",
     "commitMessage": "Fix RYM artwork album selection in extension 1.9.12"

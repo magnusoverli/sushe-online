@@ -126,6 +126,28 @@ describe('album-add-service', () => {
     assert.equal(deps.showNotification.mock.calls.length, 0);
   });
 
+  it('adds an album from its own cover image linked to the RYM buy page', async () => {
+    const deps = createDeps();
+    await globalThis.AlbumAddService.createAlbumAddService(deps).addAlbumToList(
+      {
+        pageUrl: albumUrl,
+        linkUrl: `${albumUrl}buy/`,
+        srcUrl: 'https://cdn.sonemic.net/i/600/cover.png',
+        mediaType: 'image',
+      },
+      { id: 7 },
+      'list',
+      'List'
+    );
+    assert.equal(deps.chrome.tabs.sendMessage.mock.calls.length, 1);
+    assert.equal(
+      deps.chrome.tabs.sendMessage.mock.calls[0].arguments[1].mediaType,
+      'image'
+    );
+    assert.equal(deps.albumApi.saveAlbum.mock.calls.length, 1);
+    assert.equal(deps.showNotification.mock.calls.length, 0);
+  });
+
   it('rejects an unsupported release linked from an image before extraction', async () => {
     const deps = createDeps();
     await globalThis.AlbumAddService.createAlbumAddService(deps).addAlbumToList(

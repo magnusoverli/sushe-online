@@ -31,6 +31,37 @@ test('the Namu RYM album URL is a supported album release', () => {
   });
 });
 
+test('a RYM cover image linking to its own buy page retains the album identity', () => {
+  const identity = globalThis.AlbumIdentity;
+  const pageUrl =
+    'https://rateyourmusic.com/release/album/namu/wretched-spawns-of-iniquitous-orders/';
+  const context = {
+    pageUrl,
+    linkUrl: `${pageUrl}buy/`,
+    srcUrl: 'https://cdn.sonemic.net/i/600/namu-cover.png',
+    mediaType: 'image',
+  };
+  assert.equal(identity.getAlbumIdentityFromUrl(context.linkUrl), null);
+  assert.deepEqual(
+    identity.getContextAlbumIdentity(context),
+    identity.getAlbumIdentityFromUrl(pageUrl)
+  );
+  for (const overrides of [
+    { mediaType: 'link' },
+    { srcUrl: undefined },
+    { pageUrl: pageUrl.replace('namu', 'different-artist') },
+    { linkUrl: context.linkUrl.replace('namu', 'different-artist') },
+    { linkUrl: `${pageUrl}buy/more/` },
+    { linkUrl: `${pageUrl.replace('/album/', '/ep/')}buy/` },
+    { linkUrl: context.linkUrl.replace('rateyourmusic.com', 'evil.test') },
+  ]) {
+    assert.throws(
+      () => identity.getContextAlbumIdentity({ ...context, ...overrides }),
+      /Only album releases/
+    );
+  }
+});
+
 test('MusicBrainz search preserves query delimiters and rejects mismatched or ambiguous releases', async () => {
   let url;
   let releases = [
