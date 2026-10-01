@@ -2,6 +2,13 @@
   {
     "date": "2026-10-01",
     "category": "fix",
+    "description": "Fixed album covers not loading for RYM buy-linked albums.",
+    "hash": "bc6bb1e13e416ebb7d8d320481761cc71ffbee36",
+    "commitMessage": "Fix RYM buy-linked album covers in extension 1.9.13"
+  },
+  {
+    "date": "2026-10-01",
+    "category": "fix",
     "description": "Extension 1.9.13 adds albums when their RYM cover image links to that same album's buy page."
   },
   {
