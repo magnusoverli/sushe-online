@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-10-01",
+    "category": "fix",
+    "description": "Extension 1.9.12 recognizes album artwork on RYM listing pages without mistaking unrelated or ambiguous links for an album."
+  },
+  {
     "date": "2026-09-30",
     "category": "security",
     "description": "Updated runtimes, database and dependencies, migrated metrics, and added automated dependency and container security checks."

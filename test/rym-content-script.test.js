@@ -74,6 +74,24 @@ function createListingDocument() {
   };
 }
 
+function createListingDocumentWithCover() {
+  const document = createListingDocument();
+  const albumLink = document.querySelectorAll('a[href*="/release/album/"]')[0];
+  const row = albumLink.closest();
+  const image = {
+    src: 'https://images.test/cover.jpg',
+    currentSrc: 'https://images.test/cover.jpg',
+    closest: (selector) =>
+      selector === 'a' ? { href: 'https://images.test/full.jpg' } : row,
+  };
+  const querySelectorAll = document.querySelectorAll;
+  document.querySelectorAll = (selector) =>
+    selector.startsWith('img.coverart_img')
+      ? [image]
+      : querySelectorAll(selector);
+  return { document, image, row };
+}
+
 function response({ html = '<html></html>', url = albumUrl, ok = true } = {}) {
   const result = new globalThis.Response(html, {
     status: ok ? 200 : 503,
@@ -208,6 +226,61 @@ describe('RateYourMusic listing observation fetch', () => {
       'schemaVersion',
       'taxonomy',
     ]);
+  });
+
+  it('resolves a listing cover image from its single album row, not the listing URL', async () => {
+    const { document, image } = createListingDocumentWithCover();
+    const script = loadContentScript({
+      fetchResponse: response(),
+      parsedDocument: createDetailDocument(),
+      pageDocument: document,
+    });
+    const album = await script.extractAlbumDataFromPage({
+      pageUrl: globalThis.location.href,
+      srcUrl: image.src,
+      linkUrl: 'https://images.test/full.jpg',
+    });
+
+    assert.equal(album.albumUrl, albumUrl);
+    assert.equal(album.genre_1, 'Art Rock');
+    assert.equal(album.sourceObservation.taxonomy.complete, true);
+  });
+
+  it('rejects unrelated and ambiguous listing images instead of guessing an album', async () => {
+    const { document, image, row } = createListingDocumentWithCover();
+    const script = loadContentScript({
+      fetchResponse: response(),
+      parsedDocument: createDetailDocument(),
+      pageDocument: document,
+    });
+    const context = {
+      pageUrl: globalThis.location.href,
+      srcUrl: image.src,
+      linkUrl: 'https://images.test/full.jpg',
+    };
+    for (const overrides of [
+      { srcUrl: 'https://images.test/unrelated.jpg' },
+      { linkUrl: 'https://images.test/other.jpg' },
+      { linkUrl: albumUrl.replace('/album/', '/ep/') },
+    ]) {
+      await assert.rejects(
+        script.extractAlbumDataFromPage({ ...context, ...overrides }),
+        /Only album releases/
+      );
+    }
+    const querySelectorAll = row.querySelectorAll;
+    row.querySelectorAll = (selector) =>
+      selector === 'a[href*="/release/"]'
+        ? [
+            { href: albumUrl },
+            { href: albumUrl.replace('spirit-of-eden', 'another-album') },
+          ]
+        : querySelectorAll(selector);
+    await assert.rejects(
+      script.extractAlbumDataFromPage(context),
+      /Only album releases/
+    );
+    assert.equal(globalThis.fetch.mock.calls.length, 0);
   });
 
   it('preserves listing identity and legacy genres for challenge pages', async () => {

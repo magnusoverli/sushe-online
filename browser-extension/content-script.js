@@ -143,6 +143,26 @@
     return request;
   }
 
+  function findAlbumRow(element) {
+    return (
+      element.closest('.page_section_charts_item_wrapper') ||
+      element.closest('.page_charts_section_charts_item_wrapper') ||
+      element.closest('[class*="chart_item"]') ||
+      element.closest('tr') ||
+      element.closest('[class*="release_row"]')
+    );
+  }
+
+  function rowAlbumUrl(row) {
+    if (!row) return null;
+    const urls = Array.from(row.querySelectorAll('a[href*="/release/"]')).map(
+      (link) => albumIdentity.canonicalizeRymAlbumUrl(link.href)?.canonicalUrl
+    );
+    return urls.length && urls[0] && urls.every((url) => url === urls[0])
+      ? urls[0]
+      : null;
+  }
+
   function findAlbumContext(identity) {
     try {
       const canonicalUrl = (link) =>
@@ -152,19 +172,8 @@
       ).find((link) => canonicalUrl(link) === identity.albumUrl);
       if (!albumLink) return null;
 
-      const row =
-        albumLink.closest('.page_section_charts_item_wrapper') ||
-        albumLink.closest('.page_charts_section_charts_item_wrapper') ||
-        albumLink.closest('[class*="chart_item"]') ||
-        albumLink.closest('tr') ||
-        albumLink.closest('[class*="release_row"]');
-      if (!row) return null;
-      const urls = Array.from(row.querySelectorAll('a[href*="/release/"]')).map(
-        canonicalUrl
-      );
-      return urls.length && urls.every((url) => url === identity.albumUrl)
-        ? row
-        : null;
+      const row = findAlbumRow(albumLink);
+      return rowAlbumUrl(row) === identity.albumUrl ? row : null;
     } catch (error) {
       console.warn('Could not find the selected RYM album row:', error);
       return null;
@@ -208,6 +217,23 @@
     );
   }
 
+  function findImageAlbumIdentity(context) {
+    if (!context.srcUrl || /\/release\//i.test(context.linkUrl || ''))
+      return null;
+    const images = Array.from(
+      document.querySelectorAll(
+        'img.coverart_img, .release_cover img, img[class*="cover"], [class*="cover"] img, img[class*="charts_item_image"]'
+      )
+    ).filter(
+      (image) =>
+        [image.src, image.currentSrc].includes(context.srcUrl) &&
+        (!context.linkUrl || image.closest('a')?.href === context.linkUrl)
+    );
+    if (images.length !== 1) return null;
+    const albumUrl = rowAlbumUrl(findAlbumRow(images[0]));
+    return albumUrl ? albumIdentity.getAlbumIdentityFromUrl(albumUrl) : null;
+  }
+
   function applyObservation(data, identity, observation) {
     data.sourceObservation =
       observation || createIdentityOnlyObservation(identity);
@@ -226,9 +252,12 @@
   }
 
   async function extractAlbumDataFromPage(context) {
+    const imageIdentity = isCurrentCoverLink(context)
+      ? albumIdentity.getAlbumIdentityFromUrl(context.pageUrl || location.href)
+      : findImageAlbumIdentity(context);
     const identity = albumIdentity.getContextAlbumIdentity({
       ...context,
-      ...(isCurrentCoverLink(context) ? { linkUrl: null } : {}),
+      ...(imageIdentity ? { linkUrl: imageIdentity.albumUrl } : {}),
       pageUrl: context.pageUrl || location.href,
     });
     let pageGenres = { genre_1: '', genre_2: '' };

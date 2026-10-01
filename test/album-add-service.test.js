@@ -109,6 +109,39 @@ describe('album-add-service', () => {
     );
   });
 
+  it('accepts a listing cover only after extraction identifies its album', async () => {
+    const deps = createDeps();
+    const pageUrl = 'https://rateyourmusic.com/charts/top/album/all-time/';
+    await globalThis.AlbumAddService.createAlbumAddService(deps).addAlbumToList(
+      {
+        pageUrl,
+        linkUrl: 'https://images.test/full.jpg',
+        srcUrl: 'https://images.test/cover.jpg',
+      },
+      { id: 7 },
+      'list',
+      'List'
+    );
+    assert.equal(deps.albumApi.saveAlbum.mock.calls.length, 1);
+    assert.equal(deps.showNotification.mock.calls.length, 0);
+  });
+
+  it('rejects an unsupported release linked from an image before extraction', async () => {
+    const deps = createDeps();
+    await globalThis.AlbumAddService.createAlbumAddService(deps).addAlbumToList(
+      {
+        pageUrl: albumUrl,
+        linkUrl: albumUrl.replace('/album/', '/ep/'),
+        srcUrl: 'https://images.test/cover.jpg',
+      },
+      { id: 7 },
+      'list',
+      'List'
+    );
+    assert.equal(deps.chrome.tabs.sendMessage.mock.calls.length, 0);
+    assert.equal(deps.albumApi.saveAlbum.mock.calls.length, 0);
+  });
+
   for (const extraction of [
     { error: 'Selected release is unsupported' },
     {

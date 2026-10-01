@@ -64,6 +64,16 @@
       );
   }
 
+  function getInitialAlbumIdentity(identity, info) {
+    const clicked = identity.getAlbumIdentityFromUrl(
+      info.linkUrl || info.pageUrl
+    );
+    // An unsupported release link cannot be reinterpreted as album artwork.
+    if (!clicked && (!info.srcUrl || /\/release\//i.test(info.linkUrl || '')))
+      identity.getContextAlbumIdentity(info);
+    return clicked;
+  }
+
   async function finishAddition({
     deps,
     enrichment,
@@ -154,11 +164,7 @@
             handleUnauthorized: scope.unauthorized,
             logger,
           });
-        const clicked = identity.getAlbumIdentityFromUrl(
-          info.linkUrl || info.pageUrl
-        );
-        // Only the content script can prove that a linked image is this page's cover.
-        if (!clicked && !info.srcUrl) identity.getContextAlbumIdentity(info);
+        const clicked = getInitialAlbumIdentity(identity, info);
         const speculative = clicked
           ? api
               .searchMusicBrainz(scope.apiBase, clicked)
@@ -167,9 +173,12 @@
           : null;
         let album = await extractIdentity(chrome, ACTIONS, info, tab);
         scope.assertCurrent();
+        if (album?.error) throw new Error(album.error);
         const selected =
           clicked ||
-          identity.getContextAlbumIdentity({ pageUrl: info.pageUrl });
+          identity.getContextAlbumIdentity({
+            pageUrl: info.srcUrl ? album?.albumUrl : info.pageUrl,
+          });
         validateExtractedAlbum(album, selected, identity);
         const retry = enrichment.startObservationRetry(album, () =>
           extractIdentity(chrome, ACTIONS, info, tab)

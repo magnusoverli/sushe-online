@@ -142,7 +142,7 @@
     const identity = getAlbumIdentityFromUrl(linkUrl || pageUrl);
     if (!identity)
       throw new Error(
-        'Select a RYM album link or open its album page. Only album releases are supported.'
+        'Right-click a RYM album link or a recognizable album cover. Only album releases are supported.'
       );
     return identity;
   }

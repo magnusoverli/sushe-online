@@ -20,6 +20,17 @@ test('album names preserve meaningful numbers and Unicode matching identities', 
   );
 });
 
+test('the Namu RYM album URL is a supported album release', () => {
+  const url =
+    'https://rateyourmusic.com/release/album/namu/wretched-spawns-of-iniquitous-orders/';
+  assert.deepEqual(globalThis.AlbumIdentity.getAlbumIdentityFromUrl(url), {
+    artist: 'Namu',
+    album: 'Wretched Spawns Of Iniquitous Orders',
+    albumUrl: url,
+    canonicalPath: '/release/album/namu/wretched-spawns-of-iniquitous-orders/',
+  });
+});
+
 test('MusicBrainz search preserves query delimiters and rejects mismatched or ambiguous releases', async () => {
   let url;
   let releases = [
