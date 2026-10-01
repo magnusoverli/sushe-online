@@ -2,7 +2,28 @@
   {
     "date": "2026-10-01",
     "category": "fix",
+    "description": "Fixed album artwork selection when adding albums via browser extension.",
+    "hash": "99ccc6d76076bb30b365ca035d991b913f99b1e6",
+    "commitMessage": "Fix RYM artwork album selection in extension 1.9.12"
+  },
+  {
+    "date": "2026-10-01",
+    "category": "fix",
     "description": "Extension 1.9.12 recognizes album artwork on RYM listing pages without mistaking unrelated or ambiguous links for an album."
+  },
+  {
+    "date": "2026-09-30",
+    "category": "feature",
+    "description": "Backup transfers now show progress and clearer saving status.",
+    "hash": "0f6641b6e6ee2c8b385f21a0cbe4a58e53e961d4",
+    "commitMessage": "Show backup transfer progress and clarify saving\n\nTrack upload and download bytes with accessible progress indicators while preserving authentication and CSRF handling. Explain browser-managed saving, keep the dialog open until Done, and cover transfers and reduced motion in browser tests."
+  },
+  {
+    "date": "2026-09-30",
+    "category": "fix",
+    "description": "Fixed reordering albums not saving correctly across multiple lists.",
+    "hash": "8b358fbac99b8fe4ba3a60605e4ca19f28e07907",
+    "commitMessage": "Fix reorder saves across lists and coordinate pending writes\n\n- Share per-list queues between reorders and other list saves\n- Settle coalesced callers, flush pending reorders on navigation, and restore failed batches\n- Add queue, persistence, and desktop/mobile browser regressions"
   },
   {
     "date": "2026-09-30",
@@ -67,6 +88,13 @@
   {
     "date": "2026-09-28",
     "category": "fix",
+    "description": "Fixed browser extension login not working in Brave browser.",
+    "hash": "a628520414a03b39c225e067ed39f07773e87e23",
+    "commitMessage": "Fix browser extension authentication in Brave\n\n- Validate extension message senders without rejecting settings tabs\n- Surface settings and authorization failures and handle token lifecycle safely\n- Support localhost ports consistently and release extension 1.9.10\n- Cover the real sign-in flow and failure paths with Brave regression tests"
+  },
+  {
+    "date": "2026-09-28",
+    "category": "fix",
     "description": "Extension 1.9.11 fixes album selection, cross-album genre leakage, punctuation-sensitive matching, and badges with conflicting RYM identities."
   },
   {
@@ -82,6 +110,13 @@
   {
     "date": "2026-09-14",
     "category": "fix",
+    "description": "Fixed extension saving conflicts when multiple browser sessions are open.",
+    "hash": "3c1635c4ca56e42c6ea14c923902f7b585ba393e",
+    "commitMessage": "Fix extension saves colliding with browser sessions\n\n- Validate explicit bearer credentials before browser sessions and preserve session CSRF protection\n- Keep extension API requests cookie-free and make save errors readable\n- Migrate account caches, guard late responses, and fix extension packaging for 1.9.9\n- Add authentication, cache, packaged-browser, and error-handling regressions"
+  },
+  {
+    "date": "2026-09-14",
+    "category": "fix",
     "description": "Fixed CI validation for extension releases."
   },
   {
@@ -93,6 +128,20 @@
     "date": "2026-09-14",
     "category": "fix",
     "description": "Fixed extension album saves and enrichment failing while signed into the website, and made API errors readable."
+  },
+  {
+    "date": "2026-09-13",
+    "category": "fix",
+    "description": "Fixed sidebar cutting off part of the album list.",
+    "hash": "c5a32b26d631ece748558fb27fa60bfdcaa88c60",
+    "commitMessage": "Fix sidebar overflow cropping the album list\n\n- Constrain the shared grid height and scroll sidebar navigation independently\n- Remove the album container minimum-height conflict\n- Add browser regression coverage for expanded sidebar groups"
+  },
+  {
+    "date": "2026-09-10",
+    "category": "fix",
+    "description": "Fixed authentication and list integrity issues affecting some users.",
+    "hash": "fac00a7745e7b29d375030e987b8e1f58071df59",
+    "commitMessage": "Fix authentication, list integrity, and realtime lifecycle issues\n\n- Harden public URL requests, OAuth state, extension login, and credential revocation\n- Protect list revisions, ranking and year invariants, transfers, and post-commit synchronization\n- Bind playlist exports to provider accounts and list IDs, and drain WebSockets on shutdown\n- Add cross-component regressions, portable test tooling, and safe branch CI dispatches"
   },
   {
     "date": "2026-09-10",
