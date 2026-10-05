@@ -19,7 +19,7 @@ services:
       timeout: 3s
       retries: 30
   app:
-    image: ${UPGRADE_IMAGE:-ghcr.io/magnusoverli/sushe-online@sha256:e897f354c5eb33a5dfde501a29ed4650b67e89e64a096c5ba68c6ea528affae0}
+    image: ${UPGRADE_IMAGE:-ghcr.io/magnusoverli/sushe-online@sha256:2391d833b1b19860e32b2415d1bc3f3cfb9bf8d7a8763a1c6b9f705993170582}
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://postgres:example@/sushe?host=/var/run/postgresql
