@@ -1,7 +1,15 @@
 /**
  * App API client wrapper for authenticated JSON requests.
  */
-import { getListRevision, rememberListRevision } from './list-revisions.js';
+import {
+  getItemListId,
+  getListRevision,
+  rememberListItems,
+  rememberListRevision,
+} from './list-revisions.js';
+import { enqueueListWrite } from './list-write-queue.js';
+import { createKeyedTaskQueue } from '../utils/keyed-task-queue.js';
+const enqueueMetadata = createKeyedTaskQueue();
 import { hasUnsavedLists, protectUnsavedLists } from './unsaved-lists.js';
 import { requestWithUploadProgress } from './upload-request.js';
 
@@ -79,7 +87,7 @@ export function createAppApiClient(deps = {}) {
     return error?.requiresConfirmation === true;
   }
 
-  async function apiCall(url, options = {}, csrfRetried = false) {
+  async function request(url, options = {}, csrfRetried = false) {
     try {
       const socketId = getRealtimeSyncModuleInstance()?.getSocket?.()?.id;
 
@@ -96,13 +104,18 @@ export function createAppApiClient(deps = {}) {
 
       const method = options.method || 'GET';
       const listMatch =
-        /^\/api\/lists\/([^/?]+)(?:\/(items|reorder))?(?:\?|$)/.exec(url);
-      const listId = listMatch ? decodeURIComponent(listMatch[1]) : null;
+        /^\/api\/lists\/([^/?]+)(?:\/(items|reorder))?(?:\/|\?|$)/.exec(url);
+      const trackMatch = /^\/api\/track-picks\/([^/?]+)/.exec(url);
+      const listId = listMatch
+        ? decodeURIComponent(listMatch[1])
+        : trackMatch
+          ? getItemListId(decodeURIComponent(trackMatch[1]))
+          : null;
       const conditionalWrite =
         listId &&
         (method === 'PUT' ||
-          (method === 'PATCH' && listMatch[2] === 'items') ||
-          (method === 'POST' && listMatch[2] === 'reorder'));
+          (method === 'PATCH' && listMatch?.[2] === 'items') ||
+          (method === 'POST' && listMatch?.[2] === 'reorder'));
       if (
         conditionalWrite &&
         getListRevision(listId) !== undefined &&
@@ -122,8 +135,8 @@ export function createAppApiClient(deps = {}) {
       }
 
       const { onUploadProgress, ...requestOptions } = options;
-      const request = onUploadProgress ? uploadImpl : fetchImpl;
-      const response = await request(url, {
+      const transport = onUploadProgress ? uploadImpl : fetchImpl;
+      const response = await transport(url, {
         ...requestOptions,
         ...(onUploadProgress ? { onUploadProgress } : {}),
         headers,
@@ -168,7 +181,7 @@ export function createAppApiClient(deps = {}) {
               const { csrfToken } = await refreshed.json();
               if (win && typeof csrfToken === 'string' && csrfToken) {
                 win.csrfToken = csrfToken;
-                return apiCall(url, options, true);
+                return request(url, options, true);
               }
             }
           } catch (_error) {
@@ -193,12 +206,16 @@ export function createAppApiClient(deps = {}) {
       }
 
       const data = await readJsonResponse(response);
+      if (data?.listId && data?.revision != null) {
+        rememberListRevision(data.listId, data.revision);
+      }
       if (listId && method !== 'GET')
         rememberListRevision(
           listId,
           response.headers?.get?.('x-list-revision')
         );
       if (listId && method === 'GET' && Array.isArray(data)) {
+        rememberListItems(listId, data);
         Object.defineProperty(data, '_listRevision', {
           value: response.headers?.get?.('x-list-revision'),
         });
@@ -220,6 +237,25 @@ export function createAppApiClient(deps = {}) {
       }
       throw error;
     }
+  }
+
+  function apiCall(url, options = {}) {
+    const method = (options.method || 'GET').toUpperCase();
+    const { prepareWrite, ...requestOptions } = options;
+    const send = async () => {
+      const prepared = prepareWrite ? await prepareWrite() : {};
+      return request(url, { ...requestOptions, ...prepared });
+    };
+    if (method !== 'GET' && /^\/api\/albums\//.test(url))
+      return enqueueMetadata('albums', send);
+    const match = /^\/api\/lists\/([^/?]+)/.exec(url);
+    const track = /^\/api\/track-picks\/([^/?]+)/.exec(url);
+    const listId = match
+      ? decodeURIComponent(match[1])
+      : track
+        ? getItemListId(decodeURIComponent(track[1]))
+        : null;
+    return listId && method !== 'GET' ? enqueueListWrite(listId, send) : send();
   }
 
   return { apiCall };

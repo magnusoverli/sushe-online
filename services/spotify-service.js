@@ -476,7 +476,11 @@ async function searchTrackWithDeps(
     return { id: numberMatch.id, name: numberMatch.name };
   }
 
-  const searchName = extractTrackName(track);
+  const searchName = tracks.some(
+    (item) => item.name?.toLowerCase() === track.toLowerCase()
+  )
+    ? track
+    : extractTrackName(track);
   const matchingTrack = matchTrackByName(tracks, searchName);
   if (matchingTrack) {
     logger.info('Spotify track matched by name:', {

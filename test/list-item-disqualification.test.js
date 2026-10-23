@@ -5,6 +5,9 @@ const {
 } = require('../services/list/item-disqualification');
 const { TransactionAbort } = require('../db/transaction');
 const {
+  registerListMutationPublisher,
+} = require('../services/list/transaction');
+const {
   preserveDisqualificationState,
 } = require('../services/list/write-operations');
 
@@ -12,12 +15,16 @@ function createHarness({ updateRows = [{}] } = {}) {
   const client = {
     query: mock.fn(async (sql) => {
       if (sql.includes('UPDATE list_items')) return { rows: updateRows };
+      if (sql.startsWith('SELECT revision'))
+        return { rows: [{ revision: '2' }] };
       return { rows: [], rowCount: 1 };
     }),
   };
   const db = {
     withTransaction: mock.fn(async (callback) => callback(client)),
   };
+  const publish = mock.fn();
+  registerListMutationPublisher(db, publish);
   const findListByIdOrThrow = mock.fn(async () => ({
     _id: 'list-1',
     year: 2010,
@@ -25,6 +32,7 @@ function createHarness({ updateRows = [{}] } = {}) {
   }));
   return {
     client,
+    publish,
     service: createItemDisqualification({
       db,
       TransactionAbort,
@@ -123,7 +131,7 @@ describe('list item disqualification', () => {
   });
 
   it('stores list-specific state and a normalized reason', async () => {
-    const { client, service } = createHarness();
+    const { client, service, publish } = createHarness();
     const result = await service.updateItemDisqualification(
       'list-1',
       'user-1',
@@ -134,6 +142,11 @@ describe('list item disqualification', () => {
 
     assert.strictEqual(result.is_disqualified, true);
     assert.strictEqual(result.disqualification_reason, 'Released in 2009');
+    assert.strictEqual(result.list.revision, '2');
+    assert.strictEqual(publish.mock.calls.length, 1);
+    assert.deepStrictEqual(publish.mock.calls[0].arguments[0].changes, [
+      { listId: 'list-1', revision: '2' },
+    ]);
     const updateCall = client.query.mock.calls.find((call) =>
       call.arguments[0].includes('UPDATE list_items')
     );

@@ -436,6 +436,7 @@ function compareCanonicalAlbums(a, b) {
  * @param {Object} [deps.logger] - Logger instance
  * @param {{invalidateAlbum?: Function}} [deps.coverCache] - Album cover cache to invalidate on merge
  * @param {Object} [deps.responseCache] - Per-user response cache to invalidate on merge
+ * @param {Function} [deps.getBroadcast] - Live publication after a committed merge
  */
 // eslint-disable-next-line max-lines-per-function -- Cohesive service module with related duplicate operations
 function createDuplicateService(deps = {}) {
@@ -451,12 +452,15 @@ function createDuplicateService(deps = {}) {
   }
 
   async function invalidateResponseCacheForMergedAlbums(albumIds) {
+    responseCache?.invalidate?.('GET:/api/community/');
+    responseCache?.invalidate?.('GET:/api/recommendations/');
     return invalidateAlbumUserResponseCaches({
       db,
       responseCache,
       logger,
       albumIds,
       operation: 'duplicate-service',
+      onInvalidate: (userId) => deps.getBroadcast?.()?.libraryUpdated(userId),
     });
   }
 
@@ -1672,6 +1676,7 @@ function createDuplicateService(deps = {}) {
     invalidateAlbumCoverCache(keepAlbumId);
     invalidateAlbumCoverCache(deleteAlbumId);
     await invalidateResponseCacheForMergedAlbums([keepAlbumId, deleteAlbumId]);
+    deps.getBroadcast?.()?.sharedViewsUpdated?.();
     return result;
   }
 
@@ -1851,6 +1856,7 @@ function createDuplicateService(deps = {}) {
       for (const retireId of retireIds) invalidateAlbumCoverCache(retireId);
     }
     await invalidateResponseCacheForMergedAlbums([canonicalId, ...retireIds]);
+    deps.getBroadcast?.()?.sharedViewsUpdated?.();
     return result;
   }
 

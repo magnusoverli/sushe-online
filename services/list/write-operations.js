@@ -205,7 +205,11 @@ function createListWriteOperations(deps = {}) {
       throw new TransactionAbort(400, { error: 'Albums must be an array' });
     const timestamp = new Date();
     let list;
-    let observationResult = { sourceObservationResults: [], warnings: [] };
+    let observationResult = {
+      sourceObservationResults: [],
+      warnings: [],
+      addedItems: [],
+    };
 
     await prepareExplicitCovers(rawAlbums, TransactionAbort);
 
@@ -268,6 +272,7 @@ function createListWriteOperations(deps = {}) {
     return {
       list,
       count: rawAlbums.length,
+      addedItems: observationResult.addedItems,
       sourceObservationResults: observationResult.sourceObservationResults,
       warnings: observationResult.warnings,
     };

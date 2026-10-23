@@ -57,6 +57,7 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
     sourceObservationResults: [],
     warnings: [],
     backgroundItems: [],
+    addedItems: [],
   };
   const validEntries = (albums || [])
     .map((album, index) => ({ album, index }))
@@ -138,6 +139,11 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
     listId,
     count: itemsToInsert.length,
   });
+  result.addedItems = itemsToInsert.map((item, index) => ({
+    _id: item._id,
+    album_id: item.album_id,
+    inputAlbumId: canonicalEntries[index].album.album_id,
+  }));
   return result;
 }
 

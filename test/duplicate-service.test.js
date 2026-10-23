@@ -511,7 +511,7 @@ describe('duplicate-service', () => {
     );
     assert.deepStrictEqual(
       responseCache.invalidate.mock.calls.map((call) => call.arguments[0]),
-      [':user1']
+      ['GET:/api/community/', 'GET:/api/recommendations/', ':user1']
     );
   });
 
@@ -907,7 +907,7 @@ describe('duplicate-service', () => {
     );
     assert.deepStrictEqual(
       responseCache.invalidate.mock.calls.map((call) => call.arguments[0]),
-      [':user2']
+      ['GET:/api/community/', 'GET:/api/recommendations/', ':user2']
     );
   });
 

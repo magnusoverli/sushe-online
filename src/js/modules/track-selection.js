@@ -8,6 +8,10 @@
  * @returns {Object} Public API
  */
 import { createTrackPickService } from './track-pick-service.js';
+import { fetchTracksForAlbum } from './track-loading.js';
+import { stateEvents } from './state-events.js';
+import { escapeHtml } from './html-utils.js';
+import { resolveTrackTitle } from '../utils/track-reference.js';
 
 export function createTrackSelection(deps = {}) {
   const {
@@ -20,6 +24,7 @@ export function createTrackSelection(deps = {}) {
     refreshAlbumDisplay = () => {},
   } = deps;
   const trackPickService = createTrackPickService({ apiCall });
+  let disposeMenu = () => {};
 
   // ============ PURE HELPERS ============
 
@@ -45,48 +50,6 @@ export function createTrackSelection(deps = {}) {
     return track.length || null;
   }
 
-  /**
-   * Fetch track listing from MusicBrainz API.
-   * Mutates album.tracks with the result.
-   * @param {Object} album - Album object
-   * @param {AbortSignal|null} signal - Optional abort signal
-   * @returns {Promise<Array>} Tracks array
-   */
-  async function fetchTracksForAlbum(album, signal = null) {
-    const params = new URLSearchParams({
-      id: album.album_id || '',
-      artist: album.artist,
-      album: album.album,
-    });
-
-    const fetchOptions = {
-      credentials: 'include',
-    };
-
-    if (signal) {
-      fetchOptions.signal = signal;
-    }
-
-    const resp = await fetch(
-      `/api/musicbrainz/tracks?${params.toString()}`,
-      fetchOptions
-    );
-    if (!resp.ok) {
-      // Error responses may not be JSON (e.g. proxy/HTML error pages)
-      let message = 'Failed';
-      try {
-        const errData = await resp.json();
-        message = errData.error || message;
-      } catch (_parseError) {
-        // keep the generic message
-      }
-      throw new Error(message);
-    }
-    const data = await resp.json();
-    album.tracks = data.tracks;
-    return data.tracks;
-  }
-
   // ============ TRACK CELL DISPLAY ============
 
   /**
@@ -109,17 +72,16 @@ export function createTrackSelection(deps = {}) {
    * @param {number} y - Y position
    */
   function showTrackSelectionMenu(album, albumIndex, x, y) {
+    disposeMenu();
+    const ownerListId = getCurrentListId();
+    const findItem = () =>
+      getListData(ownerListId)?.find((item) => item._id === album._id);
     // Remove existing menu
     const existingMenu = document.getElementById('quickTrackMenu');
     if (existingMenu) existingMenu.remove();
 
-    if (!album.tracks || album.tracks.length === 0) {
-      showToast('No tracks available', 'info');
-      return;
-    }
-
     // Sort tracks by track number
-    const sortedTracks = [...album.tracks].sort((a, b) => {
+    const sortedTracks = [...(album.tracks || [])].sort((a, b) => {
       const numA = typeof a === 'object' ? a.position || 0 : 0;
       const numB = typeof b === 'object' ? b.position || 0 : 0;
       return numA - numB;
@@ -128,8 +90,11 @@ export function createTrackSelection(deps = {}) {
     // Get current picks
     const currentPrimary = album.primary_track;
     const currentSecondary = album.secondary_track || null;
-    const currentPrimaryName = getTrackName(currentPrimary);
-    const currentSecondaryName = getTrackName(currentSecondary);
+    const currentPrimaryName = resolveTrackTitle(currentPrimary, album.tracks);
+    const currentSecondaryName = resolveTrackTitle(
+      currentSecondary,
+      album.tracks
+    );
 
     // Track current selections (mutable during menu interaction)
     let selectedPrimary = currentPrimaryName || null;
@@ -157,9 +122,7 @@ export function createTrackSelection(deps = {}) {
     clearBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
-        const listData = getListData(getCurrentListId());
-        if (!listData) return;
-        const currentAlbum = listData[albumIndex];
+        const currentAlbum = findItem();
         if (!currentAlbum?._id) return;
 
         const result = await trackPickService.clearTrackPicks(currentAlbum._id);
@@ -168,11 +131,12 @@ export function createTrackSelection(deps = {}) {
         currentAlbum.primary_track = selectedPrimary;
         currentAlbum.secondary_track = selectedSecondary;
         updateMenuUI();
-        updateTrackCellDisplayDual(
-          albumIndex,
-          { primary: null, secondary: null },
-          album.tracks
-        );
+        if (getCurrentListId() === ownerListId)
+          updateTrackCellDisplayDual(
+            albumIndex,
+            { primary: null, secondary: null },
+            album.tracks
+          );
       } catch (err) {
         console.error('Error clearing track picks:', err);
         showToast('Error clearing track picks', 'error');
@@ -188,8 +152,8 @@ export function createTrackSelection(deps = {}) {
 
       const numMatch = trackName.match(/^(\d+)\.\s*(.*)$/);
       const displayName = numMatch
-        ? `<span class="text-gray-500 font-mono text-xs mr-1">${numMatch[1]}.</span>${numMatch[2]}`
-        : trackName;
+        ? `<span class="text-gray-500 font-mono text-xs mr-1">${numMatch[1]}.</span>${escapeHtml(numMatch[2])}`
+        : escapeHtml(trackName);
 
       const option = document.createElement('button');
       option.className =
@@ -205,9 +169,7 @@ export function createTrackSelection(deps = {}) {
       option.addEventListener('click', async (e) => {
         e.stopPropagation();
 
-        const listData = getListData(getCurrentListId());
-        if (!listData) return;
-        const currentAlbum = listData[albumIndex];
+        const currentAlbum = findItem();
         if (!currentAlbum?._id) return;
 
         // Persist via API - backend is the source of truth
@@ -215,10 +177,10 @@ export function createTrackSelection(deps = {}) {
           const result = await trackPickService.updateTrackPick(
             currentAlbum._id,
             trackName,
-            {
+            () => ({
               primaryTrack: selectedPrimary,
               secondaryTrack: selectedSecondary,
-            }
+            })
           );
 
           selectedPrimary = result.primaryTrack || null;
@@ -229,14 +191,15 @@ export function createTrackSelection(deps = {}) {
           currentAlbum.secondary_track = selectedSecondary;
 
           updateMenuUI();
-          updateTrackCellDisplayDual(
-            albumIndex,
-            {
-              primary: selectedPrimary,
-              secondary: selectedSecondary,
-            },
-            album.tracks
-          );
+          if (getCurrentListId() === ownerListId)
+            updateTrackCellDisplayDual(
+              albumIndex,
+              {
+                primary: selectedPrimary,
+                secondary: selectedSecondary,
+              },
+              album.tracks
+            );
         } catch (err) {
           console.error('Error saving track picks:', err);
           showToast('Error saving track pick', 'error');
@@ -253,11 +216,20 @@ export function createTrackSelection(deps = {}) {
 
         opt.classList.remove('bg-gray-700/30', 'text-white', 'text-gray-300');
 
-        if (name === selectedPrimary) {
+        if (
+          name ===
+          resolveTrackTitle(selectedPrimary, findItem()?.tracks || album.tracks)
+        ) {
           indicator.innerHTML =
             '<span class="text-2xs font-semibold font-[Georgia,serif] text-green-400">I</span>';
           opt.classList.add('bg-gray-700/30', 'text-white');
-        } else if (name === selectedSecondary) {
+        } else if (
+          name ===
+          resolveTrackTitle(
+            selectedSecondary,
+            findItem()?.tracks || album.tracks
+          )
+        ) {
           indicator.innerHTML =
             '<span class="text-2xs font-semibold font-[Georgia,serif] text-green-400">II</span>';
           opt.classList.add('bg-gray-700/30', 'text-white');
@@ -294,14 +266,37 @@ export function createTrackSelection(deps = {}) {
     // Close on outside click
     const closeMenu = (e) => {
       if (!menu.contains(e.target)) {
-        menu.remove();
-        document.removeEventListener('click', closeMenu);
+        disposeMenu();
       }
     };
 
-    setTimeout(() => {
-      document.addEventListener('click', closeMenu);
-    }, 0);
+    const unsubscribe = stateEvents.subscribe(
+      [`item:${album._id}`, `list:${ownerListId}`, 'view'],
+      () => {
+        const current = findItem();
+        if (!current || getCurrentListId() !== ownerListId)
+          return disposeMenu();
+        selectedPrimary = resolveTrackTitle(
+          current.primary_track,
+          current.tracks
+        );
+        selectedSecondary = resolveTrackTitle(
+          current.secondary_track,
+          current.tracks
+        );
+        updateMenuUI();
+      }
+    );
+    const timer = setTimeout(
+      () => document.addEventListener('click', closeMenu),
+      0
+    );
+    disposeMenu = () => {
+      clearTimeout(timer);
+      unsubscribe();
+      menu.remove();
+      document.removeEventListener('click', closeMenu);
+    };
   }
 
   // ============ PUBLIC API ============

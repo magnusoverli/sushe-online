@@ -17,6 +17,7 @@ export function renderSummaryBadge(data, { mobile = false } = {}) {
   const mobileClass = mobile ? ' summary-badge-mobile' : '';
   return `<div class="summary-badge${mobileClass} claude-badge"
     data-summary="${escapeHtml(data.summary)}"
+    data-album-id="${escapeHtml(data.albumId || '')}"
     data-source-url="${escapeHtml('')}"
     data-source="${escapeHtml(data.summarySource || '')}"
     data-album-name="${escapeHtml(data.albumName)}"

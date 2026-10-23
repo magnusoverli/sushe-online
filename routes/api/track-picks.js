@@ -24,6 +24,53 @@ module.exports = (app, deps) => {
   } = deps;
   const asyncHandler = createAsyncHandler(logger);
 
+  app.put(
+    '/api/track-picks/:listItemId',
+    ensureAuthAPI,
+    asyncHandler(async (req, res) => {
+      const { primary_track: primary, secondary_track: secondary } =
+        req.body || {};
+      if (
+        [primary, secondary].some(
+          (pick) =>
+            pick !== null && (typeof pick !== 'string' || pick.length > 1000)
+        )
+      ) {
+        return res
+          .status(400)
+          .json({ error: 'Both track picks must be strings or null' });
+      }
+      const picks = {
+        primary: primary?.trim() || null,
+        secondary: secondary?.trim() || null,
+      };
+      if (picks.primary && picks.primary === picks.secondary) {
+        return res
+          .status(400)
+          .json({ error: 'Primary and secondary tracks must differ' });
+      }
+      const result = await listService.replaceTrackPicks(
+        req.user._id,
+        req.params.listItemId,
+        picks,
+        req.get('If-Match')?.replace(/^"|"$/g, '')
+      );
+      if (result.status === 'not_found')
+        return res.status(404).json({ error: 'List item not found' });
+      if (result.status === 'forbidden')
+        return res.status(403).json({ error: 'Access denied' });
+      invalidateListCaches(req.user._id, result.listId);
+      res.json({
+        success: true,
+        listItemId: req.params.listItemId,
+        listId: result.listId,
+        revision: result.revision,
+        primary_track: result.primary,
+        secondary_track: result.secondary,
+      });
+    }, 'replacing track picks')
+  );
+
   /**
    * Set or update a track pick for a list item
    * Click logic: first click = secondary (priority 2), second click = promote to primary (priority 1)
@@ -77,6 +124,8 @@ module.exports = (app, deps) => {
         listItemId,
         primary_track: result.primary,
         secondary_track: result.secondary,
+        listId: result.listId,
+        revision: result.revision,
       });
     }, 'setting track pick')
   );
@@ -125,6 +174,8 @@ module.exports = (app, deps) => {
         listItemId,
         primary_track: result.primary,
         secondary_track: result.secondary,
+        listId: result.listId,
+        revision: result.revision,
       });
     }, 'removing track pick')
   );

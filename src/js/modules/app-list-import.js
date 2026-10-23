@@ -48,38 +48,11 @@ export function createListImporter(deps = {}) {
       const albumId = savedAlbum?.album_id;
       if (!albumId) continue;
 
-      const listItemId = savedAlbum._id;
-      if (listItemId && (album.primary_track || album.secondary_track)) {
-        try {
-          if (album.primary_track) {
-            await apiCall(`/api/track-picks/${listItemId}`, {
-              method: 'POST',
-              body: JSON.stringify({
-                trackIdentifier: album.primary_track,
-                priority: 1,
-              }),
-            });
-            trackPicksImported++;
-          }
-
-          if (album.secondary_track) {
-            await apiCall(`/api/track-picks/${listItemId}`, {
-              method: 'POST',
-              body: JSON.stringify({
-                trackIdentifier: album.secondary_track,
-                priority: 2,
-              }),
-            });
-            trackPicksImported++;
-          }
-        } catch (error) {
-          logger.warn(
-            'Failed to import track picks for list item',
-            listItemId,
-            error
-          );
-        }
-      }
+      // Picks were persisted atomically with the list items. Replaying a
+      // toggle endpoint here would clear the selections we just imported.
+      trackPicksImported +=
+        Number(Boolean(album.primary_track)) +
+        Number(Boolean(album.secondary_track));
 
       if (album.summary || album.summary_source) {
         try {

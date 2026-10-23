@@ -6,6 +6,7 @@ function buildCurrentPatch(row, requestedPatch) {
     'album',
     'artist',
     'country',
+    'release_date',
     'tracks',
     'cover_image_format',
     'cover_image_updated_at',
@@ -57,7 +58,8 @@ async function publishAlbumMetadataUpdate({
          SELECT a.album_id,
                 a.artist,
                 a.album,
-                a.country,
+                 a.country,
+                 a.release_date,
                 a.tracks,
                 a.cover_image_format,
                 a.cover_image_updated_at,
@@ -102,6 +104,9 @@ async function publishAlbumMetadataUpdate({
         );
       }
     }
+    responseCache?.invalidate?.('GET:/api/community/');
+    responseCache?.invalidate?.('GET:/api/recommendations/');
+    broadcast?.sharedViewsUpdated?.();
     return result.rows.length;
   } catch (error) {
     logger?.warn('Failed to publish album metadata update', {

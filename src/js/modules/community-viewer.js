@@ -5,6 +5,8 @@ import {
 import { renderMobileAlbumCard } from './album-display/mobile-layout.js';
 import { getAllColumns, getVisibleColumns } from './column-config.js';
 import { formatReleaseDate } from './date-utils.js';
+import { stateEvents } from './state-events.js';
+import { onViewportChange } from '../utils/viewport.js';
 import {
   attachMobileCoverPlayback,
   createAlbumDisplayShared,
@@ -171,6 +173,12 @@ export function createCommunityViewer(deps = {}) {
   // Apply viewer column preferences without reading or writing anyone's list.
   const win = deps.win || doc?.defaultView;
   win?.addEventListener('columnvisibilitychange', renderCurrentDetail);
+  onViewportChange(renderCurrentDetail);
+  stateEvents.subscribe('preference:dateFormat', renderCurrentDetail);
+  stateEvents.subscribe(['shared-views', 'albums'], async () => {
+    if (!activeCommunityListId) return;
+    await selectCommunityList(activeCommunityListId, currentDetail || {});
+  });
 
   async function selectCommunityList(listId, summary = {}) {
     requestController?.abort();

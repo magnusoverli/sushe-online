@@ -4,6 +4,8 @@
  */
 
 import { io } from 'socket.io-client';
+import { stateEvents } from './state-events.js';
+import { getListRevision } from './list-revisions.js';
 
 /**
  * Create the realtime sync module with dependency injection
@@ -29,6 +31,7 @@ export function createRealtimeSync(deps = {}) {
     onAlbumAvailabilityUpdated = async () => {},
     onAlbumMetadataUpdated = async () => {},
     onAlbumTaxonomyUpdated = async () => {},
+    onAlbumSummaryUpdated,
     displayAlbums = () => {},
     ioFactory = io,
     win = typeof window !== 'undefined' ? window : null,
@@ -39,7 +42,6 @@ export function createRealtimeSync(deps = {}) {
 
   let socket = null;
   let isConnected = false;
-  let hasConnected = false;
   let reconnectAttempts = 0;
   const MAX_RECONNECT_ATTEMPTS = 10;
   const SESSION_INVALIDATION_REDIRECT_DELAY_MS = 2600;
@@ -73,10 +75,17 @@ export function createRealtimeSync(deps = {}) {
     socket.on('list:deleted', handleListDeleted);
     socket.on('list:renamed', handleListRenamed);
     socket.on('list:main-changed', handleListMainChanged);
-    socket.on('album:summary-updated', handleAlbumSummaryUpdated);
+    socket.on('album:summary-updated', (data) =>
+      Promise.resolve(
+        (onAlbumSummaryUpdated || handleAlbumSummaryUpdated)(data)
+      ).catch((error) => logger.warn('Unable to update album summary', error))
+    );
     socket.on('album:availability-updated', onAlbumAvailabilityUpdated);
     socket.on('album:metadata-updated', onAlbumMetadataUpdated);
     socket.on('album:taxonomy-updated', onAlbumTaxonomyUpdated);
+    socket.on('shared-views:updated', () =>
+      stateEvents.publish('shared-views')
+    );
     socket.on('session:invalidated', handleSessionInvalidated);
   }
 
@@ -125,9 +134,10 @@ export function createRealtimeSync(deps = {}) {
       if (currentList) {
         subscribeToList(currentList);
       }
-      if (hasConnected) {
+      {
         Promise.resolve(refreshListNav())
           .then(() => {
+            stateEvents.publish('shared-views');
             const selected = getCurrentList();
             return selected ? refreshListDataSilent(selected) : undefined;
           })
@@ -135,7 +145,6 @@ export function createRealtimeSync(deps = {}) {
             logger.warn('Unable to refresh after reconnect', error)
           );
       }
-      hasConnected = true;
     });
 
     socket.on('disconnect', (reason) => {
@@ -225,6 +234,12 @@ export function createRealtimeSync(deps = {}) {
 
     const listId = getEventListId(data, 'list:updated');
     if (!listId) return;
+    stateEvents.publish('list-membership');
+    if (
+      data.revision != null &&
+      String(data.revision) === getListRevision(listId)
+    )
+      return;
 
     const currentList = getCurrentList();
     if (listId === currentList) {
@@ -245,7 +260,8 @@ export function createRealtimeSync(deps = {}) {
       }
     } else {
       // For non-current lists, always refresh sidebar
-      refreshListNav();
+      if (getListData(listId)) await refreshListData(listId);
+      else await refreshListNav();
     }
   }
 

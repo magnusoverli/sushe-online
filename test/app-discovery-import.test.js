@@ -65,6 +65,9 @@ describe('app-discovery-import module', () => {
 
     await fileInput.onchange({ target: fileInput });
 
+    await Promise.resolve();
+    await Promise.resolve();
+
     assert.strictEqual(conflictName.textContent, 'existing');
     assert.deepStrictEqual(pendingNames, ['existing']);
     assert.strictEqual(Array.isArray(pending[0].albums), true);
@@ -72,6 +75,7 @@ describe('app-discovery-import module', () => {
   });
 
   it('imports new file and selects new list', async () => {
+    let importCompleted;
     const importCalls = [];
     const selections = [];
     const toasts = [];
@@ -95,7 +99,7 @@ describe('app-discovery-import module', () => {
 
     globalThis.FileReader = class {
       readAsText(file) {
-        this.onload({ target: { result: file.__contents } });
+        importCompleted = this.onload({ target: { result: file.__contents } });
       }
     };
 
@@ -103,7 +107,10 @@ describe('app-discovery-import module', () => {
       doc,
       showToast: (...args) => toasts.push(args),
       getLists: () => ({}),
-      importList: async (...args) => importCalls.push(args),
+      importList: async (...args) => {
+        importCalls.push(args);
+        return 'created-list-id';
+      },
       updateListNav: () => {},
       selectList: (name) => selections.push(name),
       setPendingImport: () => {},
@@ -127,13 +134,14 @@ describe('app-discovery-import module', () => {
     ];
 
     await fileInput.onchange({ target: fileInput });
+    await importCompleted;
 
     assert.deepStrictEqual(importCalls[0], [
       'new-list',
       [{ artist: 'A', album: 'B' }],
       { list_name: 'new-list' },
     ]);
-    assert.deepStrictEqual(selections, ['new-list']);
+    assert.deepStrictEqual(selections, ['created-list-id']);
     assert.deepStrictEqual(toasts[0], ['Successfully imported 1 albums']);
     assert.strictEqual(fileInput.value, '');
   });

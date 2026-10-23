@@ -648,8 +648,13 @@ function showMobileEditForm(index) {
   return getMobileUIModule().showMobileEditForm(index);
 }
 
-function showMobileSummarySheet(summary, albumName, artist) {
-  return getMobileUIModule().showMobileSummarySheet(summary, albumName, artist);
+function showMobileSummarySheet(summary, albumName, artist, albumId) {
+  return getMobileUIModule().showMobileSummarySheet(
+    summary,
+    albumName,
+    artist,
+    albumId
+  );
 }
 
 function showMobileEditFormSafe(albumId) {

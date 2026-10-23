@@ -37,6 +37,7 @@ const { resolveRamAccelerationConfig } = require('./config/ram-acceleration');
 const logger = require('./utils/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/error-handler');
 const requestIdMiddleware = require('./middleware/request-id');
+const realtimeOrigin = require('./middleware/realtime-origin');
 const { metricsMiddleware } = require('./utils/metrics');
 const { createHashedStyleMiddleware } = require('./utils/static-assets');
 const { responseCache } = require('./middleware/response-cache');
@@ -128,6 +129,7 @@ const duplicateService = createDuplicateService({
   logger,
   coverCache,
   responseCache,
+  getBroadcast: () => app.locals.broadcast,
 });
 const reidentifyService = createReidentifyService({ db, logger });
 
@@ -208,6 +210,7 @@ app.use(express.json({ limit: '50mb' }));
 
 // Request ID middleware - must be early to ensure all logs have request ID
 app.use(requestIdMiddleware());
+app.use(realtimeOrigin);
 
 // Prometheus metrics middleware
 app.use(metricsMiddleware());

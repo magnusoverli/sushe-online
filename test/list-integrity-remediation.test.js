@@ -262,6 +262,7 @@ test('copy with real diff/save reconciliation assigns the destination item ident
 });
 
 test('server duplicate results do not become phantom local list items', async () => {
+  const { createListSnapshot } = await import('../src/js/modules/app-state.js');
   const { createAppListOperations } =
     await import('../src/js/modules/app-list-operations.js');
   const { computeListDiff } = await import('../src/js/utils/save-optimizer.js');
@@ -273,7 +274,7 @@ test('server duplicate results do not become phantom local list items', async ()
   };
   const alias = { album_id: 'alias', artist: 'Alias', album: 'Album' };
   const lists = { target: { _data: [owned, alias] } };
-  const snapshots = new Map([['target', ['canonical']]]);
+  const snapshots = new Map([['target', createListSnapshot([owned])]]);
   const operations = createAppListOperations({
     apiCall: async () => ({
       addedItems: [],
@@ -285,7 +286,7 @@ test('server duplicate results do not become phantom local list items', async ()
     setListData: (id, data) => {
       lists[id]._data = data;
     },
-    createListSnapshot: (data) => data.map((item) => item.album_id),
+    createListSnapshot,
     saveSnapshotToStorage() {},
     markLocalSave() {},
     updateListNav() {},
@@ -299,12 +300,14 @@ test('server duplicate results do not become phantom local list items', async ()
 });
 
 test('failed target loading leaves the source and subsequent save diff intact', async () => {
+  const { createListSnapshot } = await import('../src/js/modules/app-state.js');
   const { transferAlbumToList } =
     await import('../src/js/modules/album-transfer.js');
   const { computeListDiff } = await import('../src/js/utils/save-optimizer.js');
   const source = [
     { _id: 'source-item', album_id: 'a', artist: 'Artist', album: 'Album' },
   ];
+  const baseline = createListSnapshot(source);
   await assert.rejects(
     transferAlbumToList(
       {
@@ -321,7 +324,7 @@ test('failed target loading leaves the source and subsequent save diff intact', 
     /network failed/
   );
   assert.equal(source.length, 1);
-  assert.equal(computeListDiff(['a'], source).totalChanges, 0);
+  assert.equal(computeListDiff(baseline, source).totalChanges, 0);
 });
 
 test('a pending destination write never exposes a source removal to another save', async () => {

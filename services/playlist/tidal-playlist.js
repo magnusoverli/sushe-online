@@ -11,6 +11,7 @@ const {
   processTrackBatches,
 } = require('./playlist-helpers');
 const { findTidalPlaylist } = require('./bound-playlist');
+const { matchTrackByNumber } = require('../../utils/track-matching');
 
 /**
  * Create Tidal playlist service
@@ -112,25 +113,23 @@ function createTidalPlaylistService(deps) {
 
       if (albumData && albumData.tracks) {
         // Try to match by track number
-        const trackNum = parseInt(trackPick);
-        if (
-          !isNaN(trackNum) &&
-          trackNum > 0 &&
-          trackNum <= albumData.tracks.length
-        ) {
-          return albumData.tracks[trackNum - 1].id;
-        }
+        const numberMatch = matchTrackByNumber(albumData.tracks, trackPick);
+        if (numberMatch) return numberMatch.id;
 
         // Try to match by track name (skip tracks with missing metadata)
         const pickLower = trackPick.toLowerCase();
-        const matchingTrack = albumData.tracks.find((t) => {
-          const title = t?.attributes?.title;
-          if (!title) return false;
-          const titleLower = title.toLowerCase();
-          return (
-            titleLower.includes(pickLower) || pickLower.includes(titleLower)
-          );
-        });
+        const matchingTrack =
+          albumData.tracks.find(
+            (track) => track.attributes?.title?.toLowerCase() === pickLower
+          ) ||
+          albumData.tracks.find((t) => {
+            const title = t?.attributes?.title;
+            if (!title) return false;
+            const titleLower = title.toLowerCase();
+            return (
+              titleLower.includes(pickLower) || pickLower.includes(titleLower)
+            );
+          });
         if (matchingTrack) {
           return matchingTrack.id;
         }

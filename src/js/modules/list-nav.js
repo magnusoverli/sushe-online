@@ -76,8 +76,9 @@ export function createListNav(deps = {}) {
   });
 
   // Track sortable instances for cleanup
-  let groupsSortable = null;
-  const listSortables = new Map();
+  const sortables = new Set();
+  let sortingGeneration = 0;
+  const touchContainers = new WeakSet();
 
   function getActiveRecommendationsYear() {
     return typeof getCurrentRecommendationsYear === 'function'
@@ -849,12 +850,9 @@ export function createListNav(deps = {}) {
    * Destroy all sortable instances
    */
   function destroySortables() {
-    if (groupsSortable) {
-      groupsSortable.destroy();
-      groupsSortable = null;
-    }
-    listSortables.forEach((sortable) => sortable.destroy());
-    listSortables.clear();
+    sortingGeneration++;
+    sortables.forEach((sortable) => sortable.destroy());
+    sortables.clear();
   }
 
   /**
@@ -863,8 +861,12 @@ export function createListNav(deps = {}) {
    * @param {boolean} isMobile - Whether this is mobile view
    */
   function initializeDragAndDrop(container, isMobile = false) {
+    const generation = sortingGeneration;
     loadSortable()
-      .then(() => initializeDragAndDropAfterLoad(container, isMobile))
+      .then(() => {
+        if (generation !== sortingGeneration) return;
+        initializeDragAndDropAfterLoad(container, isMobile);
+      })
       .catch((error) => {
         console.warn('SortableJS not loaded, drag-and-drop disabled', error);
       });
@@ -895,6 +897,8 @@ export function createListNav(deps = {}) {
    * @param {HTMLElement} container - The sidebar container
    */
   function setupMobileTouchHandling(container) {
+    if (touchContainers.has(container)) return;
+    touchContainers.add(container);
     const SCROLL_GRACE_PERIOD = 200; // ms - allow scroll during this initial period
     let touchState = null;
 
@@ -947,7 +951,7 @@ export function createListNav(deps = {}) {
         }
       : {};
 
-    groupsSortable = new window.Sortable(container, {
+    const sortable = new window.Sortable(container, {
       animation: 150,
       handle: '.group-header-wrapper', // Drag by the header wrapper, not entire section
       draggable: '.group-section',
@@ -1002,6 +1006,7 @@ export function createListNav(deps = {}) {
         }
       },
     });
+    sortables.add(sortable);
   }
 
   /**
@@ -1114,7 +1119,7 @@ export function createListNav(deps = {}) {
       },
     });
 
-    listSortables.set(groupId, sortable);
+    sortables.add(sortable);
   }
 
   /**
@@ -1221,15 +1226,7 @@ export function createListNav(deps = {}) {
     const { groups: groupsWithLists, orphaned } = groupListsByGroup();
     initializeExpandStateForActiveList(groupsWithLists, orphaned);
 
-    const mobileNav = document.getElementById('mobileListNav');
-    if (mobileNav) {
-      // Clean up existing mobile sortables before re-rendering
-      destroySortables();
-      renderListItems(mobileNav, true);
-      if (apiCall) {
-        initializeDragAndDrop(mobileNav, true);
-      }
-    }
+    updateListNav();
   }
 
   function refreshCommunityLists() {

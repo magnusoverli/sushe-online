@@ -32,3 +32,5 @@ browser-extension/*.zip
 # Development files
 docker-compose.dev.yml
 cookies.txt
+restart-trigger*
+.restart-trigger*

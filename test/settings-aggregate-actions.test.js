@@ -148,7 +148,7 @@ describe('settings aggregate actions', () => {
     const refreshCalls = [];
     const categoryData = {
       admin: {
-        aggregateStatus: [{ year: 2024, locked: false }],
+        aggregateLists: [{ year: 2024, locked: false }],
       },
     };
 
@@ -235,7 +235,7 @@ describe('settings aggregate actions', () => {
     assert.ok(yearHeader.lockIcon);
     assert.strictEqual(yearHeader.lockIcon.className.includes('fa-lock'), true);
     assert.strictEqual(contributorsButton.replacedWith?.disabled, true);
-    assert.strictEqual(categoryData.admin.aggregateStatus[0].locked, true);
+    assert.strictEqual(categoryData.admin.aggregateLists[0].locked, true);
     assert.deepStrictEqual(refreshCalls, [2024]);
     assert.strictEqual(createdNodes.length >= 2, true);
   });
@@ -355,7 +355,7 @@ describe('settings aggregate actions', () => {
     };
     const categoryData = {
       admin: {
-        aggregateStatus: [{ year: 2022, stats: { totalAlbums: 1 } }],
+        aggregateLists: [{ year: 2022, stats: { totalAlbums: 1 } }],
       },
     };
 
@@ -412,7 +412,7 @@ describe('settings aggregate actions', () => {
       'Aggregate list for 2022 recomputed successfully',
       'success',
     ]);
-    assert.deepStrictEqual(categoryData.admin.aggregateStatus[0], status);
+    assert.deepStrictEqual(categoryData.admin.aggregateLists[0], status);
     assert.match(statsGrid.innerHTML, /Contributors/);
     assert.match(statsGrid.innerHTML, />20</);
   });

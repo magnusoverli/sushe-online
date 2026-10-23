@@ -209,7 +209,7 @@ describe('realtime-sync module', () => {
       updatedAt: new Date().toISOString(),
     });
 
-    assert.deepStrictEqual(refreshCalls, ['list-1']);
+    assert.deepStrictEqual(refreshCalls, ['list-1', 'list-1']);
   });
 
   it('forwards album availability, metadata, and taxonomy socket events', async () => {

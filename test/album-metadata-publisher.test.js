@@ -41,7 +41,7 @@ describe('album-metadata-publisher', () => {
     assert.strictEqual(count, 2);
     assert.deepStrictEqual(
       responseCache.invalidate.mock.calls.map((call) => call.arguments[0]),
-      [':user-1', ':user-2']
+      [':user-1', ':user-2', 'GET:/api/community/', 'GET:/api/recommendations/']
     );
     assert.deepStrictEqual(albumMetadataUpdated.mock.calls[0].arguments, [
       'user-1',

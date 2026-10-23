@@ -60,11 +60,22 @@ export function createRealtimeAlbumPatches(options = {}) {
     }
   }
 
+  function reconcile(albumId, patch, requestGeneration) {
+    const current = { ...patch, album_id: albumId };
+    applyAfter([current], requestGeneration);
+    return Object.fromEntries(
+      Object.keys(patch).map((field) => [field, current[field]])
+    );
+  }
+
   return {
     remember,
     applyAfter,
+    reconcile,
     get generation() {
       return generation;
     },
   };
 }
+
+export const liveAlbumPatches = createRealtimeAlbumPatches({ maxAlbums: 2000 });

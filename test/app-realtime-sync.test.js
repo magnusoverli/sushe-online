@@ -125,8 +125,8 @@ describe('app-realtime-sync module', () => {
 
   it('patches album enrichments across loaded lists without list refetches', async () => {
     let realtimeConfig = null;
-    const sharedAlbumOne = { album_id: 'album/1' };
-    const sharedAlbumTwo = { album_id: 'album/1' };
+    let sharedAlbumOne = { album_id: 'album/1' };
+    let sharedAlbumTwo = { album_id: 'album/1' };
     const lists = {
       'list-1': { _data: [sharedAlbumOne] },
       'list-2': { _data: [{ album_id: 'other' }, sharedAlbumTwo] },
@@ -153,7 +153,11 @@ describe('app-realtime-sync module', () => {
       apiCall,
       updateAlbumSummaryInPlace: () => {},
       wasRecentLocalSave: () => false,
-      setListData: () => {},
+      setListData: (id, data) => {
+        lists[id]._data = data;
+        sharedAlbumOne = lists['list-1']._data[0];
+        sharedAlbumTwo = lists['list-2']._data[1];
+      },
       updateListNav: () => {},
       displayAlbums,
       refreshGroupsAndLists: () => {},
@@ -365,7 +369,9 @@ describe('app-realtime-sync module', () => {
       apiCall,
       updateAlbumSummaryInPlace: () => {},
       wasRecentLocalSave: () => false,
-      setListData: () => {},
+      setListData: (id, data) => {
+        lists[id]._data = data;
+      },
       updateListNav: () => {},
       displayAlbums: () => {},
       refreshGroupsAndLists: () => {},
@@ -398,6 +404,6 @@ describe('app-realtime-sync module', () => {
     });
     await older;
 
-    assert.strictEqual(album.genre_1, 'New');
+    assert.strictEqual(lists['list-1']._data[0].genre_1, 'New');
   });
 });

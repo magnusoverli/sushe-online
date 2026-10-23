@@ -593,6 +593,14 @@ function createAlbumService(deps = {}) {
 
         let wasUpdated = false;
         const countryFields = buildAlbumMetadataFields({ country });
+        for (const field of ['artist', 'album', 'release_date']) {
+          if (!Object.hasOwn(update, field)) continue;
+          validateOptionalTextField(update[field], `Invalid ${field} value`);
+          const value = normalizeOptionalText(update[field]);
+          if (field !== 'release_date' && !value)
+            throw new TransactionAbort(400, { error: `${field} is required` });
+          countryFields.push({ column: field, value });
+        }
         const partialUpdate = buildPartialUpdate(
           'albums',
           'album_id',
@@ -606,8 +614,13 @@ function createAlbumService(deps = {}) {
             partialUpdate.values
           );
           wasUpdated = result.rowCount > 0;
-          if (wasUpdated && country !== undefined) {
-            countryUpdates.set(albumId, countryFields[0]?.value ?? null);
+          if (wasUpdated) {
+            countryUpdates.set(
+              albumId,
+              Object.fromEntries(
+                countryFields.map(({ column, value }) => [column, value])
+              )
+            );
           }
         }
 
@@ -657,7 +670,7 @@ function createAlbumService(deps = {}) {
           broadcast,
           logger,
           albumId,
-          patch: { country: countryUpdates.get(albumId) },
+          patch: countryUpdates.get(albumId),
           operation: 'album-service-batch-country',
         });
       } else {

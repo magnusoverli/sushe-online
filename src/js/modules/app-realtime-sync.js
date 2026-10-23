@@ -1,5 +1,8 @@
 import { createRealtimeSync as createRealtimeSyncDefault } from './realtime-sync.js';
-import { createRealtimeAlbumPatches } from './realtime-album-patches.js';
+import { liveAlbumPatches } from './realtime-album-patches.js';
+import { getListWriteState, waitForListWrites } from './list-write-queue.js';
+import { isListUnsaved } from './unsaved-lists.js';
+import { stateEvents } from './state-events.js';
 
 /**
  * Realtime sync composition helpers for app.js.
@@ -25,11 +28,13 @@ export function createAppRealtimeSync(deps = {}) {
     win = typeof window !== 'undefined' ? window : null,
   } = deps;
   const taxonomyRequests = new Map();
+  const summaryRequests = new Map();
   const refreshGenerations = new Map();
-  const albumPatches = createRealtimeAlbumPatches();
+  const albumPatches = liveAlbumPatches;
   const METADATA_PATCH_FIELDS = new Set([
     'album',
     'artist',
+    'release_date',
     'country',
     'cover_image_url',
     'cover_image_format',
@@ -48,12 +53,15 @@ export function createAppRealtimeSync(deps = {}) {
       const albums = getListData(listId);
       if (!Array.isArray(albums)) continue;
 
-      let listChanged = false;
-      for (const album of albums) {
-        if (album?.album_id !== albumId) continue;
-        Object.assign(album, patch);
-        listChanged = true;
-      }
+      const listChanged = albums.some((album) => album?.album_id === albumId);
+      if (listChanged)
+        setListData(
+          listId,
+          albums.map((album) =>
+            album?.album_id === albumId ? { ...album, ...patch } : album
+          ),
+          false
+        );
       if (listChanged && listId === currentListId) {
         currentListChanged = true;
       }
@@ -62,6 +70,8 @@ export function createAppRealtimeSync(deps = {}) {
     if (currentListChanged) {
       displayAlbums(getListData(currentListId));
     }
+    stateEvents.publish(`album:${albumId}`);
+    stateEvents.publish('albums');
   }
 
   function handleAlbumAvailabilityUpdated(data) {
@@ -165,17 +175,39 @@ export function createAppRealtimeSync(deps = {}) {
     }
   }
 
+  async function handleAlbumSummaryUpdated(data) {
+    if (typeof data?.albumId !== 'string') return;
+    const token = Symbol();
+    summaryRequests.set(data.albumId, token);
+    const summary = await apiCall(
+      `/api/albums/${encodeURIComponent(data.albumId)}/summary`
+    );
+    if (summaryRequests.get(data.albumId) !== token) return;
+    const patch = {
+      summary: summary.summary || '',
+      summary_source: summary.summarySource || '',
+    };
+    albumPatches.remember(data.albumId, patch);
+    patchLoadedAlbumCopies(data.albumId, patch);
+    await updateAlbumSummaryInPlace?.(data.albumId, summary);
+  }
+
   async function refreshList(listId, forceFullRebuild = false) {
     const generation = (refreshGenerations.get(listId) || 0) + 1;
     refreshGenerations.set(listId, generation);
     const requestPatchGeneration = albumPatches.generation;
     while (refreshGenerations.get(listId) === generation) {
       await waitForListSaves(listId);
+      await waitForListWrites(listId);
+      const writeState = getListWriteState(listId);
       const saveState = getListSaveState(listId);
-      if (saveState.dirty) return { wasLocalSave: true };
+      if (saveState.dirty || isListUnsaved(listId))
+        return { wasLocalSave: true };
       const previousCount = getListData(listId)?.length;
       const data = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
       const current = getListSaveState(listId);
+      const writes = getListWriteState(listId);
+      if (writes.pending || writes.version !== writeState.version) continue;
       if (refreshGenerations.get(listId) !== generation)
         return { wasLocalSave: true };
       if (current.pending || current.version !== saveState.version) continue;
@@ -192,7 +224,13 @@ export function createAppRealtimeSync(deps = {}) {
   function invalidateInactiveLists() {
     for (const [id, list] of Object.entries(getLists())) {
       const state = getListSaveState(id);
-      if (id !== getCurrentListId() && !state.pending && !state.dirty) {
+      if (
+        id !== getCurrentListId() &&
+        !state.pending &&
+        !state.dirty &&
+        !isListUnsaved(id, true) &&
+        !getListWriteState(id).pending
+      ) {
         list._data = null;
         list._dataProfile = null;
       }
@@ -210,6 +248,7 @@ export function createAppRealtimeSync(deps = {}) {
         onAlbumAvailabilityUpdated: handleAlbumAvailabilityUpdated,
         onAlbumMetadataUpdated: handleAlbumMetadataUpdated,
         onAlbumTaxonomyUpdated: handleAlbumTaxonomyUpdated,
+        onAlbumSummaryUpdated: handleAlbumSummaryUpdated,
         refreshListData: (listId) => refreshList(listId),
         refreshListDataSilent: (listId) => refreshList(listId, true),
         refreshListNav: async () => {

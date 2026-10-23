@@ -7,6 +7,8 @@
 import { createPostRenderScheduler } from './post-render-scheduler.js';
 import { createListSelectionPreloader } from './list-selection-preload.js';
 import { fetchCoreList } from './app-list-load-helpers.js';
+import { liveAlbumPatches } from './realtime-album-patches.js';
+import { getListWriteState, waitForListWrites } from './list-write-queue.js';
 
 export function createListSelection(deps = {}) {
   const doc = deps.doc || (typeof document !== 'undefined' ? document : null);
@@ -91,6 +93,9 @@ export function createListSelection(deps = {}) {
 
     try {
       await waitForListSaves(listId);
+      await waitForListWrites(listId);
+      const writeState = getListWriteState(listId);
+      const patchGeneration = liveAlbumPatches.generation;
       const state = getListSaveState(listId);
       if (state.dirty) return;
       const fullData = await apiCall(
@@ -99,9 +104,12 @@ export function createListSelection(deps = {}) {
       );
       if (!ownsSelection(selection)) return;
       const current = getListSaveState(listId);
+      const writes = getListWriteState(listId);
+      if (writes.pending || writes.version !== writeState.version) return;
       if (current.pending || current.dirty || current.version !== state.version)
         return;
 
+      liveAlbumPatches.applyAfter(fullData, patchGeneration);
       setListData(listId, fullData, true, { profile: 'full' });
       if (ownsSelection(selection)) {
         displayAlbums(fullData, { hydrate: true });
@@ -172,12 +180,29 @@ export function createListSelection(deps = {}) {
           const needsFetch = options.forceRefresh || !isListDataLoaded(listId);
 
           if (needsFetch) {
+            await waitForListSaves(listId);
+            await waitForListWrites(listId);
+            const writeState = getListWriteState(listId);
+            const saveState = getListSaveState(listId);
+            const patchGeneration = liveAlbumPatches.generation;
             const payload = await fetchCoreList(apiCall, listId, {
               signal: selection.controller.signal,
             });
             if (!ownsSelection(selection)) return;
             data = payload.items;
-            setListData(listId, data, true, { profile: payload.profile });
+            liveAlbumPatches.applyAfter(data, patchGeneration);
+            const currentWrites = getListWriteState(listId);
+            const currentSave = getListSaveState(listId);
+            if (
+              currentWrites.pending ||
+              currentWrites.version !== writeState.version ||
+              currentSave.dirty ||
+              currentSave.pending ||
+              currentSave.version !== saveState.version
+            ) {
+              data = getListData(listId) || data;
+            } else
+              setListData(listId, data, true, { profile: payload.profile });
           }
 
           if (ownsSelection(selection)) {
@@ -187,7 +212,9 @@ export function createListSelection(deps = {}) {
             ]);
             if (!ownsSelection(selection)) return;
 
-            displayAlbums(data, { forceFullRebuild: true });
+            displayAlbums(getListData(listId) || data, {
+              forceFullRebuild: true,
+            });
 
             const loadedProfile = getListDataProfile?.(listId) || 'full';
             if (loadedProfile !== 'full') {

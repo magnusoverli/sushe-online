@@ -230,7 +230,8 @@ describe('list taxonomy import', () => {
     assert.deepStrictEqual(JSON.parse(genreCall.options.body), {
       genre_1: 'Avant-Garde',
     });
-    assert.ok(calls.some(({ url }) => url === '/api/track-picks/item-local'));
+    assert.strictEqual(createBody.data[0].primary_track, 'Track One');
+    assert.ok(calls.every(({ url }) => !url.startsWith('/api/track-picks/')));
     assert.ok(
       calls.some(({ url }) => url === '/api/albums/album-local/summary')
     );

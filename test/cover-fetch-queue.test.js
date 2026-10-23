@@ -400,7 +400,7 @@ describe('CoverFetchQueue', () => {
 
       assert.deepStrictEqual(
         responseCache.invalidate.mock.calls.map((call) => call.arguments[0]),
-        [':user1']
+        [':user1', 'GET:/api/community/', 'GET:/api/recommendations/']
       );
       assert.strictEqual(albumMetadataUpdated.mock.calls.length, 1);
       assert.strictEqual(

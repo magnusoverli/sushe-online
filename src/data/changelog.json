@@ -1,5 +1,25 @@
 [
   {
+    "date": "2026-10-23",
+    "category": "fix",
+    "description": "Updated vulnerable dependencies while preserving reliable development reloads on Docker-mounted files."
+  },
+  {
+    "date": "2026-10-23",
+    "category": "fix",
+    "description": "Fixed sidebar drag-and-drop cleanup, upload retries, and stale album badges after an extension refresh."
+  },
+  {
+    "date": "2026-10-23",
+    "category": "fix",
+    "description": "Fixed self-update notifications across list edits and reordering, and removed duplicate realtime broadcasts."
+  },
+  {
+    "date": "2026-10-23",
+    "category": "fix",
+    "description": "Improved live list updates, reliable album editing and track picks, conflict-aware ordered saves, and synchronized settings across desktop and mobile."
+  },
+  {
     "date": "2026-10-01",
     "category": "fix",
     "description": "Fixed album covers not loading for RYM buy-linked albums.",

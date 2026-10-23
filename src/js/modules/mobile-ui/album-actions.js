@@ -180,6 +180,7 @@ export function createMobileAlbumActions(deps = {}) {
     // Load Spotify devices for mobile
     const loadMobileDevices = async () => {
       const devices = await fetchSpotifyDevices();
+      if (!deviceList.isConnected || !isPlayExpanded) return;
 
       if (devices.length > 0) {
         const deviceItems = devices

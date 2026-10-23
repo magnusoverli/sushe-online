@@ -14,6 +14,7 @@ describe('list-selection module', () => {
     const states = [];
     const toasts = [];
     let currentListId = 'old-list';
+    let listData = [{ album_id: 'cached' }];
     let spinnerTarget = null;
 
     const fab = { style: { display: '' } };
@@ -71,7 +72,7 @@ describe('list-selection module', () => {
       showLoadingSpinner(target) {
         spinnerTarget = target;
       },
-      getListData: () => [{ album_id: 'cached' }],
+      getListData: () => listData,
       isListDataLoaded: () => false,
       apiCall: async (url, options) => {
         apiCalls.push([url, options]);
@@ -84,6 +85,7 @@ describe('list-selection module', () => {
         return { success: true };
       },
       setListData(id, data) {
+        listData = data;
         states.push(['setListData', id, data]);
       },
       displayAlbums(data, options) {

@@ -268,7 +268,7 @@ module.exports = (app, deps) => {
           return res.status(400).json({ error: 'Invalid albums array' });
         }
 
-        const { list, count, sourceObservationResults, warnings } =
+        const { list, count, sourceObservationResults, warnings, addedItems } =
           await listService.replaceListItems(
             id,
             req.user._id,
@@ -284,7 +284,13 @@ module.exports = (app, deps) => {
           triggerAggregateListRecompute(list.year);
         }
 
-        res.json({ success: true, count, sourceObservationResults, warnings });
+        res.json({
+          success: true,
+          count,
+          sourceObservationResults,
+          warnings,
+          addedItems,
+        });
       },
       'updating list items',
       { errorMessage: 'Error updating list' }
@@ -319,14 +325,6 @@ module.exports = (app, deps) => {
         triggerAggregateListRecompute(list.year);
       }
 
-      const broadcast = req.app.locals.broadcast;
-      if (broadcast) {
-        const excludeSocketId = req.headers['x-socket-id'];
-        broadcast.listReordered(req.user._id, list._id, order, {
-          excludeSocketId,
-        });
-      }
-
       res.json({ success: true });
     }, 'reordering list')
   );
@@ -347,16 +345,17 @@ module.exports = (app, deps) => {
         return res.status(400).json({ error: 'Invalid comment value' });
       }
 
-      await listService.updateItemComment(
+      const result = await listService.updateItemComment(
         id,
         req.user._id,
         identifier,
-        comment
+        comment,
+        req.get('If-Match')?.replace(/^"|"$/g, '')
       );
 
       invalidateListCaches(req.user._id, id);
 
-      res.json({ success: true });
+      res.json({ success: true, ...result });
     }, 'updating comment')
   );
 
@@ -376,16 +375,17 @@ module.exports = (app, deps) => {
         return res.status(400).json({ error: 'Invalid comment value' });
       }
 
-      await listService.updateItemComment2(
+      const result = await listService.updateItemComment2(
         id,
         req.user._id,
         identifier,
-        comment
+        comment,
+        req.get('If-Match')?.replace(/^"|"$/g, '')
       );
 
       invalidateListCaches(req.user._id, id);
 
-      res.json({ success: true });
+      res.json({ success: true, ...result });
     }, 'updating comment 2')
   );
 
@@ -406,12 +406,6 @@ module.exports = (app, deps) => {
       invalidateListCaches(req.user._id, id);
       if (result.list.year) {
         triggerAggregateListRecompute(result.list.year);
-      }
-      const broadcast = req.app.locals.broadcast;
-      if (broadcast) {
-        broadcast.listUpdated(req.user._id, result.list._id, {
-          excludeSocketId: req.headers['x-socket-id'],
-        });
       }
       res.json({
         success: true,
@@ -449,14 +443,6 @@ module.exports = (app, deps) => {
 
         invalidateListCaches(req.user._id, id);
         scheduleTaxonomyUpdates(result.sourceObservationResults);
-
-        const broadcast = req.app.locals.broadcast;
-        if (broadcast) {
-          const excludeSocketId = req.headers['x-socket-id'];
-          broadcast.listUpdated(req.user._id, result.list._id, {
-            excludeSocketId,
-          });
-        }
 
         if (result.list.year) {
           triggerAggregateListRecompute(result.list.year);

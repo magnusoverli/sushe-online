@@ -384,7 +384,7 @@ describe('background worker preservation', () => {
         );
         assert.equal(
           responseCache.invalidate.mock.calls.length,
-          expectedWrites
+          expectedWrites * 3
         );
         if (kind === 'cover')
           assert.equal(

@@ -323,7 +323,12 @@ export function createAlbumDisplayShared(deps = {}) {
 
   function getCachedElements(row, isMobile) {
     let cache = rowElementsCache.get(row);
-    if (!cache) {
+    if (
+      !cache ||
+      Object.values(cache).some(
+        (element) => element?.nodeType && !row.contains(element)
+      )
+    ) {
       cache = isMobile
         ? cacheMobileCardElements(row)
         : cacheDesktopRowElements(row);

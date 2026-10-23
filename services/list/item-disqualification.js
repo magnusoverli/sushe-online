@@ -1,5 +1,6 @@
 const MAX_REASON_LENGTH = 1000;
 const { withListTransaction } = require('./transaction');
+const { readRevision } = require('./revision');
 
 function normalizeReason(reason, disqualified, TransactionAbort) {
   if (!disqualified) return null;
@@ -64,6 +65,7 @@ function createItemDisqualification(deps) {
         timestamp,
         list._id,
       ]);
+      await readRevision(client, list);
     });
 
     return {

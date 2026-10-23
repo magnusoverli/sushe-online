@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
 test('an expired session does not navigate away from pending list edits', async () => {
+  const { createListSnapshot } = await import('../src/js/modules/app-state.js');
   const { createAppApiClient } =
     await import('../src/js/modules/app-api-client.js');
   const { createAppListOperations } =
@@ -34,6 +35,7 @@ test('an expired session does not navigate away from pending list edits', async 
     markLocalSave() {},
     getLastSavedSnapshots: () => snapshots,
     computeListDiff: () => null,
+    createListSnapshot,
     showToast() {},
   });
   try {

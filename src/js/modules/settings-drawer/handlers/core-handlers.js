@@ -234,7 +234,7 @@ export function createSettingsCoreHandlers(deps = {}) {
         .querySelectorAll('input[data-settings-column-id]')
         .forEach((cb) => {
           cb.addEventListener('change', () => {
-            toggleColumnVisibility(cb.dataset.settingsColumnId);
+            toggleColumnVisibility(cb.dataset.settingsColumnId, cb.checked);
           });
         });
     }

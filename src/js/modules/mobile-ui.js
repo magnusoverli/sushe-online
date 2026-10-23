@@ -18,7 +18,11 @@ import { createTrackPickService } from './track-pick-service.js';
 import { createAlbumIdentityFinder } from './mobile-ui/album-identity.js';
 import { createListMenuActions } from './list-menu-shared.js';
 import { createMobileListMenus } from './mobile-ui/list-menus.js';
-import { applyCoverUpdate } from '../utils/album-api.js';
+import { createAlbumEditSession } from './album-edit-session.js';
+import { stateEvents } from './state-events.js';
+import { patchAlbumCopies } from './app-state.js';
+import { markListUnsaved } from './unsaved-lists.js';
+import { resolveTrackTitle } from '../utils/track-reference.js';
 
 /**
  * Factory function to create the mobile UI module with injected dependencies
@@ -464,12 +468,25 @@ export function createMobileUI(deps = {}) {
       showToast('Album not found', 'error');
       return;
     }
+    const editSession = createAlbumEditSession({
+      album,
+      listId: currentList,
+      getListData,
+      setListData,
+      apiCall,
+      trackPickService,
+    });
+    let unsubscribeTracks = () => {};
+    const draftOwner = { draft: true };
+    const refreshOwner = () => {
+      if (getCurrentList() === currentList)
+        displayAlbums(getListData(currentList));
+    };
 
     const originalReleaseDate = album.release_date || '';
     const inputReleaseDate = originalReleaseDate
-      ? normalizeDateForInput(originalReleaseDate) ||
-        new Date().toISOString().split('T')[0]
-      : new Date().toISOString().split('T')[0];
+      ? normalizeDateForInput(originalReleaseDate) || ''
+      : '';
 
     // Remove any existing edit modals first
     const existingModals = document.querySelectorAll('.mobile-edit-modal');
@@ -633,7 +650,7 @@ export function createMobileUI(deps = {}) {
           <div class="w-full" id="trackPickWrapper">
             <div class="flex items-center justify-between">
               <label class="block text-gray-400 text-sm mb-2">Track Selection</label>
-              <button type="button" id="fetchTracksBtn" class="text-xs text-red-500 hover:underline">Get</button>
+              <div class="flex gap-3"><button type="button" id="clearTrackPicksBtn" class="text-xs text-red-500 hover:underline">Clear all</button><button type="button" id="fetchTracksBtn" class="text-xs text-red-500 hover:underline">Get</button></div>
             </div>
             <div class="text-xs text-gray-500 mb-2">Click once = secondary (<span class="font-[Georgia,serif] font-semibold text-green-400">II</span>) | Click again = primary (<span class="font-[Georgia,serif] font-semibold text-green-400">I</span>)</div>
             <div id="trackPickContainer" data-list-item-id="${album._id || ''}">
@@ -653,11 +670,11 @@ export function createMobileUI(deps = {}) {
                       isPrimary || isSecondary ? 'bg-gray-700/30' : '';
                     return `
                   <li class="flex items-center space-x-2 p-1.5 rounded ${bgClass} track-pick-item cursor-pointer active:bg-gray-700/50" 
-                      data-track="${trackName.replace(/"/g, '&quot;')}"
+                      data-track="${escapeHtml(trackName)}"
                       data-is-primary="${isPrimary}"
                       data-is-secondary="${isSecondary}">
                     ${indicator}
-                    <span class="text-gray-300 flex-1 min-w-0 truncate">${trackName}</span>
+                    <span class="text-gray-300 flex-1 min-w-0 truncate">${escapeHtml(trackName)}</span>
                     ${trackLength ? `<span class="text-gray-500 text-xs shrink-0">${trackLength}</span>` : ''}
                   </li>`;
                   })
@@ -665,7 +682,7 @@ export function createMobileUI(deps = {}) {
               </ul>
             `
                 : `
-              <input type="number" id="editTrackPickNumber" value="${album.primary_track || ''}"
+              <input type="number" id="editTrackPickNumber" value="${/^#?\d+$/.test(album.primary_track || '') ? album.primary_track.replace(/^#/, '') : ''}"
                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
                      placeholder="Enter track number (primary)">
             `
@@ -681,6 +698,22 @@ export function createMobileUI(deps = {}) {
     `;
 
     document.body.appendChild(editModal);
+    let manualTrackChanged = false;
+    let manualTrackValue = '';
+    editModal.addEventListener('input', (event) => {
+      if (event.target.id === 'editTrackPickNumber') {
+        manualTrackChanged = true;
+        manualTrackValue = event.target.value.trim()
+          ? `#${event.target.value.trim()}`
+          : '';
+      }
+    });
+    editModal.addEventListener('input', () =>
+      markListUnsaved(currentList, true, draftOwner)
+    );
+    editModal.addEventListener('change', () =>
+      markListUnsaved(currentList, true, draftOwner)
+    );
     const emojiAutocompleteTeardowns = [];
     const teardownEmojiAutocompletes = () => {
       while (emojiAutocompleteTeardowns.length > 0) {
@@ -699,6 +732,8 @@ export function createMobileUI(deps = {}) {
       closeButton: editModal.querySelector('[data-close-editor]'),
       label: 'Edit album',
       onClose: () => {
+        unsubscribeTracks();
+        markListUnsaved(currentList, false, draftOwner);
         teardownEmojiAutocompletes();
         editModal.remove();
         window.scrollTo(0, 0);
@@ -831,14 +866,36 @@ export function createMobileUI(deps = {}) {
     // Track current selections (will be synced with server)
     let currentPrimaryTrack = album.primary_track || '';
     let currentSecondaryTrack = album.secondary_track || '';
+    unsubscribeTracks = stateEvents.subscribe(
+      [`item:${album._id}`, `list:${currentList}`],
+      () => {
+        const current = editSession.findItem();
+        if (!current) return;
+        currentPrimaryTrack = current.primary_track || '';
+        currentSecondaryTrack = current.secondary_track || '';
+        const numberInput = editModal.querySelector('#editTrackPickNumber');
+        if (numberInput && !manualTrackChanged)
+          numberInput.value = /^#?\d+$/.test(currentPrimaryTrack)
+            ? currentPrimaryTrack.replace(/^#/, '')
+            : '';
+        updateTrackPickUI();
+      }
+    );
 
     function updateTrackPickUI() {
       if (!trackPickContainer) return;
       const items = trackPickContainer.querySelectorAll('.track-pick-item');
       items.forEach((item) => {
         const trackName = item.dataset.track;
-        const isPrimary = trackName === currentPrimaryTrack;
-        const isSecondary = trackName === currentSecondaryTrack;
+        const tracks = editSession.findItem()?.tracks || album.tracks;
+        const isPrimary =
+          trackName ===
+          resolveTrackTitle(
+            manualTrackChanged ? manualTrackValue : currentPrimaryTrack,
+            tracks
+          );
+        const isSecondary =
+          trackName === resolveTrackTitle(currentSecondaryTrack, tracks);
 
         // Update data attributes
         item.dataset.isPrimary = isPrimary;
@@ -876,23 +933,34 @@ export function createMobileUI(deps = {}) {
             const result = await trackPickService.updateTrackPick(
               listItemId,
               trackName,
-              {
+              () => ({
                 primaryTrack: currentPrimaryTrack,
                 secondaryTrack: currentSecondaryTrack,
-              }
+              })
             );
             currentPrimaryTrack = result.primaryTrack;
             currentSecondaryTrack = result.secondaryTrack;
+            manualTrackChanged = false;
 
             // Update UI immediately
             updateTrackPickUI();
 
             // Update local album data for save
-            album.primary_track = currentPrimaryTrack;
-            album.secondary_track = currentSecondaryTrack;
-
-            // Reuse the card renderer so its track number and duration update now.
-            displayAlbums(albumsForEdit);
+            const latest = getListData(currentList);
+            setListData(
+              currentList,
+              latest.map((entry) =>
+                entry._id === listItemId
+                  ? {
+                      ...entry,
+                      primary_track: currentPrimaryTrack,
+                      secondary_track: currentSecondaryTrack,
+                    }
+                  : entry
+              ),
+              false
+            );
+            refreshOwner();
           } catch (err) {
             console.error('Track pick error:', err);
             showToast('Error updating track selection', 'error');
@@ -904,6 +972,23 @@ export function createMobileUI(deps = {}) {
     // Fetch track list when button is clicked
     const fetchBtn = document.getElementById('fetchTracksBtn');
     setupTrackPickItems();
+    updateTrackPickUI();
+    document.getElementById('clearTrackPicksBtn').onclick = async () => {
+      try {
+        const current = editSession.findItem();
+        if (!current?._id) throw new Error('Album is no longer available');
+        const picks = await trackPickService.clearTrackPicks(current._id);
+        currentPrimaryTrack = picks.primaryTrack;
+        currentSecondaryTrack = picks.secondaryTrack;
+        const numberInput = document.getElementById('editTrackPickNumber');
+        if (numberInput) numberInput.value = '';
+        manualTrackChanged = false;
+        updateTrackPickUI();
+        refreshOwner();
+      } catch (error) {
+        showToast(error.message || 'Unable to clear picks', 'error');
+      }
+    };
 
     if (fetchBtn) {
       fetchBtn.onclick = async () => {
@@ -913,6 +998,9 @@ export function createMobileUI(deps = {}) {
         try {
           const tracks = await fetchTracksForAlbum(album);
           album.tracks = tracks;
+          patchAlbumCopies(album.album_id, { tracks });
+          refreshOwner();
+          if (!editModal.isConnected) return;
           if (trackPickContainer) {
             trackPickContainer.innerHTML =
               tracks.length > 0
@@ -927,19 +1015,20 @@ export function createMobileUI(deps = {}) {
                         isPrimary || isSecondary ? 'bg-gray-700/30' : '';
                       return `
                   <li class="flex items-center space-x-2 p-1.5 rounded ${bgClass} track-pick-item cursor-pointer active:bg-gray-700/50" 
-                      data-track="${trackName.replace(/"/g, '&quot;')}"
+                      data-track="${escapeHtml(trackName)}"
                       data-is-primary="${isPrimary}"
                       data-is-secondary="${isSecondary}">
                     ${indicator}
-                    <span class="text-gray-300 flex-1 min-w-0 truncate">${trackName}</span>
+                    <span class="text-gray-300 flex-1 min-w-0 truncate">${escapeHtml(trackName)}</span>
                     ${trackLength ? `<span class="text-gray-500 text-xs shrink-0">${trackLength}</span>` : ''}
                   </li>`;
                     })
                     .join('')}</ul>`
-                : `<input type="number" id="editTrackPickNumber" value="${currentPrimaryTrack}"
+                : `<input type="number" id="editTrackPickNumber" value="${/^#?\d+$/.test(currentPrimaryTrack || '') ? currentPrimaryTrack.replace(/^#/, '') : ''}"
                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
                      placeholder="Enter track number (primary)">`;
             setupTrackPickItems();
+            updateTrackPickUI();
           }
           showToast('Tracks loaded');
         } catch (err) {
@@ -961,101 +1050,44 @@ export function createMobileUI(deps = {}) {
           ? originalReleaseDate
           : formatDateForStorage(newDateValue);
 
-      const primaryTrackForSave =
-        currentPrimaryTrack ||
-        (() => {
-          const numInput = document.getElementById('editTrackPickNumber');
-          return numInput ? numInput.value.trim() : '';
-        })();
-
-      let updatedAlbum = {
-        ...album,
+      const values = {
         artist: document.getElementById('editArtist').value.trim(),
         album: document.getElementById('editAlbum').value.trim(),
         release_date: finalReleaseDate,
         country: document.getElementById('editCountry').value,
         genre_1: document.getElementById('editGenre1').value,
         genre_2: document.getElementById('editGenre2').value,
-        tracks: Array.isArray(album.tracks) ? album.tracks : undefined,
-        primary_track: primaryTrackForSave,
-        secondary_track: currentSecondaryTrack,
+        ...(manualTrackChanged ? { primary_track: manualTrackValue } : {}),
         comments: document.getElementById('editComments').value.trim(),
         comments_2: document.getElementById('editComments2').value.trim(),
       };
 
-      // Apply pending cover image if user selected a new one
-      if (pendingCoverData) {
-        updatedAlbum.cover_image = pendingCoverData.base64;
-        updatedAlbum.cover_image_format = pendingCoverData.format;
-        // Clear the URL to ensure base64 takes priority
-        delete updatedAlbum.cover_image_url;
-        delete updatedAlbum.cover_thumb_url;
-      }
-
-      if (!updatedAlbum.artist || !updatedAlbum.album) {
+      if (!values.artist || !values.album) {
         showToast('Artist and Album are required', 'error');
         return;
       }
 
-      const existingAlbums = getListData(currentList);
-      if (!existingAlbums) {
-        showToast('Error: List data not found', 'error');
-        return;
-      }
-      // New array reference so displayAlbums sees a fresh fingerprint
-      // and can apply the edit as an incremental field update
-      const albumsToSave = [...existingAlbums];
-      albumsToSave[index] = updatedAlbum;
-      setListData(currentList, albumsToSave, false);
-
-      closeEditor();
-
-      displayAlbums(albumsToSave);
-
+      this.disabled = true;
+      this.textContent = 'Saving…';
       try {
-        let albumsForSave = albumsToSave;
-        if (pendingCoverData && updatedAlbum.album_id) {
-          const albumWithoutCoverPayload = { ...updatedAlbum };
-          delete albumWithoutCoverPayload.cover_image;
-          delete albumWithoutCoverPayload.cover_image_format;
-          albumsForSave = [...albumsToSave];
-          albumsForSave[index] = albumWithoutCoverPayload;
-        }
-
-        await saveList(currentList, albumsForSave);
-        if (pendingCoverData && updatedAlbum.album_id) {
-          const coverResult = await apiCall(
-            `/api/albums/${encodeURIComponent(updatedAlbum.album_id)}/cover`,
-            {
-              method: 'PATCH',
-              body: JSON.stringify({
-                cover_image: pendingCoverData.base64,
-                cover_image_format: pendingCoverData.format,
-              }),
-            }
-          );
-
-          updatedAlbum = applyCoverUpdate(updatedAlbum, coverResult);
-          albumsToSave[index] = updatedAlbum;
-          setListData(currentList, albumsToSave);
-          displayAlbums(albumsToSave);
-        }
+        await editSession.save(values, pendingCoverData);
+        refreshOwner();
+        closeEditor();
         showToast('Album updated successfully');
       } catch (error) {
         console.error('Error saving album:', error);
-        showToast('Error saving changes', 'error');
-        const revertedAlbums = [...albumsToSave];
-        revertedAlbums[index] = album;
-        setListData(currentList, revertedAlbums, false);
-        displayAlbums(
-          revertedAlbums,
-          pendingCoverData ? { forceFullRebuild: true } : {}
+        showToast(
+          error.message || 'Some changes could not be saved. Retry to finish.',
+          'error'
         );
+      } finally {
+        this.disabled = false;
+        this.textContent = 'Save';
       }
     };
 
     setTimeout(() => {
-      document.getElementById('editArtist').focus();
+      editModal.querySelector('#editArtist')?.focus();
     }, 100);
   }
 
@@ -1107,7 +1139,7 @@ export function createMobileUI(deps = {}) {
    * @param {string} albumName - Album name
    * @param {string} artist - Artist name
    */
-  function showMobileSummarySheet(summary, albumName, artist) {
+  function showMobileSummarySheet(summary, albumName, artist, albumId) {
     if (!summary) {
       showToast('No summary available', 'error');
       return;
@@ -1149,11 +1181,21 @@ export function createMobileUI(deps = {}) {
         
         <!-- Summary Content -->
         <div class="flex-1 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch p-4">
-          <div class="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">${escapeHtml(summary)}</div>
+          <div data-summary-content class="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">${escapeHtml(summary)}</div>
         </div>
       </div>
     `;
     document.body.appendChild(summaryModal);
+    const unsubscribe = stateEvents.subscribe(`album:${albumId}`, () => {
+      const album = Object.values(getLists())
+        .flatMap((list) => list._data || [])
+        .find((item) => item.album_id === albumId);
+      if (!album) return;
+      summaryModal.querySelector('[data-summary-content]').textContent =
+        album.summary || 'No summary available';
+      summaryModal.querySelector('h3').textContent = album.album || '';
+      summaryModal.querySelector('p').textContent = album.artist || '';
+    });
 
     // Backdrop, close button, Escape and scroll lock via the shared controller;
     // restore the FAB on close.
@@ -1163,6 +1205,7 @@ export function createMobileUI(deps = {}) {
       closeButton: summaryModal.querySelector('[data-close-summary]'),
       label: 'Album summary',
       onClose: () => {
+        unsubscribe();
         summaryModal.remove();
         const fabElement = document.getElementById('addAlbumFAB');
         if (fabElement && getCurrentList()) {

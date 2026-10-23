@@ -1,3 +1,5 @@
+import { getCurrentListId } from './app-state.js';
+
 export function canManageListItemDisqualification(
   listMeta,
   currentUser = {},
@@ -37,6 +39,7 @@ export async function updateListItemDisqualification(
     showDisqualificationReasonModal,
     showToast,
     refreshLockedYearStatus = () => {},
+    getCurrentList = getCurrentListId,
   },
   { listId, album }
 ) {
@@ -73,8 +76,8 @@ export async function updateListItemDisqualification(
       is_disqualified: response.is_disqualified,
       disqualification_reason: response.disqualification_reason ?? null,
     };
-    setListData(listId, nextAlbums);
-    displayAlbums(nextAlbums);
+    setListData(listId, nextAlbums, false);
+    if (getCurrentList() === listId) displayAlbums(nextAlbums);
     showToast(
       response.is_disqualified
         ? 'Album disqualified from ranking'

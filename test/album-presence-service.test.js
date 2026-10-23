@@ -108,7 +108,7 @@ describe('extension album presence identity index', () => {
     assert.equal(harness.fetchWithTimeout.mock.calls.length, 1);
   });
 
-  it('concurrent callers get the same offline fallback', async () => {
+  it('a forced follow-up preserves cached presence when both requests fail', async () => {
     const harness = createHarness();
     let reject;
     harness.fetchWithTimeout.mock.mockImplementation(
@@ -125,9 +125,46 @@ describe('extension album presence identity index', () => {
       forceRefresh: true,
     });
     await new Promise((resolve) => setImmediate(resolve));
+    harness.fetchWithTimeout.mock.mockImplementation(async () => {
+      throw new Error('offline');
+    });
     reject(new Error('offline'));
     assert.deepEqual(await Promise.all([first, second]), [{}, {}]);
-    assert.equal(harness.fetchWithTimeout.mock.calls.length, 1);
+    assert.equal(harness.fetchWithTimeout.mock.calls.length, 2);
+  });
+
+  it('coalesces forced refreshes after a pending request to observe changed identities', async () => {
+    const item = {
+      listId: 'list',
+      albumId: 'album',
+      artist: 'Artist',
+      album: 'Album',
+    };
+    const harness = createHarness({
+      items: [{ ...item, rymNumericId: '222' }],
+    });
+    let resolve;
+    harness.fetchWithTimeout.mock.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        })
+    );
+    const albums = [{ key: 'selected', ...item, numericId: '111' }];
+    const initial = harness.service.getPresenceForAlbums(albums);
+    while (!resolve) await Promise.resolve();
+    const refreshes = [1, 2].map(() =>
+      harness.service.getPresenceForAlbums(albums, { forceRefresh: true })
+    );
+    await new Promise((done) => setImmediate(done));
+    resolve({
+      ok: true,
+      status: 200,
+      json: async () => ({ items: [{ ...item, rymNumericId: '111' }] }),
+    });
+    await initial;
+    assert.deepEqual(await Promise.all(refreshes), [{}, {}]);
+    assert.equal(harness.fetchWithTimeout.mock.calls.length, 2);
   });
 
   for (const status of [401, 403]) {

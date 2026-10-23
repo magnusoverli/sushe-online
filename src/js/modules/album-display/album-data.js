@@ -3,6 +3,7 @@ import {
   isYearMismatch,
   extractYearFromDate,
 } from '../date-utils.js';
+import { findTrackIndex } from '../../utils/track-reference.js';
 
 export function formatPlaycount(count) {
   if (count === null || count === undefined) return '';
@@ -36,7 +37,7 @@ function formatTrackPickDuration(duration) {
 }
 
 function formatTrackPickDisplay(trackName, trackNumber) {
-  const match = trackName.match(/^(\d+)[.\s-]+\s*(.*)$/);
+  const match = trackName.match(/^(\d+)(?:\.\s+|\s+-\s+)(.+)$/);
   const displayName = match?.[2] || trackName;
   const number = trackNumber || match?.[1] || null;
   return number ? `#${number} - ${displayName}` : displayName;
@@ -53,9 +54,7 @@ export function processTrackPick(trackIdentifier, tracks, deps = {}) {
   }
 
   if (Array.isArray(tracks)) {
-    const trackIndex = tracks.findIndex(
-      (track) => getTrackName(track) === trackIdentifier
-    );
+    const trackIndex = findTrackIndex(trackIdentifier, tracks);
     if (trackIndex >= 0) {
       const trackMatch = tracks[trackIndex];
       const trackName = getTrackName(trackMatch);
@@ -72,9 +71,10 @@ export function processTrackPick(trackIdentifier, tracks, deps = {}) {
     }
   }
 
-  if (trackIdentifier.match(/^\d+$/)) {
+  if (trackIdentifier.match(/^#?\d+$/)) {
+    const number = trackIdentifier.replace(/^#/, '');
     return {
-      display: `#${trackIdentifier} - Track ${trackIdentifier}`,
+      display: `#${number} - Track ${number}`,
       class: 'text-gray-300',
       duration: '',
     };

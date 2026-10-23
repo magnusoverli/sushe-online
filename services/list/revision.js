@@ -1,4 +1,5 @@
 const { TransactionAbort } = require('../../db/transaction');
+const { recordListContentChange } = require('./transaction');
 
 function checkRevision(list, expected) {
   if (expected === undefined || expected === null) {
@@ -22,6 +23,7 @@ async function readRevision(client, list) {
     [list._id]
   );
   list.revision = String(rows[0].revision);
+  recordListContentChange(client, list);
 }
 
 module.exports = { checkRevision, readRevision };

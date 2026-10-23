@@ -106,4 +106,30 @@ describe('list write queue', () => {
     assert.equal(queue.getState('a').dirty, false);
     assert.equal(unsaved.size, 0);
   });
+
+  it('allows queued saves to issue ordered HTTP writes without clearing an open draft', async (t) => {
+    const { enqueueListWrite, getListWriteState, waitForListWrites } =
+      await import('../src/js/modules/list-write-queue.js');
+    const { markListUnsaved, isListUnsaved } =
+      await import('../src/js/modules/unsaved-lists.js');
+    const listId = 'combined-queues';
+    const draft = Symbol('draft');
+    markListUnsaved(listId, true, draft);
+    t.after(() => markListUnsaved(listId, false, draft));
+    const queue = createListWriteQueue();
+    const calls = [];
+    await queue.schedule(listId, () =>
+      enqueueListWrite(listId, async () => {
+        assert.equal(getListWriteState(listId).pending, 1);
+        calls.push('save');
+      })
+    );
+    await waitForListWrites(listId);
+    assert.deepEqual(calls, ['save']);
+    assert.equal(queue.getState(listId).pending, 0);
+    assert.equal(getListWriteState(listId).pending, 0);
+    assert.equal(isListUnsaved(listId), true);
+    markListUnsaved(listId, false, draft);
+    assert.equal(isListUnsaved(listId), false);
+  });
 });

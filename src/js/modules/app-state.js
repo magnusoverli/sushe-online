@@ -13,7 +13,16 @@ import {
   normalizeAlbumRecords,
   normalizeListsMap,
 } from './list-data-normalization.js';
-import { rememberListRevision } from './list-revisions.js';
+import { rememberListItems, rememberListRevision } from './list-revisions.js';
+import { stateEvents } from './state-events.js';
+import { liveAlbumPatches } from './realtime-album-patches.js';
+import { createListSnapshot, saveSnapshotToStorage } from './list-snapshots.js';
+export {
+  createListSnapshot,
+  saveSnapshotToStorage,
+  loadSnapshotFromStorage,
+  clearSnapshotFromStorage,
+} from './list-snapshots.js';
 
 // ============ CORE STATE VARIABLES ============
 
@@ -125,7 +134,14 @@ export function getLists() {
  * @param {Object} newLists - New lists object
  */
 export function setLists(newLists) {
+  const previous = lists;
   lists = normalizeListsMap(newLists);
+  for (const id of new Set([...Object.keys(previous), ...Object.keys(lists)])) {
+    if (previous[id]?._data !== lists[id]?._data)
+      stateEvents.publish(`list:${id}`);
+    if (lists[id]?._data) rememberListItems(id, lists[id]._data);
+  }
+  stateEvents.publish('lists');
 }
 
 /**
@@ -156,6 +172,7 @@ export function setListData(
 ) {
   if (!listId) return;
 
+  const previous = getListData(listId) || [];
   const normalizedAlbums = normalizeAlbumRecords(albums || []);
   const profile = options.profile || 'full';
 
@@ -166,6 +183,7 @@ export function setListData(
     lists[listId].count = normalizedAlbums.length;
   }
   lists[listId]._dataProfile = profile;
+  rememberListItems(listId, normalizedAlbums);
 
   // Update snapshot for diff-based saves (when data is fetched from server)
   if (updateSnapshot && albums) {
@@ -174,6 +192,50 @@ export function setListData(
     lastSavedSnapshots.set(listId, snapshot);
     saveSnapshotToStorage(listId, snapshot);
   }
+  stateEvents.publish(`list:${listId}`);
+  const oldItems = new Map(previous.map((item) => [item._id, item]));
+  for (const item of normalizedAlbums) {
+    if (item._id && oldItems.get(item._id) !== item)
+      stateEvents.publish(`item:${item._id}`);
+    oldItems.delete(item._id);
+  }
+  for (const id of oldItems.keys()) if (id) stateEvents.publish(`item:${id}`);
+  stateEvents.publish('library');
+}
+
+export function patchListItem(listId, itemId, patch) {
+  const items = getListData(listId);
+  if (!items) return null;
+  const index = items.findIndex((item) => item._id === itemId);
+  if (index < 0) return null;
+  const next = [...items];
+  next[index] = { ...items[index], ...patch };
+  setListData(listId, next, false, { profile: getListDataProfile(listId) });
+  stateEvents.publish(`item:${itemId}`);
+  return next[index];
+}
+
+export function patchAlbumCopies(
+  albumId,
+  patch,
+  requestGeneration = liveAlbumPatches.generation
+) {
+  patch = liveAlbumPatches.reconcile(albumId, patch, requestGeneration);
+  liveAlbumPatches.remember(albumId, patch);
+  for (const [listId, list] of Object.entries(lists)) {
+    if (!list._data?.some((item) => item.album_id === albumId)) continue;
+    setListData(
+      listId,
+      list._data.map((item) =>
+        item.album_id === albumId ? { ...item, ...patch } : item
+      ),
+      false,
+      { profile: list._dataProfile }
+    );
+  }
+  stateEvents.publish(`album:${albumId}`);
+  stateEvents.publish('albums');
+  return patch;
 }
 
 /**
@@ -220,6 +282,8 @@ export function updateListMetadata(listId, updates) {
 
   // Apply updates
   Object.assign(lists[listId], updates);
+  stateEvents.publish(`list:${listId}`);
+  stateEvents.publish('lists');
 }
 
 /**
@@ -331,6 +395,7 @@ export function getCurrentListId() {
  */
 export function setCurrentListId(listId) {
   currentListId = listId;
+  stateEvents.publish('view');
 }
 
 /**
@@ -356,6 +421,7 @@ export function getCurrentRecommendationsYear() {
 export function setCurrentRecommendationsYear(year) {
   currentRecommendationsYear = year;
   window.currentRecommendationsYear = year;
+  stateEvents.publish('view');
 }
 
 /**
@@ -584,67 +650,6 @@ export function wasRecentLocalSave(listName) {
  */
 export function getLastSavedSnapshots() {
   return lastSavedSnapshots;
-}
-
-/**
- * Create a lightweight snapshot of album IDs for diff comparison
- * @param {Array} albums - Album array
- * @returns {Array} Array of album_id strings
- */
-export function createListSnapshot(albums) {
-  if (!albums || !Array.isArray(albums)) return [];
-  return albums.map((a) => a.album_id || null).filter(Boolean);
-}
-
-/**
- * Save snapshot to localStorage for persistence across page reloads
- * @param {string} listId - The list ID
- * @param {Array} snapshot - Array of album IDs
- */
-export function saveSnapshotToStorage(listId, snapshot) {
-  if (!listId || !snapshot) return;
-  try {
-    const key = `list-snapshot-${listId}`;
-    localStorage.setItem(key, JSON.stringify(snapshot));
-  } catch (_e) {
-    // Silently fail if localStorage is full or unavailable
-    console.warn('Failed to save snapshot to localStorage:', _e.message);
-  }
-}
-
-/**
- * Load snapshot from localStorage
- * @param {string} listId - The list ID
- * @returns {Array|null} Array of album IDs or null if not found
- */
-export function loadSnapshotFromStorage(listId) {
-  if (!listId) return null;
-  try {
-    const key = `list-snapshot-${listId}`;
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      const snapshot = JSON.parse(stored);
-      return Array.isArray(snapshot) ? snapshot : null;
-    }
-  } catch (_e) {
-    // Silently fail if localStorage is unavailable or data is corrupted
-    console.warn('Failed to load snapshot from localStorage:', _e.message);
-  }
-  return null;
-}
-
-/**
- * Clear snapshot from localStorage (e.g., when list is deleted)
- * @param {string} listId - The list ID
- */
-export function clearSnapshotFromStorage(listId) {
-  if (!listId) return;
-  try {
-    const key = `list-snapshot-${listId}`;
-    localStorage.removeItem(key);
-  } catch (_e) {
-    // Silently fail
-  }
 }
 
 // ============ COMPUTED / STATIC DATA ============

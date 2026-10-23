@@ -112,7 +112,13 @@ function createSpotifyPlaylistService(deps) {
 
         if (albumData && albumData.tracks) {
           // Try to match by track number
-          const trackNum = parseInt(trackPick);
+          const trackNum =
+            /^#?\d+$/.test(trackPick.trim()) &&
+            !albumData.tracks.some(
+              (track) => track.name?.toLowerCase() === trackPick.toLowerCase()
+            )
+              ? Number(trackPick.replace(/^#/, ''))
+              : NaN;
           if (
             !isNaN(trackNum) &&
             trackNum > 0 &&
@@ -123,13 +129,17 @@ function createSpotifyPlaylistService(deps) {
 
           // Try to match by track name (skip tracks with missing metadata)
           const pickLower = trackPick.toLowerCase();
-          const matchingTrack = albumData.tracks.find((t) => {
-            if (!t?.name) return false;
-            const nameLower = t.name.toLowerCase();
-            return (
-              nameLower.includes(pickLower) || pickLower.includes(nameLower)
-            );
-          });
+          const matchingTrack =
+            albumData.tracks.find(
+              (track) => track.name?.toLowerCase() === pickLower
+            ) ||
+            albumData.tracks.find((t) => {
+              if (!t?.name) return false;
+              const nameLower = t.name.toLowerCase();
+              return (
+                nameLower.includes(pickLower) || pickLower.includes(nameLower)
+              );
+            });
           if (matchingTrack) {
             return matchingTrack.uri;
           }

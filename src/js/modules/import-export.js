@@ -924,14 +924,6 @@ export function createImportConflictHandler(deps = {}) {
           // Non-critical: track picks won't be imported but merge still succeeds
         }
 
-        // Build a map from album_id to list_item_id for track picks
-        const albumToListItemMap = new Map();
-        for (const item of savedList) {
-          if (item.album_id && item._id) {
-            albumToListItemMap.set(item.album_id, item._id);
-          }
-        }
-
         const overrideResult = await replayManualGenreOverrides(
           albums,
           savedList,
@@ -944,37 +936,7 @@ export function createImportConflictHandler(deps = {}) {
           const albumId = savedAlbum?.album_id;
           if (!albumId) continue;
 
-          // Import track picks (now uses list item ID, not album ID)
-          const listItemId = savedAlbum?._id || albumToListItemMap.get(albumId);
-          if (listItemId && (album.primary_track || album.secondary_track)) {
-            try {
-              if (album.primary_track) {
-                await apiCall(`/api/track-picks/${listItemId}`, {
-                  method: 'POST',
-                  body: JSON.stringify({
-                    trackIdentifier: album.primary_track,
-                    priority: 1,
-                  }),
-                });
-              }
-              if (album.secondary_track) {
-                await apiCall(`/api/track-picks/${listItemId}`, {
-                  method: 'POST',
-                  body: JSON.stringify({
-                    trackIdentifier: album.secondary_track,
-                    priority: 2,
-                  }),
-                });
-              }
-            } catch (err) {
-              console.warn(
-                'Failed to import track picks for list item',
-                listItemId,
-                err
-              );
-            }
-          }
-
+          // New item picks are already included in the list save.
           // Import summary (still uses album_id)
           if (album.summary || album.summary_source) {
             try {

@@ -16,6 +16,7 @@ const COMMENT_FIELD_CONFIG = {
   },
 };
 const { withListTransaction } = require('./transaction');
+const { readRevision, checkRevision } = require('./revision');
 
 function createItemComments(deps = {}) {
   const { db, TransactionAbort, findListByIdOrThrow, logger } = deps;
@@ -29,7 +30,8 @@ function createItemComments(deps = {}) {
     userId,
     identifier,
     comment,
-    field
+    field,
+    expectedRevision
   ) {
     const fieldConfig = COMMENT_FIELD_CONFIG[field];
     if (!fieldConfig) {
@@ -39,13 +41,14 @@ function createItemComments(deps = {}) {
     const trimmedComment = comment ? comment.trim() : null;
     const now = new Date();
 
-    await withListTransaction(db, userId, async (client) => {
+    const result = await withListTransaction(db, userId, async (client) => {
       const list = await findListByIdOrThrow(
         listId,
         userId,
         fieldConfig.action,
         client
       );
+      if (expectedRevision !== undefined) checkRevision(list, expectedRevision);
 
       const updateResult = await client.query(
         `UPDATE list_items SET ${field} = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4 RETURNING _id`,
@@ -57,9 +60,12 @@ function createItemComments(deps = {}) {
           error: 'Album not found in list',
         });
       }
+      await readRevision(client, list);
+      return { listId: list._id, revision: list.revision };
     });
 
     logger?.info(fieldConfig.logMessage, { userId, listId, identifier });
+    return result;
   }
 
   return {

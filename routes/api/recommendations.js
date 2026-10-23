@@ -70,6 +70,7 @@ module.exports = (appInstance, deps) => {
         );
 
         responseCache.invalidate('GET:/api/app-bootstrap');
+        app.locals.broadcast?.sharedViewsUpdated?.();
 
         // Send Telegram notification (fire-and-forget)
         const telegramNotifier = app.locals.telegramNotifier;
@@ -121,6 +122,7 @@ module.exports = (appInstance, deps) => {
         await recommendationService.removeRecommendation(year, albumId);
 
         responseCache.invalidate('GET:/api/app-bootstrap');
+        app.locals.broadcast?.sharedViewsUpdated?.();
 
         logger.info('Admin action', {
           action: 'remove_recommendation',
@@ -162,6 +164,7 @@ module.exports = (appInstance, deps) => {
           username: req.user.username,
         });
 
+        app.locals.broadcast?.sharedViewsUpdated?.();
         res.json({ success: true, year, albumId, reasoning: trimmedReasoning });
       },
       'updating recommendation reasoning',
@@ -206,6 +209,7 @@ module.exports = (appInstance, deps) => {
           ip: req.ip,
         });
 
+        app.locals.broadcast?.sharedViewsUpdated?.();
         res.json({ success: true, year, locked: true });
       },
       'locking recommendations',
@@ -232,6 +236,7 @@ module.exports = (appInstance, deps) => {
           ip: req.ip,
         });
 
+        app.locals.broadcast?.sharedViewsUpdated?.();
         res.json({ success: true, year, locked: false });
       },
       'unlocking recommendations',

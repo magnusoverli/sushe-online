@@ -4,6 +4,7 @@ async function invalidateResponseCacheForAlbumUsers({
   logger,
   albumIds,
   operation,
+  onInvalidate = null,
 }) {
   if (!responseCache || typeof responseCache.invalidate !== 'function')
     return 0;
@@ -28,6 +29,7 @@ async function invalidateResponseCacheForAlbumUsers({
 
     for (const row of result.rows) {
       responseCache.invalidate(`:${row.user_id}`);
+      await onInvalidate?.(row.user_id);
     }
     return result.rows.length;
   } catch (error) {

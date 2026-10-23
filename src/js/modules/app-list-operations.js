@@ -4,6 +4,8 @@
 import { createListImporter } from './app-list-import.js';
 import { createListWriteQueue } from './list-write-queue.js';
 import { createListReorder } from './list-reorder.js';
+import { getListRevision } from './list-revisions.js';
+import { rebaseListChanges } from '../utils/rebase-list.js';
 import {
   buildListMetadataEntries,
   fetchCoreList,
@@ -39,10 +41,19 @@ export function createAppListOperations(deps = {}) {
   } = deps;
   let metadataRefreshGeneration = 0;
   const failedAdditions = new Map();
+  const queuedSnapshots = new Map();
   const writes = createListWriteQueue({
-    onIdle: (listId) => failedAdditions.delete(listId),
+    onIdle: (listId) => {
+      failedAdditions.delete(listId);
+      queuedSnapshots.delete(listId);
+    },
   });
-  const { saveReorder } = createListReorder({ apiCall, logger });
+  const { saveReorder } = createListReorder({
+    apiCall,
+    logger,
+    getLastSavedSnapshots,
+    saveSnapshotToStorage,
+  });
 
   function debouncedSaveReorder(listId, data) {
     const order = data.map((item) => ({ album_id: item.album_id }));
@@ -51,9 +62,6 @@ export function createAppListOperations(deps = {}) {
       async () => {
         markLocalSave(listId);
         await saveReorder(listId, order);
-        const snapshot = createListSnapshot(order);
-        getLastSavedSnapshots().set(listId, snapshot);
-        saveSnapshotToStorage(listId, snapshot);
       },
       { kind: 'reorder' }
     );
@@ -205,10 +213,13 @@ export function createAppListOperations(deps = {}) {
   }
 
   function saveList(listId, data, year = undefined, { expectedRevision } = {}) {
+    const baseline =
+      queuedSnapshots.get(listId) || getLastSavedSnapshots().get(listId);
+    const revision = expectedRevision ?? getListRevision(listId);
     const precondition =
-      expectedRevision === undefined
+      revision === undefined
         ? {}
-        : { headers: { 'If-Match': `"${expectedRevision}"` } };
+        : { headers: { 'If-Match': `"${revision}"` } };
     const visibleData = getLists()[listId]?._data;
     const visibleFingerprint = JSON.stringify(visibleData);
     let cleanedData = data.map((album) => {
@@ -218,11 +229,43 @@ export function createAppListOperations(deps = {}) {
       return cleaned;
     });
     let addedIds = [];
+    queuedSnapshots.set(listId, createListSnapshot(cleanedData));
 
     return writes.schedule(
       listId,
       async (queuedVersion) => {
         let saveResult;
+        let requestedData;
+        const listUrl = `/api/lists/${encodeURIComponent(listId)}`;
+        const prepareWrite =
+          expectedRevision === undefined && baseline?.records
+            ? async () => {
+                const remote = await apiCall(listUrl);
+                cleanedData = rebaseListChanges(
+                  baseline,
+                  requestedData,
+                  remote
+                );
+                return {
+                  body: JSON.stringify({ data: cleanedData }),
+                  headers: {
+                    'If-Match': `"${remote._listRevision ?? getListRevision(listId)}"`,
+                  },
+                };
+              }
+            : undefined;
+        const persist = async (url, options) => {
+          try {
+            return await apiCall(url, options);
+          } catch (error) {
+            if (error.code !== 'LIST_CONFLICT' || !prepareWrite) throw error;
+            return apiCall(listUrl, {
+              method: 'PUT',
+              prepareWrite,
+              body: JSON.stringify({ data: cleanedData }),
+            });
+          }
+        };
         try {
           // Queued edits may include an optimistic addition whose earlier write
           // failed. Do not silently retry it; an explicit later retry is allowed.
@@ -245,6 +288,7 @@ export function createAppListOperations(deps = {}) {
             }
           }
 
+          requestedData = cleanedData;
           markLocalSave(listId);
 
           const oldSnapshot = getLastSavedSnapshots().get(listId);
@@ -258,7 +302,7 @@ export function createAppListOperations(deps = {}) {
             .map((album) => album.album_id);
 
           if (diff && diff.totalChanges > 0) {
-            const result = await apiCall(
+            const result = await persist(
               `/api/lists/${encodeURIComponent(listId)}/items`,
               {
                 method: 'PATCH',
@@ -312,16 +356,27 @@ export function createAppListOperations(deps = {}) {
               `List "${listName}" saved incrementally: +${diff.added.length} -${diff.removed.length} ~${diff.updated.length}`
             );
           } else {
-            saveResult = await apiCall(
+            saveResult = await persist(
               `/api/lists/${encodeURIComponent(listId)}`,
               {
                 method: 'PUT',
                 ...precondition,
+                prepareWrite,
                 body: JSON.stringify({ data: cleanedData }),
               }
             );
           }
 
+          for (const added of saveResult?.addedItems || []) {
+            const item = cleanedData.find(
+              (entry) =>
+                entry.album_id === (added.inputAlbumId || added.album_id)
+            );
+            if (item) {
+              item._id = added._id;
+              item.album_id = added.album_id;
+            }
+          }
           const snapshot = createListSnapshot(cleanedData);
           getLastSavedSnapshots().set(listId, snapshot);
           saveSnapshotToStorage(listId, snapshot);

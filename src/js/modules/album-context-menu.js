@@ -305,7 +305,8 @@ export function createAlbumContextMenu(deps = {}) {
       if (context.index === null) return;
 
       // Verify the album is still at the expected index, fallback to identity search
-      const albumsForRemove = getListData(getCurrentListId());
+      const ownerListId = getCurrentListId();
+      const albumsForRemove = getListData(ownerListId);
       const verified = verifyAlbumAtIndex(
         albumsForRemove,
         context.index,
@@ -320,7 +321,6 @@ export function createAlbumContextMenu(deps = {}) {
         return;
       }
       const album = verified.album;
-      const indexToRemove = verified.index;
 
       showConfirmation(
         'Remove Album',
@@ -330,18 +330,30 @@ export function createAlbumContextMenu(deps = {}) {
         async () => {
           try {
             // Remove from the list using the correct index
-            const albumsToModify = getListData(getCurrentListId());
+            const albumsToModify = getListData(ownerListId);
             if (!albumsToModify) {
               showToast('Error: List data not found', 'error');
               return;
             }
-            albumsToModify.splice(indexToRemove, 1);
+            const indexToRemove = albumsToModify.findIndex((item) =>
+              album._id
+                ? item._id === album._id
+                : item.album_id === album.album_id
+            );
+            if (indexToRemove < 0) {
+              showToast('Album has already been removed', 'info');
+              return;
+            }
+            const nextAlbums = albumsToModify.filter(
+              (_, index) => index !== indexToRemove
+            );
 
             // Save to server
-            await saveList(getCurrentListId(), albumsToModify);
+            await saveList(ownerListId, nextAlbums);
 
             // Update display
-            selectList(getCurrentListId());
+            if (getCurrentListId() === ownerListId)
+              displayAlbums(getListData(ownerListId));
 
             showToast(`Removed "${album.album}" from the list`);
           } catch (error) {
@@ -349,7 +361,8 @@ export function createAlbumContextMenu(deps = {}) {
             showToast('Error removing album', 'error');
 
             // Refetch this list without resetting the startup-owned list state.
-            await selectList(getCurrentListId(), { forceRefresh: true });
+            if (getCurrentListId() === ownerListId)
+              await selectList(ownerListId, { forceRefresh: true });
           }
 
           clearContextAlbumSelection();

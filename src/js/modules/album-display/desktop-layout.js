@@ -19,6 +19,18 @@ function renderTrack(data, secondary, editable) {
   </div>`;
 }
 
+export function renderDesktopTracks(data, editable = false) {
+  const primary =
+    data.primaryTrack && data.primaryTrackDisplay
+      ? renderTrack(data, false, editable)
+      : editable
+        ? '<div class="flex items-center min-w-0"><span data-field="primary-track-text" class="album-cell-text text-gray-800 italic hover:text-gray-100">Select Track</span></div>'
+        : '';
+  return (
+    primary + (data.secondaryTrack ? renderTrack(data, true, editable) : '')
+  );
+}
+
 function renderComment(value, secondary, editable) {
   const cellClass = secondary ? 'comment-2' : 'comment';
   const textClass = value
@@ -87,14 +99,7 @@ export function renderDesktopAlbumRow(
     genre_1: renderDesktopGenreCell(data, 1, genreOptions),
     genre_2: renderDesktopGenreCell(data, 2, genreOptions),
     track: `<div class="flex flex-col justify-start track-cell min-w-0${editable ? ' cursor-pointer' : ''} overflow-hidden">
-      ${
-        data.primaryTrackDisplay
-          ? renderTrack(data, false, editable)
-          : editable
-            ? '<div class="flex items-center min-w-0"><span class="album-cell-text text-gray-800 italic hover:text-gray-100">Select Track</span></div>'
-            : ''
-      }
-      ${data.hasSecondaryTrack ? renderTrack(data, true, editable) : ''}
+      ${renderDesktopTracks(data, editable)}
     </div>`,
     comment: renderComment(data.comment, false, editable),
     comment_2: renderComment(data.comment2, true, editable),

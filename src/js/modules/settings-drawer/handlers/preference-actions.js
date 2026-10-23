@@ -9,6 +9,8 @@ import {
   adjustColor,
   colorWithOpacity,
 } from '../../../../../utils/color-utils.js';
+import { updateUserPreferences } from '../../state-events.js';
+import { createKeyedTaskQueue } from '../../../utils/keyed-task-queue.js';
 
 export function createSettingsPreferenceActions(deps = {}) {
   const doc =
@@ -18,10 +20,12 @@ export function createSettingsPreferenceActions(deps = {}) {
   const {
     categoryData,
     showConfirmation,
-    apiCall,
+    apiCall: request,
     showToast,
     loadCategoryData,
   } = deps;
+  const enqueue = createKeyedTaskQueue();
+  const apiCall = (url, options) => enqueue(url, () => request(url, options));
 
   async function handleDisconnect(service) {
     const serviceName =
@@ -43,15 +47,14 @@ export function createSettingsPreferenceActions(deps = {}) {
         if (categoryData.integrations?.lastfm) {
           categoryData.integrations.lastfm.connected = false;
         }
-        if (win.currentUser) {
-          win.currentUser.lastfmUsername = null;
-        }
+        updateUserPreferences({ lastfmUsername: null }, win);
         showToast('Last.fm disconnected successfully', 'success');
         await loadCategoryData('integrations');
         return;
       }
 
       await apiCall(`/auth/${service}/disconnect`, { method: 'POST' });
+      updateUserPreferences({ [`${service}Auth`]: false }, win);
       showToast(`${serviceName} disconnected successfully`, 'success');
       await loadCategoryData('integrations');
     } catch (error) {
@@ -72,9 +75,7 @@ export function createSettingsPreferenceActions(deps = {}) {
         if (categoryData.integrations) {
           categoryData.integrations.musicService = service || '';
         }
-        if (win.currentUser) {
-          win.currentUser.musicService = service || null;
-        }
+        updateUserPreferences({ musicService: service || null }, win);
       } else {
         showToast(result.error || 'Error updating music service', 'error');
       }
@@ -195,9 +196,7 @@ export function createSettingsPreferenceActions(deps = {}) {
         categoryData.visual.accentColor = color;
       }
 
-      if (win.currentUser) {
-        win.currentUser.accentColor = color;
-      }
+      updateUserPreferences({ accentColor: color }, win);
     } catch (error) {
       console.error('Error updating accent color:', error);
       showToast('Failed to update accent color', 'error');
@@ -222,9 +221,7 @@ export function createSettingsPreferenceActions(deps = {}) {
         categoryData.visual.timeFormat = timeFormat;
       }
 
-      if (win.currentUser) {
-        win.currentUser.timeFormat = timeFormat;
-      }
+      updateUserPreferences({ timeFormat }, win);
     } catch (error) {
       console.error('Error updating time format:', error);
       showToast('Failed to update time format', 'error');
@@ -249,9 +246,7 @@ export function createSettingsPreferenceActions(deps = {}) {
         categoryData.visual.dateFormat = dateFormat;
       }
 
-      if (win.currentUser) {
-        win.currentUser.dateFormat = dateFormat;
-      }
+      updateUserPreferences({ dateFormat }, win);
     } catch (error) {
       console.error('Error updating date format:', error);
       showToast('Failed to update date format', 'error');

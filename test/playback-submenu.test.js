@@ -30,6 +30,7 @@ describe('playback submenu', async () => {
     const submenu = createElement();
     const playOption = createElement({ top: 120, right: 0 });
     const contextMenu = createElement({ top: 0, right: 420 });
+    contextMenu.classList.remove('hidden');
 
     const elements = {
       playAlbumSubmenu: submenu,

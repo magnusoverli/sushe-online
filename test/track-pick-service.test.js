@@ -72,8 +72,11 @@ describe('track-pick-service module', () => {
       [
         '/api/track-picks/item-1',
         {
-          method: 'POST',
-          body: JSON.stringify({ trackIdentifier: 'Track B', priority: 1 }),
+          method: 'PUT',
+          body: JSON.stringify({
+            primary_track: 'Track B',
+            secondary_track: 'Track A',
+          }),
         },
       ],
     ]);
@@ -95,7 +98,13 @@ describe('track-pick-service module', () => {
     const result = await service.clearTrackPicks('item-2');
 
     assert.deepStrictEqual(calls, [
-      ['/api/track-picks/item-2', { method: 'DELETE' }],
+      [
+        '/api/track-picks/item-2',
+        {
+          method: 'PUT',
+          body: JSON.stringify({ primary_track: null, secondary_track: null }),
+        },
+      ],
     ]);
     assert.deepStrictEqual(result, {
       primaryTrack: '',

@@ -7,7 +7,9 @@
  * @module album-display
  */
 
-import { isMobileViewport } from '../utils/viewport.js';
+import { isMobileViewport, onViewportChange } from '../utils/viewport.js';
+import { stateEvents } from './state-events.js';
+import { patchAlbumCopies } from './app-state.js';
 import {
   formatReleaseDate,
   isYearMismatch,
@@ -35,6 +37,7 @@ import {
 } from './column-config.js';
 import {
   attachMobileCoverPlayback,
+  albumMutableFingerprint,
   createAlbumDisplayShared,
   PLACEHOLDER_GIF,
 } from './album-display-shared.js';
@@ -56,6 +59,7 @@ import { canManageListItemDisqualification } from './list-item-disqualification.
 import {
   renderDesktopAlbumRow,
   renderDesktopAlbumHeader,
+  renderDesktopTracks,
 } from './album-display/desktop-layout.js';
 import { renderMobileAlbumCard } from './album-display/mobile-layout.js';
 import {
@@ -137,7 +141,7 @@ export function createAlbumDisplay(deps = {}) {
     getListMetadata,
     getCurrentList,
     isCommunityView = () => false,
-    saveList,
+    saveList: _saveList,
     showToast,
     apiCall,
     fetchTracksForAlbum,
@@ -275,6 +279,7 @@ export function createAlbumDisplay(deps = {}) {
       primaryTrackDisplay,
       primaryTrackClass,
       primaryTrackDuration,
+      albumId: album.album_id,
       secondaryTrack,
       secondaryTrackDisplay,
       secondaryTrackDuration,
@@ -430,6 +435,7 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   function playTrackButton(index, trackIdentifier) {
+    if (!trackIdentifier) return;
     if (trackIdentifier && typeof playSpecificTrack === 'function') {
       playSpecificTrack(index, trackIdentifier);
       return;
@@ -522,13 +528,12 @@ export function createAlbumDisplay(deps = {}) {
           showToast('Fetching tracks...', 'info');
           try {
             await fetchTracksForAlbum(album);
-            await saveList(currentList, albumsForTrack);
           } catch (_err) {
             showToast('Error fetching tracks', 'error');
-            return;
           }
         }
 
+        if (!row.isConnected || getCurrentList() !== currentList) return;
         const rect = trackCell.getBoundingClientRect();
         showTrackSelectionMenu(album, currentIndex, rect.left, rect.bottom);
       };
@@ -904,7 +909,10 @@ export function createAlbumDisplay(deps = {}) {
       trackPlayBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
-        playTrackButton(index, trackPlayBtn.dataset.trackIdentifier);
+        playTrackButton(
+          Number(card.dataset.index),
+          trackPlayBtn.dataset.trackIdentifier
+        );
       });
     });
   }
@@ -926,7 +934,8 @@ export function createAlbumDisplay(deps = {}) {
           showMobileSummarySheet(
             summaryBadge.dataset.summary,
             summaryBadge.dataset.albumName,
-            summaryBadge.dataset.artist
+            summaryBadge.dataset.artist,
+            summaryBadge.dataset.albumId
           );
         }
       });
@@ -1111,6 +1120,10 @@ export function createAlbumDisplay(deps = {}) {
       albums.forEach((album, index) => {
         const row = rows[index];
         if (!row) return;
+        if (
+          lastRenderedMutableState?.[index] === albumMutableFingerprint(album)
+        )
+          return;
 
         row.dataset.index = index;
         const data = extractFieldUpdateData(album, index);
@@ -1229,29 +1242,12 @@ export function createAlbumDisplay(deps = {}) {
             }
           }
 
-          // Update track pick using cached span
-          if (cache.trackSpan) {
-            cache.trackSpan.textContent = data.primaryTrackDisplay;
-            cache.trackSpan.className = `album-cell-text ${data.primaryTrackClass} truncate hover:text-gray-100 flex-1 min-w-0`;
-            cache.trackSpan.title =
-              data.primaryTrack || 'Click to select track';
-            updateTrackDuration(
-              cache.trackSpan,
-              data.primaryTrackDuration,
-              'primary-track-duration',
-              'text-xs text-gray-500 shrink-0 ml-2 tabular-nums'
-            );
-          }
-
-          if (cache.secondaryTrackSpan) {
-            cache.secondaryTrackSpan.textContent = data.secondaryTrackDisplay;
-            cache.secondaryTrackSpan.title = data.secondaryTrack;
-            updateTrackDuration(
-              cache.secondaryTrackSpan,
-              data.secondaryTrackDuration,
-              'secondary-track-duration',
-              'text-xs text-gray-500 shrink-0 ml-2 tabular-nums'
-            );
+          if (cache.trackCell) {
+            const html = renderDesktopTracks(data, true);
+            if (cache.trackCell.innerHTML !== html)
+              cache.trackCell.innerHTML = html;
+            cache.trackSpan = null;
+            cache.secondaryTrackSpan = null;
           }
         } else {
           // Mobile: use cached elements
@@ -1322,7 +1318,10 @@ export function createAlbumDisplay(deps = {}) {
                 newBtn.addEventListener('click', (e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  playTrackButton(index, newBtn.dataset.trackIdentifier);
+                  playTrackButton(
+                    Number(row.dataset.index),
+                    newBtn.dataset.trackIdentifier
+                  );
                 });
               } else {
                 trackPlayBtn.classList.remove(
@@ -1386,7 +1385,7 @@ export function createAlbumDisplay(deps = {}) {
                   e.stopPropagation();
                   e.preventDefault();
                   playTrackButton(
-                    index,
+                    Number(row.dataset.index),
                     newSecondaryBtn.dataset.trackIdentifier
                   );
                 });
@@ -2356,7 +2355,7 @@ export function createAlbumDisplay(deps = {}) {
       dropdown.querySelectorAll('input[data-column-id]').forEach((cb) => {
         cb.addEventListener('change', (e) => {
           e.stopPropagation();
-          toggleColumn(cb.dataset.columnId);
+          toggleColumn(cb.dataset.columnId, cb.checked);
           applyVisibilityInPlace();
         });
       });
@@ -2485,6 +2484,10 @@ export function createAlbumDisplay(deps = {}) {
    * @param {string} summaryData.summarySource - Summary source
    */
   async function updateAlbumSummaryInPlace(albumId, summaryData) {
+    patchAlbumCopies(albumId, {
+      summary: summaryData.summary || '',
+      summary_source: summaryData.summarySource || '',
+    });
     const isMobile = isMobileViewport();
     const container = document.getElementById('albumContainer');
     if (!container) return;
@@ -2526,6 +2529,7 @@ export function createAlbumDisplay(deps = {}) {
 
             const badgeHtml = `<div class="summary-badge ${badgeClassMobile} ${badgeClass}" 
               data-summary="${escapeHtml(summaryData.summary)}" 
+              data-album-id="${escapeHtml(albumId)}"
               data-source-url="" 
               data-source="${escapeHtml(source)}"
               data-album-name="${escapeHtml(data.albumName)}" 
@@ -2545,9 +2549,10 @@ export function createAlbumDisplay(deps = {}) {
                 e.stopPropagation();
                 e.preventDefault();
                 showMobileSummarySheet(
-                  summaryData.summary,
-                  data.albumName,
-                  data.artist
+                  newBadge.dataset.summary,
+                  newBadge.dataset.albumName,
+                  newBadge.dataset.artist,
+                  newBadge.dataset.albumId
                 );
               });
             } else {
@@ -2580,6 +2585,36 @@ export function createAlbumDisplay(deps = {}) {
 
   // Set up global event listeners for cover preview
   document.addEventListener('keydown', handleCoverPreviewKeydown);
+
+  let unsubscribeList = () => {};
+  function subscribeToSelection() {
+    unsubscribeList();
+    const id = getCurrentList?.();
+    if (!id) return;
+    unsubscribeList = stateEvents.subscribe(`list:${id}`, () => {
+      if (ownedViewActive && !isCommunityView() && getCurrentList() === id) {
+        const albums = getListData(id);
+        if (albums) displayAlbums(albums);
+      }
+    });
+  }
+  stateEvents.subscribe('view', subscribeToSelection);
+  subscribeToSelection();
+  const reconcileLayout = () => {
+    if (ownedViewActive && !isCommunityView()) {
+      const albums = getListData(getCurrentList());
+      if (albums) displayAlbums(albums, { forceFullRebuild: true });
+    }
+  };
+  stateEvents.subscribe(
+    [
+      'preference:dateFormat',
+      'preference:timeFormat',
+      'preference:lastfmUsername',
+    ],
+    reconcileLayout
+  );
+  onViewportChange(reconcileLayout);
 
   // Listen for column visibility changes from external sources (e.g. settings drawer)
   window.addEventListener('columnvisibilitychange', () => {

@@ -62,7 +62,7 @@ describe('album-service', () => {
         'SELECT DISTINCT l.user_id'
       )
     );
-    assert.strictEqual(responseCache.invalidate.mock.calls.length, 1);
+    assert.strictEqual(responseCache.invalidate.mock.calls.length, 3);
     assert.strictEqual(
       responseCache.invalidate.mock.calls[0].arguments[0],
       ':user-1'
@@ -410,7 +410,7 @@ describe('album-service', () => {
         'cover_thumbnail_updated_at = NOW()'
       )
     );
-    assert.strictEqual(responseCache.invalidate.mock.calls.length, 1);
+    assert.strictEqual(responseCache.invalidate.mock.calls.length, 3);
     assert.match(
       albumMetadataUpdated.mock.calls[0].arguments[2].cover_image_url,
       /\/api\/albums\/album-1\/cover\?v=/

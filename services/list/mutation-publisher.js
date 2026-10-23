@@ -4,11 +4,20 @@ function createListMutationPublisher({
   getBroadcast,
   logger,
 }) {
-  return async ({ userId, years }) => {
+  return async ({ userId, years, changes = [] }) => {
     try {
       responseCache.invalidate(`:${userId}`);
       for (const year of years) aggregateList.scheduleRecompute(year);
-      getBroadcast()?.libraryUpdated(userId);
+      const broadcast = getBroadcast();
+      if (changes.length) {
+        for (const change of changes)
+          broadcast?.listUpdated(userId, change.listId, {
+            revision: change.revision,
+          });
+      } else broadcast?.libraryUpdated(userId);
+      responseCache.invalidate('GET:/api/community/');
+      responseCache.invalidate('GET:/api/recommendations/');
+      broadcast?.sharedViewsUpdated?.();
     } catch (error) {
       // Persistence succeeded. Never ask a caller to retry a committed write
       // because notification transport failed; reconnect refreshes the library.

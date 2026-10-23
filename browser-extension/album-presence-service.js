@@ -8,8 +8,7 @@
     const logger = deps.logger || console;
     const constants = deps.constants || globalThis.ExtensionConstants;
     const albumIdentity = deps.albumIdentity || globalThis.AlbumIdentity;
-    const { STORAGE_KEYS } = constants;
-    const { API, ALBUM_PRESENCE_CACHE_DURATION_MS } = constants;
+    const { STORAGE_KEYS, API, ALBUM_PRESENCE_CACHE_DURATION_MS } = constants;
     const { fetchWithTimeout, getApiBase, getAuthHeaders, ensureStateLoaded } =
       deps;
     const findListById = deps.findListById || (() => null);
@@ -18,6 +17,7 @@
     let presenceIndex = {};
     let lastFetched = 0;
     let fetchInFlight = null;
+    let forcedFollowUp = null;
     let storageLoaded = false;
     let cacheNeedsRebuild = false;
     let cacheGeneration = 0;
@@ -176,9 +176,17 @@
       await loadStoredCache();
 
       if (!forceRefresh && isFresh()) return presenceIndex;
-      if (fetchInFlight) return fetchInFlight;
-
       const generation = cacheGeneration;
+      if (fetchInFlight) {
+        if (!forceRefresh) return fetchInFlight;
+        // A forced refresh must observe changes made after the pending request.
+        forcedFollowUp ||= fetchInFlight.then(() => {
+          if (generation !== cacheGeneration) return presenceIndex;
+          forcedFollowUp = null;
+          return fetchPresenceIndex(true);
+        });
+        return forcedFollowUp;
+      }
       const revision = additionRevision;
       const scope = deps.captureScope?.();
       const pendingFetch = (async () => {
@@ -315,6 +323,7 @@
       presenceIndex = {};
       lastFetched = 0;
       fetchInFlight = null;
+      forcedFollowUp = null;
       storageLoaded = true;
       cacheNeedsRebuild = false;
       additions = [];

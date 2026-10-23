@@ -74,6 +74,7 @@ async function startExtension(
           ? { executablePath: process.env.EXTENSION_BROWSER_EXECUTABLE }
           : { channel: process.env.EXTENSION_BROWSER_CHANNEL || 'chromium' }),
         headless: true,
+        ignoreDefaultArgs: ['--disable-extensions'],
         args: [
           `--disable-extensions-except=${packageDir}`,
           `--load-extension=${packageDir}`,

@@ -8,12 +8,26 @@
 /**
  * Try to match a track by number (1-based index).
  *
- * @param {Array<{id: string}>} tracks - Array of track objects with at least an `id` property
+ * @param {Array<{id: string, name?: string, title?: string, attributes?: {title?: string}}>} tracks - Track metadata
  * @param {string} trackQuery - The track query string (could be a number like "3")
  * @returns {{id: string}|null} - Matched track or null
  */
 function matchTrackByNumber(tracks, trackQuery) {
-  const trackNum = parseInt(trackQuery);
+  const query = String(trackQuery).trim();
+  if (
+    tracks.some(
+      (track) =>
+        (
+          track.name ||
+          track.title ||
+          track.attributes?.title ||
+          ''
+        ).toLowerCase() === query.toLowerCase()
+    )
+  )
+    return null;
+  if (!/^#?\d+$/.test(query)) return null;
+  const trackNum = Number(query.replace(/^#/, ''));
   if (!isNaN(trackNum) && trackNum > 0 && trackNum <= tracks.length) {
     return tracks[trackNum - 1];
   }
@@ -28,7 +42,7 @@ function matchTrackByNumber(tracks, trackQuery) {
  * @returns {string} - Extracted track name
  */
 function extractTrackName(trackQuery) {
-  const match = trackQuery.match(/^\d+[.\s-]*\s*(.+)$/);
+  const match = trackQuery.match(/^\d+(?:\.\s+|\s+-\s+)(.+)$/);
   return match ? match[1] : trackQuery;
 }
 
@@ -43,13 +57,15 @@ function extractTrackName(trackQuery) {
 function matchTrackByName(tracks, searchName) {
   const lower = searchName.toLowerCase();
   return (
+    tracks.find((t) => t.name?.toLowerCase() === lower) ||
     tracks.find(
       (t) =>
         t.name &&
         (t.name.toLowerCase() === lower ||
           t.name.toLowerCase().includes(lower) ||
           lower.includes(t.name.toLowerCase()))
-    ) || null
+    ) ||
+    null
   );
 }
 

@@ -4,6 +4,7 @@
  */
 
 const { Server } = require('socket.io');
+const { getRealtimeOrigin } = require('./realtime-origin');
 const AUTH_RECHECK_INTERVAL_MS = 30 * 1000;
 const { resolveSessionIdentity } = require('../services/session-identity');
 const {
@@ -30,8 +31,15 @@ function createBroadcast(getIO, logger) {
       return;
     }
     const userRoom = `user:${userId}`;
-    if (options.excludeSocketId) {
-      io.to(userRoom).except(options.excludeSocketId).emit(event, payload);
+    // List/library mutations are acknowledged by the HTTP response. Album
+    // enrichment events still reach the origin to reconcile canonical metadata.
+    const excludeSocketId =
+      options.excludeSocketId ||
+      (event.startsWith('list:') || event === 'library:updated'
+        ? getRealtimeOrigin()
+        : undefined);
+    if (excludeSocketId) {
+      io.to(userRoom).except(excludeSocketId).emit(event, payload);
     } else {
       io.to(userRoom).emit(event, payload);
     }
@@ -39,6 +47,9 @@ function createBroadcast(getIO, logger) {
   }
 
   return {
+    sharedViewsUpdated() {
+      getIO()?.emit('shared-views:updated', {});
+    },
     libraryUpdated(userId) {
       emitToUser('library:updated', 'WebSocket not initialized', userId, {});
     },
@@ -56,7 +67,11 @@ function createBroadcast(getIO, logger) {
         'list:updated',
         'WebSocket not initialized, cannot broadcast list:updated',
         userId,
-        { listId, updatedAt: new Date().toISOString() },
+        {
+          listId,
+          updatedAt: new Date().toISOString(),
+          ...(options.revision != null ? { revision: options.revision } : {}),
+        },
         options
       );
       logger.debug('Broadcast list:updated', { userId, listId });
@@ -412,6 +427,7 @@ function createWebSocketService(deps = {}) {
 const defaultInstance = createWebSocketService();
 
 module.exports = {
+  createBroadcast,
   createWebSocketService,
   ...defaultInstance,
 };

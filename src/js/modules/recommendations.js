@@ -1,4 +1,5 @@
-import { isMobileViewport } from '../utils/viewport.js';
+import { isMobileViewport, onViewportChange } from '../utils/viewport.js';
+import { stateEvents } from './state-events.js';
 import { createContextSubmenuController } from '../utils/context-submenu-controller.js';
 import {
   formatInUserListsTooltip as formatInUserListsTooltipBase,
@@ -88,6 +89,8 @@ export function createRecommendations(deps = {}) {
 
   /** Current recommendation context for context menu: { rec, year } */
   let currentRecommendationContext = null;
+  let requestGeneration = 0;
+  let visibleRecommendations = null;
 
   /** Currently highlighted year in add-to-list recommendation submenu */
   let currentRecommendationAddHighlightedYear = null;
@@ -551,6 +554,7 @@ export function createRecommendations(deps = {}) {
    * @param {number} year - The year to show recommendations for
    */
   async function selectRecommendations(year) {
+    const generation = ++requestGeneration;
     try {
       hideReasoningTooltip(true);
 
@@ -584,7 +588,10 @@ export function createRecommendations(deps = {}) {
       try {
         const response = await apiCall(`/api/recommendations/${year}`);
 
-        if (getCurrentRecommendationsYear() === year) {
+        if (
+          generation === requestGeneration &&
+          getCurrentRecommendationsYear() === year
+        ) {
           displayRecommendations(
             response.recommendations,
             year,
@@ -594,6 +601,11 @@ export function createRecommendations(deps = {}) {
           if (refreshRecommendationYears) refreshRecommendationYears();
         }
       } catch (err) {
+        if (
+          generation !== requestGeneration ||
+          getCurrentRecommendationsYear() !== year
+        )
+          return;
         console.warn('Failed to fetch recommendations:', err);
         showToast('Error loading recommendations', 'error');
       }
@@ -1124,6 +1136,7 @@ export function createRecommendations(deps = {}) {
    * Responsive: mobile cards or desktop table.
    */
   function displayRecommendations(recommendations, year, locked) {
+    visibleRecommendations = { recommendations, year, locked };
     const container = document.getElementById('albumContainer');
     if (!container) return;
 
@@ -1660,6 +1673,18 @@ export function createRecommendations(deps = {}) {
   }
 
   // ============ PUBLIC API ============
+
+  stateEvents.subscribe(['shared-views', 'list-membership', 'albums'], () => {
+    const year = getCurrentRecommendationsYear();
+    if (year != null) return selectRecommendations(year);
+  });
+  const reconcileLayout = () => {
+    const view = visibleRecommendations;
+    if (view && getCurrentRecommendationsYear() === view.year)
+      displayRecommendations(view.recommendations, view.year, view.locked);
+  };
+  stateEvents.subscribe('preference:dateFormat', reconcileLayout);
+  onViewportChange(reconcileLayout);
 
   return {
     recommendAlbum,

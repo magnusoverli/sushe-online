@@ -5,6 +5,7 @@
  */
 
 import { isMobileViewport } from '../utils/viewport.js';
+import { updateUserPreferences } from './state-events.js';
 import { showToast } from './utils.js';
 import { csrfHeaders } from './csrf-headers.js';
 import { getDeviceIcon } from '../utils/device-icons.js';
@@ -311,6 +312,7 @@ function resetScrobbleState() {
  * Wrapper for API calls with loading state and error handling
  */
 async function apiCall(url, options = {}, actionName = null) {
+  if (options.method && options.method !== 'GET') playbackGeneration++;
   if (actionName) {
     pendingActions.add(actionName);
     updateButtonLoadingState(actionName, true);
@@ -360,9 +362,7 @@ async function apiCall(url, options = {}, actionName = null) {
           if (!isHeadlessMode) {
             showState('not-connected');
           }
-          if (window.currentUser) {
-            window.currentUser.spotifyAuth = false;
-          }
+          updateUserPreferences({ spotifyAuth: false });
           console.info(
             'Spotify miniplayer disabled: Spotify authentication required'
           );
@@ -806,7 +806,9 @@ function renderDeviceList(devices) {
 /**
  * Load and show devices
  */
+let devicesGeneration = 0;
 async function loadDevices() {
+  const generation = ++devicesGeneration;
   if (!elements.deviceList) return;
 
   elements.deviceList.innerHTML = `
@@ -816,6 +818,11 @@ async function loadDevices() {
   `;
 
   const devices = await apiGetDevices();
+  if (
+    generation !== devicesGeneration ||
+    elements.deviceDropdown?.classList.contains('hidden')
+  )
+    return;
   renderDeviceList(devices);
 }
 
@@ -838,6 +845,7 @@ function toggleDeviceDropdown() {
  * Hide device dropdown
  */
 function hideDeviceDropdown() {
+  devicesGeneration++;
   elements.deviceDropdown?.classList.add('hidden');
 }
 
@@ -961,8 +969,12 @@ function scheduleImmediatePoll() {
 /**
  * Poll Spotify API for playback state
  */
+let playbackGeneration = 0;
 async function pollPlaybackState() {
+  const generation = ++playbackGeneration;
   const state = await apiGetPlaybackState();
+  if (generation !== playbackGeneration || !window.currentUser?.spotifyAuth)
+    return;
 
   // Handle too many errors
   if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
@@ -1414,6 +1426,18 @@ function handleVisibilityChange() {
 /**
  * Initialize the miniplayer module
  */
+let controlsInitialized = false;
+export function stopPlaybackTracking() {
+  playbackGeneration++;
+  stopPolling();
+  stopProgressAnimation();
+  currentPlayback = null;
+  previousTrackId = null;
+  resetScrobbleState();
+  emitPlaybackChange(null);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+}
+
 export function initMiniplayer() {
   // Only initialize on desktop
   if (isMobileViewport()) {
@@ -1437,7 +1461,11 @@ export function initMiniplayer() {
   }
 
   // Set up control event listeners
-  setupControls();
+  isHeadlessMode = false;
+  if (!controlsInitialized) {
+    setupControls();
+    controlsInitialized = true;
+  }
 
   // Set up visibility change handler
   document.addEventListener('visibilitychange', handleVisibilityChange);

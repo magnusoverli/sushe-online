@@ -11,6 +11,7 @@ export function createListWriteQueue({
   const enqueue = createKeyedTaskQueue();
   const debounced = createKeyedDebounce({ ...timing, enqueue });
   const states = new Map();
+  const owner = Symbol('list-writes');
 
   function getState(listId) {
     const state = states.get(listId);
@@ -29,7 +30,7 @@ export function createListWriteQueue({
     const version = ++state.version;
     const isReorder = kind === 'reorder';
     if (!isReorder || !debounced.hasPending(listId)) state.pending++;
-    markUnsaved(listId, true);
+    markUnsaved(listId, true, owner);
 
     const run = async () => {
       try {
@@ -45,7 +46,11 @@ export function createListWriteQueue({
         throw error;
       } finally {
         state.pending--;
-        markUnsaved(listId, state.pending > 0 || state.failures.size > 0);
+        markUnsaved(
+          listId,
+          state.pending > 0 || state.failures.size > 0,
+          owner
+        );
         if (!state.pending) onIdle(listId);
       }
     };
@@ -62,4 +67,33 @@ export function createListWriteQueue({
   }
 
   return { schedule, getState, wait, flush: debounced.flush };
+}
+
+// Serialize HTTP writes separately from the orchestration queue: a queued list
+// save calls the API client itself, so sharing its task queue would deadlock.
+const enqueueRequest = createKeyedTaskQueue();
+const requestStates = new Map();
+
+export function getListWriteState(listId) {
+  const state = requestStates.get(listId);
+  return { pending: state?.pending || 0, version: state?.version || 0 };
+}
+
+export async function waitForListWrites(listId) {
+  while (requestStates.get(listId)?.pending)
+    await requestStates.get(listId).tail.catch(() => {});
+}
+
+export function enqueueListWrite(listId, task) {
+  const owner = Symbol('request');
+  markListUnsaved(listId, true, owner);
+  const state = requestStates.get(listId) || { pending: 0, version: 0 };
+  requestStates.set(listId, state);
+  state.pending++;
+  state.version++;
+  state.tail = enqueueRequest(listId, task).finally(() => {
+    state.pending--;
+    markListUnsaved(listId, false, owner);
+  });
+  return state.tail;
 }

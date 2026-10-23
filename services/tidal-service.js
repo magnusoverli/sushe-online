@@ -16,6 +16,7 @@ const {
   matchTrackByName,
 } = require('../utils/track-matching');
 const { generateQueryForms } = require('../utils/entity-matching');
+const { runInBatches } = require('../utils/batch');
 
 /**
  * @param {Object} [deps]
@@ -179,30 +180,38 @@ function createTidalService(deps = {}) {
 
     // Step 3: Match by track number
     const numberMatch = matchTrackByNumber(tracks, track);
-    if (numberMatch) {
+    if (numberMatch && track.startsWith('#')) {
       logger.info('Tidal track matched by number', { trackId: numberMatch.id });
       return { id: numberMatch.id };
     }
 
     // Step 4: Fetch details and match by name
-    const searchName = extractTrackName(track);
-    const trackDetailsPromises = tracks.slice(0, 20).map(async (t) => {
-      try {
-        const detailResp = await fetch(
-          `https://openapi.tidal.com/v2/tracks/${t.id}?countryCode=${countryCode}`,
-          { headers }
-        );
-        if (detailResp.ok) {
-          const detail = await detailResp.json();
-          return { id: t.id, name: detail.data?.attributes?.title || '' };
+    const trackDetails = await runInBatches(
+      tracks,
+      { batchSize: 5, delayMs: 0 },
+      async (t) => {
+        try {
+          const detailResp = await fetch(
+            `https://openapi.tidal.com/v2/tracks/${t.id}?countryCode=${countryCode}`,
+            { headers }
+          );
+          if (detailResp.ok) {
+            const detail = await detailResp.json();
+            return { id: t.id, name: detail.data?.attributes?.title || '' };
+          }
+        } catch {
+          // Ignore individual track fetch errors
         }
-      } catch {
-        // Ignore individual track fetch errors
+        return { id: t.id, name: '' };
       }
-      return { id: t.id, name: '' };
-    });
+    );
 
-    const trackDetails = await Promise.all(trackDetailsPromises);
+    const exact = trackDetails.find(
+      (item) => item.name?.toLowerCase() === track.toLowerCase()
+    );
+    if (exact) return { id: exact.id };
+    if (numberMatch) return { id: numberMatch.id };
+    const searchName = extractTrackName(track);
     const matchingTrack = matchTrackByName(trackDetails, searchName);
     if (matchingTrack) {
       logger.info('Tidal track matched by name', { trackId: matchingTrack.id });

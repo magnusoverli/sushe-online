@@ -8,6 +8,12 @@ async function mountHarness(page, mobile, rejectReorder = false) {
   const root = path.resolve(__dirname, '../..');
   const requests = [];
   const revisions = { a: 1, b: 1 };
+  const lists = Object.fromEntries(
+    ['a', 'b'].map((id) => [
+      id,
+      [1, 2, 3].map((n) => ({ album_id: `${id}${n}`, album: `Album ${n}` })),
+    ])
+  );
   await page.route('http://reorder.test/**', async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
@@ -19,6 +25,12 @@ async function mountHarness(page, mobile, rejectReorder = false) {
     }
     if (pathname.startsWith('/api/lists/')) {
       const id = pathname.split('/')[3];
+      if (request.method() === 'GET') {
+        return route.fulfill({
+          headers: { 'X-List-Revision': String(revisions[id]) },
+          json: lists[id],
+        });
+      }
       requests.push({
         path: pathname,
         method: request.method(),
@@ -27,6 +39,14 @@ async function mountHarness(page, mobile, rejectReorder = false) {
       });
       const conflict =
         rejectReorder || request.headers()['if-match'] !== `"${revisions[id]}"`;
+      if (!conflict) {
+        const body = request.postDataJSON();
+        lists[id] = pathname.endsWith('/reorder')
+          ? body.order.map((albumId) =>
+              lists[id].find((item) => item.album_id === albumId)
+            )
+          : body.data;
+      }
       return route.fulfill({
         status: conflict ? 412 : 200,
         headers: {

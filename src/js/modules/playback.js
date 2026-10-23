@@ -69,7 +69,9 @@ export function createPlayback(deps = {}) {
     submenu.style.top = `${playRect.top}px`;
   }
 
+  let submenuGeneration = 0;
   async function showPlayAlbumSubmenuWithOptions(options = {}) {
+    const generation = ++submenuGeneration;
     const {
       playOptionId = 'playAlbumOption',
       contextMenuId = 'albumContextMenu',
@@ -135,6 +137,12 @@ export function createPlayback(deps = {}) {
       submenu.classList.remove('hidden');
 
       const devices = await fetchSpotifyDevices();
+      if (
+        generation !== submenuGeneration ||
+        submenu.classList.contains('hidden') ||
+        contextMenu.classList.contains('hidden')
+      )
+        return;
 
       if (devices.length > 0) {
         const deviceItems = devices.map((device) => {

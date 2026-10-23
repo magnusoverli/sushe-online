@@ -8,6 +8,9 @@
  */
 
 import { escapeHtmlAttr } from './html-utils.js';
+import { patchAlbumCopies, patchListItem } from './app-state.js';
+import { markListUnsaved } from './unsaved-lists.js';
+import { liveAlbumPatches } from './realtime-album-patches.js';
 
 /**
  * Factory function to create the editable fields module with injected dependencies
@@ -23,6 +26,8 @@ import { escapeHtmlAttr } from './html-utils.js';
  * @returns {Object} Editable fields module API
  */
 export function createEditableFields(deps = {}) {
+  const fieldWrites = new Map();
+  const commentDrafts = new Map();
   const {
     getListData,
     getCurrentList,
@@ -69,85 +74,10 @@ export function createEditableFields(deps = {}) {
     return true;
   }
 
-  // Batch update queue for rapid field edits
-  // Groups updates by albumId to reduce API calls
-  const pendingUpdates = new Map(); // albumId -> { country?, genre_1?, genre_2? }
-  let batchTimeout = null;
-  const BATCH_DELAY = 1500; // 1.5 seconds - allows user to make multiple edits
-
-  /**
-   * Queue a field update for batching
-   * @param {string} albumId - Album ID to update
-   * @param {string} field - Field name (country, genre_1, genre_2)
-   * @param {string|null} value - New value
-   */
-  function queueFieldUpdate(albumId, field, value) {
-    if (!albumId) return;
-
-    if (!pendingUpdates.has(albumId)) {
-      pendingUpdates.set(albumId, {});
-    }
-    pendingUpdates.get(albumId)[field] = value;
-
-    scheduleBatchFlush();
-  }
-
-  /**
-   * Schedule the batch flush with debounce
-   */
-  function scheduleBatchFlush() {
-    clearTimeout(batchTimeout);
-    batchTimeout = setTimeout(flushBatchUpdates, BATCH_DELAY);
-  }
-
-  /**
-   * Flush all pending updates to the server
-   */
-  async function flushBatchUpdates() {
-    if (pendingUpdates.size === 0) return;
-
-    // Copy and clear pending updates
-    const updates = Array.from(pendingUpdates.entries()).map(
-      ([albumId, fields]) => ({
-        albumId,
-        ...fields,
-      })
+  function findItem(listId, item) {
+    return getListData(listId)?.find((entry) =>
+      item._id ? entry._id === item._id : entry.album_id === item.album_id
     );
-
-    pendingUpdates.clear();
-    batchTimeout = null;
-
-    // Only use batch endpoint if there are multiple updates
-    if (updates.length === 1) {
-      // Single update - use individual endpoints (already handled inline)
-      return;
-    }
-
-    try {
-      const result = await apiCall('/api/albums/batch-update', {
-        method: 'PATCH',
-        body: JSON.stringify({ updates }),
-      });
-
-      if (result.updated > 0) {
-        console.log(`Batch updated ${result.updated} album(s)`);
-      }
-    } catch (error) {
-      console.error('Batch update failed:', error);
-      // Don't show toast - individual edits already showed success
-    }
-  }
-
-  /**
-   * Check if there are pending updates for an album
-   * If so, flush immediately to ensure data consistency
-   * @param {string} albumId - Album ID to check
-   */
-  async function flushPendingForAlbum(albumId) {
-    if (pendingUpdates.has(albumId)) {
-      clearTimeout(batchTimeout);
-      await flushBatchUpdates();
-    }
   }
 
   /**
@@ -173,6 +103,8 @@ export function createEditableFields(deps = {}) {
     const albums = getListData(currentList);
     if (!albums || !albums[albumIndex]) return;
     const currentCountry = albums[albumIndex].country || '';
+    const originalItem = albums[albumIndex];
+    let editingClosed = false;
 
     // Create input with datalist
     const input = document.createElement('input');
@@ -208,6 +140,7 @@ export function createEditableFields(deps = {}) {
     let handleClickOutside;
 
     const restoreDisplay = (valueToDisplay) => {
+      editingClosed = true;
       // Remove the click outside listener if it exists
       if (handleClickOutside) {
         document.removeEventListener('click', handleClickOutside);
@@ -227,6 +160,7 @@ export function createEditableFields(deps = {}) {
     };
 
     const saveCountry = async (newCountry) => {
+      if (editingClosed) return;
       // Trim the input
       newCountry = newCountry.trim();
 
@@ -256,11 +190,8 @@ export function createEditableFields(deps = {}) {
       }
 
       // Update the data
-      const albumsToUpdate = getListData(currentList);
-      if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
-
-      // Get album_id for canonical update
-      const album = albumsToUpdate[albumIndex];
+      const album = findItem(currentList, originalItem);
+      if (!album) return;
       const albumId = album.album_id;
 
       if (!albumId) {
@@ -270,10 +201,14 @@ export function createEditableFields(deps = {}) {
       }
 
       // Close the dropdown immediately for better UX
+      const writeKey = `${albumId}:country`;
+      const token = Symbol();
+      fieldWrites.set(writeKey, token);
       restoreDisplay(newCountry);
 
       // Update local state immediately (optimistic)
-      albumsToUpdate[albumIndex].country = newCountry;
+      album.country = newCountry;
+      const requestGeneration = liveAlbumPatches.generation;
 
       try {
         // Use lightweight endpoint to update canonical country
@@ -282,18 +217,26 @@ export function createEditableFields(deps = {}) {
           body: JSON.stringify({ country: newCountry || null }),
         });
 
-        // Queue for potential batch if more edits come in rapid succession
-        queueFieldUpdate(albumId, 'country', newCountry || null);
+        if (fieldWrites.get(writeKey) !== token) return;
+        patchAlbumCopies(
+          albumId,
+          { country: newCountry || null },
+          requestGeneration
+        );
 
         showToast(newCountry === '' ? 'Country cleared' : 'Country updated');
       } catch (error) {
+        if (fieldWrites.get(writeKey) !== token) return;
         const handled = handleLockedError(error);
         if (!handled) {
           showToast('Error saving country', 'error');
         }
         // Revert on error
-        albumsToUpdate[albumIndex].country = currentCountry;
-        restoreDisplay(currentCountry);
+        const latest = findItem(currentList, originalItem);
+        if (latest?.country === newCountry) {
+          latest.country = currentCountry;
+          restoreDisplay(currentCountry);
+        }
       }
     };
 
@@ -356,6 +299,7 @@ export function createEditableFields(deps = {}) {
     const albumsForGenre = getListData(currentList);
     if (!albumsForGenre || !albumsForGenre[albumIndex]) return;
     const currentGenre = albumsForGenre[albumIndex][genreField] || '';
+    const originalItem = albumsForGenre[albumIndex];
 
     // Track highlighted index for keyboard navigation
     let highlightedIndex = -1;
@@ -508,11 +452,8 @@ export function createEditableFields(deps = {}) {
       }
 
       // Update the data
-      const albumsToUpdate = getListData(currentList);
-      if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
-
-      // Get album_id for canonical update
-      const album = albumsToUpdate[albumIndex];
+      const album = findItem(currentList, originalItem);
+      if (!album) return;
       const albumId = album.album_id;
 
       if (!albumId) {
@@ -522,10 +463,14 @@ export function createEditableFields(deps = {}) {
       }
 
       // Close the dropdown immediately for better UX
+      const writeKey = `${albumId}:${genreField}`;
+      const token = Symbol();
+      fieldWrites.set(writeKey, token);
       restoreDisplay(newGenre);
 
       // Update local state immediately (optimistic)
-      albumsToUpdate[albumIndex][genreField] = newGenre;
+      album[genreField] = newGenre;
+      const requestGeneration = liveAlbumPatches.generation;
 
       try {
         // Use lightweight endpoint to update canonical genre
@@ -538,18 +483,26 @@ export function createEditableFields(deps = {}) {
           body: JSON.stringify(body),
         });
 
-        // Queue for potential batch if more edits come in rapid succession
-        queueFieldUpdate(albumId, genreField, newGenre || null);
+        if (fieldWrites.get(writeKey) !== token) return;
+        patchAlbumCopies(
+          albumId,
+          { [genreField]: newGenre || null },
+          requestGeneration
+        );
 
         showToast(newGenre === '' ? 'Genre cleared' : 'Genre updated');
       } catch (error) {
+        if (fieldWrites.get(writeKey) !== token) return;
         const handled = handleLockedError(error);
         if (!handled) {
           showToast('Error saving genre', 'error');
         }
         // Revert on error
-        albumsToUpdate[albumIndex][genreField] = currentGenre;
-        restoreDisplay(currentGenre);
+        const latest = findItem(currentList, originalItem);
+        if (latest?.[genreField] === newGenre) {
+          latest[genreField] = currentGenre;
+          restoreDisplay(currentGenre);
+        }
       }
     };
 
@@ -813,7 +766,7 @@ export function createEditableFields(deps = {}) {
    * @param {HTMLElement} commentDiv - Comment container element
    * @param {number} albumIndex - Album index in list
    */
-  function makeCommentEditable(commentDiv, albumIndex) {
+  function makeCommentEditable(commentDiv, albumIndex, secondary = false) {
     if (isCurrentListLocked()) {
       notifyLocked();
       return;
@@ -823,15 +776,38 @@ export function createEditableFields(deps = {}) {
     const albumsForComment = getListData(currentList);
     if (!albumsForComment || !albumsForComment[albumIndex]) return;
 
-    const currentComment = albumsForComment[albumIndex].comments || '';
+    if (commentDiv.querySelector('textarea')) return;
+    const field = secondary ? 'comments_2' : 'comments';
+    const route = secondary ? 'comment2' : 'comment';
+    const textClass = secondary ? 'comment-2-text' : 'comment-text';
+    const placeholder = secondary ? 'Comment 2' : 'Comment';
+    const originalItem = albumsForComment[albumIndex];
+    const draftKey = `${currentList}:${originalItem._id || originalItem.album_id}:${field}`;
+    const draft = commentDrafts.get(draftKey) || {
+      base: originalItem[field] || '',
+      value: originalItem[field] || '',
+      owner: { draft: true },
+    };
+    const currentComment = draft.base;
+    let saving = false;
+    let closed = false;
+    const draftOwner = draft.owner;
 
     // Create textarea
     const textarea = document.createElement('textarea');
     textarea.className = 'inline-edit-textarea';
-    textarea.value = currentComment;
+    textarea.value = draft.value;
     textarea.rows = 2;
+    textarea.addEventListener('input', () => {
+      draft.value = textarea.value;
+      commentDrafts.set(draftKey, draft);
+      markListUnsaved(currentList, true, draftOwner);
+    });
     let detachEmojiAutocomplete = () => {};
     const teardownCommentEditor = () => {
+      closed = true;
+      commentDrafts.delete(draftKey);
+      markListUnsaved(currentList, false, draftOwner);
       detachEmojiAutocomplete();
       detachEmojiAutocomplete = () => {};
     };
@@ -843,13 +819,50 @@ export function createEditableFields(deps = {}) {
     textarea.focus();
     textarea.select();
 
+    function restoreDisplay() {
+      teardownCommentEditor();
+      const value = findItem(currentList, originalItem)?.[field] || '';
+      const displayClass = value ? 'text-gray-300' : 'text-gray-800 italic';
+      commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 ${textClass}">${escapeHtmlAttr(value || placeholder)}</span>`;
+      commentDiv.onclick = () => {
+        if (getCurrentList() !== currentList) return;
+        const index = getListData(currentList)?.indexOf(
+          findItem(currentList, originalItem)
+        );
+        if (index >= 0) makeCommentEditable(commentDiv, index, secondary);
+      };
+      const text = commentDiv.querySelector(`.${textClass}`);
+      if (value)
+        setTimeout(() => {
+          if (text?.isConnected && isTextTruncated(text))
+            text.setAttribute('data-comment', value);
+        }, 0);
+    }
+
     // Save on blur or enter
     const saveComment = async () => {
-      const albumsToUpdate = getListData(currentList);
-      if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
+      if (saving || closed) return;
+      const album = findItem(currentList, originalItem);
+      if (!album) {
+        showToast('Album was removed while editing', 'error');
+        return;
+      }
 
       const newComment = textarea.value.trim();
-      const album = albumsToUpdate[albumIndex];
+      if (newComment === currentComment) {
+        restoreDisplay();
+        return;
+      }
+      if (
+        (album[field] || '') !== currentComment &&
+        album[field] !== newComment
+      ) {
+        showToast(
+          'This comment changed elsewhere. Your draft is kept; press Escape to load the current comment.',
+          'error'
+        );
+        return;
+      }
 
       // Get canonical album identifier
       const identifier = album.album_id;
@@ -860,69 +873,34 @@ export function createEditableFields(deps = {}) {
       }
 
       try {
+        saving = true;
+        textarea.disabled = true;
         // Use lightweight endpoint to update comment
         await apiCall(
-          `/api/lists/${encodeURIComponent(currentList)}/items/${encodeURIComponent(identifier)}/comment`,
+          `/api/lists/${encodeURIComponent(currentList)}/items/${encodeURIComponent(identifier)}/${route}`,
           {
             method: 'PATCH',
             body: JSON.stringify({ comment: newComment || null }),
           }
         );
 
-        teardownCommentEditor();
-
-        // Update local state
-        albumsToUpdate[albumIndex].comments = newComment;
-
-        // Update display without re-rendering everything
-        let displayComment = newComment;
-        let displayClass = 'text-gray-300';
-
-        // If comment is empty, show placeholder with almost invisible styling
-        if (!displayComment) {
-          displayComment = 'Comment';
-          displayClass = 'text-gray-800 italic';
-        }
-
-        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${escapeHtmlAttr(displayComment)}</span>`;
-
-        // Re-add click handler
-        commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
-
-        // Add tooltip only if comment is truncated
-        const commentTextEl = commentDiv.querySelector('.comment-text');
-        if (commentTextEl && newComment) {
-          setTimeout(() => {
-            if (isTextTruncated(commentTextEl)) {
-              commentTextEl.setAttribute('data-comment', newComment);
-            }
-          }, 0);
-        }
+        const latest = findItem(currentList, originalItem);
+        if (latest) latest[field] = newComment;
+        patchListItem(currentList, originalItem._id, { [field]: newComment });
+        restoreDisplay();
       } catch (error) {
-        teardownCommentEditor();
         const handled = handleLockedError(error);
         if (!handled) {
-          showToast('Error saving comment', 'error');
+          showToast(
+            'Comment not saved. Your draft is kept; press Enter to retry.',
+            'error'
+          );
         }
-        // Revert on error - also handle placeholder for empty comments
-        let revertDisplay = currentComment;
-        let revertClass = 'text-gray-300';
-        if (!revertDisplay) {
-          revertDisplay = 'Comment';
-          revertClass = 'text-gray-500';
-        }
-        commentDiv.innerHTML = `<span class="text-sm ${revertClass} italic line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${escapeHtmlAttr(revertDisplay)}</span>`;
-        commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
-
-        // Add tooltip only if comment is truncated
-        const revertTextEl = commentDiv.querySelector('.comment-text');
-        if (revertTextEl && currentComment) {
-          setTimeout(() => {
-            if (isTextTruncated(revertTextEl)) {
-              revertTextEl.setAttribute('data-comment', currentComment);
-            }
-          }, 0);
-        }
+        textarea.disabled = false;
+        textarea.focus();
+      } finally {
+        saving = false;
+        textarea.disabled = false;
       }
     };
 
@@ -930,32 +908,11 @@ export function createEditableFields(deps = {}) {
     textarea.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        textarea.blur();
+        void saveComment();
       }
       if (e.key === 'Escape') {
-        teardownCommentEditor();
-        // Cancel editing
-        let displayComment = currentComment;
-        let displayClass = 'text-gray-300';
-
-        // If comment is empty, show placeholder
-        if (!displayComment) {
-          displayComment = 'Comment';
-          displayClass = 'text-gray-500';
-        }
-
-        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${escapeHtmlAttr(displayComment)}</span>`;
-        commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
-
-        // Add tooltip only if comment is truncated
-        const cancelTextEl = commentDiv.querySelector('.comment-text');
-        if (cancelTextEl && currentComment) {
-          setTimeout(() => {
-            if (isTextTruncated(cancelTextEl)) {
-              cancelTextEl.setAttribute('data-comment', currentComment);
-            }
-          }, 0);
-        }
+        e.preventDefault();
+        if (!saving) restoreDisplay();
       }
     });
   }
@@ -966,149 +923,7 @@ export function createEditableFields(deps = {}) {
    * @param {number} albumIndex - Album index in list
    */
   function makeComment2Editable(commentDiv, albumIndex) {
-    if (isCurrentListLocked()) {
-      notifyLocked();
-      return;
-    }
-
-    const currentList = getCurrentList();
-    const albumsForComment = getListData(currentList);
-    if (!albumsForComment || !albumsForComment[albumIndex]) return;
-
-    const currentComment = albumsForComment[albumIndex].comments_2 || '';
-
-    // Create textarea
-    const textarea = document.createElement('textarea');
-    textarea.className = 'inline-edit-textarea';
-    textarea.value = currentComment;
-    textarea.rows = 2;
-    let detachEmojiAutocomplete = () => {};
-    const teardownCommentEditor = () => {
-      detachEmojiAutocomplete();
-      detachEmojiAutocomplete = () => {};
-    };
-
-    // Replace div content with textarea
-    commentDiv.innerHTML = '';
-    commentDiv.appendChild(textarea);
-    detachEmojiAutocomplete = attachEmojiAutocomplete(textarea);
-    textarea.focus();
-    textarea.select();
-
-    // Save on blur or enter
-    const saveComment = async () => {
-      const albumsToUpdate = getListData(currentList);
-      if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
-
-      const newComment = textarea.value.trim();
-      const album = albumsToUpdate[albumIndex];
-
-      // Get canonical album identifier
-      const identifier = album.album_id;
-
-      if (!identifier) {
-        showToast('Cannot update - album not identified', 'error');
-        return;
-      }
-
-      try {
-        // Use lightweight endpoint to update comment 2
-        await apiCall(
-          `/api/lists/${encodeURIComponent(currentList)}/items/${encodeURIComponent(identifier)}/comment2`,
-          {
-            method: 'PATCH',
-            body: JSON.stringify({ comment: newComment || null }),
-          }
-        );
-
-        teardownCommentEditor();
-
-        // Update local state
-        albumsToUpdate[albumIndex].comments_2 = newComment;
-
-        // Update display without re-rendering everything
-        let displayComment = newComment;
-        let displayClass = 'text-gray-300';
-
-        // If comment is empty, show placeholder with almost invisible styling
-        if (!displayComment) {
-          displayComment = 'Comment 2';
-          displayClass = 'text-gray-800 italic';
-        }
-
-        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${escapeHtmlAttr(displayComment)}</span>`;
-
-        // Re-add click handler
-        commentDiv.onclick = () => makeComment2Editable(commentDiv, albumIndex);
-
-        // Add tooltip only if comment is truncated
-        const commentTextEl = commentDiv.querySelector('.comment-2-text');
-        if (commentTextEl && newComment) {
-          setTimeout(() => {
-            if (isTextTruncated(commentTextEl)) {
-              commentTextEl.setAttribute('data-comment', newComment);
-            }
-          }, 0);
-        }
-      } catch (error) {
-        teardownCommentEditor();
-        const handled = handleLockedError(error);
-        if (!handled) {
-          showToast('Error saving comment', 'error');
-        }
-        // Revert on error
-        let revertDisplay = currentComment;
-        let revertClass = 'text-gray-300';
-        if (!revertDisplay) {
-          revertDisplay = 'Comment 2';
-          revertClass = 'text-gray-500';
-        }
-        commentDiv.innerHTML = `<span class="text-sm ${revertClass} italic line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${escapeHtmlAttr(revertDisplay)}</span>`;
-        commentDiv.onclick = () => makeComment2Editable(commentDiv, albumIndex);
-
-        // Add tooltip only if comment is truncated
-        const revertTextEl = commentDiv.querySelector('.comment-2-text');
-        if (revertTextEl && currentComment) {
-          setTimeout(() => {
-            if (isTextTruncated(revertTextEl)) {
-              revertTextEl.setAttribute('data-comment', currentComment);
-            }
-          }, 0);
-        }
-      }
-    };
-
-    textarea.addEventListener('blur', saveComment);
-    textarea.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        textarea.blur();
-      }
-      if (e.key === 'Escape') {
-        teardownCommentEditor();
-        // Cancel editing
-        let displayComment = currentComment;
-        let displayClass = 'text-gray-300';
-
-        if (!displayComment) {
-          displayComment = 'Comment 2';
-          displayClass = 'text-gray-500';
-        }
-
-        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${escapeHtmlAttr(displayComment)}</span>`;
-        commentDiv.onclick = () => makeComment2Editable(commentDiv, albumIndex);
-
-        // Add tooltip only if comment is truncated
-        const cancelTextEl = commentDiv.querySelector('.comment-2-text');
-        if (cancelTextEl && currentComment) {
-          setTimeout(() => {
-            if (isTextTruncated(cancelTextEl)) {
-              cancelTextEl.setAttribute('data-comment', currentComment);
-            }
-          }, 0);
-        }
-      }
-    });
+    return makeCommentEditable(commentDiv, albumIndex, true);
   }
 
   // Return public API
@@ -1117,8 +932,5 @@ export function createEditableFields(deps = {}) {
     makeGenreEditable,
     makeCommentEditable,
     makeComment2Editable,
-    // Batch update utilities
-    flushBatchUpdates,
-    flushPendingForAlbum,
   };
 }

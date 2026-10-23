@@ -12,6 +12,9 @@
  */
 
 import { apiCall } from './api-client.js';
+import { updateUserPreferences } from './state-events.js';
+import { createKeyedTaskQueue } from '../utils/keyed-task-queue.js';
+import { showToast } from './toast.js';
 
 // ── Column Definitions ──────────────────────────────────────────────────────
 
@@ -186,7 +189,7 @@ function applyGridTemplate() {
  * @param {string} columnId - Column ID to toggle
  * @returns {boolean} The new visibility state of the column
  */
-function toggleColumn(columnId) {
+function toggleColumn(columnId, visible = !isColumnVisible(columnId)) {
   const def = COLUMN_DEFINITIONS.find((c) => c.id === columnId);
   if (!def || def.alwaysVisible) return true;
 
@@ -194,7 +197,7 @@ function toggleColumn(columnId) {
     currentVisibility = {};
   }
 
-  const newState = !isColumnVisible(columnId);
+  const newState = visible;
   currentVisibility[columnId] = newState;
 
   // Clean up: remove keys that are true (visible is default)
@@ -209,9 +212,7 @@ function toggleColumn(columnId) {
   }
 
   // Sync to window.currentUser
-  if (window.currentUser) {
-    window.currentUser.columnVisibility = currentVisibility;
-  }
+  updateUserPreferences({ columnVisibility: currentVisibility });
 
   applyGridTemplate();
   saveColumnVisibility();
@@ -237,9 +238,7 @@ function setAllColumns(visible) {
     }
   }
 
-  if (window.currentUser) {
-    window.currentUser.columnVisibility = currentVisibility;
-  }
+  updateUserPreferences({ columnVisibility: currentVisibility });
 
   applyGridTemplate();
   saveColumnVisibility();
@@ -261,25 +260,45 @@ function getVisibilityPrefs() {
 
 /** Debounce timer for save requests. */
 let saveTimer = null;
+const enqueueSave = createKeyedTaskQueue();
+let saveVersion = 0;
 
 /**
  * Persist the current column visibility to the server.
  * Debounced to avoid rapid-fire API calls when toggling multiple columns.
  */
 function saveColumnVisibility() {
+  const version = ++saveVersion;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
-      await apiCall('/settings/update-column-visibility', {
-        method: 'POST',
-        body: JSON.stringify({ columnVisibility: currentVisibility }),
-      });
+      const prefs = currentVisibility ? { ...currentVisibility } : null;
+      await enqueueSave('columns', () =>
+        apiCall('/settings/update-column-visibility', {
+          method: 'POST',
+          body: JSON.stringify({ columnVisibility: prefs }),
+        })
+      );
     } catch {
-      // Silent failure — the local state is already applied.
-      // On next page load the server's last-saved state will be used.
+      if (version === saveVersion)
+        showToast(
+          'Column preferences could not be saved. Change a column to retry.',
+          'error'
+        );
     }
   }, 500);
 }
+
+if (typeof window !== 'undefined')
+  window.addEventListener?.('columnvisibilitychange', () => {
+    document
+      .querySelectorAll('input[data-column-id], input[data-settings-column-id]')
+      .forEach((input) => {
+        input.checked = isColumnVisible(
+          input.dataset.columnId || input.dataset.settingsColumnId
+        );
+      });
+  });
 
 // ── Exports ─────────────────────────────────────────────────────────────────
 

@@ -74,7 +74,7 @@ describe('list write route latency', () => {
 
     assert.strictEqual(notifyTaxonomyUpdated.mock.calls.length, 1);
     assert.strictEqual(res.json.mock.calls.length, 1);
-    assert.strictEqual(listUpdated.mock.calls.length, 1);
+    assert.strictEqual(listUpdated.mock.calls.length, 0);
 
     taxonomyNotification.resolve();
     await taxonomyNotification.promise;

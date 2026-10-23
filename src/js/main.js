@@ -1,6 +1,7 @@
-import { isMobileViewport } from './utils/viewport.js';
+import { isMobileViewport, onViewportChange } from './utils/viewport.js';
 import './app.js';
 import { scheduleDeferredStartup } from './modules/post-render-scheduler.js';
+import { stateEvents } from './modules/state-events.js';
 
 /**
  * Determine which sidebar widget to show based on user's music service preference
@@ -44,11 +45,17 @@ function getSidebarWidgetType() {
 /**
  * Initialize the appropriate sidebar widget based on user preference
  */
+let widgetGeneration = 0;
 async function initSidebarWidget(isMobile) {
+  const generation = ++widgetGeneration;
   const widgetType = getSidebarWidgetType();
+  const player = await import('./modules/spotify-player.js');
+  if (generation !== widgetGeneration) return;
+  player.stopPlaybackTracking();
 
   if (widgetType === 'tidal') {
     const { initTidalWidget } = await import('./modules/tidal-widget.js');
+    if (generation !== widgetGeneration) return;
     // Hide Spotify miniplayer, show Tidal widget
     const spotifyMiniplayer = document.getElementById('spotifyMiniplayer');
     if (spotifyMiniplayer) {
@@ -58,6 +65,7 @@ async function initSidebarWidget(isMobile) {
   } else {
     const { initMiniplayer, initPlaybackTracking } =
       await import('./modules/spotify-player.js');
+    if (generation !== widgetGeneration) return;
     // Hide Tidal widget, show Spotify miniplayer
     const tidalWidget = document.getElementById('tidalWidget');
     if (tidalWidget) {
@@ -75,11 +83,23 @@ async function initSidebarWidget(isMobile) {
 
 // Initialize music service widgets when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  const isMobile = isMobileViewport();
+  const refreshWidget = () =>
+    initSidebarWidget(isMobileViewport()).catch((error) =>
+      console.warn('Failed to refresh sidebar widget:', error)
+    );
+  stateEvents.subscribe(
+    [
+      'preference:musicService',
+      'preference:spotifyAuth',
+      'preference:tidalAuth',
+    ],
+    refreshWidget
+  );
+  onViewportChange(refreshWidget);
 
   scheduleDeferredStartup(
     () => {
-      initSidebarWidget(isMobile).catch((error) => {
+      initSidebarWidget(isMobileViewport()).catch((error) => {
         console.warn('Failed to initialize sidebar widget:', error);
       });
     },

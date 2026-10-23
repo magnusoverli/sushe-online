@@ -301,11 +301,35 @@ function createListItemsRepository(deps = {}) {
     });
   }
 
+  /**
+   * @param {string} listItemId
+   * @param {{primary: string|null, secondary: string|null}} picks
+   * @param {import('pg').PoolClient|null} transactionClient
+   */
+  async function replaceTrackPicks(
+    listItemId,
+    picks,
+    transactionClient = null
+  ) {
+    return inTransaction(db, transactionClient, async (client) => {
+      const result = await client.query(
+        `UPDATE list_items SET primary_track = $1, secondary_track = $2, updated_at = NOW()
+         WHERE _id = $3 RETURNING primary_track, secondary_track`,
+        [picks.primary, picks.secondary, listItemId]
+      );
+      const row = result.rows[0];
+      return row
+        ? { primary: row.primary_track, secondary: row.secondary_track }
+        : null;
+    });
+  }
+
   return {
     findWithAlbumData,
     findItemWithOwner,
     setTrackPick,
     removeTrackPick,
+    replaceTrackPicks,
   };
 }
 

@@ -14,6 +14,17 @@ describe('track-matching', () => {
   ];
 
   describe('matchTrackByNumber', () => {
+    it('does not interpret numeric-leading titles as positions', () => {
+      const tracks = [
+        { id: 'one', name: 'Other' },
+        { id: 'two', name: '2 + 2 = 5' },
+        { id: 'three', name: '2' },
+      ];
+      assert.equal(matchTrackByNumber(tracks, '2 + 2 = 5'), null);
+      assert.equal(matchTrackByNumber(tracks, '2'), null);
+      assert.equal(matchTrackByNumber(tracks, '#2').id, 'two');
+      assert.equal(matchTrackByName(tracks, '2').id, 'three');
+    });
     it('should match track by 1-based number', () => {
       const result = matchTrackByNumber(tracks, '1');
       assert.strictEqual(result.id, 'a');
@@ -47,8 +58,8 @@ describe('track-matching', () => {
       assert.strictEqual(extractTrackName('3 - Some Song'), 'Some Song');
     });
 
-    it('should extract name from "3  Track Name" format', () => {
-      assert.strictEqual(extractTrackName('3  Some Song'), 'Some Song');
+    it('preserves numeric-leading titles without an explicit separator', () => {
+      assert.strictEqual(extractTrackName('3  Some Song'), '3  Some Song');
     });
 
     it('should return original string if no number prefix', () => {

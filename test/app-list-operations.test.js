@@ -581,7 +581,16 @@ describe('app-list-operations module', () => {
     assert.strictEqual(importedId, 'new-list');
     assert.strictEqual(listsState['new-list'].name, 'Imported List');
     assert.strictEqual(logger.log.mock.calls.length, 1);
-    assert.strictEqual(apiCall.mock.calls.length, 5);
+    assert.strictEqual(apiCall.mock.calls.length, 3);
+    const imported = JSON.parse(apiCall.mock.calls[0].arguments[1].body)
+      .data[0];
+    assert.strictEqual(imported.primary_track, 'Track A');
+    assert.strictEqual(imported.secondary_track, 'Track B');
+    assert.ok(
+      apiCall.mock.calls.every(
+        (call) => !call.arguments[0].startsWith('/api/track-picks/')
+      )
+    );
   });
 });
 
@@ -653,7 +662,10 @@ describe('saveList with real state and diff computation', () => {
         globalThis.localStorage.setItem.mock.calls.at(-1).arguments,
         [
           'list-snapshot-list-1',
-          JSON.stringify(state.getLastSavedSnapshots().get('list-1')),
+          JSON.stringify({
+            ids: [...state.getLastSavedSnapshots().get('list-1')],
+            records: state.getLastSavedSnapshots().get('list-1').records,
+          }),
         ]
       );
     });

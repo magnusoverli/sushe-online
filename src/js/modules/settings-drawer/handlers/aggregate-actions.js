@@ -304,12 +304,12 @@ export function createSettingsAggregateActions(deps = {}) {
       }
     }
 
-    if (categoryData.admin?.aggregateStatus) {
-      const statusIndex = categoryData.admin.aggregateStatus.findIndex(
+    if (categoryData.admin?.aggregateLists) {
+      const statusIndex = categoryData.admin.aggregateLists.findIndex(
         (status) => status.year === year
       );
       if (statusIndex !== -1) {
-        categoryData.admin.aggregateStatus[statusIndex].locked = newLockStatus;
+        categoryData.admin.aggregateLists[statusIndex].locked = newLockStatus;
       }
     }
   }
@@ -335,12 +335,12 @@ export function createSettingsAggregateActions(deps = {}) {
           'success'
         );
 
-        if (response.status && categoryData.admin?.aggregateStatus) {
-          const yearIndex = categoryData.admin.aggregateStatus.findIndex(
+        if (response.status && categoryData.admin?.aggregateLists) {
+          const yearIndex = categoryData.admin.aggregateLists.findIndex(
             (status) => status.year === year
           );
           if (yearIndex !== -1) {
-            categoryData.admin.aggregateStatus[yearIndex] = response.status;
+            categoryData.admin.aggregateLists[yearIndex] = response.status;
           }
 
           const yearContent = doc.getElementById(

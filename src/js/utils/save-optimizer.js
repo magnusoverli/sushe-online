@@ -24,8 +24,33 @@ export function computeListDiff(oldSnapshot, newData) {
     // No previous snapshot - can't compute diff
     return null;
   }
+  // Legacy ID-only snapshots cannot prove that persisted fields are unchanged.
+  if (
+    !oldSnapshot.records &&
+    newData.some(
+      (item) =>
+        oldSnapshot.includes(item.album_id) &&
+        Object.keys(item).some(
+          (key) =>
+            !['album_id', '_id', 'position', 'points', 'rank'].includes(key)
+        )
+    )
+  )
+    return null;
 
   const newSnapshot = createListSnapshot(newData);
+  // The incremental endpoint only accepts membership and positions. A field
+  // change must never disappear merely because the same save also reorders.
+  if (
+    oldSnapshot.records &&
+    Object.keys(oldSnapshot.records).some(
+      (id) =>
+        newSnapshot.records[id] &&
+        oldSnapshot.records[id] !== newSnapshot.records[id]
+    )
+  ) {
+    return null;
+  }
   const oldSet = new Set(oldSnapshot);
   const newSet = new Set(newSnapshot);
 
@@ -90,20 +115,24 @@ export function computeListDiff(oldSnapshot, newData) {
  */
 export function createDebouncedSave(deps = {}) {
   const { saveList, showToast } = deps;
-  let saveTimeout = null;
+  const saveTimeouts = new Map();
 
   return function debouncedSaveList(listId, listData, delay = 300) {
-    clearTimeout(saveTimeout);
+    clearTimeout(saveTimeouts.get(listId));
 
-    saveTimeout = setTimeout(async () => {
-      try {
-        await saveList(listId, listData);
-      } catch (error) {
-        console.error('Error saving list:', error);
-        if (showToast) {
-          showToast('Error saving list order', 'error');
+    saveTimeouts.set(
+      listId,
+      setTimeout(async () => {
+        saveTimeouts.delete(listId);
+        try {
+          await saveList(listId, listData);
+        } catch (error) {
+          console.error('Error saving list:', error);
+          if (showToast) {
+            showToast('Error saving list order', 'error');
+          }
         }
-      }
-    }, delay);
+      }, delay)
+    );
   };
 }

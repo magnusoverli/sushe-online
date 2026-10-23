@@ -61,6 +61,7 @@ export function createSettingsDrawer(deps = {}) {
   let currentCategory = 'account';
   const categoryData = {};
   const categoryLoadPromises = {};
+  const categoryVersions = new Map();
   const categoryScrollPositions = {};
   let isOpen = false;
   let closeTimer = null;
@@ -486,6 +487,7 @@ export function createSettingsDrawer(deps = {}) {
       await ensureCategoryDataLoaded(categoryId);
     }
 
+    if (currentCategory !== categoryId) return;
     renderCategoryContent(categoryId, {
       skipAnimation: categoryId === 'admin',
     });
@@ -496,10 +498,12 @@ export function createSettingsDrawer(deps = {}) {
    * @param {string} categoryId - Category ID
    */
   async function loadCategoryData(categoryId) {
+    const version = (categoryVersions.get(categoryId) || 0) + 1;
+    categoryVersions.set(categoryId, version);
     const contentEl = document.getElementById('settingsCategoryContent');
     if (!contentEl) return;
 
-    if (categoryId !== 'admin') {
+    if (categoryId !== 'admin' && currentCategory === categoryId) {
       // Show loading state
       contentEl.innerHTML = `
       <div class="flex items-center justify-center py-12">
@@ -538,6 +542,7 @@ export function createSettingsDrawer(deps = {}) {
           return;
       }
 
+      if (categoryVersions.get(categoryId) !== version) return;
       categoryData[categoryId] = data;
 
       if (currentCategory === categoryId) {
@@ -546,6 +551,11 @@ export function createSettingsDrawer(deps = {}) {
         });
       }
     } catch (error) {
+      if (
+        categoryVersions.get(categoryId) !== version ||
+        currentCategory !== categoryId
+      )
+        return;
       console.error('Error loading category data:', error);
       contentEl.innerHTML = `
         <div class="flex items-center justify-center py-12">

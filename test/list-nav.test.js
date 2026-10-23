@@ -135,6 +135,75 @@ function createSidebarSelectionDeps(overrides = {}) {
 // import the module and use a tiny fake DOM surface.
 
 describe('List Navigation Module - Unit Tests', () => {
+  it('cancels superseded sorting setup and destroys both sidebar views', async (t) => {
+    const { createListNav } = await import('../src/js/modules/list-nav.js');
+    const live = new Set();
+    let created = 0;
+    const container = () => {
+      const lists = {};
+      return {
+        addEventListener() {},
+        querySelectorAll: () => [
+          {
+            getAttribute: () => 'shared-group',
+            querySelector: () => lists,
+          },
+        ],
+      };
+    };
+    const desktop = container();
+    const mobile = container();
+    for (const key of ['document', 'window', 'localStorage']) {
+      const descriptor = Object.getOwnPropertyDescriptor(global, key);
+      Object.defineProperty(global, key, {
+        configurable: true,
+        writable: true,
+        value: undefined,
+      });
+      t.after(() => {
+        if (descriptor) Object.defineProperty(global, key, descriptor);
+        else delete global[key];
+      });
+    }
+    t.mock.property(global, 'document', {
+      getElementById: (id) => (id === 'listNav' ? desktop : mobile),
+    });
+    t.mock.property(global, 'window', {
+      Sortable: class {
+        constructor(element) {
+          assert.equal(live.has(element), false, 'duplicate sortable');
+          this.element = element;
+          live.add(element);
+          created++;
+        }
+        destroy() {
+          live.delete(this.element);
+        }
+      },
+    });
+    t.mock.property(global, 'localStorage', { setItem() {}, getItem() {} });
+    const nav = createListNav({ getLists: () => ({}), apiCall() {} });
+    nav.updateListNav();
+    nav.updateListNav();
+    await Promise.resolve();
+    assert.equal(created, 4);
+    assert.equal(live.size, 4);
+    nav.updateListNav();
+    assert.equal(live.size, 0);
+    await Promise.resolve();
+    assert.equal(live.size, 4);
+    const getElementById = global.document.getElementById;
+    global.document.getElementById = () => null;
+    nav.updateListNav();
+    assert.equal(live.size, 0);
+    global.document.getElementById = getElementById;
+    nav.updateListNav();
+    global.document.getElementById = () => null;
+    nav.updateListNav();
+    await Promise.resolve();
+    assert.equal(live.size, 0);
+  });
+
   describe('groupListsByYear logic', () => {
     it('should group lists by year', () => {
       const lists = {

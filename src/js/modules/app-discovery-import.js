@@ -58,7 +58,12 @@ export function createAppDiscoveryImport(deps = {}) {
             );
           }
 
-          if (getLists()[fileName]) {
+          const existing = Object.values(getLists()).find(
+            (list) =>
+              list.name === fileName &&
+              (!metadata?.group_id || list.groupId === metadata.group_id)
+          );
+          if (existing) {
             setPendingImport({ albums, metadata });
             setPendingImportFilename(fileName);
 
@@ -72,9 +77,9 @@ export function createAppDiscoveryImport(deps = {}) {
             return;
           }
 
-          await importList(fileName, albums, metadata);
+          const listId = await importList(fileName, albums, metadata);
           updateListNav();
-          selectList(fileName);
+          await selectList(listId);
           showToast(`Successfully imported ${albums.length} albums`);
         } catch (error) {
           showToast('Error importing file: ' + error.message, 'error');

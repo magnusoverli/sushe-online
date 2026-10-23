@@ -19,6 +19,7 @@ const {
 const { createSetupStatus } = require('./list/setup-status');
 const { createListWriteOperations } = require('./list/write-operations');
 const { withListTransaction } = require('./list/transaction');
+const { checkRevision, readRevision } = require('./list/revision');
 const {
   acquireYearLocks,
   validateYearNotLocked,
@@ -289,23 +290,37 @@ function createListService(deps = {}) {
     );
   }
 
-  async function updateItemComment(listId, userId, identifier, comment) {
-    await updateItemCommentField(
+  async function updateItemComment(
+    listId,
+    userId,
+    identifier,
+    comment,
+    expectedRevision
+  ) {
+    return updateItemCommentField(
       listId,
       userId,
       identifier,
       comment,
-      'comments'
+      'comments',
+      expectedRevision
     );
   }
 
-  async function updateItemComment2(listId, userId, identifier, comment) {
-    await updateItemCommentField(
+  async function updateItemComment2(
+    listId,
+    userId,
+    identifier,
+    comment,
+    expectedRevision
+  ) {
+    return updateItemCommentField(
       listId,
       userId,
       identifier,
       comment,
-      'comments_2'
+      'comments_2',
+      expectedRevision
     );
   }
 
@@ -365,7 +380,17 @@ function createListService(deps = {}) {
     );
   }
 
-  function mutateTrackPick(userId, listItemId, mutate) {
+  function replaceTrackPicks(userId, listItemId, picks, expectedRevision) {
+    return mutateTrackPick(
+      userId,
+      listItemId,
+      (client) =>
+        listItemsRepository.replaceTrackPicks(listItemId, picks, client),
+      expectedRevision
+    );
+  }
+
+  function mutateTrackPick(userId, listItemId, mutate, expectedRevision) {
     return withListTransaction(db, userId, async (client) => {
       const owner = await listItemsRepository.findItemWithOwner(
         listItemId,
@@ -373,17 +398,20 @@ function createListService(deps = {}) {
       );
       if (!owner) return { status: 'not_found' };
       if (owner.user_id !== userId) return { status: 'forbidden' };
-      await findListByIdOrThrow(
+      const list = await findListByIdOrThrow(
         owner.list_id,
         userId,
         'edit track picks',
         client
       );
+      if (expectedRevision !== undefined) checkRevision(list, expectedRevision);
       const result = await mutate(client);
+      if (result) await readRevision(client, list);
       return result
         ? {
             status: 'ok',
             listId: owner.list_id,
+            revision: list.revision,
             primary: result.primary,
             secondary: result.secondary,
           }
@@ -413,6 +441,7 @@ function createListService(deps = {}) {
     getPlaylistSourceData,
     setTrackPick,
     removeTrackPick,
+    replaceTrackPicks,
   };
 }
 
