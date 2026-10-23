@@ -2,6 +2,13 @@
   {
     "date": "2026-10-23",
     "category": "fix",
+    "description": "Live list editing now stays in sync across tabs and devices.",
+    "hash": "8afc52f96ee2b906dd4f2abb188255d3bac992c4",
+    "commitMessage": "Make live list editing reliable across tabs and devices\n\nPreserve field-owned drafts, rebase concurrent list saves, and serialize writes alongside upstream reorder coordination.\n\nExclude originating browsers from shared mutation notifications, stabilize track picks and sidebar sorting, and refresh extension presence after pending requests.\n\nFix upload retries, update vulnerable dependencies, and retain Docker-compatible development reloads with focused regression coverage."
+  },
+  {
+    "date": "2026-10-23",
+    "category": "fix",
     "description": "Updated the PostgreSQL container's gosu build toolchain to fix newly reported Go vulnerabilities."
   },
   {
