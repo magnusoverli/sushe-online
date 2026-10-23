@@ -2,6 +2,11 @@
   {
     "date": "2026-10-23",
     "category": "fix",
+    "description": "Updated the PostgreSQL container's gosu build toolchain to fix newly reported Go vulnerabilities."
+  },
+  {
+    "date": "2026-10-23",
+    "category": "fix",
     "description": "Updated vulnerable dependencies while preserving reliable development reloads on Docker-mounted files."
   },
   {
