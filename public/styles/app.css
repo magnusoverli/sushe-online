@@ -508,6 +508,13 @@
     overscroll-behavior: none;
   }
 
+  /* Constrain the list's own scroll container, including iOS edge bounce. */
+  #albumContainer {
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    touch-action: pan-y pinch-zoom;
+  }
+
   /* Larger touch targets */
   button {
     min-height: 44px;

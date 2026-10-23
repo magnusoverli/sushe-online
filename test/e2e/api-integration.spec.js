@@ -4,15 +4,38 @@
  * These tests authenticate as a real user and test actual API functionality.
  * They verify that the refactored API routes work correctly end-to-end.
  *
- * Uses page.request() to maintain session cookies from browser login.
+ * Reuses one browser login per worker in isolated page contexts.
  *
  * NOTE: These tests require a test user to be approved in the database.
  * Since registration creates users with 'pending' approval status,
  * we use a pre-approved test user or register + approve in setup.
  */
 
-const { test, expect } = require('@playwright/test');
+const { test: base, expect } = require('@playwright/test');
 const { sessionApi } = require('./session-api');
+
+const test = base.extend({
+  authenticatedCookies: [
+    async ({ browser }, use, workerInfo) => {
+      const context = await browser.newContext({
+        baseURL: workerInfo.project.use.baseURL,
+      });
+      let cookies;
+      try {
+        await setupAuthenticatedUser(await context.newPage());
+        cookies = await context.cookies();
+      } finally {
+        await context.close();
+      }
+      await use(cookies);
+    },
+    { scope: 'worker' },
+  ],
+  page: async ({ page, authenticatedCookies }, use) => {
+    await page.context().addCookies(authenticatedCookies);
+    await use(page);
+  },
+});
 
 // Test configuration - use a consistent test user
 const TEST_USER = {
@@ -220,8 +243,6 @@ test.describe('Lists API Integration', () => {
   test('should create, retrieve, update, and delete a list', async ({
     page,
   }) => {
-    await setupAuthenticatedUser(page);
-
     // CREATE: Create a new list with albums
     const { response: createResponse, json: createBody } = await createList(
       page,
@@ -276,8 +297,6 @@ test.describe('Lists API Integration', () => {
   });
 
   test('should create list with groupId (collection)', async ({ page }) => {
-    await setupAuthenticatedUser(page);
-
     // First create a collection
     const groupResponse = await sessionApi(page).post('/api/groups', {
       data: { name: 'Test Collection For List' },
@@ -310,8 +329,6 @@ test.describe('Lists API Integration', () => {
   test('should auto-create year group when creating list with year', async ({
     page,
   }) => {
-    await setupAuthenticatedUser(page);
-
     // Create list with specific year
     const { response: createResponse, json: createBody } = await createList(
       page,
@@ -337,8 +354,6 @@ test.describe('Lists API Integration', () => {
   });
 
   test('should reject invalid data field on item update', async ({ page }) => {
-    await setupAuthenticatedUser(page);
-
     // Create a valid list first
     const { json: createBody } = await createList(page, {
       name: 'Bad Field Test',
@@ -361,8 +376,6 @@ test.describe('Lists API Integration', () => {
   });
 
   test('should reject invalid groupId', async ({ page }) => {
-    await setupAuthenticatedUser(page);
-
     const response = await sessionApi(page).post('/api/lists', {
       data: {
         name: 'Bad Group Test',
@@ -377,8 +390,6 @@ test.describe('Lists API Integration', () => {
 
 test.describe('Groups API Integration', () => {
   test('should create, rename, and delete a collection', async ({ page }) => {
-    await setupAuthenticatedUser(page);
-
     // CREATE
     const createResponse = await sessionApi(page).post('/api/groups', {
       data: { name: 'My Test Collection' },
@@ -416,8 +427,6 @@ test.describe('Groups API Integration', () => {
   });
 
   test('should reject duplicate collection names', async ({ page }) => {
-    await setupAuthenticatedUser(page);
-
     // Create first
     const first = await sessionApi(page).post('/api/groups', {
       data: { name: 'Unique Name' },
@@ -435,8 +444,6 @@ test.describe('Groups API Integration', () => {
   });
 
   test('should reject year as collection name', async ({ page }) => {
-    await setupAuthenticatedUser(page);
-
     const response = await sessionApi(page).post('/api/groups', {
       data: { name: '2024' },
     });
@@ -448,8 +455,6 @@ test.describe('Groups API Integration', () => {
 
 test.describe('Track Picks API Integration', () => {
   test('should set and remove track picks', async ({ page }) => {
-    await setupAuthenticatedUser(page);
-
     // Create a list with an album first
     const { json: createBody } = await createList(page, {
       name: 'Track Pick List',
@@ -502,7 +507,6 @@ test.describe('Track Picks API Integration', () => {
 
 test.describe('List Main Status', () => {
   test('should set and unset list as main', async ({ page }) => {
-    await setupAuthenticatedUser(page);
     const listName = `Main Status Test ${Date.now()}`;
 
     // Create a list
@@ -546,8 +550,6 @@ test.describe('Error Handling', () => {
   });
 
   test('should return 400 for malformed requests', async ({ page }) => {
-    await setupAuthenticatedUser(page);
-
     // Missing required 'name' field
     const response = await sessionApi(page).post('/api/lists', {
       data: { year: 2024, data: [] },
@@ -562,8 +564,6 @@ test.describe('Album Data Preservation', () => {
   test('should preserve album metadata through save cycle', async ({
     page,
   }) => {
-    await setupAuthenticatedUser(page);
-
     const albumData = {
       artist: 'Metadata Artist',
       album: 'Metadata Album',
@@ -598,8 +598,6 @@ test.describe('Album Data Preservation', () => {
 
 test.describe('Special Characters', () => {
   test('should handle special characters in list names', async ({ page }) => {
-    await setupAuthenticatedUser(page);
-
     const specialName = "Best of '90s & 2000s!";
 
     const { json: createBody } = await createList(page, {

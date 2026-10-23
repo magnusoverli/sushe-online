@@ -2,6 +2,16 @@
   {
     "date": "2026-10-23",
     "category": "fix",
+    "description": "Prevent sideways scrolling and edge bounce in mobile album lists while preserving vertical scrolling and pinch zoom."
+  },
+  {
+    "date": "2026-10-23",
+    "category": "perf",
+    "description": "Run browser checks with two CI workers, test the extension directly from source, and disable scheduled Dependabot updates."
+  },
+  {
+    "date": "2026-10-23",
+    "category": "fix",
     "description": "Simplified release checks: security reports run weekly or manually, recovery rehearsals are manual, and structural limits are advisory."
   },
   {

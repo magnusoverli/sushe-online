@@ -12,8 +12,8 @@ module.exports = defineConfig({
   forbidOnly: !!process.env.CI,
   /* Retry failed tests once */
   retries: process.env.CI ? 2 : 1,
-  /* Limit workers to avoid overwhelming the server with user registrations */
-  workers: process.env.CI ? 1 : 2,
+  /* Two isolated workers locally and in CI; shared-account API tests stay serial. */
+  workers: 2,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : 'html',
   /* Global timeout for each test */

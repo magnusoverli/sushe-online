@@ -15,6 +15,7 @@
     "build:css": "postcss src/styles/input.css -o public/styles/output.css",
     "build:js": "vite build",
     "package:extension": "node scripts/package-extension.js",
+    "test:extension-package": "node --test test/manual/extension-package.test.js",
     "watch:css": "postcss src/styles/input.css -o public/styles/output.css --watch",
     "watch:js": "vite build --watch",
     "test": "npm run lint:strict && node scripts/run-tests.js",

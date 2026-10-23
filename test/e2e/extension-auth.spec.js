@@ -1,13 +1,30 @@
 /* global chrome, albumAdd, lists, state, presence */
 const { test, expect, chromium } = require('@playwright/test');
 const { once } = require('node:events');
+const path = require('node:path');
 const {
   createExtensionAuthApp,
   VALID_TOKEN,
   EXTENSION_USER,
   SESSION_USER,
 } = require('../helpers/extension-auth-app');
-const { stageExtensionPackage } = require('../helpers/extension-package');
+const extensionDir = path.resolve(__dirname, '../../browser-extension');
+
+async function expireToken(worker) {
+  await worker.evaluate(() =>
+    chrome.storage.local.set({ tokenExpiresAt: Date.now() - 1000 })
+  );
+  // An unauthenticated snapshot can precede the queued logout storage write.
+  // Wait for cleanup before simulating a subsequent login's storage update.
+  await expect
+    .poll(() =>
+      worker.evaluate(async () => {
+        const stored = await chrome.storage.local.get('authToken');
+        return !!state.get() && !state.get().authToken && !stored.authToken;
+      })
+    )
+    .toBe(true);
+}
 
 function rymDetailHtml({
   artist = 'Artist',
@@ -66,7 +83,6 @@ async function startExtension(
     await new Promise((resolve) => server.close(resolve));
   };
   try {
-    const packageDir = stageExtensionPackage(testInfo.outputPath('extension'));
     context = await chromium.launchPersistentContext(
       testInfo.outputPath('profile'),
       {
@@ -76,8 +92,11 @@ async function startExtension(
         headless: true,
         ignoreDefaultArgs: ['--disable-extensions'],
         args: [
-          `--disable-extensions-except=${packageDir}`,
-          `--load-extension=${packageDir}`,
+          `--disable-extensions-except=${extensionDir}`,
+          `--load-extension=${extensionDir}`,
+          // Avoid Chromium's new-tab renderer/DevTools attachment race.
+          // https://github.com/microsoft/playwright/issues/42142
+          '--disable-features=RenderDocument',
         ],
       }
     );
@@ -120,7 +139,7 @@ async function startExtension(
   }
 }
 
-test('packaged extension saves and enriches using its token with any website session', async ({
+test('extension saves and enriches using its token with any website session', async ({
   browserName: _browserName,
 }, testInfo) => {
   const fixture = await startExtension(testInfo);
@@ -505,16 +524,7 @@ test('a fresh login expiry is applied before requests start with the replacement
     validateExtensionToken: async () => EXTENSION_USER,
   });
   try {
-    await fixture.worker.evaluate(() =>
-      chrome.storage.local.set({ tokenExpiresAt: Date.now() - 1000 })
-    );
-    await expect
-      .poll(() =>
-        fixture.worker.evaluate(
-          () => !globalThis.getAuthStatusResponse().isAuthenticated
-        )
-      )
-      .toBe(true);
+    await expireToken(fixture.worker);
     await fixture.worker.evaluate(() =>
       chrome.storage.local.set({
         authToken: 'r'.repeat(43),
@@ -581,16 +591,7 @@ test('expiry of the previous token does not cancel a replacement authorization i
     ).toBe(true);
     const authPage = await authPagePromise;
     await authPage.waitForURL(`${fixture.apiBase}/extension/auth`);
-    await fixture.worker.evaluate(() =>
-      chrome.storage.local.set({ tokenExpiresAt: Date.now() - 1000 })
-    );
-    await expect
-      .poll(() =>
-        fixture.worker.evaluate(
-          () => globalThis.getAuthStatusResponse().isAuthenticated
-        )
-      )
-      .toBe(false);
+    await expireToken(fixture.worker);
     await authPage.locator('#authorizeBtn').click();
     await expect(authPage.locator('#status')).toContainText(
       'Extension authorized!'
@@ -601,7 +602,7 @@ test('expiry of the previous token does not cancel a replacement authorization i
   }
 });
 
-test('packaged RYM extraction, addition, duplicate handling and reinjection keep badges and counts consistent', async ({
+test('RYM extraction, addition, duplicate handling and reinjection keep badges and counts consistent', async ({
   browserName: _browserName,
 }, testInfo) => {
   let saved = false;
@@ -855,7 +856,7 @@ for (const local of [true, false]) {
   });
 }
 
-test('packaged badges reject conflicting RYM IDs even when canonical URL and names match', async ({
+test('badges reject conflicting RYM IDs even when canonical URL and names match', async ({
   browserName: _browserName,
 }, testInfo) => {
   const url = 'https://rateyourmusic.com/release/album/artist/album/';

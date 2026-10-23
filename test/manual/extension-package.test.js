@@ -8,11 +8,9 @@ const {
   createExtensionPackage,
   validateExtensionPackage,
   writeExtensionPackage,
-} = require('../scripts/package-extension');
-const {
   extensionDir,
   extensionPackageFiles,
-} = require('./helpers/extension-package');
+} = require('../../scripts/package-extension');
 
 test('the release package includes every worker, content-script, and extension-page dependency', () => {
   const { entries, manifest } = validateExtensionPackage(
