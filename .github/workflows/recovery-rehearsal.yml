@@ -23,7 +23,7 @@ jobs:
         run: |
           docker compose -f docker-compose.recovery-test.yml up --build -d --wait app recovery
           docker compose -f docker-compose.recovery-test.yml run --rm --no-deps tests
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Rehearse image-only upgrade from the published baseline
