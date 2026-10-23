@@ -2,6 +2,11 @@
   {
     "date": "2026-10-23",
     "category": "fix",
+    "description": "Simplified release checks: security reports run weekly or manually, recovery rehearsals are manual, and structural limits are advisory."
+  },
+  {
+    "date": "2026-10-23",
+    "category": "fix",
     "description": "Updated the PostgreSQL container's gosu build toolchain to fix newly reported Go vulnerabilities."
   },
   {

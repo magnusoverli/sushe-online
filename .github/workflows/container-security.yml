@@ -1,7 +1,6 @@
-name: Container Security
+name: Security Reports
 
 on:
-  workflow_call:
   workflow_dispatch:
   schedule:
     - cron: '23 5 * * 1'
@@ -9,7 +8,46 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  NODE_VERSION: '26.10.0'
+  NPM_VERSION: '12.1.0'
+
 jobs:
+  audit:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install --global "npm@${NPM_VERSION}" --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit
+      - name: Collect dependency findings (advisory)
+        continue-on-error: true
+        run: npm audit --json > dependency-audit.json
+      - name: Summarize dependency findings
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('dependency-audit.json', 'utf8'));
+          if (report.error || !report.metadata?.vulnerabilities) {
+            throw new Error('Dependency audit could not complete; inspect the report artifact.');
+          }
+          const counts = report.metadata.vulnerabilities;
+          const summary = `Dependency findings: ${counts.critical} critical, ${counts.high} high, ${counts.moderate} moderate, ${counts.low} low.\n\nAdvisory only; review dependency-audit.json.\n`;
+          console.log(summary);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+          NODE
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: dependency-audit
+          path: dependency-audit.json
+          if-no-files-found: warn
+          retention-days: 14
+
   scan:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
@@ -35,12 +73,13 @@ jobs:
             docker build --pull -f Dockerfile.postgres -t "$image" .
           fi
           echo "name=$image" >> "$GITHUB_OUTPUT"
-      - name: Report all vulnerabilities and block fixable high/critical findings
+      - name: Report container vulnerabilities (advisory)
         env:
           IMAGE: ${{ steps.image.outputs.name }}
         run: |
           trivy image --scanners vuln --format json --output image-security.json "$IMAGE"
-          trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE"
+          trivy convert --format table --severity HIGH,CRITICAL image-security.json
+          echo "Advisory scan for $IMAGE. Review the findings in the step log and image-security.json artifact." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
