@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-11-09",
+    "category": "feature",
+    "description": "Share your Listening Room lists publicly with others.",
+    "hash": "b5b768bdcb82491e5805111fa3d2369e6e95bbf2",
+    "commitMessage": "Add public Listening Room sharing for lists\n\n- Add fixed seven-day links with atomic renewal and immediate revocation\n\n- Share current track picks through the read-only v1 contract\n\n- Add desktop and mobile share controls, privacy safeguards, and tests"
+  },
+  {
     "date": "2026-10-23",
     "category": "fix",
     "description": "Prevent sideways scrolling and edge bounce in mobile album lists while preserving vertical scrolling and pinch zoom."
