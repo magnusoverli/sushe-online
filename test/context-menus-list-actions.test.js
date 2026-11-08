@@ -84,6 +84,7 @@ const MENU_ELEMENT_IDS = [
   'renameListOption',
   'toggleMainOption',
   'updatePlaylistOption',
+  'listeningRoomShareOption',
   'deleteListOption',
   'moveListOption',
   'moveListSubmenu',
@@ -197,6 +198,24 @@ describe('desktop list context menu', () => {
       'a tag in a collection name must not become markup'
     );
     assert.ok(html.includes('&lt;img'), 'the name is still shown, escaped');
+  });
+
+  it('shares the context list through the owner-only endpoint and clears menu state', async () => {
+    const requests = [];
+    const { elements, state } = build({
+      apiCall: async (url, options) => {
+        requests.push([url, options.method]);
+        throw new Error('Offline');
+      },
+    });
+    await elements.get('listeningRoomShareOption').onclick();
+    assert.deepStrictEqual(requests, [
+      ['/api/lists/id-a/listening-room-share', 'POST'],
+    ]);
+    assert.strictEqual(state.contextList, null);
+    assert.deepStrictEqual(state.toasts, [
+      "Couldn't share the list. Try again.",
+    ]);
   });
 
   it('round-trips an escaped collection name back through the click handler', async () => {

@@ -25,12 +25,13 @@ const isRateLimitingDisabled = process.env.DISABLE_RATE_LIMITING === 'true';
 const noopMiddleware = (_req, _res, next) => next();
 
 // Helper to create standardized rate limit handler
-function createRateLimitHandler(message) {
+function createRateLimitHandler(message, pathLabel) {
   return (_req, res) => {
-    incRateLimitHit(_req.path);
+    const path = pathLabel || _req.path;
+    incRateLimitHit(path);
     logger.warn('Rate limit exceeded', {
       ip: _req.ip,
-      path: _req.path,
+      path,
       message,
     });
     res.status(429).json({
@@ -47,6 +48,7 @@ function createRateLimitHandler(message) {
  * @param {string} options.envVar - Environment variable name for max
  * @param {number} options.defaultMax - Default max requests
  * @param {string} options.handlerMessage - Message for the 429 handler
+ * @param {string} [options.pathLabel] - Fixed log/metric path for bearer-link routes
  * @param {boolean} [options.skipSuccessfulRequests=false] - Skip counting successful requests
  * @param {boolean} [options.skipFailedRequests=false] - Skip counting failed requests
  * @returns {Function} Rate limit middleware (or noop if disabled)
@@ -56,6 +58,7 @@ function createRateLimiter({
   envVar,
   defaultMax,
   handlerMessage,
+  pathLabel,
   skipSuccessfulRequests = false,
   skipFailedRequests = false,
 }) {
@@ -68,7 +71,7 @@ function createRateLimiter({
     legacyHeaders: false,
     skipSuccessfulRequests,
     skipFailedRequests,
-    handler: createRateLimitHandler(handlerMessage),
+    handler: createRateLimitHandler(handlerMessage, pathLabel),
   });
 }
 

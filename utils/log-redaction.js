@@ -49,7 +49,10 @@ const PRIVATE_KEYS = new Set([
 function safeText(value) {
   return value
     .replace(/[a-z][a-z\d+.-]*:\/\/[^\s"'<>]+/gi, (url) => logSafeUrl(url))
-    .replace(/(\/(?:reset|api\/telegram\/webhook)\/)[^\s/?]+/g, '$1[redacted]')
+    .replace(
+      /(\/(?:reset|lr|api\/telegram\/webhook)\/)[^\s/?]+/g,
+      '$1[redacted]'
+    )
     .replace(/\b(Bearer|Basic)\s+[^\s,;]+/gi, '$1 [redacted]')
     .replace(
       /\b(password|secret|token|api[_-]?key|authorization|cookie)\s*[:=]\s*[^\s,;]+/gi,

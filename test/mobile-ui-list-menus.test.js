@@ -10,7 +10,7 @@ function createClickableElement() {
     trigger(eventName) {
       const handler = listeners.get(eventName);
       if (handler) {
-        handler({
+        return handler({
           preventDefault() {},
           stopPropagation() {},
         });
@@ -32,6 +32,7 @@ function createListActionSheet() {
       'download-csv',
       'edit',
       'send-to-service',
+      'share-listening-room',
       'delete',
     ].map((action) => [`[data-action="${action}"]`, createClickableElement()])
   );
@@ -62,6 +63,31 @@ describe('mobile-ui list menus', () => {
   beforeEach(async () => {
     const module = await import('../src/js/modules/mobile-ui/list-menus.js');
     createMobileListMenus = module.createMobileListMenus;
+  });
+
+  it('places Listening Room beside the music service and shares the selected list', async () => {
+    const { createMobileListActionMenu } =
+      await import('../src/js/modules/mobile-ui/list-action-menu.js');
+    const { sheet, button } = createListActionSheet();
+    const share = mock.fn(async () => {});
+    const close = mock.fn();
+    let html;
+    const show = createMobileListActionMenu({
+      createActionSheet: ({ contentHtml }) => {
+        html = contentHtml;
+        return { sheet, close };
+      },
+      getListMetadata: () => ({ name: 'Not main', isMain: false }),
+      getCurrentUser: () => ({}),
+      listMenuActions: { shareToListeningRoom: share },
+    });
+    show('owned-list');
+    assert.ok(
+      html.indexOf('share-listening-room') > html.indexOf('send-to-service')
+    );
+    await button('share-listening-room').trigger('click');
+    assert.equal(close.mock.callCount(), 1);
+    assert.deepStrictEqual(share.mock.calls[0].arguments, ['owned-list']);
   });
 
   it('wires list menu download action through shared list actions', async () => {

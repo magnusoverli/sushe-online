@@ -60,6 +60,32 @@ describe('app-api-client module', () => {
     assert.strictEqual(headers['Content-Type'], undefined);
   });
 
+  it('accepts a bodyless 204 when stopping Listening Room sharing', async () => {
+    const json = mock.fn(async () => {
+      throw new SyntaxError('Unexpected end of JSON input');
+    });
+    const fetchImpl = mock.fn(async () => ({ ok: true, status: 204, json }));
+    const logger = { error: mock.fn() };
+    const client = createAppApiClient({
+      getRealtimeSyncModuleInstance: () => null,
+      fetchImpl,
+      win: { csrfToken: 'csrf-1', location: { href: '/' } },
+      logger,
+    });
+    assert.strictEqual(
+      await client.apiCall('/api/lists/list/listening-room-share', {
+        method: 'DELETE',
+      }),
+      null
+    );
+    assert.strictEqual(json.mock.callCount(), 0);
+    assert.strictEqual(logger.error.mock.callCount(), 0);
+    assert.strictEqual(
+      fetchImpl.mock.calls[0].arguments[1].headers['X-CSRF-Token'],
+      'csrf-1'
+    );
+  });
+
   it('redirects to login on non-oauth 401 responses', async () => {
     const win = { csrfToken: null, location: { href: '/app' } };
     const fetchImpl = mock.fn(async () => ({

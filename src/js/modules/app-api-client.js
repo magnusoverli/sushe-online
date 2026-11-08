@@ -59,6 +59,10 @@ export function createAppApiClient(deps = {}) {
       throw sessionExpiredError();
     }
 
+    // Stop-sharing (and other bodyless DELETE endpoints) succeeds with 204.
+    // Attempting response.json() would turn that success into a client error.
+    if (response.status === 204) return null;
+
     const contentType = response.headers?.get?.('content-type') || '';
     if (
       contentType &&

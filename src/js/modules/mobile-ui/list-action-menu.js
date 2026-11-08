@@ -74,6 +74,10 @@ export function createMobileListActionMenu(deps = {}) {
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
             <i class="fas fa-paper-plane mr-3 text-gray-400"></i>${menuConfig.musicServiceText}
           </button>
+          <button data-action="share-listening-room"
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
+            <i class="fas fa-link mr-3 text-gray-400"></i>${menuConfig.listeningRoomText}
+          </button>
           
           ${
             menuConfig.isInCollection
@@ -125,6 +129,14 @@ export function createMobileListActionMenu(deps = {}) {
       '[data-action="send-to-service"]'
     );
     const deleteBtn = actionSheet.querySelector('[data-action="delete"]');
+    actionSheet
+      .querySelector('[data-action="share-listening-room"]')
+      ?.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+        await listMenuActions.shareToListeningRoom(listId);
+      });
 
     let isDownloadExpanded = false;
     const toggleDownloadOptions = () => {

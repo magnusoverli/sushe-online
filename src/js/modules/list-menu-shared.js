@@ -1,6 +1,7 @@
 /**
  * Shared list menu config and action helpers.
  */
+import { openListeningRoomShare } from './listening-room-share.js';
 
 function getMusicServiceText(currentUser = {}) {
   const hasSpotify = !!currentUser.spotifyAuth;
@@ -52,6 +53,7 @@ export function buildListMenuConfig({
     mainToggleText: meta.isMain ? 'Remove Main Status' : 'Set as Main',
     mainIconClass: 'fa-star',
     musicServiceText,
+    listeningRoomText: 'Share to Listening Room',
     hasSpotify,
     hasTidal,
     isInCollection,
@@ -86,6 +88,7 @@ export function createListMenuActions(deps = {}) {
     downloadListAsCSV,
     openRenameModal,
     toggleMainStatus,
+    openShareWindow = openListeningRoomShare,
     logger = console,
   } = deps;
 
@@ -122,6 +125,19 @@ export function createListMenuActions(deps = {}) {
       await updatePlaylist(listId, listData);
     } catch (error) {
       logger.error('Update playlist failed', error);
+    }
+  }
+
+  async function shareToListeningRoom(listId) {
+    if (!listId) return;
+    try {
+      const share = await apiCall(
+        `/api/lists/${encodeURIComponent(listId)}/listening-room-share`,
+        { method: 'POST' }
+      );
+      openShareWindow(share, listId, { apiCall, showConfirmation, showToast });
+    } catch {
+      showToast("Couldn't share the list. Try again.", 'error');
     }
   }
 
@@ -205,6 +221,7 @@ export function createListMenuActions(deps = {}) {
     toggleMainForList,
     downloadList,
     sendToMusicService,
+    shareToListeningRoom,
     deleteList,
   };
 }

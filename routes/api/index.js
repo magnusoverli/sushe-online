@@ -109,6 +109,7 @@ module.exports = (app, deps) => {
     authService,
     userService,
     ramAccelerationConfig,
+    listeningRoomShareService,
     coverCache: injectedCoverCache,
   } = deps;
 
@@ -250,6 +251,7 @@ module.exports = (app, deps) => {
     // Services
     playlistService,
     listService,
+    listeningRoomShareService,
     groupService,
     albumService,
     sourceObservationService,
@@ -299,6 +301,7 @@ module.exports = (app, deps) => {
   require('./albums')(app, sharedDeps);
   require('./groups')(app, sharedDeps);
   require('./lists')(app, sharedDeps);
+  require('./listening-room-shares')(app, sharedDeps);
   require('./search')(app, sharedDeps);
   require('./track-picks')(app, sharedDeps);
   require('./password-reset')(app, sharedDeps);

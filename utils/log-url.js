@@ -19,7 +19,10 @@ function logSafeUrl(value) {
   try {
     const url = new URL(value, 'http://request.invalid');
     const path = url.pathname
-      .replace(/(\/(?:reset|api\/telegram\/webhook)\/)[^/]+/g, '$1[redacted]')
+      .replace(
+        /(\/(?:reset|lr|api\/telegram\/webhook)\/)[^/]+/g,
+        '$1[redacted]'
+      )
       .replace(/\/bot[^/]+\//g, '/bot[redacted]/');
     let redacted = path !== url.pathname || !!url.username || !!url.password;
     for (const key of [...url.searchParams.keys()]) {

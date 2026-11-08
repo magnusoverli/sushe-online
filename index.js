@@ -153,6 +153,17 @@ app.set('view cache', process.env.NODE_ENV === 'production');
 // Security headers (Helmet) with static-asset bypass
 app.use(createHelmetMiddleware());
 
+// Public bearer links must never enter the cookie/session, CORS or request-log
+// stack. Register them before that stack, including their error responses.
+const listeningRoomShareService =
+  require('./services/listening-room-share-service').createListeningRoomShareService(
+    { db }
+  );
+require('./routes/listening-room-share')(app, {
+  listeningRoomShareService,
+  logger,
+});
+
 // CORS for browser extension support
 app.use(createCorsMiddleware());
 
@@ -308,6 +319,7 @@ const deps = {
   ramAccelerationConfig,
   coverCache,
   responseCache,
+  listeningRoomShareService,
 };
 
 // Application routes

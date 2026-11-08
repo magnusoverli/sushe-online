@@ -204,6 +204,15 @@ export function createContextMenus(deps = {}) {
       'updatePlaylistOption'
     );
     const deleteOption = document.getElementById('deleteListOption');
+    const shareOption = document.getElementById('listeningRoomShareOption');
+    if (shareOption) {
+      shareOption.onclick = async () => {
+        const listId = getContextList();
+        hideAllContextMenus();
+        setContextList(null);
+        await listMenuActions.shareToListeningRoom(listId);
+      };
+    }
 
     if (
       !contextMenu ||
