@@ -34,9 +34,15 @@ test('PostgreSQL share lifetime, concurrent upserts, live picks, approval and ca
       "INSERT INTO users (_id,email,username,hash,role,approval_status) VALUES ($1,$2,$1,'unused','user','approved')",
       [userId, `${userId}@lr.test`]
     );
+    const group = (
+      await pool.query(
+        "INSERT INTO list_groups (_id,user_id,name) VALUES ($1,$2,'Listening Room fixture') RETURNING id",
+        [randomUUID(), userId]
+      )
+    ).rows[0];
     await pool.query(
-      "INSERT INTO lists (_id,user_id,name,year,is_main) VALUES ($1,$2,'Shared picks',2025,FALSE)",
-      [listId, userId]
+      "INSERT INTO lists (_id,user_id,name,year,is_main,group_id) VALUES ($1,$2,'Shared picks',2025,FALSE,$3)",
+      [listId, userId, group.id]
     );
     await pool.query(
       "INSERT INTO albums (album_id,artist,album,tracks) VALUES ($1,'Artist','Album',$2)",
@@ -134,8 +140,8 @@ test('PostgreSQL share lifetime, concurrent upserts, live picks, approval and ca
     );
 
     await pool.query(
-      "INSERT INTO lists (_id,user_id,name) VALUES ($1,$2,'Another')",
-      [listId, userId]
+      "INSERT INTO lists (_id,user_id,name,group_id) VALUES ($1,$2,'Another',$3)",
+      [listId, userId, group.id]
     );
     const last = await services[0].createOrRenew(listId, userId);
     await pool.query('DELETE FROM users WHERE _id=$1', [userId]);
