@@ -1,14 +1,7 @@
 // utils/claude-summary.js
 // Album summary fetching from Claude API with web search
 
-// The CJS entry point of @anthropic-ai/sdk is constructable
-// (`new Anthropic({ apiKey })`), but its type declarations only describe the
-// ESM namespace object, which structurally has no construct signature — hence
-// restating the constructor type here (via `unknown`, as the two shapes do not
-// overlap structurally).
-const Anthropic = /** @type {typeof import('@anthropic-ai/sdk').Anthropic} */ (
-  /** @type {unknown} */ (require('@anthropic-ai/sdk'))
-);
+const { Anthropic } = require('@anthropic-ai/sdk');
 const logger = require('./logger');
 const {
   getModelCapabilities,
@@ -669,7 +662,7 @@ function classifyApiFailure(err) {
  * difference between "the key is wrong" and "the model was busy" decides what
  * the reader should do next.
  *
- * @param {{status?: number, code?: string, message?: string}} err
+ * @param {{status?: number, code?: string, message?: string, apiMessage?: string}} err
  * @param {number} timeoutMs
  * @returns {string}
  */
@@ -678,9 +671,11 @@ function describeApiFailure(err, timeoutMs) {
     return `No response within ${Math.round(timeoutMs / 1000)}s`;
   }
   const status = err?.status ? `HTTP ${err.status}` : 'Request failed';
-  // The SDK puts the whole JSON error body in .message, prefixed with the
-  // status it already reports separately. Prefer the API's own message text
-  // over the envelope, and fall back to the first line when it cannot be read.
+  // SDK 1.x exposes the API's message directly, without its JSON envelope.
+  // Keep the fallback for generic transport errors and injected clients.
+  if (typeof err?.apiMessage === 'string' && err.apiMessage) {
+    return `${status}: ${err.apiMessage.split('\n')[0].slice(0, 160)}`;
+  }
   const raw = (err?.message || '').split('\n')[0];
   const apiMessage = raw.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)"/)?.[1];
   const detail = (apiMessage || raw.replace(/^\d{3}\s+/, '')).slice(0, 160);

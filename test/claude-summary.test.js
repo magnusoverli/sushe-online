@@ -1335,6 +1335,39 @@ test('a rejected API key is reported as an auth error, with the API message', as
   );
 });
 
+test('SDK 1.x errors use the structured API message rather than parsing the envelope', async () => {
+  const { APIError } = require('@anthropic-ai/sdk');
+  const error = APIError.generate(
+    401,
+    {
+      type: 'error',
+      error: {
+        type: 'authentication_error',
+        message: 'The configured key is no longer valid.',
+      },
+    },
+    undefined,
+    new Headers()
+  );
+  error.message = 'An envelope whose wording is not a public contract';
+  const result = await serviceWithError(error).fetchClaudeSummary('A', 'B');
+  assert.strictEqual(result.reason, 'auth_error');
+  assert.strictEqual(
+    result.reasonDetail,
+    'HTTP 401: The configured key is no longer valid.'
+  );
+});
+
+test('structured SDK error messages stay single-line and bounded', async () => {
+  const error = Object.assign(new Error('Generic envelope'), {
+    status: 403,
+    apiMessage:
+      'x'.repeat(300) + '\nInternal detail that should not reach the UI',
+  });
+  const result = await serviceWithError(error).fetchClaudeSummary('A', 'B');
+  assert.strictEqual(result.reasonDetail, 'HTTP 403: ' + 'x'.repeat(160));
+});
+
 test('an overloaded model is distinguished from a rate limit', async () => {
   const overloaded = new Error('529 overloaded');
   overloaded.status = 529;

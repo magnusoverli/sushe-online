@@ -8,7 +8,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-  NODE_VERSION: '26.10.0'
+  NODE_VERSION: '26.13.0'
 
 # Run before releasing backup, recovery, migration or deployment changes.
 jobs:
@@ -23,7 +23,7 @@ jobs:
         run: |
           docker compose -f docker-compose.recovery-test.yml up --build -d --wait app recovery
           docker compose -f docker-compose.recovery-test.yml run --rm --no-deps tests
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Rehearse image-only upgrade from the published baseline
@@ -33,7 +33,7 @@ jobs:
       - name: Collect sanitized recovery logs
         if: failure()
         run: docker compose -f docker-compose.recovery-test.yml logs app recovery > recovery.log
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: recovery-rehearsal

@@ -278,7 +278,7 @@ function deduplicateEntries(entries) {
  * @returns {Promise<Array>} Array of { date, category, description, hash?, commitMessage? }
  */
 async function classifyWithClaude(commits) {
-  const Anthropic = require('@anthropic-ai/sdk');
+  const { Anthropic } = require('@anthropic-ai/sdk');
   const client = new Anthropic();
 
   // Build a lookup so we can attach the hash after Claude responds

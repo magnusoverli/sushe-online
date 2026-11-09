@@ -1,9 +1,9 @@
 # ----- Common base stage -----
 # Shared setup for both builder and runtime stages
 # This layer is cached and reused, saving ~8-9 seconds per build
-ARG NODE_VERSION=26.10.0
-ARG NPM_VERSION=12.1.0
-FROM node:${NODE_VERSION}-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 AS base
+ARG NODE_VERSION=26.13.0
+ARG NPM_VERSION=12.2.2
+FROM node:${NODE_VERSION}-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS base
 
 # Update npm to specific version (done once, inherited by both stages)
 ARG NPM_VERSION

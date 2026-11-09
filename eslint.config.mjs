@@ -2,7 +2,10 @@ import js from '@eslint/js';
 import prettier from 'eslint-plugin-prettier';
 import prettierConfig from 'eslint-config-prettier';
 import security from 'eslint-plugin-security';
-// import-x supports ESLint 10; preserve rule names without peer overrides.
+// import-x supports ESLint 10. Keep 4.17.1 until 4.18's unconditional optional
+// @typescript-eslint/utils import supports our stable TypeScript 7 compiler.
+// Its unused rules still import makeRe(), so scope the hardened Minimatch 11
+// overrides to ESLint/config-array rather than breaking the plugin's imports.
 import importPlugin from 'eslint-plugin-import-x';
 
 export default [

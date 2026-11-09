@@ -1,4 +1,3 @@
-// @ts-expect-error -- Node 26 supports require(ESM); the project's node16 typechecking mode predates that support.
 const { findTrackIndex, trackTitle } = require('./track-reference.mjs');
 const { AVAILABILITY_SERVICES } = require('../services/availability/platforms');
 
