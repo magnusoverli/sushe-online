@@ -27,7 +27,7 @@ async function openFixture(
     await route.fulfill({
       contentType: 'text/html',
       body: `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body class="bg-gray-900 text-white">
-      <button id="open-share">Share to Listening Room</button>
+      <button id="open-share">Share to Doom Room</button>
       <div id="confirmationModal" class="hidden fixed inset-0 modal-overlay modal-layer flex items-center justify-center p-4">
         <div class="bg-gray-900 p-6 border border-gray-800 rounded-lg"><h3 id="confirmationTitle"></h3><p id="confirmationMessage"></p><p id="confirmationSubMessage"></p>
         <div id="confirmationCheckboxContainer"><input id="confirmationCheckbox" type="checkbox"><label id="confirmationCheckboxLabel"></label></div>
@@ -54,12 +54,12 @@ async function openFixture(
 }
 
 for (const mobile of [false, true]) {
-  test(`Listening Room share window on ${mobile ? 'mobile' : 'desktop'}`, async ({
+  test(`Doom Room share window on ${mobile ? 'mobile' : 'desktop'}`, async ({
     page,
   }) => {
     await openFixture(page, { mobile });
     const dialog = page.getByRole('dialog', {
-      name: 'Shared with Listening Room.',
+      name: 'Shared with Doom Room.',
     });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('textbox')).toHaveAttribute('readonly', '');

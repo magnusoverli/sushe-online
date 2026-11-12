@@ -81,7 +81,7 @@ function createSpotifyComponents(deps) {
     ${menuItem({ id: 'renameListOption', icon: 'fa-edit', label: 'Edit Details' })}
     ${menuItem({ id: 'toggleMainOption', icon: 'fa-star', label: '<span id="toggleMainText">Set as Main</span>' })}
     ${menuItem({ id: 'updatePlaylistOption', icon: 'fa-paper-plane', label: '<span id="updatePlaylistText">Send to Music Service</span>' })}
-    ${menuItem({ id: 'listeningRoomShareOption', icon: 'fa-link', label: 'Share to Listening Room' })}
+    ${menuItem({ id: 'listeningRoomShareOption', icon: 'fa-link', label: 'Share to Doom Room' })}
     ${menuItem({ id: 'moveListOption', icon: 'fa-folder-open', label: 'Move to Collection', hasSubmenu: true })}
     ${menuItem({ id: 'deleteListOption', icon: 'fa-trash', label: 'Delete List', hoverColor: 'hover:text-red-400' })}
   </div>

@@ -25,7 +25,7 @@ module.exports = (
       ).replace(/\/+$/, '');
       res.set('Cache-Control', 'no-store');
       res.json({ url: `${origin}/lr/${token}`, ...summary });
-    }, 'sharing list with Listening Room')
+    }, 'sharing list with Doom Room')
   );
   app.delete(
     route,
@@ -33,6 +33,6 @@ module.exports = (
     asyncHandler(async (req, res) => {
       await listeningRoomShareService.stop(req.params.id, req.user._id);
       res.status(204).end();
-    }, 'stopping Listening Room sharing')
+    }, 'stopping Doom Room sharing')
   );
 };

@@ -35,7 +35,7 @@ export function openListeningRoomShare(share, listId, deps = {}) {
   modal.innerHTML = `
     <div class="bg-gray-900 border border-gray-800 rounded-lg w-full max-w-md max-h-full flex flex-col">
       <div class="p-6 border-b border-gray-800 shrink-0">
-        <h3 class="text-xl font-bold text-white">Shared with Listening Room.</h3>
+        <h3 class="text-xl font-bold text-white">Shared with Doom Room.</h3>
       </div>
       <div data-share-details class="p-6 space-y-4 text-sm text-gray-300 overflow-y-auto min-h-0">
         <label class="block">Share link
@@ -44,7 +44,7 @@ export function openListeningRoomShare(share, listId, deps = {}) {
         <p data-share-summary></p>
         <p data-share-expiry></p>
         <p>Anyone with this link can see these picks until it expires.</p>
-        <p>In Listening Room, open Your playlist → Import list and paste the link.</p>
+        <p>In Doom Room, open Your playlist → Import list and paste the link.</p>
         <p data-share-status role="status" aria-live="polite"></p>
       </div>
       <div class="p-6 border-t border-gray-800 flex flex-wrap gap-3 justify-end shrink-0">
@@ -125,7 +125,7 @@ export function openListeningRoomShare(share, listId, deps = {}) {
     element: modal,
     backdrop: modal,
     closeButton: modal.querySelector('[data-close-share]'),
-    label: 'Shared with Listening Room.',
+    label: 'Shared with Doom Room.',
     onOpen: () => {
       if (!stopped) {
         controller.addListener(copyButton, 'click', () => copyLink());

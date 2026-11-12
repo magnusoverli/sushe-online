@@ -53,7 +53,7 @@ export function buildListMenuConfig({
     mainToggleText: meta.isMain ? 'Remove Main Status' : 'Set as Main',
     mainIconClass: 'fa-star',
     musicServiceText,
-    listeningRoomText: 'Share to Listening Room',
+    listeningRoomText: 'Share to Doom Room',
     hasSpotify,
     hasTidal,
     isInCollection,

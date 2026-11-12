@@ -83,7 +83,7 @@ function buildListeningRoomPayload({ list, items }, expiresAt) {
     else if (payload.songs.length < MAX_SONGS) payload.songs.push(song);
   });
   // Preserve a prefix by rank even for unusually long multi-byte titles/URLs.
-  // A byte limit (not JS string length) matches Listening Room's wire limit.
+  // A byte limit (not JS string length) matches Doom Room's wire limit.
   let bytes = Buffer.byteLength(
     JSON.stringify({ ...payload, songs: [] }),
     'utf8'

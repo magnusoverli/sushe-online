@@ -57,11 +57,11 @@ module.exports = (app, { listeningRoomShareService, logger }) => {
         .type('html')
         .send(
           page(
-            `<h1>${escapeHtml(payload.list.name)}</h1><p>${count} ${count === 1 ? 'song' : 'songs'}.</p><p>Works until ${escapeHtml(payload.expiresAt)}.</p><p>Paste this link into Listening Room → Your playlist → Import list.</p>`
+            `<h1>${escapeHtml(payload.list.name)}</h1><p>${count} ${count === 1 ? 'song' : 'songs'}.</p><p>Works until ${escapeHtml(payload.expiresAt)}.</p><p>Paste this link into Doom Room → Your playlist → Import list.</p>`
           )
         );
     } catch {
-      logger.error('Failed to read Listening Room share');
+      logger.error('Failed to read Doom Room share');
       res.status(500).json({ error: 'internal_error' });
     }
   });
