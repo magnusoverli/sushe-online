@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-11-12",
+    "category": "feature",
+    "description": "List sharing feature has been renamed to Doom Room.",
+    "hash": "72ac093eeba2f17494915a5f666b1ebf7c01b175",
+    "commitMessage": "Rename list sharing to Doom Room\n\nUpdate sharing menus, dialog labels, import instructions, and changelog copy for the renamed application."
+  },
+  {
     "date": "2026-11-09",
     "category": "feature",
     "description": "Share your lists with Doom Room using public links.",
