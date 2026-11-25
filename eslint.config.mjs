@@ -21,6 +21,7 @@ export default [
       'node_modules/**',
       'playwright-report/**',
       'coverage/**',
+      'plans/**',
       'test-results/**',
     ],
   },

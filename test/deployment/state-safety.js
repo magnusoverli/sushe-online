@@ -5,6 +5,29 @@ const os = require('node:os');
 const path = require('node:path');
 const { loadState } = require('../../services/deployment/legacy-state');
 
+test('completed cutover requires its app receipt and existing deployment state', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'deployment-cutover-'));
+  const env = {
+    DATA_DIR: root,
+    NODE_ENV: 'production',
+    SUSHE_PG19_CUTOVER_ID: '123456',
+  };
+  try {
+    await assert.rejects(loadState(env), { code: 'ENOENT' });
+    await fs.mkdir(path.join(root, '.deployment'), { mode: 0o700 });
+    const receipt = path.join(root, '.deployment', '.sushe-tower19-complete');
+    await fs.writeFile(receipt, '987\n');
+    await assert.rejects(loadState(env), /matching PostgreSQL 19/);
+    await fs.writeFile(receipt, '123456\n');
+    await assert.rejects(loadState(env), { code: 'ENOENT' });
+    await assert.rejects(fs.stat(path.join(root, '.deployment/state.json')), {
+      code: 'ENOENT',
+    });
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('image-only data relocation refuses to overwrite existing files', async () => {
   assert.equal(process.env.DEPLOYMENT_REHEARSAL, 'disposable');
   assert.equal(process.getuid(), 0);

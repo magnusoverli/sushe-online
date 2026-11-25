@@ -53,6 +53,11 @@ jobs:
           docker run --rm --network none --tmpfs /var/lib/postgresql \
             -v "$PWD/test/deployment/pgdata-selection.sh:/probe.sh:ro" \
             --entrypoint bash sushe-postgres:local /probe.sh
+          docker run --rm --network none --read-only --entrypoint node sushe-recovery-test:local -e '
+            const c=require("./services/admin-backup-service").createAdminBackupService({env:{}}).getRuntimeConfig();
+            for(const bin of [c.pgDumpCmd,c.pgRestoreCmd]){
+              if(!require("child_process").execFileSync(bin,["--version"],{encoding:"utf8"}).includes(" 19."))process.exit(1);
+            }'
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}

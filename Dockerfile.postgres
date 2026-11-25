@@ -1,6 +1,6 @@
 # Keep the official PostgreSQL entrypoint, extensions and data layout. Refresh
 # Debian security packages and rebuild gosu with a supported Go toolchain.
-ARG POSTGRES_IMAGE=postgres:18.7-trixie@sha256:c699303802144847d238196173655dbbecf7a96aeca1565f2b02eb671a1f0b6b
+ARG POSTGRES_IMAGE=postgres:19.0-trixie@sha256:aaa10f7ba7328b4a221a6c3184d83eef885bd16bf1f6de864757863156b0a4d1
 FROM golang:1.27.3-trixie@sha256:af1bfc2614ebb1dbd31af514b78740fd678850e76498762b425ecee4c5c6ea80 AS gosu
 ARG GOSU_COMMIT=29b939aa5bd4dc588af765b8248f6e39150d2565
 ARG SYS_VERSION=v0.49.0

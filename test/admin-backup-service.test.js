@@ -18,6 +18,7 @@ test('backup credentials honor URL/socket configuration and never enter argument
     env,
     runProcess: async (_cmd, args, options) => {
       assert.ok(!args.join(' ').includes('private-password'));
+      assert.ok(args.includes('--compress=zstd:1'));
       assert.equal(options.env.PGUSER, 'reader');
       assert.equal(options.env.PGHOST, '/var/run/postgresql');
       await new Promise((resolve) =>
@@ -37,6 +38,19 @@ test('backup credentials honor URL/socket configuration and never enter argument
     pgEnvironment('postgres://user:pass@db:5433/fixture').PGPORT,
     '5433'
   );
+});
+
+test('backup and restore honor an explicit client major or tool directory', () => {
+  const config = (env) => createAdminBackupService({ env }).getRuntimeConfig();
+  assert.equal(
+    config({ PG_MAJOR: '18' }).pgDumpCmd,
+    path.join('/usr/lib/postgresql/18/bin', 'pg_dump')
+  );
+  assert.equal(
+    config({ PG_MAJOR: '18', PG_BIN: '/custom' }).pgRestoreCmd,
+    path.join('/custom', 'pg_restore')
+  );
+  assert.equal(config({ PG_DUMP: 'custom-dump' }).pgDumpCmd, 'custom-dump');
 });
 
 test('preflight validates actual bytes and always applies a process deadline', async () => {

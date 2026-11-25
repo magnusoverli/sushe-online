@@ -342,11 +342,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build PostgreSQL image (publish on main)
+      - name: Publish the PostgreSQL 18 compatibility bridge
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: Dockerfile.postgres
+          build-args: |
+            POSTGRES_IMAGE=postgres:18.7-trixie@sha256:c699303802144847d238196173655dbbecf7a96aeca1565f2b02eb671a1f0b6b
           push: ${{ github.ref == 'refs/heads/main' }}
           pull: true
           # Refresh security packages even when the upstream image is unchanged.
@@ -354,4 +356,15 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}-postgres:18
             ghcr.io/${{ github.repository }}-postgres:managed
+
+      - name: Publish production PostgreSQL 19
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Dockerfile.postgres
+          push: true
+          pull: true
+          no-cache: true
+          tags: |
+            ghcr.io/${{ github.repository }}-postgres:19
             ghcr.io/${{ github.repository }}-postgres:main-${{ steps.image_revision.outputs.short_sha }}

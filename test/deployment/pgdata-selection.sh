@@ -17,12 +17,27 @@ marker() {
 }
 current="$root/$PG_MAJOR/docker"
 [[ $(select_dir) == "$current" ]]
+export SUSHE_PG19_CUTOVER_ID=123456
+refused empty-cutover-target
+unset SUSHE_PG19_CUTOVER_ID
 marker "$root/data" "$PG_MAJOR"
 [[ $(select_dir) == "$root/data" ]]
 marker "$current" "$PG_MAJOR"
 refused ambiguous
 mv "$root/data" /tmp/retained
 [[ $(select_dir) == "$current" ]]
+export SUSHE_PG19_CUTOVER_ID=123456
+printf x > "$current/global/pg_control"
+refused missing-cutover-receipt
+echo 999 > "$current/.sushe-tower19-complete"
+refused mismatched-cutover-receipt
+echo 123456 > "$current/.sushe-tower19-complete"
+if [[ $PG_MAJOR == 19 ]]; then
+  [[ $(select_dir) == "$current" ]]
+else
+  refused wrong-cutover-major
+fi
+unset SUSHE_PG19_CUTOVER_ID
 mv "$current/PG_VERSION" "$current/saved"
 refused incomplete
 mv "$current/saved" "$current/PG_VERSION"

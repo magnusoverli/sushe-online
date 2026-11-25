@@ -13,18 +13,14 @@ function createAdminBackupService(deps = {}) {
   const run = deps.runProcess || runProcess;
   let activeBackups = 0;
   function getRuntimeConfig() {
-    const bin = env.PG_BIN || `/usr/lib/postgresql/${env.PG_MAJOR || '18'}/bin`;
+    const bin = env.PG_BIN || `/usr/lib/postgresql/${env.PG_MAJOR || '19'}/bin`;
+    const binary = (name) => {
+      const file = path.join(bin, name);
+      return env.PG_BIN || env.PG_MAJOR || fs.existsSync(file) ? file : name;
+    };
     return {
-      pgDumpCmd:
-        env.PG_DUMP ||
-        (fs.existsSync(path.join(bin, 'pg_dump'))
-          ? path.join(bin, 'pg_dump')
-          : 'pg_dump'),
-      pgRestoreCmd:
-        env.PG_RESTORE ||
-        (fs.existsSync(path.join(bin, 'pg_restore'))
-          ? path.join(bin, 'pg_restore')
-          : 'pg_restore'),
+      pgDumpCmd: env.PG_DUMP || binary('pg_dump'),
+      pgRestoreCmd: env.PG_RESTORE || binary('pg_restore'),
       databaseUrl:
         env.BACKUP_DATABASE_URL ||
         (env.NODE_ENV !== 'production' ? env.DATABASE_URL : undefined),
@@ -93,13 +89,17 @@ function createAdminBackupService(deps = {}) {
       )
         throw new Error('Insufficient backup storage');
       const filePath = path.join(directory, 'database.dump');
-      await run(config.pgDumpCmd, ['-Fc', '--no-owner', '--no-privileges'], {
-        env: pgEnvironment(config.databaseUrl, env),
-        signal,
-        output: fs.createWriteStream(filePath, { flags: 'wx', mode: 0o600 }),
-        maxOutputBytes: config.restoreMaxFileBytes,
-        timeoutMs: config.restoreTimeoutMs,
-      });
+      await run(
+        config.pgDumpCmd,
+        ['-Fc', '--compress=zstd:1', '--no-owner', '--no-privileges'],
+        {
+          env: pgEnvironment(config.databaseUrl, env),
+          signal,
+          output: fs.createWriteStream(filePath, { flags: 'wx', mode: 0o600 }),
+          maxOutputBytes: config.restoreMaxFileBytes,
+          timeoutMs: config.restoreTimeoutMs,
+        }
+      );
       const { fileSize } = validateRestoreFile(filePath, null, config);
       let released = false;
       return {

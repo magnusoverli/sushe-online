@@ -70,8 +70,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.postgres
-      args:
-        POSTGRES_IMAGE: postgres:19.0-trixie@sha256:aaa10f7ba7328b4a221a6c3184d83eef885bd16bf1f6de864757863156b0a4d1
     container_name: sushe-db-local
     ports:
       - '127.0.0.1:5433:5432'

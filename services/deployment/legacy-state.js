@@ -71,26 +71,45 @@ async function moveWithoutOverwrite(source, destination) {
   await fs.rename(source, destination);
 }
 
+async function prepareStateDirectory(root, cutoverId) {
+  const rootStat = await fs.lstat(root);
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink())
+    throw new Error('Deployment data must be a real directory');
+  const directory = path.join(root, '.deployment');
+  if (!cutoverId) {
+    await fs.chown(root, 0, 0);
+    await fs.chmod(root, 0o755);
+    try {
+      await fs.mkdir(directory, { mode: 0o700 });
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+  }
+  const stat = await fs.lstat(directory);
+  if (!stat.isDirectory() || stat.uid !== 0 || stat.mode & 0o077)
+    throw new Error('Unsafe deployment state ownership or permissions');
+  if (cutoverId) {
+    const receipt = path.join(directory, '.sushe-tower19-complete');
+    if (
+      !/^\d+$/.test(cutoverId) ||
+      !(await fs.lstat(receipt)).isFile() ||
+      (await fs.readFile(receipt, 'utf8')).trimEnd() !== cutoverId
+    )
+      throw new Error('Expected matching PostgreSQL 19 application volume');
+  }
+  return directory;
+}
+
 async function loadState(env) {
   if (process.getuid() !== 0)
     throw new Error(
       'The published Compose upgrade requires the image entrypoint identity'
     );
   const root = env.DATA_DIR || '/app/data';
-  const rootStat = await fs.lstat(root);
-  if (!rootStat.isDirectory() || rootStat.isSymbolicLink())
-    throw new Error('Deployment data must be a real directory');
-  await fs.chown(root, 0, 0);
-  await fs.chmod(root, 0o755);
-  const directory = path.join(root, '.deployment');
-  try {
-    await fs.mkdir(directory, { mode: 0o700 });
-  } catch (error) {
-    if (error.code !== 'EEXIST') throw error;
-  }
-  const stat = await fs.lstat(directory);
-  if (!stat.isDirectory() || stat.uid !== 0 || stat.mode & 0o077)
-    throw new Error('Unsafe deployment state ownership or permissions');
+  const directory = await prepareStateDirectory(
+    root,
+    env.SUSHE_PG19_CUTOVER_ID
+  );
   const file = path.join(directory, 'state.json');
   let state;
   try {
@@ -101,7 +120,7 @@ async function loadState(env) {
     if (state.version !== 1 || !state.env || !state.candidate)
       throw new Error('Unrecognized deployment state');
   } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
+    if (env.SUSHE_PG19_CUTOVER_ID || error.code !== 'ENOENT') throw error;
     const id = randomBytes(6).toString('hex');
     const candidate = `sushe_upgrade_${id}`;
     const control = `sushe_control_${id}`;

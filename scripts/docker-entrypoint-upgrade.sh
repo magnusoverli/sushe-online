@@ -44,5 +44,13 @@ for entry in "$root"/*; do
   selected=$candidate
 done
 
+# Completed copy-based cutovers must never initialize an empty replacement.
+if [[ -n ${SUSHE_PG19_CUTOVER_ID:-} ]]; then
+  receipt="$standard/.sushe-tower19-complete"
+  [[ $SUSHE_PG19_CUTOVER_ID =~ ^[0-9]+$ && $major == 19 && $selected == "$standard" &&
+     -s "$standard/global/pg_control" && -f "$receipt" && ! -L "$receipt" &&
+     $(<"$receipt") == "$SUSHE_PG19_CUTOVER_ID" ]] || refuse 'expected completed PostgreSQL 19 cutover'
+fi
+
 export PGDATA=${selected:-${PGDATA:-$standard}}
 exec /usr/local/bin/docker-entrypoint.sh "$@"

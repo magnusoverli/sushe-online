@@ -17,6 +17,7 @@ services:
       - BASE_URL=${BASE_URL}
       - PORT=3000
       - DATA_DIR=/app/data
+      - SUSHE_PG19_CUTOVER_ID=${SUSHE_PG19_CUTOVER_ID:-}
       - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
       - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
       - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
@@ -71,12 +72,13 @@ services:
           cpus: '0.5'
 
   db:
-    # Managed upgrade channel. The bridge release still runs PostgreSQL 18.7.
-    image: ghcr.io/magnusoverli/sushe-online-postgres:managed
+    # Major-pinned updates. Unmigrated PG18 deployments stay on :managed.
+    image: ghcr.io/magnusoverli/sushe-online-postgres:19
     pull_policy: always
     ports:
       - '5433:5432' # Expose PostgreSQL for local development
     environment:
+      SUSHE_PG19_CUTOVER_ID: ${SUSHE_PG19_CUTOVER_ID:-}
       POSTGRES_PASSWORD: example
       POSTGRES_DB: sushe
       POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256'
@@ -121,10 +123,10 @@ services:
 volumes:
   sushe-data:
     external: true
-    name: sushe-online_sushe-data
+    name: ${SUSHE_APP_VOLUME:-sushe-online_sushe-data}
   postgres-data:
     external: true
-    name: sushe-online_postgres-data
+    name: ${SUSHE_DATABASE_VOLUME:-sushe-online_postgres-data}
   postgres-socket:
     external: true
-    name: sushe-online_postgres-socket
+    name: ${SUSHE_SOCKET_VOLUME:-sushe-online_postgres-socket}
