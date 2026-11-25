@@ -1,6 +1,7 @@
 name: Recovery and Upgrade Rehearsal
 
 on:
+  workflow_call:
   workflow_dispatch:
   pull_request:
     paths:
@@ -42,16 +43,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Build test harness
         run: docker compose -f docker-compose.test.yml build tests
-      - name: Check startup volume selection
-        run: |
-          docker run --rm --network none --tmpfs /var/lib/postgresql \
-            -v "$PWD/scripts/docker-entrypoint-upgrade.sh:/usr/local/bin/docker-entrypoint-upgrade.sh:ro" \
-            -v "$PWD/test/deployment/pgdata-selection.sh:/probe.sh:ro" \
-            --entrypoint bash "$POSTGRES_IMAGE" /probe.sh
       - name: Rehearse automatic recovery with production-only images
         run: |
           docker compose -f docker-compose.recovery-test.yml up --build -d --wait app recovery
           docker compose -f docker-compose.recovery-test.yml run --rm --no-deps tests
+      - name: Check the packaged database entrypoint and volume selection
+        run: |
+          test "$(docker image inspect --format '{{index .Config.Entrypoint 0}}' sushe-postgres:local)" = /usr/local/bin/docker-entrypoint-upgrade.sh
+          docker run --rm --network none --tmpfs /var/lib/postgresql \
+            -v "$PWD/test/deployment/pgdata-selection.sh:/probe.sh:ro" \
+            --entrypoint bash sushe-postgres:local /probe.sh
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}

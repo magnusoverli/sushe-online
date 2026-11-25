@@ -8,7 +8,12 @@ const compose = [
   '-f',
   'docker-compose.upgrade-test.yml',
 ];
-const majorOverlay = ['-f', 'docker-compose.upgrade-19-test.yml'];
+const majorOverlay = [
+  '-f',
+  'docker-compose.upgrade-19-test.yml',
+  '-f',
+  'docker-compose.upgrade-startup-test.yml',
+];
 let testing19 = false;
 // The old server is deliberate test input, not a deployment recommendation.
 let databaseImage =
@@ -82,9 +87,16 @@ try {
   run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
   check('restart');
   check('capture-session');
-  run(['stop', 'app', 'db']);
   testing19 = true;
-  run(['run', '--build', '--rm', '--no-deps', 'major-copy']);
+  // Model a pulled image: build it while 18 is still serving, then exercise
+  // normal Compose recreation, without a manual stop or migration command.
+  run(['build', 'db']);
+  run(
+    ['up', '--no-build', '-d', '--wait', 'app'],
+    'sushe-upgrade-candidate:local'
+  );
+  check('verify19');
+  run(['stop', 'app', 'db']);
   run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
   check('verify19');
   // Take a backup through the running PG19 app, restore it on the candidate

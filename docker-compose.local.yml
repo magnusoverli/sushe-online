@@ -83,9 +83,6 @@ services:
       - postgres-data-local:/var/lib/postgresql
       - postgres-socket-local:/var/run/postgresql
       - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
-      - ./scripts/docker-entrypoint-upgrade.sh:/usr/local/bin/docker-entrypoint-upgrade.sh:ro
-    entrypoint: ['/usr/local/bin/docker-entrypoint-upgrade.sh']
-    command: ['postgres']
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres -d sushe']
       interval: 10s

@@ -1,0 +1,16 @@
+# Synthetic overlay on top of the 19 rehearsal. Both source volumes are read-only.
+services:
+  db:
+    image: ${COMPOSE_PROJECT_NAME}-startup-db:rehearsal
+    build:
+      context: ./test/deployment
+      dockerfile: Dockerfile.upgrade
+    environment:
+      DEPLOYMENT_REHEARSAL: disposable
+    entrypoint: ['bash', '/start-upgraded-db.sh']
+    command: ['postgres']
+    tmpfs: [/work]
+    volumes:
+      - database:/source:ro
+      - data:/source-app:ro
+      - data19:/target-app

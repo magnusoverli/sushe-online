@@ -6,10 +6,11 @@ dst=/var/lib/postgresql/19/docker
 if [[ $EUID == 0 ]]; then
   [[ -z $(ls -A /var/lib/postgresql) && -z $(ls -A /target-app) ]]
   [[ -s /source-app/.deployment/state.json ]]
-  cp -a /source-app/. /target-app/
   src=/source/18/docker
   [[ -d $src ]] || src=/source/data
   [[ $(<"$src/PG_VERSION") == 18 && ! -e "$src/postmaster.pid" ]]
+  [[ $(LC_ALL=C /usr/lib/postgresql/18/bin/pg_controldata "$src" | awk -F ': *' '/^Database cluster state:/{print $2}') == 'shut down' ]]
+  cp -a /source-app/. /target-app/
   install -d -o postgres -g postgres -m 0700 "$dst" /work
   cp -a "$src" /work/old
   exec gosu postgres bash /probe.sh

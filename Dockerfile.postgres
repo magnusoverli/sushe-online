@@ -18,6 +18,9 @@ RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=gosu /gosu /usr/local/bin/gosu
+COPY --chmod=0755 scripts/docker-entrypoint-upgrade.sh /usr/local/bin/docker-entrypoint-upgrade.sh
 RUN gosu nobody true && test "$(gosu postgres id -u)" = "$(id -u postgres)"
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint-upgrade.sh"]
+CMD ["postgres"]
 LABEL org.opencontainers.image.source="https://github.com/magnusoverli/sushe-online" \
       org.opencontainers.image.description="PostgreSQL with refreshed security packages and gosu"
