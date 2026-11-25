@@ -297,44 +297,43 @@ async function initialRepair() {
 }
 
 async function restore() {
-  const deployment = await state();
-  const service =
-    require('../../services/admin-backup-service').createAdminBackupService({
-      env: { ...process.env, ...deployment.env, DATA_DIR: '/tmp' },
-    });
-  const artifact = await service.createBackup();
-  try {
-    const cookie = await login();
-    const csrf = (
-      await api.get('/api/auth/csrf').set('Cookie', cookie).expect(200)
-    ).body.csrfToken;
-    const uploaded = await api
-      .post('/admin/restore')
-      .set('Cookie', cookie)
-      .set('X-CSRF-Token', csrf)
-      .attach('backup', artifact.filePath)
-      .expect(202);
-    const token = cookies(uploaded);
-    for (let attempt = 0; attempt < 240; attempt++) {
-      const status = (
-        await api
-          .get(`/admin/restore/${uploaded.body.restoreId}/status`)
-          .set('Cookie', token)
-          .expect(200)
-      ).body;
-      if (status.status === 'failed') assert.fail(JSON.stringify(status));
-      if (status.status === 'completed') {
-        console.log(
-          'Admin restore completed through the compatibility supervisor'
-        );
-        return;
-      }
-      await delay(500);
+  const cookie = await login();
+  // Use the running app's active database and client major after a cutover.
+  const download = await fetch('http://app:3000/admin/backup', {
+    headers: { Cookie: cookie },
+    redirect: 'error',
+    signal: AbortSignal.timeout(30000),
+  });
+  assert.equal(download.status, 200);
+  const archive = Buffer.from(await download.arrayBuffer());
+  assert.equal(archive.toString('ascii', 0, 5), 'PGDMP');
+  const csrf = (
+    await api.get('/api/auth/csrf').set('Cookie', cookie).expect(200)
+  ).body.csrfToken;
+  const uploaded = await api
+    .post('/admin/restore')
+    .set('Cookie', cookie)
+    .set('X-CSRF-Token', csrf)
+    .attach('backup', archive, 'sushe-db.dump')
+    .expect(202);
+  const token = cookies(uploaded);
+  for (let attempt = 0; attempt < 240; attempt++) {
+    const status = (
+      await api
+        .get(`/admin/restore/${uploaded.body.restoreId}/status`)
+        .set('Cookie', token)
+        .expect(200)
+    ).body;
+    if (status.status === 'failed') assert.fail(JSON.stringify(status));
+    if (status.status === 'completed') {
+      console.log(
+        'Admin restore completed through the compatibility supervisor'
+      );
+      return;
     }
-    assert.fail('Restore deadline exceeded');
-  } finally {
-    await artifact.cleanup();
+    await delay(500);
   }
+  assert.fail('Restore deadline exceeded');
 }
 
 async function main() {

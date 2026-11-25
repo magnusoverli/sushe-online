@@ -78,7 +78,8 @@ async function reorderItems(ctx, listId, userId, order, expectedRevision) {
       `UPDATE list_items
        SET position = t.position, updated_at = $1
        FROM UNNEST($2::text[], $3::int[]) AS t(item_id, position)
-       WHERE list_items._id = t.item_id AND list_items.list_id = $4`,
+       WHERE list_items._id = t.item_id AND list_items.list_id = $4
+         AND list_items.position IS DISTINCT FROM t.position`,
       [now, orderedItemIds, positionValues, list._id]
     );
 

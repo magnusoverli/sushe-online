@@ -365,7 +365,8 @@ async function processPositionUpdates(client, listId, updated, timestamp) {
   const result = await client.query(
     `UPDATE list_items SET position = t.position, updated_at = $1
      FROM UNNEST($2::text[], $3::int[]) AS t(album_id, position)
-     WHERE list_items.list_id = $4 AND list_items.album_id = t.album_id`,
+      WHERE list_items.list_id = $4 AND list_items.album_id = t.album_id
+        AND list_items.position IS DISTINCT FROM t.position`,
     [timestamp, albumIds, positions, listId]
   );
   return result.rowCount;

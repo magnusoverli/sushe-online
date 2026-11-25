@@ -24,7 +24,8 @@ async function validateAndCompactOrder(client, listId) {
     await client.query(
       `UPDATE list_items AS li SET position = ranked.position, updated_at = NOW()
       FROM UNNEST($1::text[], $2::int[]) AS ranked(id, position)
-      WHERE li._id = ranked.id AND li.list_id = $3`,
+       WHERE li._id = ranked.id AND li.list_id = $3
+         AND li.position IS DISTINCT FROM ranked.position`,
       [rows.map((row) => row._id), rows.map((_, index) => index + 1), listId]
     );
   }

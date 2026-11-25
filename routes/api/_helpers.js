@@ -16,6 +16,9 @@ const {
 } = require('../../db/advisory-locks');
 const { validateYear } = require('../../utils/validators');
 const { TransactionAbort } = require('../../db/transaction');
+const {
+  findOrInsertAutoGroup,
+} = require('../../db/repositories/auto-list-groups');
 
 /**
  * Create helper functions with injected dependencies
@@ -446,34 +449,8 @@ function createHelpers(deps) {
     }
     const validYear = yearValidation.value;
 
-    await acquireTransactionLocks(queryable, LOCK_NAMESPACES.LIST_GROUPS_USER, [
-      userId,
-    ]);
-
-    const result = await queryable.query(
-      `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
-       VALUES (
-         $1,
-         $2,
-         $3,
-         $4,
-         COALESCE((SELECT MAX(sort_order) + 1 FROM list_groups WHERE user_id = $2), 0),
-         NOW(),
-         NOW()
-       )
-       ON CONFLICT (user_id, year)
-       WHERE year IS NOT NULL
-       DO UPDATE SET name = list_groups.name
-       RETURNING id`,
-      [
-        crypto.randomBytes(12).toString('hex'),
-        userId,
-        String(validYear),
-        validYear,
-      ]
-    );
-
-    return { groupId: result.rows[0].id, year: validYear };
+    const groupId = await resolveAutoGroup(queryable, userId, validYear);
+    return { groupId, year: validYear };
   }
 
   /**
@@ -486,28 +463,20 @@ function createHelpers(deps) {
   async function findOrCreateUncategorizedGroup(queryable, userId) {
     assertTransactionalQueryable(queryable, 'findOrCreateUncategorizedGroup');
 
+    return resolveAutoGroup(queryable, userId, null);
+  }
+
+  async function resolveAutoGroup(queryable, userId, year) {
     await acquireTransactionLocks(queryable, LOCK_NAMESPACES.LIST_GROUPS_USER, [
       userId,
     ]);
 
-    const result = await queryable.query(
-      `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
-       VALUES (
-         $1,
-         $2,
-         'Uncategorized',
-         NULL,
-         COALESCE((SELECT MAX(sort_order) + 1 FROM list_groups WHERE user_id = $2), 0),
-         NOW(),
-         NOW()
-       )
-       ON CONFLICT (user_id, name)
-       DO UPDATE SET name = list_groups.name
-       RETURNING id`,
-      [crypto.randomBytes(12).toString('hex'), userId]
+    return findOrInsertAutoGroup(
+      queryable,
+      crypto.randomBytes(12).toString('hex'),
+      userId,
+      year
     );
-
-    return result.rows[0].id;
   }
 
   /**

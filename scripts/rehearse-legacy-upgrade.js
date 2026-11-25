@@ -87,6 +87,13 @@ try {
   run(['run', '--build', '--rm', '--no-deps', 'major-copy']);
   run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
   check('verify19');
+  // Take a backup through the running PG19 app, restore it on the candidate
+  // only, and verify a new session before returning to the original volumes.
+  check('restore');
+  run(['restart', 'app']);
+  run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
+  check('capture-session');
+  check('verify19');
   run(['stop', 'app', 'db']);
   testing19 = false;
   run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
