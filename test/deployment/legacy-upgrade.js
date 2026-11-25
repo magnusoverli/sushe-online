@@ -106,7 +106,7 @@ async function seed() {
   console.log('Published baseline seeded and authenticated');
 }
 
-async function verify(restart = false) {
+async function verify(restart = false, expectedMajor = 18) {
   const deployment = await state();
   const saved = await fixture();
   assert.equal(deployment.verified, true);
@@ -118,6 +118,13 @@ async function verify(restart = false) {
   });
   let runtime;
   try {
+    const settings = (
+      await boot.query(
+        "SELECT current_setting('server_version_num') AS version, current_setting('hba_file') AS hba"
+      )
+    ).rows[0];
+    assert.equal(Math.floor(Number(settings.version) / 10000), expectedMajor);
+    assert.equal(deployment.hbaFile, settings.hba);
     const active = (
       await owner.query('SELECT database_name FROM recovery_state WHERE id=1')
     ).rows[0].database_name;
@@ -338,6 +345,15 @@ async function main() {
     'initial-repair': initialRepair,
     seed,
     verify,
+    verify19: () => verify(false, 19),
+    'capture-session': async () => {
+      const saved = await fixture();
+      saved.cookie = await login();
+      await fs.writeFile(
+        '/state/application/fixture.json',
+        JSON.stringify(saved)
+      );
+    },
     restart: () => verify(true),
     damage,
     repair: () => damage(true),

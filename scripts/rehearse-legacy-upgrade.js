@@ -1,19 +1,32 @@
 const { execFileSync } = require('node:child_process');
+const { randomUUID } = require('node:crypto');
 
-const compose = ['compose', '-f', 'docker-compose.upgrade-test.yml'];
+const compose = [
+  'compose',
+  '-p',
+  `sushe-upgrade-${randomUUID()}`,
+  '-f',
+  'docker-compose.upgrade-test.yml',
+];
+const majorOverlay = ['-f', 'docker-compose.upgrade-19-test.yml'];
+let testing19 = false;
 // The old server is deliberate test input, not a deployment recommendation.
 let databaseImage =
   'postgres:18.4@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636';
 function run(args, image) {
-  execFileSync('docker', [...compose, ...args], {
-    env: {
-      ...process.env,
-      UPGRADE_DATABASE_IMAGE: databaseImage,
-      ...(image ? { UPGRADE_IMAGE: image } : {}),
-    },
-    stdio: 'inherit',
-    timeout: 300000,
-  });
+  execFileSync(
+    'docker',
+    [...compose, ...(testing19 ? majorOverlay : []), ...args],
+    {
+      env: {
+        ...process.env,
+        UPGRADE_DATABASE_IMAGE: databaseImage,
+        ...(image ? { UPGRADE_IMAGE: image } : {}),
+      },
+      stdio: 'inherit',
+      timeout: 300000,
+    }
+  );
 }
 function check(mode) {
   run([
@@ -68,13 +81,24 @@ try {
   run(['kill', '-s', 'SIGKILL', 'app']);
   run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
   check('restart');
+  check('capture-session');
+  run(['stop', 'app', 'db']);
+  testing19 = true;
+  run(['run', '--build', '--rm', '--no-deps', 'major-copy']);
+  run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
+  check('verify19');
+  run(['stop', 'app', 'db']);
+  testing19 = false;
+  run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
+  check('verify');
   console.log(
-    'Published-image upgrade, initial adoption failure/retry, crash restart and automatic restore passed'
+    'Published-image adoption, recovery, physical 18->19 cutover and rollback passed'
   );
 } catch (_error) {
   // Application deployment logs contain no generated credentials.
   run(['logs', '--tail', '60', 'app', 'db']);
   process.exitCode = 1;
 } finally {
-  run(['down', '--volumes']);
+  testing19 = true;
+  run(['--profile', 'checks', 'down', '--volumes']);
 }

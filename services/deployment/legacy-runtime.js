@@ -23,6 +23,7 @@ async function runLegacy(env = process.env) {
     const effective = {
       ...env,
       ...deployment.state.env,
+      PG_MAJOR: String(lease.major),
       DATA_DIR: deployment.appData,
       RECOVERY_UPLOAD_DIR: deployment.uploads,
       RECOVERY_CAPACITY_PATH: deployment.root,

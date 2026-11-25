@@ -1,199 +1,48 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# Published Compose mounts the parent volume. Older revisions of this wrapper
+# exported /data even on PG18; fresh official images use <major>/docker.
+# A server restart must never migrate, delete, or silently replace a cluster.
+set -euo pipefail
+shopt -s nullglob dotglob
 
-PGDATA="/var/lib/postgresql/data"
-PG_VERSION_FILE="$PGDATA/PG_VERSION"
+refuse() {
+  echo "PostgreSQL startup refused: $1. Inspect the volume offline." >&2
+  exit 1
+}
 
-echo "🔍 Checking PostgreSQL version..."
+root=/var/lib/postgresql
+version=$(postgres --version)
+[[ $version =~ PostgreSQL\)\ (18|19)\. ]] || refuse 'unsupported server major'
+major=${BASH_REMATCH[1]}
+standard="$root/$major/docker"
+legacy="$root/data"
+case "${PGDATA:-$standard}" in
+  "$standard"|"$legacy") ;;
+  *) refuse 'unexpected configured data directory' ;;
+esac
 
-if [ -f "$PG_VERSION_FILE" ]; then
-    OLD_VERSION=$(cat "$PG_VERSION_FILE")
-    echo "   Found PostgreSQL $OLD_VERSION data"
-    
-    if [ "$OLD_VERSION" = "16" ]; then
-        echo ""
-        echo "🔄 PostgreSQL 16 → 17 Upgrade Starting"
-        echo "========================================"
-        echo ""
-        
-        # Backup old data directory name
-        BACKUP_DIR="/var/lib/postgresql/data.pg16.backup"
-        NEW_DATA_DIR="/var/lib/postgresql/17/data"
-        
-        # Clean up any previous failed upgrade attempts
-        rm -rf /var/lib/postgresql/17
-        rm -rf "$BACKUP_DIR"
-        
-        echo "📦 Installing PostgreSQL 16 binaries..."
-        apt-get update -qq
-        apt-get install -y -qq postgresql-16 > /dev/null 2>&1
-        echo "   ✅ PostgreSQL 16 binaries installed"
-        
-        echo ""
-        echo "🆕 Creating new PostgreSQL 17 cluster..."
-        mkdir -p /var/lib/postgresql/17
-        chown -R postgres:postgres /var/lib/postgresql/17
-        
-        # Initialize new cluster as postgres user
-        su - postgres -c "/usr/lib/postgresql/17/bin/initdb -D $NEW_DATA_DIR"
-        echo "   ✅ PostgreSQL 17 cluster initialized"
-        
-        echo ""
-        echo "🔍 Running compatibility check..."
-        su - postgres -c "cd /var/lib/postgresql && /usr/lib/postgresql/17/bin/pg_upgrade \
-            --old-bindir=/usr/lib/postgresql/16/bin \
-            --new-bindir=/usr/lib/postgresql/17/bin \
-            --old-datadir=$PGDATA \
-            --new-datadir=$NEW_DATA_DIR \
-            --check"
-        echo "   ✅ Compatibility check passed"
-        
-        echo ""
-        echo "⚡ Running pg_upgrade (copying data)..."
-        echo "   Note: Using copy mode (not link) for Docker volume compatibility"
-        su - postgres -c "cd /var/lib/postgresql && /usr/lib/postgresql/17/bin/pg_upgrade \
-            --old-bindir=/usr/lib/postgresql/16/bin \
-            --new-bindir=/usr/lib/postgresql/17/bin \
-            --old-datadir=$PGDATA \
-            --new-datadir=$NEW_DATA_DIR"
-        echo "   ✅ Data upgraded successfully"
-        
-        echo ""
-        echo "🔄 Switching to new data directory..."
-        # Move old data to backup subdirectory (can't move volume mount point)
-        mkdir -p "$PGDATA/pg16_backup"
-        find "$PGDATA" -maxdepth 1 -mindepth 1 ! -name 'pg16_backup' -exec mv {} "$PGDATA/pg16_backup/" \;
-        
-        # Move new data into main directory
-        mv "$NEW_DATA_DIR"/* "$PGDATA/"
-        rmdir "$NEW_DATA_DIR"
-        rm -rf /var/lib/postgresql/17
-        
-        # Restore important config files
-        if [ -f "$PGDATA/pg16_backup/pg_hba.conf" ]; then
-            cp "$PGDATA/pg16_backup/pg_hba.conf" "$PGDATA/"
-        fi
-        if [ -f "$PGDATA/pg16_backup/postgresql.auto.conf" ]; then
-            cp "$PGDATA/pg16_backup/postgresql.auto.conf" "$PGDATA/"
-        fi
-        
-        chown -R postgres:postgres "$PGDATA"
-        echo "   ✅ Switched to PostgreSQL 17 data"
-        echo "   📝 Old data backed up to: $PGDATA/pg16_backup"
-        
-        echo ""
-        echo "🧹 Cleaning up..."
-        apt-get remove -y -qq postgresql-16 > /dev/null 2>&1
-        apt-get autoremove -y -qq > /dev/null 2>&1
-        rm -rf /var/lib/apt/lists/*
-        echo "   ✅ Cleanup complete"
-        
-        echo ""
-        echo "========================================"
-        echo "✅ PostgreSQL 17 Upgrade Complete!"
-        echo "========================================"
-        echo ""
-        
-    elif [ "$OLD_VERSION" = "17" ]; then
-        echo ""
-        echo "🔄 PostgreSQL 17 → 18 Upgrade Starting"
-        echo "========================================"
-        echo ""
-        
-        # Backup old data directory name
-        BACKUP_DIR="/var/lib/postgresql/data.pg17.backup"
-        NEW_DATA_DIR="/var/lib/postgresql/18/data"
-        
-        # Clean up any previous failed upgrade attempts
-        rm -rf /var/lib/postgresql/18
-        rm -rf "$BACKUP_DIR"
-        
-        echo "📦 Installing PostgreSQL 17 binaries..."
-        apt-get update -qq
-        apt-get install -y -qq postgresql-17 > /dev/null 2>&1
-        echo "   ✅ PostgreSQL 17 binaries installed"
-        
-        echo ""
-        echo "🆕 Creating new PostgreSQL 18 cluster..."
-        mkdir -p /var/lib/postgresql/18
-        chown -R postgres:postgres /var/lib/postgresql/18
-        
-        # Initialize new cluster as postgres user.
-        # --no-data-checksums: PG18's initdb enables checksums by default, but
-        # clusters initialized under PG17 have them off; pg_upgrade --check
-        # hard-fails on the mismatch.
-        su - postgres -c "/usr/lib/postgresql/18/bin/initdb --no-data-checksums -D $NEW_DATA_DIR"
-        echo "   ✅ PostgreSQL 18 cluster initialized"
-        
-        echo ""
-        echo "🔍 Running compatibility check..."
-        su - postgres -c "cd /var/lib/postgresql && /usr/lib/postgresql/18/bin/pg_upgrade \
-            --old-bindir=/usr/lib/postgresql/17/bin \
-            --new-bindir=/usr/lib/postgresql/18/bin \
-            --old-datadir=$PGDATA \
-            --new-datadir=$NEW_DATA_DIR \
-            --check"
-        echo "   ✅ Compatibility check passed"
-        
-        echo ""
-        echo "⚡ Running pg_upgrade (copying data)..."
-        echo "   Note: Using copy mode (not link) for Docker volume compatibility"
-        su - postgres -c "cd /var/lib/postgresql && /usr/lib/postgresql/18/bin/pg_upgrade \
-            --old-bindir=/usr/lib/postgresql/17/bin \
-            --new-bindir=/usr/lib/postgresql/18/bin \
-            --old-datadir=$PGDATA \
-            --new-datadir=$NEW_DATA_DIR"
-        echo "   ✅ Data upgraded successfully"
-        
-        echo ""
-        echo "🔄 Switching to new data directory..."
-        # Move old data to backup subdirectory (can't move volume mount point)
-        mkdir -p "$PGDATA/pg17_backup"
-        find "$PGDATA" -maxdepth 1 -mindepth 1 ! -name 'pg17_backup' -exec mv {} "$PGDATA/pg17_backup/" \;
-        
-        # Move new data into main directory
-        mv "$NEW_DATA_DIR"/* "$PGDATA/"
-        rmdir "$NEW_DATA_DIR"
-        rm -rf /var/lib/postgresql/18
-        
-        # Restore important config files
-        if [ -f "$PGDATA/pg17_backup/pg_hba.conf" ]; then
-            cp "$PGDATA/pg17_backup/pg_hba.conf" "$PGDATA/"
-        fi
-        if [ -f "$PGDATA/pg17_backup/postgresql.auto.conf" ]; then
-            cp "$PGDATA/pg17_backup/postgresql.auto.conf" "$PGDATA/"
-        fi
-        
-        chown -R postgres:postgres "$PGDATA"
-        echo "   ✅ Switched to PostgreSQL 18 data"
-        echo "   📝 Old data backed up to: $PGDATA/pg17_backup"
-        
-        echo ""
-        echo "🧹 Cleaning up..."
-        apt-get remove -y -qq postgresql-17 > /dev/null 2>&1
-        apt-get autoremove -y -qq > /dev/null 2>&1
-        rm -rf /var/lib/apt/lists/*
-        echo "   ✅ Cleanup complete"
-        
-        echo ""
-        echo "========================================"
-        echo "✅ PostgreSQL 18 Upgrade Complete!"
-        echo "========================================"
-        echo ""
-        
-    elif [ "$OLD_VERSION" = "18" ]; then
-        echo "   ✅ Already running PostgreSQL 18, no upgrade needed"
-    else
-        echo "   ⚠️  Unknown PostgreSQL version: $OLD_VERSION"
-        echo "   Proceeding with normal startup..."
-    fi
-else
-    echo "   📝 No existing data found (fresh installation)"
-fi
+selected=''
+for entry in "$root"/*; do
+  [[ -d "$entry" && ! -L "$entry" ]] || refuse 'unexpected volume entry'
+  case "$entry" in
+    "$root/lost+found") continue ;;
+    "$legacy") candidate=$legacy ;;
+    "$root/$major")
+      for child in "$entry"/*; do
+        [[ $child == "$standard" && -d "$child" && ! -L "$child" ]] ||
+          refuse 'unexpected entry in versioned directory'
+      done
+      candidate=$standard ;;
+    *) refuse 'different major or unrecognized volume layout' ;;
+  esac
+  children=("$candidate"/*)
+  ((${#children[@]})) || continue
+  [[ -f "$candidate/PG_VERSION" && ! -L "$candidate/PG_VERSION" &&
+     $(<"$candidate/PG_VERSION") == "$major" &&
+     -f "$candidate/global/pg_control" ]] || refuse 'incomplete or incompatible cluster'
+  [[ -z $selected ]] || refuse 'multiple clusters on the same volume'
+  selected=$candidate
+done
 
-echo ""
-echo "🚀 Starting PostgreSQL..."
-echo ""
-
-# Execute the original PostgreSQL entrypoint
+export PGDATA=${selected:-${PGDATA:-$standard}}
 exec /usr/local/bin/docker-entrypoint.sh "$@"

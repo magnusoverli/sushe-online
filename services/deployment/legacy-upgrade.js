@@ -76,11 +76,13 @@ async function writeHba(client, file, text) {
 
 async function hardenAuthentication(client, deployment) {
   const { state, directory } = deployment;
+  // A major upgrade can relocate PGDATA; the saved path belongs to the
+  // previous cluster. Always use the running server's active HBA file.
+  const hbaFile = (await client.query('SHOW hba_file')).rows[0].hba_file;
   if (!state.hbaFile) {
-    state.hbaFile = (await client.query('SHOW hba_file')).rows[0].hba_file;
     const original = (
       await client.query('SELECT pg_read_file($1,0,1048576) AS content', [
-        state.hbaFile,
+        hbaFile,
       ])
     ).rows[0].content;
     await fs
@@ -100,12 +102,11 @@ async function hardenAuthentication(client, deployment) {
     } finally {
       await backup.close();
     }
-    await saveState(directory, state);
   }
   const password = new URL(state.env.PROVISION_DATABASE_URL).password;
   await client.query("SET password_encryption='scram-sha-256'");
   await client.query(`ALTER ROLE postgres PASSWORD ${escapeLiteral(password)}`);
-  await writeHba(client, state.hbaFile, HBA);
+  await writeHba(client, hbaFile, HBA);
   for (let attempt = 0; attempt < 50; attempt++) {
     const bad = new URL(state.env.PROVISION_DATABASE_URL);
     bad.password = 'incorrect-upgrade-probe';
@@ -133,6 +134,7 @@ async function hardenAuthentication(client, deployment) {
         await valid.end();
       }
       state.hardened = true;
+      state.hbaFile = hbaFile;
       await saveState(directory, state);
       return;
     }
@@ -168,10 +170,10 @@ async function prepareLegacyUpgrade(deployment, env, abort) {
     const version = Number(
       (await client.query('SHOW server_version_num')).rows[0].server_version_num
     );
-    if (version < 180000 || version >= 190000)
-      throw new Error(
-        'Automatic published-baseline upgrade requires PostgreSQL 18'
-      );
+    const major = Math.floor(version / 10000);
+    if (![18, 19].includes(major))
+      throw new Error('Managed deployment requires PostgreSQL 18 or 19');
+    const clientBin = `/usr/lib/postgresql/${major}/bin`;
     if (!state.cloned) await verifyCloneCapacity(client, state.original);
     logger.info('Automatic deployment: verifying database authentication');
     await hardenAuthentication(client, deployment);
@@ -216,7 +218,7 @@ async function prepareLegacyUpgrade(deployment, env, abort) {
       const temporary = path.join(directory, 'pre-upgrade.partial');
       const backup = path.join(directory, 'pre-upgrade.dump');
       await runProcess(
-        'pg_dump',
+        path.join(clientBin, 'pg_dump'),
         ['--format=custom', '--no-owner', '--no-privileges'],
         {
           env: pgEnvironment(
@@ -229,11 +231,15 @@ async function prepareLegacyUpgrade(deployment, env, abort) {
           maxOutputBytes: Math.max(bytes * 2, 1024 * 1024 * 1024),
         }
       );
-      await runProcess('pg_restore', ['--list', temporary], {
-        signal,
-        timeoutMs: 60000,
-        maxOutputBytes: 16 * 1024 * 1024,
-      });
+      await runProcess(
+        path.join(clientBin, 'pg_restore'),
+        ['--list', temporary],
+        {
+          signal,
+          timeoutMs: 60000,
+          maxOutputBytes: 16 * 1024 * 1024,
+        }
+      );
       const handle = await fs.open(temporary, 'r');
       try {
         await handle.sync();
@@ -259,6 +265,7 @@ async function prepareLegacyUpgrade(deployment, env, abort) {
     signal.throwIfAborted();
     return {
       client,
+      major,
       close: async () => {
         client.release();
         await pool.end();

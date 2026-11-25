@@ -1,0 +1,29 @@
+# Overlay only for docker-compose.upgrade-test.yml, using synthetic, project-local volumes.
+services:
+  db:
+    image: postgres:19.0-trixie@sha256:aaa10f7ba7328b4a221a6c3184d83eef885bd16bf1f6de864757863156b0a4d1
+    volumes:
+      - database19:/var/lib/postgresql
+  app:
+    volumes:
+      - data19:/app/data
+  checks:
+    volumes:
+      - data19:/state
+  major-copy:
+    profiles: [checks]
+    build:
+      context: ./test/deployment
+      dockerfile: Dockerfile.upgrade
+    environment:
+      DEPLOYMENT_REHEARSAL: disposable
+    network_mode: none
+    tmpfs: [/work]
+    volumes:
+      - database:/source:ro
+      - data:/source-app:ro
+      - database19:/var/lib/postgresql
+      - data19:/target-app
+volumes:
+  database19:
+  data19:

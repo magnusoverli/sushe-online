@@ -10,6 +10,8 @@ npm-debug.log
 README.md
 .DS_Store
 data/
+plans/
+**/*.dump
 
 # Built assets (will be generated during Docker build)
 public/js/

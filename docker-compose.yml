@@ -77,8 +77,7 @@ services:
     environment:
       POSTGRES_PASSWORD: example
       POSTGRES_DB: sushe
-      # Enhanced logging for monitoring
-      POSTGRES_INITDB_ARGS: '--auth-host=md5'
+      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256'
     volumes:
       - postgres-data:/var/lib/postgresql
       - postgres-socket:/var/run/postgresql
