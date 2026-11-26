@@ -389,7 +389,7 @@ function createAlbumCanonical(deps = {}) {
           updated_at = EXCLUDED.updated_at
         RETURNING 
           album_id,
-          (xmax = 0) AS was_inserted,
+          OLD.id IS NULL AS was_inserted,
           cover_image IS NULL AS needs_cover_fetch,
           summary_fetched_at IS NULL AS needs_summary_fetch,
           tracks IS NULL AS needs_tracks_fetch`,
@@ -471,7 +471,7 @@ function createAlbumCanonical(deps = {}) {
           updated_at = EXCLUDED.updated_at
         RETURNING 
           album_id,
-          (xmax = 0) AS was_inserted,
+          OLD.id IS NULL AS was_inserted,
           cover_image IS NULL AS needs_cover_fetch,
           summary_fetched_at IS NULL AS needs_summary_fetch,
           tracks IS NULL AS needs_tracks_fetch`,
@@ -604,7 +604,7 @@ function createAlbumCanonical(deps = {}) {
           updated_at = EXCLUDED.updated_at
         RETURNING 
           album_id, artist, album,
-          (xmax = 0) AS was_inserted,
+          OLD.id IS NULL AS was_inserted,
           cover_image IS NULL AS needs_cover_fetch,
           summary_fetched_at IS NULL AS needs_summary_fetch,
           tracks IS NULL AS needs_tracks_fetch`,
@@ -693,7 +693,7 @@ function createAlbumCanonical(deps = {}) {
           updated_at = EXCLUDED.updated_at
         RETURNING 
           album_id, artist, album,
-          (xmax = 0) AS was_inserted,
+          OLD.id IS NULL AS was_inserted,
           cover_image IS NULL AS needs_cover_fetch,
           summary_fetched_at IS NULL AS needs_summary_fetch,
           tracks IS NULL AS needs_tracks_fetch`,

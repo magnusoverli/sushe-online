@@ -71,22 +71,25 @@ async function moveWithoutOverwrite(source, destination) {
   await fs.rename(source, destination);
 }
 
-async function prepareStateDirectory(root, cutoverId) {
+async function inspectStateDirectory(root, cutoverId) {
   const rootStat = await fs.lstat(root);
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink())
     throw new Error('Deployment data must be a real directory');
   const directory = path.join(root, '.deployment');
-  if (!cutoverId) {
-    await fs.chown(root, 0, 0);
-    await fs.chmod(root, 0o755);
-    try {
-      await fs.mkdir(directory, { mode: 0o700 });
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-    }
+  let stat;
+  try {
+    stat = await fs.lstat(directory);
+  } catch (error) {
+    if (!cutoverId && error.code === 'ENOENT') return directory;
+    throw error;
   }
-  const stat = await fs.lstat(directory);
-  if (!stat.isDirectory() || stat.uid !== 0 || stat.mode & 0o077)
+  if (
+    rootStat.uid !== 0 ||
+    rootStat.mode & 0o022 ||
+    !stat.isDirectory() ||
+    stat.uid !== 0 ||
+    stat.mode & 0o077
+  )
     throw new Error('Unsafe deployment state ownership or permissions');
   if (cutoverId) {
     const receipt = path.join(directory, '.sushe-tower19-complete');
@@ -100,18 +103,19 @@ async function prepareStateDirectory(root, cutoverId) {
   return directory;
 }
 
-async function loadState(env) {
+async function loadState(env, beforePrepare) {
   if (process.getuid() !== 0)
     throw new Error(
       'The published Compose upgrade requires the image entrypoint identity'
     );
   const root = env.DATA_DIR || '/app/data';
-  const directory = await prepareStateDirectory(
+  const directory = await inspectStateDirectory(
     root,
     env.SUSHE_PG19_CUTOVER_ID
   );
   const file = path.join(directory, 'state.json');
   let state;
+  let fresh = false;
   try {
     const stat = await fs.lstat(file);
     if (!stat.isFile() || stat.uid !== 0 || stat.mode & 0o077)
@@ -157,8 +161,20 @@ async function loadState(env) {
         SESSION_SECRET: sessionSecretFor(env),
       },
     };
-    await saveState(directory, state);
+    fresh = true;
   }
+  // Even an accidental image pull on PG18 must leave both volumes usable
+  // with the previous app, including the original file ownership.
+  if (beforePrepare) await beforePrepare(state.env.PROVISION_DATABASE_URL);
+  if (!env.SUSHE_PG19_CUTOVER_ID) {
+    await fs.chown(root, 0, 0);
+    await fs.chmod(root, 0o755);
+    if (fresh) {
+      await fs.mkdir(directory, { mode: 0o700, recursive: true });
+      await inspectStateDirectory(root);
+    }
+  }
+  if (fresh) await saveState(directory, state);
   const sessionSecret = sessionSecretFor(env, state.env.SESSION_SECRET);
   if (sessionSecret !== state.env.SESSION_SECRET) {
     state.env.SESSION_SECRET = sessionSecret;

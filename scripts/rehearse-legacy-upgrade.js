@@ -15,11 +15,15 @@ const majorOverlay = [
   'docker-compose.upgrade-startup-test.yml',
 ];
 let testing19 = false;
+// Last published dual-major app. Use the actual release on the retained PG18
+// volumes, including rollback; the candidate must only serve on the PG19 copy.
+const bridgeImage =
+  'ghcr.io/magnusoverli/sushe-online@sha256:eab849bcd8e40b1262c299e647fa2ea2c5ae423a71b4c52e2ce2a8e59720aec4';
 // The old server is deliberate test input, not a deployment recommendation.
 let databaseImage =
   'postgres:18.4@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636';
-function run(args, image) {
-  execFileSync(
+function run(args, image, capture = false) {
+  return execFileSync(
     'docker',
     [...compose, ...(testing19 ? majorOverlay : []), ...args],
     {
@@ -28,7 +32,8 @@ function run(args, image) {
         UPGRADE_DATABASE_IMAGE: databaseImage,
         ...(image ? { UPGRADE_IMAGE: image } : {}),
       },
-      stdio: 'inherit',
+      stdio: capture ? 'pipe' : 'inherit',
+      encoding: 'utf8',
       timeout: 300000,
     }
   );
@@ -55,13 +60,31 @@ try {
   ]);
   run(['up', '-d', '--wait', 'app']);
   check('seed');
+  // An accidental early pull must fail before adoption touches either volume.
+  require('node:assert/strict').throws(
+    () =>
+      run(
+        ['run', '--rm', '--no-deps', 'app'],
+        'sushe-upgrade-candidate:local',
+        true
+      ),
+    (error) =>
+      error instanceof Error &&
+      'status' in error &&
+      error.status === 1 &&
+      'stderr' in error &&
+      typeof error.stderr === 'string' &&
+      error.stderr.includes('PostgreSQL 19 is required (detected 18)')
+  );
+  check('refused18');
   check('initial-damage');
   // Exercise the production Compose update of both the app and PostgreSQL.
-  databaseImage = 'sushe-postgres:local';
-  run(['up', '-d', 'app'], 'sushe-upgrade-candidate:local');
+  databaseImage =
+    'postgres:18.7-trixie@sha256:c699303802144847d238196173655dbbecf7a96aeca1565f2b02eb671a1f0b6b';
+  run(['up', '-d', 'app'], bridgeImage);
   check('initial-failed');
   check('initial-repair');
-  run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
+  run(['up', '-d', '--wait', 'app'], bridgeImage);
   check('verify');
   run([
     'exec',
@@ -74,29 +97,29 @@ try {
   ]);
   // Docker stops/recreates the app; the Compose configuration and .env are unchanged.
   run(['kill', '-s', 'SIGKILL', 'app']);
-  run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
+  run(['up', '-d', '--wait', 'app'], bridgeImage);
   check('restart');
   check('damage');
   run(['restart', 'app']);
   check('failed');
   check('repair');
-  run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
+  run(['up', '-d', '--wait', 'app'], bridgeImage);
   check('restart');
   check('restore');
   run(['kill', '-s', 'SIGKILL', 'app']);
-  run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
+  run(['up', '-d', '--wait', 'app'], bridgeImage);
   check('restart');
   check('capture-session');
   testing19 = true;
   // Model a pulled image: build it while 18 is still serving, then exercise
   // normal Compose recreation, without a manual stop or migration command.
   run(['build', 'db']);
-  run(
-    ['up', '--no-build', '-d', '--wait', 'app'],
-    'sushe-upgrade-candidate:local'
-  );
+  run(['up', '--no-build', '-d', '--wait', 'app'], bridgeImage);
   check('verify19');
-  run(['stop', 'app', 'db']);
+  // Normal app update on the already populated PG19 volumes.
+  run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
+  check('verify19');
+  check('verify-indexes');
   run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
   check('verify19');
   // Take a backup through the running PG19 app, restore it on the candidate
@@ -108,7 +131,7 @@ try {
   check('verify19');
   run(['stop', 'app', 'db']);
   testing19 = false;
-  run(['up', '-d', '--wait', 'app'], 'sushe-upgrade-candidate:local');
+  run(['up', '-d', '--wait', 'app'], bridgeImage);
   check('verify');
   console.log(
     'Published-image adoption, recovery, physical 18->19 cutover and rollback passed'

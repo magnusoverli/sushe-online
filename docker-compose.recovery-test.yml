@@ -2,7 +2,6 @@ name: sushe-recovery-test
 
 x-environment: &environment
   NODE_ENV: production
-  PG_MAJOR: ${REHEARSAL_PG_MAJOR:-19}
   DATABASE_URL: postgres://sushe_runtime:synthetic-runtime-password-only@db/sushe
   MIGRATION_DATABASE_URL: postgres://sushe_migration:synthetic-migration-password-only@db/sushe
   BACKUP_DATABASE_URL: postgres://sushe_backup:synthetic-backup-password-only@db/sushe
@@ -55,7 +54,6 @@ services:
     <<: *runtime
     environment:
       NODE_ENV: production
-      PG_MAJOR: ${REHEARSAL_PG_MAJOR:-19}
       DATABASE_URL: postgres://sushe_runtime:synthetic-runtime-password-only@db/sushe
       BACKUP_DATABASE_URL: postgres://sushe_backup:synthetic-backup-password-only@db/sushe
       CONTROL_DATABASE_URL: postgres://sushe_control:synthetic-control-password-only@db/control

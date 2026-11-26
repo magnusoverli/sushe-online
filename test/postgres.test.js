@@ -113,13 +113,26 @@ describe('DB helpers', () => {
         if (attempts < 3) {
           throw new Error('not ready');
         }
-        return { rows: [{ ok: true }] };
+        return { rows: [{ server_version_num: '190000' }] };
       }),
     };
 
     await waitForPostgres(pool, 3, 1);
 
     assert.strictEqual(pool.query.mock.calls.length, 3);
+  });
+
+  it('rejects PG18 immediately instead of retrying or running migrations', async () => {
+    const pool = {
+      query: mock.fn(async () => ({
+        rows: [{ server_version_num: '180007' }],
+      })),
+    };
+    await assert.rejects(
+      waitForPostgres(pool, 3, 1),
+      /19 is required \(detected 18\)/
+    );
+    assert.strictEqual(pool.query.mock.calls.length, 1);
   });
 
   it('warmConnections uses pool.options.min when available', async () => {

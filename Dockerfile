@@ -52,7 +52,6 @@ ARG INSTALL_DEV_DEPS=false
 # Install only production dependencies  
 COPY --chown=node:node package*.json .npmrc ./
 
-# Keep native archive tools for both majors throughout the rollback window.
 # Install build-time dependencies, add repo, install pg client, then remove build-time deps
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
@@ -62,7 +61,7 @@ RUN apt-get update \
     && . /etc/os-release \
     && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client-18 postgresql-client-19 \
+    && apt-get install -y --no-install-recommends postgresql-client-19 \
     && apt-get purge -y --auto-remove curl gnupg \
     && rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man
 

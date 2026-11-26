@@ -5,6 +5,10 @@ const metrics = require('../utils/metrics');
 const { withRetry } = require('./retry-wrapper');
 const { withTransaction: baseWithTransaction } = require('./transaction');
 const { classify } = require('./errors');
+const {
+  requirePostgres19,
+  UnsupportedPostgresError,
+} = require('./server-version');
 
 const observeDbQuery = metrics.observeDbQuery;
 
@@ -102,10 +106,11 @@ async function waitForPostgres(pool, retries = 10, interval = 3000) {
   logger.info('Checking PostgreSQL connection...');
   for (let i = 0; i < retries; i++) {
     try {
-      await pool.query('SELECT 1');
+      await requirePostgres19(pool);
       logger.info('PostgreSQL is reachable');
       return;
-    } catch {
+    } catch (error) {
+      if (error instanceof UnsupportedPostgresError) throw error;
       logger.info(`Waiting for PostgreSQL... (${i + 1}/${retries})`);
       await new Promise((res) => setTimeout(res, interval));
     }

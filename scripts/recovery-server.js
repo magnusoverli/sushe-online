@@ -3,6 +3,10 @@ const { createControlStore } = require('../services/recovery/control-store');
 const { createRecoveryGateway } = require('../services/recovery/gateway');
 const { createRecoveryWorker } = require('../services/recovery/worker');
 const logger = require('../utils/logger');
+const {
+  requirePostgres19,
+  UnsupportedPostgresError,
+} = require('../db/server-version');
 
 async function main(env = process.env) {
   process.on('message', (message) => {
@@ -10,6 +14,12 @@ async function main(env = process.env) {
   });
   const control = createControlStore(env.RECOVERY_DATABASE_URL);
   if (!control) throw new Error('RECOVERY_DATABASE_URL is required');
+  try {
+    await requirePostgres19(control.pool);
+  } catch (error) {
+    await control.close();
+    throw error;
+  }
   const worker = createRecoveryWorker(control, env);
   const server = createRecoveryGateway(control, env).listen(
     Number(env.RECOVERY_PORT || 3000)
@@ -40,8 +50,12 @@ async function main(env = process.env) {
   }
 }
 if (require.main === module)
-  main().catch(() => {
-    logger.error('Recovery service configuration failed');
+  main().catch((error) => {
+    logger.error(
+      error instanceof UnsupportedPostgresError
+        ? error.message
+        : 'Recovery service configuration failed'
+    );
     process.exitCode = 1;
   });
 module.exports = { main };

@@ -74,24 +74,8 @@ function createStatsService(deps = {}) {
    * @returns {Promise<Object>} Admin stats with users array
    */
   async function getAdminStats() {
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const [
-      countsResult,
-      allUsersResult,
-      userListCountsResult,
-      adminStatsResult,
-    ] = await Promise.all([
-      db.raw(
-        `SELECT
-           COUNT(*)::int AS total_users,
-           COUNT(*) FILTER (WHERE role = 'admin')::int AS admin_users,
-           (SELECT COUNT(*)::int FROM lists) AS total_lists
-         FROM users`,
-        [],
-        { name: 'stats-admin-counts', retryable: true }
-      ),
+    const [summary, allUsersResult, userListCountsResult] = await Promise.all([
+      getPublicStats(),
       db.raw(
         `SELECT _id, username, email, role, last_activity, created_at
          FROM users
@@ -104,29 +88,8 @@ function createStatsService(deps = {}) {
         [],
         { name: 'stats-admin-list-counts', retryable: true }
       ),
-      db.raw(
-        `WITH album_genres AS (
-           SELECT DISTINCT li.album_id, a.genre_1, a.genre_2
-           FROM list_items li
-           LEFT JOIN albums a ON li.album_id = a.album_id
-         ),
-         unique_albums AS (
-           SELECT COUNT(DISTINCT album_id) as total
-           FROM album_genres
-           WHERE album_id IS NOT NULL AND album_id != ''
-         ),
-         active_users AS (
-           SELECT COUNT(DISTINCT user_id) as count FROM lists WHERE updated_at >= $1
-         )
-         SELECT
-           (SELECT total FROM unique_albums) as total_albums,
-           (SELECT count FROM active_users) as active_users`,
-        [sevenDaysAgo],
-        { name: 'stats-admin-aggregate', retryable: true }
-      ),
     ]);
 
-    const counts = countsResult.rows[0] || {};
     const allUsers = allUsersResult.rows.map((row) => ({
       _id: row._id,
       username: row.username,
@@ -154,18 +117,7 @@ function createStatsService(deps = {}) {
       createdAt: user.createdAt,
     }));
 
-    const aggregateStats = adminStatsResult.rows[0] || {};
-    const totalAlbums = parseInt(aggregateStats.total_albums, 10) || 0;
-    const activeUsers = parseInt(aggregateStats.active_users, 10) || 0;
-
-    return {
-      totalUsers: counts.total_users || allUsers.length,
-      totalLists: counts.total_lists || 0,
-      totalAlbums,
-      adminUsers: counts.admin_users || 0,
-      activeUsers,
-      users: usersWithCounts,
-    };
+    return { ...summary, users: usersWithCounts };
   }
 
   return { getPublicStats, getAdminStats };

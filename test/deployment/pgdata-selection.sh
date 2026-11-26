@@ -32,11 +32,7 @@ refused missing-cutover-receipt
 echo 999 > "$current/.sushe-tower19-complete"
 refused mismatched-cutover-receipt
 echo 123456 > "$current/.sushe-tower19-complete"
-if [[ $PG_MAJOR == 19 ]]; then
-  [[ $(select_dir) == "$current" ]]
-else
-  refused wrong-cutover-major
-fi
+[[ $(select_dir) == "$current" ]]
 unset SUSHE_PG19_CUTOVER_ID
 mv "$current/PG_VERSION" "$current/saved"
 refused incomplete

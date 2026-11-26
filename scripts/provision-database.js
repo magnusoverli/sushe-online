@@ -7,6 +7,7 @@ const {
 const { initializeControl } = require('../services/recovery/control-store');
 const MigrationManager = require('../db/migrations');
 const { createMigrationPool } = require('../db/migration-policy');
+const { requirePostgres19 } = require('../db/server-version');
 
 async function adoptSchema(pool, owner) {
   // Targeted adoption only: never REASSIGN everything owned by postgres.
@@ -77,6 +78,7 @@ async function provision(env = process.env) {
     throw new Error('Provisioning must use a separate administrator identity');
   const admin = new Pool({ ...adminConfig, max: 1 });
   try {
+    await requirePostgres19(admin);
     // Existing clusters may still default to MD5; every generated identity
     // must authenticate under the managed SCRAM socket policy.
     await admin.query("SET password_encryption='scram-sha-256'");

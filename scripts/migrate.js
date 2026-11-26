@@ -4,6 +4,7 @@ const { createMigrationPool } = require('../db/migration-policy');
 const { positiveInteger } = require('../config/limits');
 const MigrationManager = require('../db/migrations');
 const logger = require('../utils/logger');
+const { requirePostgres19 } = require('../db/server-version');
 
 require('dotenv').config();
 
@@ -25,6 +26,7 @@ async function main() {
   deadline.unref();
 
   try {
+    if (command !== 'create') await requirePostgres19(pool);
     switch (command) {
       case 'up':
       case 'migrate':

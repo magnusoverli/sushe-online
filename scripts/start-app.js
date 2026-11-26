@@ -4,6 +4,10 @@ const { setTimeout: delay } = require('node:timers/promises');
 const { createControlStore } = require('../services/recovery/control-store');
 const { databaseUrlFor } = require('../config/database-connection');
 const logger = require('../utils/logger');
+const {
+  requirePostgres19,
+  UnsupportedPostgresError,
+} = require('../db/server-version');
 
 async function supervise(env = process.env) {
   let deploymentReady = env.DEPLOYMENT_VERIFY_ONLY !== 'true';
@@ -42,6 +46,7 @@ async function supervise(env = process.env) {
   process.once('SIGTERM', stop);
   process.once('SIGINT', stop);
   try {
+    await requirePostgres19(control.pool);
     while (!stopping) {
       try {
         const state = await control.state();
@@ -122,8 +127,12 @@ async function supervise(env = process.env) {
 }
 
 if (require.main === module)
-  supervise().catch(() => {
-    logger.error('App supervisor failed');
+  supervise().catch((error) => {
+    logger.error(
+      error instanceof UnsupportedPostgresError
+        ? error.message
+        : 'App supervisor failed'
+    );
     process.exitCode = 1;
   });
 module.exports = { supervise };

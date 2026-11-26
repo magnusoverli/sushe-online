@@ -41,7 +41,6 @@ services:
       SESSION_SECRET: synthetic-backend-test-signing-secret-only
       BASE_URL: http://localhost:3000
       DATA_DIR: /tmp/sushe-data
-      PG_MAJOR: '19'
       DISABLE_RATE_LIMITING: 'true'
     command: ['node', 'index.js']
     depends_on:

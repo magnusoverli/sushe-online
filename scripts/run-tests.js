@@ -4,6 +4,7 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const integrationTests = [
+  'test/integration/pg19-upgrade.test.js',
   'test/integration/list-write-efficiency.test.js',
   'test/integration/listening-room-shares.test.js',
   'test/integration/oauth-refresh.test.js',

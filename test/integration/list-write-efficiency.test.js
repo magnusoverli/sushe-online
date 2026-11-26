@@ -20,9 +20,6 @@ test('auto-group conflicts reuse the id; reorders only version moved items', asy
       "INSERT INTO users (_id, email, username, hash) VALUES ($1,$2,$1,'synthetic')",
       [user, `${user}@example.test`]
     );
-    const major = Number(
-      (await client.query('SHOW server_version_num')).rows[0].server_version_num
-    );
     const tuple = async (id) =>
       (
         await client.query('SELECT ctid::text FROM list_groups WHERE id=$1', [
@@ -34,7 +31,7 @@ test('auto-group conflicts reuse the id; reorders only version moved items', asy
       const id = await get();
       const before = await tuple(id);
       assert.equal(await get(), id);
-      if (major >= 190000) assert.equal(await tuple(id), before);
+      assert.equal(await tuple(id), before);
     }
     await client.query(
       "INSERT INTO lists (_id,user_id,name,sort_order,group_id) SELECT $1,$2,'Order',0,id FROM list_groups WHERE user_id=$2 AND year=2026",

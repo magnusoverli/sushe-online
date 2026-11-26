@@ -6,6 +6,21 @@ const { createControlStore } = require('../recovery/control-store');
 const { createCandidateManager } = require('../recovery/candidate');
 const { runProcess } = require('../../utils/subprocess');
 const logger = require('../../utils/logger');
+const { Client } = require('pg');
+const { requirePostgres19 } = require('../../db/server-version');
+
+async function checkAdoptionServer(connectionString) {
+  const client = new Client({
+    connectionString,
+    connectionTimeoutMillis: 5000,
+  });
+  try {
+    await client.connect();
+    await requirePostgres19(client);
+  } finally {
+    await client.end();
+  }
+}
 
 async function runLegacy(env = process.env) {
   const abort = new AbortController();
@@ -18,12 +33,11 @@ async function runLegacy(env = process.env) {
   process.once('SIGINT', stop);
   let lease, control;
   try {
-    const deployment = await loadState(env);
+    const deployment = await loadState(env, checkAdoptionServer);
     lease = await prepareLegacyUpgrade(deployment, env, abort);
     const effective = {
       ...env,
       ...deployment.state.env,
-      PG_MAJOR: String(lease.major),
       DATA_DIR: deployment.appData,
       RECOVERY_UPLOAD_DIR: deployment.uploads,
       RECOVERY_CAPACITY_PATH: deployment.root,

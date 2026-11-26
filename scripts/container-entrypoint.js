@@ -1,5 +1,6 @@
 const { spawn } = require('node:child_process');
 const { isLegacyDeployment } = require('../services/deployment/legacy-state');
+const { UnsupportedPostgresError } = require('../db/server-version');
 
 async function main() {
   const args = process.argv.slice(2);
@@ -27,11 +28,13 @@ async function main() {
 }
 
 if (require.main === module)
-  main().catch(() => {
+  main().catch((error) => {
     // Provider/database errors can embed connection strings; never print them.
-    console.error(
-      'Automatic deployment did not become healthy; protected state and original database retained. Restart retries the recorded phase.'
-    );
+    if (error instanceof UnsupportedPostgresError) console.error(error.message);
+    else
+      console.error(
+        'Automatic deployment did not become healthy; protected state and original database retained. Restart retries the recorded phase.'
+      );
     process.exitCode = 1;
   });
 module.exports = { main };

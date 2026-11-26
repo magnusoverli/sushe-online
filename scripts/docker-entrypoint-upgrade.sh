@@ -12,7 +12,7 @@ refuse() {
 
 root=/var/lib/postgresql
 version=$(postgres --version)
-[[ $version =~ PostgreSQL\)\ (18|19)\. ]] || refuse 'unsupported server major'
+[[ $version =~ PostgreSQL\)\ (19)\. ]] || refuse 'PostgreSQL 19 is required'
 major=${BASH_REMATCH[1]}
 standard="$root/$major/docker"
 legacy="$root/data"

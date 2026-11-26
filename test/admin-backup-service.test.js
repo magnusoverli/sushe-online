@@ -40,14 +40,10 @@ test('backup credentials honor URL/socket configuration and never enter argument
   );
 });
 
-test('backup and restore honor an explicit client major or tool directory', () => {
+test('backup and restore honor explicit tool overrides', () => {
   const config = (env) => createAdminBackupService({ env }).getRuntimeConfig();
   assert.equal(
-    config({ PG_MAJOR: '18' }).pgDumpCmd,
-    path.join('/usr/lib/postgresql/18/bin', 'pg_dump')
-  );
-  assert.equal(
-    config({ PG_MAJOR: '18', PG_BIN: '/custom' }).pgRestoreCmd,
+    config({ PG_BIN: '/custom' }).pgRestoreCmd,
     path.join('/custom', 'pg_restore')
   );
   assert.equal(config({ PG_DUMP: 'custom-dump' }).pgDumpCmd, 'custom-dump');

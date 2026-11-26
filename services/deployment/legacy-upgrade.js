@@ -12,6 +12,7 @@ const {
 const { runProcess } = require('../../utils/subprocess');
 const { saveState } = require('./legacy-state');
 const logger = require('../../utils/logger');
+const { requirePostgres19, POSTGRES_BIN } = require('../../db/server-version');
 
 const UPGRADE_LOCK = 1400072554;
 const HBA =
@@ -159,6 +160,7 @@ async function prepareLegacyUpgrade(deployment, env, abort) {
   try {
     client = await pool.connect();
     client.on('error', () => abort.abort());
+    await requirePostgres19(client);
     if (
       !(
         await client.query('SELECT pg_try_advisory_lock($1) AS acquired', [
@@ -167,13 +169,6 @@ async function prepareLegacyUpgrade(deployment, env, abort) {
       ).rows[0].acquired
     )
       throw new Error('Another managed application owns this deployment');
-    const version = Number(
-      (await client.query('SHOW server_version_num')).rows[0].server_version_num
-    );
-    const major = Math.floor(version / 10000);
-    if (![18, 19].includes(major))
-      throw new Error('Managed deployment requires PostgreSQL 18 or 19');
-    const clientBin = `/usr/lib/postgresql/${major}/bin`;
     if (!state.cloned) await verifyCloneCapacity(client, state.original);
     logger.info('Automatic deployment: verifying database authentication');
     await hardenAuthentication(client, deployment);
@@ -218,7 +213,7 @@ async function prepareLegacyUpgrade(deployment, env, abort) {
       const temporary = path.join(directory, 'pre-upgrade.partial');
       const backup = path.join(directory, 'pre-upgrade.dump');
       await runProcess(
-        path.join(clientBin, 'pg_dump'),
+        path.join(POSTGRES_BIN, 'pg_dump'),
         ['--format=custom', '--no-owner', '--no-privileges'],
         {
           env: pgEnvironment(
@@ -232,7 +227,7 @@ async function prepareLegacyUpgrade(deployment, env, abort) {
         }
       );
       await runProcess(
-        path.join(clientBin, 'pg_restore'),
+        path.join(POSTGRES_BIN, 'pg_restore'),
         ['--list', temporary],
         {
           signal,
@@ -265,7 +260,6 @@ async function prepareLegacyUpgrade(deployment, env, abort) {
     signal.throwIfAborted();
     return {
       client,
-      major,
       close: async () => {
         client.release();
         await pool.end();

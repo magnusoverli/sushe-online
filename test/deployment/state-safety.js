@@ -5,6 +5,26 @@ const os = require('node:os');
 const path = require('node:path');
 const { loadState } = require('../../services/deployment/legacy-state');
 
+test('unsupported server refusal leaves the old app volume untouched', async () => {
+  const root = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'deployment-old-major-')
+  );
+  try {
+    await fs.writeFile(path.join(root, 'retained'), 'old app data');
+    const before = await fs.stat(root);
+    await assert.rejects(
+      loadState({ DATA_DIR: root }, async () => {
+        throw new Error('PostgreSQL 19 is required');
+      }),
+      /PostgreSQL 19/
+    );
+    assert.deepEqual(await fs.readdir(root), ['retained']);
+    assert.equal((await fs.stat(root)).mode, before.mode);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('completed cutover requires its app receipt and existing deployment state', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'deployment-cutover-'));
   const env = {

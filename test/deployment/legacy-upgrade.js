@@ -343,8 +343,43 @@ async function main() {
     'initial-failed': initialFailed,
     'initial-repair': initialRepair,
     seed,
+    refused18: async () => {
+      await fs.access('/state/fixture.json');
+      await assert.rejects(fs.stat('/state/.deployment'), { code: 'ENOENT' });
+      await api
+        .get('/api/lists')
+        .set('Cookie', await login())
+        .expect(200);
+    },
     verify,
     verify19: () => verify(false, 19),
+    'verify-indexes': async () => {
+      const deployment = await state();
+      const control = new Pool({
+        connectionString: deployment.env.RECOVERY_DATABASE_URL,
+      });
+      try {
+        const { rows } = await control.query(
+          'SELECT database_name FROM recovery_state WHERE id=1'
+        );
+        const db = new Pool({
+          connectionString: databaseUrlFor(
+            deployment.env.DATABASE_URL,
+            rows[0].database_name
+          ),
+        });
+        try {
+          const result = await db.query(`SELECT
+            to_regclass('public.idx_artist_service_aliases_source_album_id') IS NOT NULL AS added,
+            to_regclass('public.idx_users_email') IS NULL AS removed`);
+          assert.deepEqual(result.rows[0], { added: true, removed: true });
+        } finally {
+          await db.end();
+        }
+      } finally {
+        await control.end();
+      }
+    },
     'capture-session': async () => {
       const saved = await fixture();
       saved.cookie = await login();

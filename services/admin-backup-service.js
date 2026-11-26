@@ -4,6 +4,7 @@ const path = require('node:path');
 const { runProcess } = require('../utils/subprocess');
 const { pgEnvironment } = require('../config/database-connection');
 const { positiveInteger } = require('../config/limits');
+const { POSTGRES_BIN } = require('../db/server-version');
 const { createRestoreError, RESTORE_ERROR_CODES } = require('./restore-errors');
 
 const MAX_FILE_BYTES = 256 * 1024 * 1024;
@@ -13,10 +14,10 @@ function createAdminBackupService(deps = {}) {
   const run = deps.runProcess || runProcess;
   let activeBackups = 0;
   function getRuntimeConfig() {
-    const bin = env.PG_BIN || `/usr/lib/postgresql/${env.PG_MAJOR || '19'}/bin`;
+    const bin = env.PG_BIN || POSTGRES_BIN;
     const binary = (name) => {
       const file = path.join(bin, name);
-      return env.PG_BIN || env.PG_MAJOR || fs.existsSync(file) ? file : name;
+      return env.PG_BIN || fs.existsSync(file) ? file : name;
     };
     return {
       pgDumpCmd: env.PG_DUMP || binary('pg_dump'),

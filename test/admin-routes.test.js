@@ -884,7 +884,7 @@ describe('GET /api/admin/bootstrap', () => {
         return { rows: [{ user_id: 'admin-123', list_count: '2' }] };
       }
 
-      if (sql.includes('WITH album_genres AS')) {
+      if (sql.includes('WITH unique_albums AS')) {
         return { rows: [{ total_albums: '10', active_users: '1' }] };
       }
 

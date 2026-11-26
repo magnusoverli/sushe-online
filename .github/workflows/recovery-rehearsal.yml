@@ -28,17 +28,6 @@ jobs:
   recovery:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - major: 18
-            image: postgres:18.7-trixie@sha256:c699303802144847d238196173655dbbecf7a96aeca1565f2b02eb671a1f0b6b
-          - major: 19
-            image: postgres:19.0-trixie@sha256:aaa10f7ba7328b4a221a6c3184d83eef885bd16bf1f6de864757863156b0a4d1
-    env:
-      POSTGRES_IMAGE: ${{ matrix.image }}
-      REHEARSAL_PG_MAJOR: ${{ matrix.major }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Build test harness
@@ -62,7 +51,6 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Rehearse image-only upgrade from the published baseline
-        if: matrix.major == 18
         run: |
           docker tag sushe-recovery-test:local sushe-upgrade-candidate:local
           node scripts/rehearse-legacy-upgrade.js
@@ -72,7 +60,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
-          name: recovery-rehearsal-${{ matrix.major }}
+          name: recovery-rehearsal
           path: recovery.log
           retention-days: 7
       - name: Remove disposable databases
