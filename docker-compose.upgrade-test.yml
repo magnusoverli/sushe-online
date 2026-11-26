@@ -1,11 +1,11 @@
 name: sushe-upgrade-test
 services:
   db:
-    image: ${UPGRADE_DATABASE_IMAGE:-sushe-postgres:local}
+    image: sushe-postgres:local
     environment:
       POSTGRES_DB: sushe
       POSTGRES_PASSWORD: example
-      POSTGRES_INITDB_ARGS: '--auth-host=md5'
+      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256'
     volumes:
       # A real disposable volume survives database image replacement.
       - database:/var/lib/postgresql
@@ -17,13 +17,16 @@ services:
       timeout: 3s
       retries: 30
   app:
-    image: ${UPGRADE_IMAGE:-ghcr.io/magnusoverli/sushe-online@sha256:e897f354c5eb33a5dfde501a29ed4650b67e89e64a096c5ba68c6ea528affae0}
+    # Published PG19-only baseline; the rehearsal replaces only the app image.
+    image: ${UPGRADE_IMAGE:-ghcr.io/magnusoverli/sushe-online@sha256:2d260487f36beea2af46d724fecc1e9ed14f90ecc4a238a93e015139d638e43b}
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://postgres:example@/sushe?host=/var/run/postgresql
       DATA_DIR: /app/data
       BASE_URL: http://app:3000
       SESSION_SECRET: synthetic-upgrade-rehearsal-session-secret-0123456789
+      BOOTSTRAP_ADMIN_EMAIL: bootstrap@example.test
+      BOOTSTRAP_ADMIN_PASSWORD: synthetic-bootstrap-rehearsal-only
     volumes:
       - data:/app/data
       - socket:/var/run/postgresql
@@ -50,14 +53,13 @@ services:
     entrypoint: [node]
     environment:
       DEPLOYMENT_REHEARSAL: disposable
-      DATABASE_URL: postgres://postgres:example@/sushe?host=/var/run/postgresql
     volumes:
       - data:/state
       - socket:/var/run/postgresql
       - ./test/deployment:/app/test/deployment:ro
       - ./services/deployment:/app/services/deployment:ro
     tmpfs: [/tmp]
-    command: ['test/deployment/legacy-upgrade.js', 'verify']
+    command: ['test/deployment/image-update.js', 'verify']
 volumes:
   database:
   data:

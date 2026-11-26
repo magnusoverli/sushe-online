@@ -1,7 +1,0 @@
-FROM postgres:18.7-trixie@sha256:c699303802144847d238196173655dbbecf7a96aeca1565f2b02eb671a1f0b6b AS old
-FROM postgres:19.0-trixie@sha256:aaa10f7ba7328b4a221a6c3184d83eef885bd16bf1f6de864757863156b0a4d1
-COPY --from=old /usr/lib/postgresql/18 /usr/lib/postgresql/18
-COPY --from=old /usr/share/postgresql/18 /usr/share/postgresql/18
-COPY upgrade-retained-cluster.sh /probe.sh
-COPY start-upgraded-db.sh /start-upgraded-db.sh
-ENTRYPOINT ["bash", "/probe.sh"]

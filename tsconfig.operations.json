@@ -2,7 +2,7 @@
   "extends": "./tsconfig.app.json",
   "include": [
     "scripts/container-entrypoint.js",
-    "scripts/rehearse-legacy-upgrade.js",
+    "scripts/rehearse-image-update.js",
     "scripts/migrate.js",
     "scripts/deploy-migrate.js",
     "scripts/provision-database.js",

@@ -54,7 +54,10 @@ async function accessSnapshot() {
 }
 
 async function seed() {
-  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  const deployment = await state();
+  const db = new Pool({
+    connectionString: deployment.env.MIGRATION_DATABASE_URL,
+  });
   try {
     const hash = await require('bcryptjs').hash(password, 10);
     await db.query(
@@ -91,11 +94,12 @@ async function seed() {
       );
     }
     await fs.writeFile(
-      '/state/fixture.json',
+      '/state/application/fixture.json',
       JSON.stringify({
         cookie,
         hash,
         checksum,
+        credentialsDigest: digest(deployment.env),
         access: await accessSnapshot(),
       }),
       { mode: 0o600 }
@@ -106,7 +110,7 @@ async function seed() {
   console.log('Published baseline seeded and authenticated');
 }
 
-async function verify(restart = false, expectedMajor = 18) {
+async function verify(restart = false) {
   const deployment = await state();
   const saved = await fixture();
   assert.equal(deployment.verified, true);
@@ -123,7 +127,7 @@ async function verify(restart = false, expectedMajor = 18) {
         "SELECT current_setting('server_version_num') AS version, current_setting('hba_file') AS hba"
       )
     ).rows[0];
-    assert.equal(Math.floor(Number(settings.version) / 10000), expectedMajor);
+    assert.equal(Math.floor(Number(settings.version) / 10000), 19);
     assert.equal(deployment.hbaFile, settings.hba);
     const active = (
       await owner.query('SELECT database_name FROM recovery_state WHERE id=1')
@@ -173,15 +177,11 @@ async function verify(restart = false, expectedMajor = 18) {
     await api.get('/api/lists').set('Cookie', cookie).expect(200);
     await api.get('/ready').expect(200);
     assert.deepEqual(await accessSnapshot(), saved.access);
-    if (saved.credentialsDigest)
-      assert.equal(digest(deployment.env), saved.credentialsDigest);
-    else {
-      saved.credentialsDigest = digest(deployment.env);
-      await fs.writeFile(
-        '/state/application/fixture.json',
-        JSON.stringify(saved)
-      );
-    }
+    assert.equal(digest(deployment.env), saved.credentialsDigest);
+    const indexes = await runtime.query(`SELECT
+      to_regclass('public.idx_artist_service_aliases_source_album_id') IS NOT NULL AS added,
+      to_regclass('public.idx_users_email') IS NULL AS removed`);
+    assert.deepEqual(indexes.rows[0], { added: true, removed: true });
     // Filesystem isolation is tested from the actual request-handler identity.
     assert.throws(
       () =>
@@ -243,59 +243,6 @@ async function failed() {
   );
 }
 
-async function initialDamage() {
-  const db = new Pool({ connectionString: process.env.DATABASE_URL });
-  try {
-    await db.query(
-      "UPDATE schema_migrations SET checksum='injected-adoption-failure' WHERE version='081_list_revisions'"
-    );
-  } finally {
-    await db.end();
-  }
-}
-
-async function initialFailed() {
-  for (let attempt = 0; attempt < 60; attempt++) {
-    try {
-      const deployment = await state();
-      if (deployment.backedUp) {
-        await delay(2000);
-        assert.equal((await state()).provisioned, undefined);
-        await failed();
-        return;
-      }
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
-    await delay(500);
-  }
-  assert.fail('Initial adoption did not reach the injected failure');
-}
-
-async function initialRepair() {
-  const deployment = await state();
-  const saved = await fixture();
-  const db = new Pool({
-    connectionString: databaseUrlFor(
-      deployment.env.PROVISION_DATABASE_URL,
-      deployment.candidate
-    ),
-  });
-  try {
-    await db.query(
-      "UPDATE schema_migrations SET checksum=$1 WHERE version='081_list_revisions'",
-      [saved.checksum]
-    );
-    saved.credentialsDigest = digest(deployment.env);
-    await fs.writeFile(
-      '/state/application/fixture.json',
-      JSON.stringify(saved)
-    );
-  } finally {
-    await db.end();
-  }
-}
-
 async function restore() {
   const cookie = await login();
   // Use the running app's active database and client major after a cutover.
@@ -339,55 +286,8 @@ async function restore() {
 async function main() {
   assert.equal(process.env.DEPLOYMENT_REHEARSAL, 'disposable');
   const actions = {
-    'initial-damage': initialDamage,
-    'initial-failed': initialFailed,
-    'initial-repair': initialRepair,
     seed,
-    refused18: async () => {
-      await fs.access('/state/fixture.json');
-      await assert.rejects(fs.stat('/state/.deployment'), { code: 'ENOENT' });
-      await api
-        .get('/api/lists')
-        .set('Cookie', await login())
-        .expect(200);
-    },
     verify,
-    verify19: () => verify(false, 19),
-    'verify-indexes': async () => {
-      const deployment = await state();
-      const control = new Pool({
-        connectionString: deployment.env.RECOVERY_DATABASE_URL,
-      });
-      try {
-        const { rows } = await control.query(
-          'SELECT database_name FROM recovery_state WHERE id=1'
-        );
-        const db = new Pool({
-          connectionString: databaseUrlFor(
-            deployment.env.DATABASE_URL,
-            rows[0].database_name
-          ),
-        });
-        try {
-          const result = await db.query(`SELECT
-            to_regclass('public.idx_artist_service_aliases_source_album_id') IS NOT NULL AS added,
-            to_regclass('public.idx_users_email') IS NULL AS removed`);
-          assert.deepEqual(result.rows[0], { added: true, removed: true });
-        } finally {
-          await db.end();
-        }
-      } finally {
-        await control.end();
-      }
-    },
-    'capture-session': async () => {
-      const saved = await fixture();
-      saved.cookie = await login();
-      await fs.writeFile(
-        '/state/application/fixture.json',
-        JSON.stringify(saved)
-      );
-    },
     restart: () => verify(true),
     damage,
     repair: () => damage(true),

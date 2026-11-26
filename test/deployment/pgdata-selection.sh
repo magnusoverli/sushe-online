@@ -21,7 +21,7 @@ export SUSHE_PG19_CUTOVER_ID=123456
 refused empty-cutover-target
 unset SUSHE_PG19_CUTOVER_ID
 marker "$root/data" "$PG_MAJOR"
-[[ $(select_dir) == "$root/data" ]]
+refused nonstandard-layout
 marker "$current" "$PG_MAJOR"
 refused ambiguous
 mv "$root/data" /tmp/retained
