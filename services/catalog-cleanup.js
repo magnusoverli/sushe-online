@@ -266,12 +266,8 @@ function createCatalogCleanupService(deps = {}) {
         const nullifyStatsResult = await client.query(
           `UPDATE user_album_stats uas
            SET album_id = NULL
-           WHERE uas.album_id IS NOT NULL
-             AND NOT EXISTS (
-               SELECT 1
-               FROM albums a
-               WHERE a.album_id = uas.album_id
-             )`
+            FROM cleanup_album_targets t
+            WHERE uas.album_id = t.album_id`
         );
         nullifiedUserAlbumStats = nullifyStatsResult.rowCount;
       }

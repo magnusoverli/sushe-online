@@ -141,7 +141,6 @@ function buildStatsLookupInputs(listItems, keyOf) {
  *
  * @param {Object} deps
  * @param {Function} [deps.refreshAlbumPlaycount] - single-album refresh (defaults to engine)
- * @returns {{ refreshPlaycountsInBackground: Function, getListPlaycounts: Function }}
  */
 function createPlaycountService(deps = {}) {
   const refreshAlbumPlaycount =
@@ -187,21 +186,9 @@ function createPlaycountService(deps = {}) {
    * @param {boolean} [params.forceRefresh=false]
    * @returns {Promise<{ playcounts: Object, refreshing: number } | { error: Object }>}
    */
-  async function getListPlaycounts({
-    listId,
-    userId,
-    lastfmUsername,
-    db,
-    logger,
-    normalizeAlbumKey,
-    forceRefresh = false,
-  }) {
+  async function getListPlaycounts(params) {
+    const { listId, userId, db } = params;
     const datastore = ensureDb(db, 'playcount-service.getListPlaycounts');
-
-    // Canonical key used for both cache lookups and matching, kept consistent
-    // with the write path so accented/special-char names match.
-    const keyOf = (artist, album) =>
-      canonicalAlbumKey(normalizeAlbumKey, artist, album);
 
     // Verify list exists
     const list = await datastore.raw(
@@ -220,7 +207,23 @@ function createPlaycountService(deps = {}) {
        WHERE li.list_id = $1`,
       [listId]
     );
-    const listItems = listItemsResult.rows;
+    return getItemPlaycounts(params, listItemsResult.rows);
+  }
+
+  async function getItemPlaycounts(
+    {
+      userId,
+      lastfmUsername,
+      db,
+      logger,
+      normalizeAlbumKey,
+      forceRefresh = false,
+    },
+    listItems
+  ) {
+    const datastore = ensureDb(db, 'playcount-service.getItemPlaycounts');
+    const keyOf = (artist, album) =>
+      canonicalAlbumKey(normalizeAlbumKey, artist, album);
 
     if (listItems.length === 0) {
       return { playcounts: {}, refreshing: 0 };
@@ -304,7 +307,11 @@ function createPlaycountService(deps = {}) {
     return { playcounts, refreshing: albumsToRefresh.length };
   }
 
-  return { refreshPlaycountsInBackground, getListPlaycounts };
+  return {
+    refreshPlaycountsInBackground,
+    getListPlaycounts,
+    getItemPlaycounts,
+  };
 }
 
 // Default instance for production use — callers import as before

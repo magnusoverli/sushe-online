@@ -196,8 +196,13 @@ test('shared mutations acquire the user lock first and publish old/new years onl
       },
     };
     registerListMutationPublisher(db, async (outcome) => events.push(outcome));
-    const operation = withListTransaction(db, 'owner', async () => {
+    const operation = withListTransaction(db, 'owner', async (client) => {
       events.push('mutation');
+      require('../services/list/transaction').recordAggregateYears(
+        client,
+        year,
+        2026
+      );
       year = 2026;
       return 'saved';
     });

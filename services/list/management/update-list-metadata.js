@@ -1,5 +1,5 @@
 const { checkDuplicateListName } = require('./check-duplicate-list-name');
-const { withListTransaction } = require('../transaction');
+const { withListTransaction, recordAggregateYears } = require('../transaction');
 
 async function destinationFields(ctx, client, userId, list, target) {
   const { groupId, year, name } = target;
@@ -133,12 +133,6 @@ async function updateListMetadata(ctx, listId, userId, updates) {
     );
 
     if (newName !== undefined) {
-      if (typeof newName !== 'string' || newName.trim().length === 0) {
-        throw new ctx.TransactionAbort(400, {
-          error: 'List name cannot be empty',
-        });
-      }
-
       const trimmedName = newName.trim();
       if (trimmedName !== list.name) {
         await checkDuplicateListName(
@@ -160,6 +154,8 @@ async function updateListMetadata(ctx, listId, userId, updates) {
 
     const update = ctx.buildPartialUpdate('lists', 'id', list.id, fields);
     await client.query(update.query, update.values);
+    if (list.is_main && targetYear !== currentYear)
+      recordAggregateYears(client, currentYear, targetYear);
     if (targetGroupId !== list.group_id)
       await ctx.deleteGroupIfEmptyAutoGroup(client, list.group_id);
 

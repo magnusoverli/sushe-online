@@ -74,7 +74,7 @@ test('overlapping requests keep their own origin through transaction publication
     db,
     createListMutationPublisher({
       responseCache: { invalidate() {} },
-      aggregateList: { scheduleRecompute() {} },
+      triggerAggregateListRecompute() {},
       getBroadcast: () => broadcast,
       logger: {
         error: (message) => {

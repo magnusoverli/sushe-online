@@ -265,14 +265,13 @@ function createAlbumService(deps = {}) {
     const album = result.rows[0];
     const coverLength = album.cover_length || 0;
     const thumbnailLength = album.cover_thumbnail_length || 0;
-    const selectedLength = thumbnail
-      ? thumbnailLength || coverLength
-      : coverLength;
-    const selectedFormat = thumbnail
-      ? album.cover_thumbnail_format || album.cover_image_format
+    const useThumbnail = thumbnail && thumbnailLength > 0;
+    const selectedLength = useThumbnail ? thumbnailLength : coverLength;
+    const selectedFormat = useThumbnail
+      ? album.cover_thumbnail_format
       : album.cover_image_format;
-    const selectedUpdatedAt = thumbnail
-      ? album.cover_thumbnail_updated_at || album.cover_image_updated_at
+    const selectedUpdatedAt = useThumbnail
+      ? album.cover_thumbnail_updated_at
       : album.cover_image_updated_at;
 
     if (!coverLength && album.artist && album.album) {
@@ -302,18 +301,18 @@ function createAlbumService(deps = {}) {
    */
   async function getCoverImage(albumId, options = {}) {
     const thumbnail = options.size === 'thumb';
+    // Check lengths without fetching either TOAST value into Node.
+    const useThumbnail =
+      '$2 AND octet_length(cover_thumbnail) > 0 AND octet_length(cover_image) > 0';
     const result = await db.raw(
-      `SELECT cover_image,
-              cover_image_format,
-              cover_image_updated_at,
-              cover_thumbnail,
-              cover_thumbnail_format,
-              cover_thumbnail_updated_at,
+      `SELECT CASE WHEN ${useThumbnail} THEN cover_thumbnail ELSE cover_image END AS cover_image,
+              CASE WHEN ${useThumbnail} THEN cover_thumbnail_format ELSE cover_image_format END AS cover_image_format,
+              CASE WHEN ${useThumbnail} THEN cover_thumbnail_updated_at ELSE cover_image_updated_at END AS cover_image_updated_at,
               updated_at,
               artist,
               album
        FROM albums WHERE album_id = $1`,
-      [albumId]
+      [albumId, thumbnail]
     );
 
     if (!result.rows.length) {
@@ -334,26 +333,13 @@ function createAlbumService(deps = {}) {
       throw new TransactionAbort(404, { error: 'Image not found' });
     }
 
-    const selectedImage =
-      thumbnail && album.cover_thumbnail
-        ? album.cover_thumbnail
-        : album.cover_image;
-    const selectedFormat =
-      thumbnail && album.cover_thumbnail
-        ? album.cover_thumbnail_format
-        : album.cover_image_format;
-    const selectedUpdatedAt =
-      thumbnail && album.cover_thumbnail
-        ? album.cover_thumbnail_updated_at
-        : album.cover_image_updated_at;
-
-    const imageBuffer = normalizeImageBuffer(selectedImage);
+    const imageBuffer = normalizeImageBuffer(album.cover_image);
 
     return {
       imageBuffer,
-      contentType: coverContentType(selectedFormat),
+      contentType: coverContentType(album.cover_image_format),
       albumId,
-      coverImageUpdatedAt: selectedUpdatedAt || album.updated_at,
+      coverImageUpdatedAt: album.cover_image_updated_at || album.updated_at,
     };
   }
 

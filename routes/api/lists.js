@@ -20,7 +20,7 @@ module.exports = (app, deps) => {
     cacheConfigs,
     listService,
     albumService,
-    helpers: { triggerAggregateListRecompute, invalidateListCaches },
+    helpers: { invalidateListCaches },
   } = deps;
 
   const { createAsyncHandler } = require('../../middleware/async-handler');
@@ -148,10 +148,6 @@ module.exports = (app, deps) => {
 
         invalidateListCaches(req.user._id);
 
-        for (const y of yearsToRecompute) {
-          triggerAggregateListRecompute(y);
-        }
-
         res.json({
           success: true,
           results,
@@ -197,10 +193,6 @@ module.exports = (app, deps) => {
       invalidateListCaches(req.user._id);
       scheduleTaxonomyUpdates(result.sourceObservationResults);
 
-      if (result.year) {
-        triggerAggregateListRecompute(result.year);
-      }
-
       res.status(201).json({
         success: true,
         _id: result.listId,
@@ -229,16 +221,6 @@ module.exports = (app, deps) => {
       });
 
       invalidateListCaches(req.user._id, id);
-
-      if (result.list.year !== null) {
-        triggerAggregateListRecompute(result.list.year);
-      }
-      if (
-        result.targetYear !== null &&
-        result.targetYear !== result.list.year
-      ) {
-        triggerAggregateListRecompute(result.targetYear);
-      }
 
       // Broadcast rename event if name changed
       const broadcast = req.app.locals.broadcast;
@@ -280,10 +262,6 @@ module.exports = (app, deps) => {
         invalidateListCaches(req.user._id, id);
         scheduleTaxonomyUpdates(sourceObservationResults);
 
-        if (list.year) {
-          triggerAggregateListRecompute(list.year);
-        }
-
         res.json({
           success: true,
           count,
@@ -318,12 +296,6 @@ module.exports = (app, deps) => {
       res.set('X-List-Revision', list.revision);
 
       invalidateListCaches(req.user._id, id);
-
-      // Reordering changes position-derived points, so the aggregate snapshot
-      // must be recomputed like every other item write.
-      if (list.year) {
-        triggerAggregateListRecompute(list.year);
-      }
 
       res.json({ success: true });
     }, 'reordering list')
@@ -404,9 +376,6 @@ module.exports = (app, deps) => {
       );
 
       invalidateListCaches(req.user._id, id);
-      if (result.list.year) {
-        triggerAggregateListRecompute(result.list.year);
-      }
       res.json({
         success: true,
         is_disqualified: result.is_disqualified,
@@ -444,10 +413,6 @@ module.exports = (app, deps) => {
         invalidateListCaches(req.user._id, id);
         scheduleTaxonomyUpdates(result.sourceObservationResults);
 
-        if (result.list.year) {
-          triggerAggregateListRecompute(result.list.year);
-        }
-
         res.json({
           success: true,
           changes: result.changeCount,
@@ -483,10 +448,6 @@ module.exports = (app, deps) => {
 
         invalidateListCaches(req.user._id);
 
-        if (result.year) {
-          triggerAggregateListRecompute(result.year);
-        }
-
         if (result.isRemoval) {
           return res.json({ success: true, year: result.year || null });
         }
@@ -516,13 +477,9 @@ module.exports = (app, deps) => {
     asyncHandler(async (req, res) => {
       const { id } = req.params;
 
-      const list = await listService.deleteList(id, req.user._id);
+      await listService.deleteList(id, req.user._id);
 
       invalidateListCaches(req.user._id, id, { groups: true });
-
-      if (list.year) {
-        triggerAggregateListRecompute(list.year);
-      }
 
       res.json({ success: true });
     }, 'deleting list')

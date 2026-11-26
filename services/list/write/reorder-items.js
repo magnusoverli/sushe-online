@@ -1,4 +1,4 @@
-const { withListTransaction } = require('../transaction');
+const { withListTransaction, recordAggregateYears } = require('../transaction');
 const { checkRevision, readRevision } = require('../revision');
 
 async function reorderItems(ctx, listId, userId, order, expectedRevision) {
@@ -74,7 +74,7 @@ async function reorderItems(ctx, listId, userId, order, expectedRevision) {
     }
 
     const positionValues = orderedItemIds.map((_, index) => index + 1);
-    await client.query(
+    const updated = await client.query(
       `UPDATE list_items
        SET position = t.position, updated_at = $1
        FROM UNNEST($2::text[], $3::int[]) AS t(item_id, position)
@@ -84,6 +84,8 @@ async function reorderItems(ctx, listId, userId, order, expectedRevision) {
     );
 
     effectivePos = orderedItemIds.length;
+    if (list.isMain && updated.rowCount)
+      recordAggregateYears(client, list.year);
     await readRevision(client, list);
   });
 

@@ -124,7 +124,7 @@ describe('app bootstrap route', () => {
 
   it('includes cached playcounts for the selected list when Last.fm is connected', async () => {
     const playcountService = {
-      getListPlaycounts: mock.fn(async () => ({
+      getItemPlaycounts: mock.fn(async () => ({
         playcounts: {
           'item-1': { playcount: 42, status: 'success' },
         },
@@ -148,9 +148,10 @@ describe('app bootstrap route', () => {
       'item-1': { playcount: 42, status: 'success' },
     });
     assert.strictEqual(response.body.selectedListPlaycountRefreshing, 3);
-    assert.strictEqual(playcountService.getListPlaycounts.mock.calls.length, 1);
-    const args = playcountService.getListPlaycounts.mock.calls[0].arguments[0];
-    assert.strictEqual(args.listId, 'list-1');
+    assert.strictEqual(playcountService.getItemPlaycounts.mock.calls.length, 1);
+    const [args, items] =
+      playcountService.getItemPlaycounts.mock.calls[0].arguments;
+    assert.deepStrictEqual(items, response.body.selectedListItems);
     assert.strictEqual(args.userId, 'user-1');
     assert.strictEqual(args.lastfmUsername, 'listener');
     assert.strictEqual(args.db, db);

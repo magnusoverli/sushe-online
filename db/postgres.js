@@ -456,6 +456,10 @@ class PgDatastore {
       }
       const result = await withRetry(run, {
         idempotent: true,
+        classify: (err) => ({
+          code: err?.code,
+          kind: ['40001', '40P01'].includes(err?.code) ? 'retryable' : 'fatal',
+        }),
         label: 'tx:db',
       });
       callMetric('observeDbTransaction', Date.now() - startTime, 'success');

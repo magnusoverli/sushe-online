@@ -1,5 +1,5 @@
 const MAX_REASON_LENGTH = 1000;
-const { withListTransaction } = require('./transaction');
+const { withListTransaction, recordAggregateYears } = require('./transaction');
 const { readRevision } = require('./revision');
 
 function normalizeReason(reason, disqualified, TransactionAbort) {
@@ -55,12 +55,14 @@ function createItemDisqualification(deps) {
              disqualification_reason = $2,
              updated_at = $3
          WHERE list_id = $4 AND _id = $5
-         RETURNING is_disqualified, disqualification_reason`,
+          RETURNING is_disqualified, disqualification_reason, OLD.is_disqualified IS DISTINCT FROM NEW.is_disqualified AS eligibility_changed`,
         [disqualified, normalizedReason, timestamp, list._id, itemId]
       );
       if (result.rows.length === 0) {
         throw new TransactionAbort(404, { error: 'List item not found' });
       }
+      if (list.isMain && result.rows[0].eligibility_changed)
+        recordAggregateYears(client, list.year);
       await client.query('UPDATE lists SET updated_at = $1 WHERE _id = $2', [
         timestamp,
         list._id,

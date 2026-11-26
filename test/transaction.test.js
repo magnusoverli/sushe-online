@@ -8,6 +8,30 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { mock } = require('node:test');
 const { withTransaction, TransactionAbort } = require('../db/transaction');
+const { PgDatastore } = require('../db/postgres');
+
+test('transaction retries distinguish confirmed aborts from a lost commit acknowledgement', async () => {
+  for (const [code, retryable, attempts] of [
+    ['ECONNRESET', true, 1],
+    ['40001', false, 1],
+    ['40001', true, 2],
+    ['40P01', true, 2],
+  ]) {
+    const { mockPool, mockClient } = createMockPool();
+    let commits = 0;
+    mockClient.query.mock.mockImplementation(async (sql) => {
+      if (sql === 'COMMIT' && ++commits === 1)
+        throw Object.assign(new Error('commit failed'), { code });
+    });
+    const callback = mock.fn(async () => 1);
+    const result = new PgDatastore(mockPool).withTransaction(callback, {
+      retryable,
+    });
+    if (attempts === 1) await assert.rejects(result, { code });
+    else assert.equal(await result, 1);
+    assert.equal(callback.mock.calls.length, attempts);
+  }
+});
 
 /**
  * Create a mock pool and client for testing

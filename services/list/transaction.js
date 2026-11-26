@@ -7,19 +7,20 @@ const mutationScopes = new WeakMap();
 function recordListContentChange(client, list) {
   mutationScopes
     .get(client)
-    ?.set(list._id, { listId: list._id, revision: list.revision });
+    ?.changes.set(list._id, { listId: list._id, revision: list.revision });
 }
 
 function registerListMutationPublisher(db, publisher) {
   publishers.set(db, publisher);
 }
 
-async function mainYears(client, userId) {
-  const result = await client.query(
-    'SELECT DISTINCT year FROM lists WHERE user_id = $1 AND is_main = TRUE AND year IS NOT NULL',
-    [userId]
-  );
-  return result.rows.map((row) => row.year);
+function recordAggregateYears(client, ...years) {
+  const scope = mutationScopes.get(client);
+  if (scope) for (const year of years) if (year != null) scope.years.add(year);
+}
+
+function recordChangedAlbum(client, albumId) {
+  mutationScopes.get(client)?.albumIds.add(albumId);
 }
 
 // All owned-list/group mutations acquire this lock before any row or year
@@ -27,29 +28,35 @@ async function mainYears(client, userId) {
 // remain concurrent. Administrative year flips never acquire user locks.
 async function withListTransaction(db, userId, callback) {
   const publisher = publishers.get(db);
-  let years = [];
-  let changes = [];
+  const scope = { years: new Set(), changes: new Map(), albumIds: new Set() };
   const result = await db.withTransaction(async (client) => {
     await acquireTransactionLocks(client, USER_MUTATION_NAMESPACE, [userId]);
-    if (publisher) years = await mainYears(client, userId);
-    const scope = new Map();
-    mutationScopes.set(client, scope);
+    if (publisher) mutationScopes.set(client, scope);
     let value;
     try {
       value = await callback(client);
-      changes = [...scope.values()];
+      if (scope.albumIds.size) {
+        const { rows } = await client.query(
+          `SELECT DISTINCT l.year FROM list_items li
+          JOIN lists l ON l._id=li.list_id
+          JOIN aggregate_list_contributors c ON c.year=l.year AND c.user_id=l.user_id
+          WHERE l.is_main AND li.position <= 40 AND NOT COALESCE(li.is_disqualified,false)
+            AND li.album_id=ANY($1::text[])`,
+          [[...scope.albumIds]]
+        );
+        for (const { year } of rows) scope.years.add(year);
+      }
     } finally {
       mutationScopes.delete(client);
     }
-    if (publisher) years.push(...(await mainYears(client, userId)));
     return value;
   });
   // Publication is owned by composition and occurs only after COMMIT succeeds.
   if (publisher)
     await publisher({
       userId,
-      years: [...new Set(years)],
-      ...(changes.length ? { changes } : {}),
+      years: [...scope.years],
+      ...(scope.changes.size ? { changes: [...scope.changes.values()] } : {}),
     });
   return result;
 }
@@ -58,4 +65,6 @@ module.exports = {
   withListTransaction,
   registerListMutationPublisher,
   recordListContentChange,
+  recordAggregateYears,
+  recordChangedAlbum,
 };

@@ -1,4 +1,4 @@
-const { withListTransaction } = require('../transaction');
+const { withListTransaction, recordAggregateYears } = require('../transaction');
 
 async function toggleMainStatus(ctx, listId, userId, isMain) {
   return withListTransaction(ctx.db, userId, async (client) => {
@@ -33,6 +33,7 @@ async function toggleMainStatus(ctx, listId, userId, isMain) {
     }
 
     if (isMain === false) {
+      if (list.is_main) recordAggregateYears(client, listYear);
       await client.query(
         `UPDATE lists SET is_main = FALSE, updated_at = NOW() WHERE id = $1 AND is_main IS DISTINCT FROM FALSE`,
         [list.id]
@@ -72,6 +73,8 @@ async function toggleMainStatus(ctx, listId, userId, isMain) {
       [list.id]
     );
 
+    if (!list.is_main || previousMainResult.rows.length)
+      recordAggregateYears(client, listYear);
     return {
       list,
       year: listYear,

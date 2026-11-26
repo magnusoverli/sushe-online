@@ -1,6 +1,7 @@
 const { triggerPlaycountRefresh } = require('./item-playcount-refresh');
 const { ensureDb } = require('../../db/postgres');
 const { albumBatchKey } = require('../../utils/album-batch-key');
+const { recordChangedAlbum } = require('./transaction');
 
 function toBackgroundItem({ album, upsertResult }) {
   return {
@@ -151,9 +152,14 @@ async function insertListItems(
 }
 
 async function applySourceObservations(ctx, client, entries, result) {
-  if (!ctx.sourceObservationService) return;
   for (const entry of entries) {
-    if (entry.album.sourceObservation === undefined) continue;
+    if (entry.upsertResult.metadataChanged || entry.album.cover_image)
+      recordChangedAlbum(client, entry.albumId);
+    if (
+      !ctx.sourceObservationService ||
+      entry.album.sourceObservation === undefined
+    )
+      continue;
     const applied = await ctx.sourceObservationService.apply(
       client,
       entry.albumId,
@@ -161,6 +167,8 @@ async function applySourceObservations(ctx, client, entries, result) {
       { index: entry.index }
     );
     result.sourceObservationResults.push(applied.result);
+    if (applied.result.status === 'applied')
+      recordChangedAlbum(client, entry.albumId);
     result.warnings.push(...applied.warnings);
   }
 }

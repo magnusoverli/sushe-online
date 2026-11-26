@@ -78,7 +78,7 @@ describe('absolute track selection contract', () => {
     const events = [];
     const publish = createListMutationPublisher({
       responseCache: { invalidate() {} },
-      aggregateList: { scheduleRecompute() {} },
+      triggerAggregateListRecompute() {},
       getBroadcast: () => ({
         listUpdated: (...args) => events.push(args),
         libraryUpdated: () => {

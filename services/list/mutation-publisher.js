@@ -1,13 +1,13 @@
 function createListMutationPublisher({
   responseCache,
-  aggregateList,
+  triggerAggregateListRecompute,
   getBroadcast,
   logger,
 }) {
   return async ({ userId, years, changes = [] }) => {
     try {
       responseCache.invalidate(`:${userId}`);
-      for (const year of years) aggregateList.scheduleRecompute(year);
+      for (const year of years) triggerAggregateListRecompute(year);
       const broadcast = getBroadcast();
       if (changes.length) {
         for (const change of changes)

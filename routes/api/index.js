@@ -141,7 +141,7 @@ module.exports = (app, deps) => {
     db,
     createListMutationPublisher({
       responseCache,
-      aggregateList: helpers.aggregateList,
+      triggerAggregateListRecompute: helpers.triggerAggregateListRecompute,
       getBroadcast: () => app.locals.broadcast,
       logger,
     })

@@ -28,7 +28,9 @@ async function validateAndCompactOrder(client, listId) {
          AND li.position IS DISTINCT FROM ranked.position`,
       [rows.map((row) => row._id), rows.map((_, index) => index + 1), listId]
     );
+    return true;
   }
+  return false;
 }
 
 module.exports = { validateAndCompactOrder };

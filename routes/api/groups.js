@@ -11,13 +11,7 @@
  * @param {Object} deps - Dependencies
  */
 module.exports = (app, deps) => {
-  const {
-    ensureAuthAPI,
-    logger,
-    responseCache,
-    helpers: { triggerAggregateListRecompute },
-    groupService,
-  } = deps;
+  const { ensureAuthAPI, logger, responseCache, groupService } = deps;
 
   const { createAsyncHandler } = require('../../middleware/async-handler');
   const asyncHandler = createAsyncHandler(logger);
@@ -134,10 +128,6 @@ module.exports = (app, deps) => {
         responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
         responseCache.invalidate(`GET:/api/groups:${req.user._id}`);
         responseCache.invalidate('GET:/api/app-bootstrap');
-
-        if (result.oldYear) triggerAggregateListRecompute(result.oldYear);
-        if (result.targetYear && result.targetYear !== result.oldYear)
-          triggerAggregateListRecompute(result.targetYear);
 
         res.json({
           success: true,

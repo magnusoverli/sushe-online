@@ -38,7 +38,14 @@ const {
  * Get users who need playcount sync (Last.fm connected and either stale or
  * missing coverage for some album in their lists).
  */
-async function getUsersNeedingSync(db, staleThresholdMs, limit = 50) {
+const PAGE_SIZE = 50;
+
+async function getUsersNeedingSync(
+  db,
+  staleThresholdMs,
+  limit = PAGE_SIZE,
+  after = null
+) {
   const staleIntervalSeconds = Math.floor(staleThresholdMs / 1000);
 
   const query = `
@@ -70,13 +77,34 @@ async function getUsersNeedingSync(db, staleThresholdMs, limit = 50) {
     WHERE u.lastfm_auth IS NOT NULL
       AND u.lastfm_username IS NOT NULL
       AND u.lastfm_username != ''
+      AND ($3::text IS NULL OR u._id > $3)
+      AND EXISTS (
+        SELECT 1 FROM lists l JOIN list_items li ON li.list_id=l._id
+        JOIN albums a ON a.album_id=li.album_id
+        WHERE l.user_id=u._id AND a.artist IS NOT NULL AND a.album IS NOT NULL
+      )
       AND (f.user_id IS NULL OR m.user_id IS NOT NULL)
     ORDER BY u._id
     LIMIT $1
   `;
 
-  const result = await db.raw(query, [limit, staleIntervalSeconds]);
+  const result = await db.raw(query, [limit, staleIntervalSeconds, after]);
   return result.rows;
+}
+
+async function* usersDueThisCycle(db, staleThresholdMs) {
+  let after = null;
+  do {
+    const page = await getUsersNeedingSync(
+      db,
+      staleThresholdMs,
+      PAGE_SIZE,
+      after
+    );
+    yield* page;
+    if (page.length < PAGE_SIZE) return;
+    after = page[page.length - 1]._id;
+  } while (after !== null);
 }
 
 /**
@@ -231,14 +259,19 @@ function createPlaycountSyncService(deps = {}) {
     };
 
     try {
-      const users = await getUsersNeedingSync(db, staleThresholdMs);
-      results.total = users.length;
-
-      log.info(`Found ${users.length} users needing playcount sync`);
-
-      for (const user of users) {
+      for await (const user of usersDueThisCycle(db, staleThresholdMs)) {
+        if (results.total > 0)
+          await new Promise((resolve) =>
+            setTimeout(resolve, RATE_LIMIT_DELAY_MS)
+          );
+        results.total++;
         try {
-          const result = await syncUserPlaycounts(db, log, user);
+          const result = await syncUserPlaycounts(
+            db,
+            log,
+            user,
+            loadUserAlbums
+          );
           results.totalAlbums += result.synced + result.failed;
 
           if (result.success) {
@@ -250,11 +283,6 @@ function createPlaycountSyncService(deps = {}) {
               synced: result.synced,
               failed: result.failed,
             });
-          }
-
-          // Rate limit delay between users
-          if (users.indexOf(user) < users.length - 1) {
-            await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
           }
         } catch (err) {
           results.failed++;
@@ -356,6 +384,7 @@ function createPlaycountSyncService(deps = {}) {
 }
 
 module.exports = {
+  usersDueThisCycle,
   createPlaycountSyncService,
   syncUserPlaycounts,
   // Re-exported from the engine so existing importers keep working.

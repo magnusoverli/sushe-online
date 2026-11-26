@@ -19,7 +19,10 @@ const { ensureDb } = require('../db/postgres');
 const { acquireYearLocks, isYearLocked } = require('./year-lock-service');
 const { TransactionAbort } = require('../db/transaction');
 const { buildPartialUpdate } = require('../utils/query-builder');
-const { withListTransaction } = require('./list/transaction');
+const {
+  withListTransaction,
+  recordAggregateYears,
+} = require('./list/transaction');
 
 /**
  * Create group service with injected dependencies
@@ -272,6 +275,7 @@ function createGroupService(deps = {}) {
         ...new Set(mainListsWithYears.rows.map((r) => r.year)),
       ];
       if (uniqueYears.length > 0) {
+        recordAggregateYears(client, ...uniqueYears);
         await acquireYearLocks(client, uniqueYears);
         let lockedYears;
         try {
@@ -519,6 +523,8 @@ function createGroupService(deps = {}) {
 
       // Check year locks for main lists
       if (list.is_main) {
+        if (oldYear !== targetYear)
+          recordAggregateYears(client, oldYear, targetYear);
         await acquireYearLocks(client, [oldYear, targetYear]);
 
         const sourceYearLocked = oldYear

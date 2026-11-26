@@ -35,7 +35,7 @@ describe('playcount-sync-service', () => {
       assert.ok(query.includes('users_with_missing_coverage AS'));
       assert.ok(query.includes('LEFT JOIN user_album_stats uas'));
       assert.ok(!query.includes('REGEXP_REPLACE'));
-      assert.deepStrictEqual(params, [10, 24 * 60 * 60]);
+      assert.deepStrictEqual(params, [10, 24 * 60 * 60, null]);
     });
 
     it('should apply default limit when none is provided', async () => {

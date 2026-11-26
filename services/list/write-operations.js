@@ -4,7 +4,7 @@ const {
   acquireTransactionLocks,
 } = require('../../db/advisory-locks');
 const { prepareExplicitCovers } = require('./cover-preparation');
-const { withListTransaction } = require('./transaction');
+const { withListTransaction, recordAggregateYears } = require('./transaction');
 const { validateAndCompactOrder } = require('./write/validate-order');
 const { checkRevision, readRevision } = require('./revision');
 
@@ -172,6 +172,7 @@ function createListWriteOperations(deps = {}) {
         );
       }
 
+      if (isMain) recordAggregateYears(client, resultYear);
       return resultYear;
     });
 
@@ -230,7 +231,7 @@ function createListWriteOperations(deps = {}) {
       );
 
       const existingResult = await client.query(
-        `SELECT _id, album_id, is_disqualified, disqualification_reason
+        `SELECT _id, album_id, is_disqualified, disqualification_reason, position
          FROM list_items
          WHERE list_id = $1`,
         [list._id]
@@ -247,6 +248,21 @@ function createListWriteOperations(deps = {}) {
         timestamp,
         existingResult.rows
       );
+      if (list.isMain) {
+        const oldByAlbum = new Map(
+          existingResult.rows.map((row) => [row.album_id, row])
+        );
+        const rankingChanged =
+          observationResult.addedItems.length !== existingResult.rows.length ||
+          observationResult.addedItems.some((item, index) => {
+            const old = oldByAlbum.get(item.album_id);
+            return (
+              old?.position !== index + 1 ||
+              !!old.is_disqualified !== !!albums[index].is_disqualified
+            );
+          });
+        if (rankingChanged) recordAggregateYears(client, list.year);
+      }
 
       // A PUT consumes its If-Match even when the submitted items are identical.
       // Changed items have already advanced the revision through their triggers.
@@ -359,7 +375,9 @@ function createListWriteOperations(deps = {}) {
         updated,
         timestamp
       );
-      await validateAndCompactOrder(client, list._id);
+      const compacted = await validateAndCompactOrder(client, list._id);
+      if (list.isMain && (changeCount || compacted))
+        recordAggregateYears(client, list.year);
 
       await client.query('UPDATE lists SET updated_at = $1 WHERE _id = $2', [
         timestamp,

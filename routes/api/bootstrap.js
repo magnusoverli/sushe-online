@@ -57,14 +57,16 @@ module.exports = (app, deps) => {
 
       if (selectedList && req.user.lastfmUsername && playcountService) {
         try {
-          const result = await playcountService.getListPlaycounts({
-            listId: selectedList.list._id,
-            userId: req.user._id,
-            lastfmUsername: req.user.lastfmUsername,
-            db,
-            logger,
-            normalizeAlbumKey,
-          });
+          const result = await playcountService.getItemPlaycounts(
+            {
+              userId: req.user._id,
+              lastfmUsername: req.user.lastfmUsername,
+              db,
+              logger,
+              normalizeAlbumKey,
+            },
+            selectedList.items
+          );
 
           if (!result.error) {
             selectedListPlaycounts = result.playcounts || {};
