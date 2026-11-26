@@ -88,7 +88,7 @@ function setupListWrite(t, failCommit = false) {
       assert.ok(albums.every((album) => !Object.hasOwn(album, 'cover_image')));
       return new Map(
         albums.map((album) => [
-          `${album.artist}|${album.album}`,
+          require('../utils/album-batch-key').albumBatchKey(album),
           { ...canonicalResult },
         ])
       );
@@ -252,7 +252,11 @@ describe('post-commit enrichment flags', () => {
       [album],
       new Date()
     );
-    assert.equal(results.get('Artist|Album').albumId, albumId);
+    assert.equal(
+      results.get(require('../utils/album-batch-key').albumBatchKey(album))
+        .albumId,
+      albumId
+    );
     assert.equal(state.queues['cover-fetch'].add.mock.calls.length, 2);
     assert.equal(state.queues['track-fetch'].add.mock.calls.length, 0);
   });

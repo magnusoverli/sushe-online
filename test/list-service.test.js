@@ -996,7 +996,7 @@ describe('list-service write operations', () => {
       async () =>
         new Map([
           [
-            'Panopticon|Det Hjemsokte Hjertet',
+            '["01ce764b-626f-43a7-b73a-378bcb4c03ea","Panopticon","Det Hjemsokte Hjertet"]',
             {
               albumId: '01ce764b-626f-43a7-b73a-378bcb4c03ea',
               needsCoverFetch: true,

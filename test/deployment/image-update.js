@@ -128,6 +128,9 @@ async function verify(restart = false) {
       )
     ).rows[0];
     assert.equal(Math.floor(Number(settings.version) / 10000), 19);
+    assert.ok(
+      (await boot.query('SELECT 1 FROM pg_stat_statements LIMIT 1')).rowCount
+    );
     assert.equal(deployment.hbaFile, settings.hba);
     const active = (
       await owner.query('SELECT database_name FROM recovery_state WHERE id=1')

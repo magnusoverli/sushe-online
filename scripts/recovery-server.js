@@ -1,4 +1,4 @@
-const { setTimeout: delay } = require('node:timers/promises');
+const { createWorkerWakeup } = require('../services/recovery/worker-wakeup');
 const { createControlStore } = require('../services/recovery/control-store');
 const { createRecoveryGateway } = require('../services/recovery/gateway');
 const { createRecoveryWorker } = require('../services/recovery/worker');
@@ -21,6 +21,7 @@ async function main(env = process.env) {
     throw error;
   }
   const worker = createRecoveryWorker(control, env);
+  const wakeup = createWorkerWakeup(control.pool);
   const server = createRecoveryGateway(control, env).listen(
     Number(env.RECOVERY_PORT || 3000)
   );
@@ -32,6 +33,7 @@ async function main(env = process.env) {
   let stopped = false;
   const stop = () => {
     stopped = true;
+    wakeup.wake();
     server.close();
   };
   process.once('SIGTERM', stop);
@@ -39,13 +41,15 @@ async function main(env = process.env) {
   try {
     while (!stopped) {
       try {
+        await wakeup.subscribe().catch(() => {});
         await worker.processNext();
       } catch (_error) {
         logger.error('Recovery worker retrying after control failure');
       }
-      await delay(500);
+      if (!stopped) await wakeup.wait();
     }
   } finally {
+    wakeup.disconnect();
     await control.close();
   }
 }

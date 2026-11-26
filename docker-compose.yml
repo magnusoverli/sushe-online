@@ -110,6 +110,8 @@ services:
       -c log_min_error_statement=panic
       -c log_parameter_max_length_on_error=0
       -c shared_buffers=2GB
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track_utility=off
       -c effective_cache_size=6GB
       -c maintenance_work_mem=512MB
       -c checkpoint_completion_target=0.9

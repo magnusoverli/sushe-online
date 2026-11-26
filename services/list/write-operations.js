@@ -137,7 +137,7 @@ function createListWriteOperations(deps = {}) {
       if (isMain) {
         await client.query(
           `UPDATE lists SET is_main = FALSE, updated_at = NOW()
-           WHERE user_id = $1
+            WHERE user_id = $1 AND is_main
              AND id IN (
                SELECT l.id FROM lists l
                LEFT JOIN list_groups g ON l.group_id = g.id
@@ -240,21 +240,20 @@ function createListWriteOperations(deps = {}) {
         existingResult.rows
       );
 
-      await client.query('DELETE FROM list_items WHERE list_id = $1', [
-        list._id,
-      ]);
-
       observationResult = await itemOperations.insertListItems(
         client,
         list._id,
         albums,
-        timestamp
+        timestamp,
+        existingResult.rows
       );
 
-      await client.query('UPDATE lists SET updated_at = $1 WHERE _id = $2', [
-        timestamp,
-        list._id,
-      ]);
+      // A PUT consumes its If-Match even when the submitted items are identical.
+      // Changed items have already advanced the revision through their triggers.
+      await client.query(
+        'UPDATE lists SET updated_at = $1 WHERE _id = $2 AND revision = $3',
+        [timestamp, list._id, list.revision]
+      );
       await readRevision(client, list);
     });
 

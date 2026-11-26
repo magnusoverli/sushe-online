@@ -22,6 +22,10 @@ const {
   normalizeForLookup,
 } = require('../utils/normalization');
 const { ensureDb } = require('../db/postgres');
+const { albumBatchKey } = require('../utils/album-batch-key');
+
+const MANUAL_CONFLICT = `(lower(trim(coalesce(artist,''))), lower(trim(coalesce(album,''))))
+  WHERE starts_with(album_id,'internal-') AND NOT manual_identity_alias`;
 
 /**
  * Generate a stable internal album ID for manually added albums
@@ -440,8 +444,7 @@ function createAlbumCanonical(deps = {}) {
           genre_1, genre_2, tracks, cover_image, cover_image_format,
           cover_image_updated_at, created_at, updated_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-        ON CONFLICT (LOWER(TRIM(COALESCE(artist, ''))), LOWER(TRIM(COALESCE(album, ''))))
-        WHERE album_id IS NULL OR album_id = ''
+        ON CONFLICT ${MANUAL_CONFLICT}
         DO UPDATE SET
           -- Prefer external album_id over internal UUID
           album_id = CASE
@@ -528,7 +531,7 @@ function createAlbumCanonical(deps = {}) {
     // For single album, use regular upsert
     if (albums.length === 1) {
       const result = await upsertCanonical(albums[0], timestamp, client);
-      const key = `${albums[0].artist}|${albums[0].album}`;
+      const key = albumBatchKey(albums[0]);
       return new Map([[key, result]]);
     }
 
@@ -554,7 +557,7 @@ function createAlbumCanonical(deps = {}) {
         tracks: Array.isArray(album.tracks)
           ? JSON.stringify(album.tracks)
           : null,
-        key: `${album.artist}|${album.album}`,
+        key: albumBatchKey(album),
       };
 
       if (album.album_id) {
@@ -564,33 +567,28 @@ function createAlbumCanonical(deps = {}) {
       }
     }
 
-    // Batch 1: Albums WITH album_id
-    if (withId.length > 0) {
-      const albumIds = withId.map((a) => a.album_id);
-      const artists = withId.map((a) => a.artist);
-      const albumNames = withId.map((a) => a.album);
-      const releaseDates = withId.map((a) => a.release_date);
-      const countries = withId.map((a) => a.country);
-      const genres1 = withId.map((a) => a.genre_1);
-      const genres2 = withId.map((a) => a.genre_2);
-      const tracksList = withId.map((a) => a.tracks);
-      const createdAts = withId.map(() => timestamp);
-      const updatedAts = withId.map(() => timestamp);
+    for (const batch of [withId, withoutId]) {
+      if (!batch.length) continue;
+      const byId = batch === withId;
+      const identity = (alias) =>
+        byId
+          ? `${alias}.album_id`
+          : `ROW(lower(trim(${alias}.artist)),lower(trim(${alias}.album)))`;
 
       const result = await executeQuery(
         client,
-        `INSERT INTO albums (
+        `WITH input AS (
+          SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[],
+            $5::text[], $6::text[], $7::text[], $8::jsonb[]) WITH ORDINALITY
+            AS i(album_id, artist, album, release_date, country, genre_1, genre_2, tracks, ord)
+        ), saved AS (INSERT INTO albums (
           album_id, artist, album, release_date, country, genre_1, genre_2, 
           tracks, created_at, updated_at
         )
-        SELECT * FROM UNNEST(
-          $1::text[], $2::text[], $3::text[], $4::text[], 
-          $5::text[], $6::text[], $7::text[], $8::jsonb[],
-          $9::timestamptz[], $10::timestamptz[]
-        ) AS t(album_id, artist, album, release_date, country, genre_1, genre_2, tracks, created_at, updated_at)
-        ON CONFLICT (album_id)
-        WHERE album_id IS NOT NULL AND album_id != ''
-        DO UPDATE SET${PRESERVE_NATIVE_NAME_SQL}
+        SELECT DISTINCT ON (${identity('i')}) album_id, artist, album, release_date, country,
+          genre_1, genre_2, tracks, $9, $9 FROM input i ORDER BY ${identity('i')}, ord
+        ON CONFLICT ${byId ? "(album_id) WHERE album_id IS NOT NULL AND album_id != ''" : MANUAL_CONFLICT}
+        DO UPDATE SET ${byId ? PRESERVE_NATIVE_NAME_SQL : ''}
           release_date = CASE
             WHEN EXCLUDED.release_date != '' THEN EXCLUDED.release_date
             ELSE albums.release_date
@@ -607,30 +605,30 @@ function createAlbumCanonical(deps = {}) {
           OLD.id IS NULL AS was_inserted,
           cover_image IS NULL AS needs_cover_fetch,
           summary_fetched_at IS NULL AS needs_summary_fetch,
-          tracks IS NULL AS needs_tracks_fetch`,
+          tracks IS NULL AS needs_tracks_fetch)
+        SELECT s.*, i.ord FROM input i JOIN saved s ON ${identity('s')} = ${identity('i')}`,
         [
-          albumIds,
-          artists,
-          albumNames,
-          releaseDates,
-          countries,
-          genres1,
-          genres2,
-          tracksList,
-          createdAts,
-          updatedAts,
+          ...[
+            'album_id',
+            'artist',
+            'album',
+            'release_date',
+            'country',
+            'genre_1',
+            'genre_2',
+            'tracks',
+          ].map((field) => batch.map((item) => item[field])),
+          timestamp,
         ],
-        { name: 'album-canonical-batch-upsert-with-id' }
+        { name: `album-canonical-batch-${byId ? 'id' : 'manual'}` }
       );
 
       // Map results back to the CALLER's keys via album_id — the stored
       // artist/album can legitimately differ from the input (preserved
       // native-script names, sanitization), and consumers look up results
       // by the names they passed in.
-      const inputKeyByAlbumId = new Map(withId.map((a) => [a.album_id, a.key]));
       result.rows.forEach((row) => {
-        const key =
-          inputKeyByAlbumId.get(row.album_id) || `${row.artist}|${row.album}`;
+        const key = batch[Number(row.ord) - 1].key;
         results.set(key, {
           albumId: row.album_id,
           wasInserted: row.was_inserted,
@@ -639,96 +637,6 @@ function createAlbumCanonical(deps = {}) {
           needsCoverFetch: row.needs_cover_fetch,
           needsTracksFetch: row.needs_tracks_fetch,
         });
-      });
-
-      log.debug('Batch upsert (with album_id)', {
-        count: withId.length,
-        inserted: result.rows.filter((r) => r.was_inserted).length,
-        updated: result.rows.filter((r) => !r.was_inserted).length,
-      });
-    }
-
-    // Batch 2: Albums WITHOUT album_id
-    if (withoutId.length > 0) {
-      const albumIds = withoutId.map((a) => a.album_id);
-      const artists = withoutId.map((a) => a.artist);
-      const albumNames = withoutId.map((a) => a.album);
-      const releaseDates = withoutId.map((a) => a.release_date);
-      const countries = withoutId.map((a) => a.country);
-      const genres1 = withoutId.map((a) => a.genre_1);
-      const genres2 = withoutId.map((a) => a.genre_2);
-      const tracksList = withoutId.map((a) => a.tracks);
-      const createdAts = withoutId.map(() => timestamp);
-      const updatedAts = withoutId.map(() => timestamp);
-
-      const result = await executeQuery(
-        client,
-        `INSERT INTO albums (
-          album_id, artist, album, release_date, country, genre_1, genre_2, 
-          tracks, created_at, updated_at
-        )
-        SELECT * FROM UNNEST(
-          $1::text[], $2::text[], $3::text[], $4::text[], 
-          $5::text[], $6::text[], $7::text[], $8::jsonb[],
-          $9::timestamptz[], $10::timestamptz[]
-        ) AS t(album_id, artist, album, release_date, country, genre_1, genre_2, tracks, created_at, updated_at)
-        ON CONFLICT (LOWER(TRIM(COALESCE(artist, ''))), LOWER(TRIM(COALESCE(album, ''))))
-        WHERE album_id IS NULL OR album_id = ''
-        DO UPDATE SET
-          album_id = CASE
-            WHEN albums.album_id LIKE 'internal-%' AND EXCLUDED.album_id NOT LIKE 'internal-%'
-            THEN EXCLUDED.album_id
-            ELSE albums.album_id
-          END,
-          release_date = CASE 
-            WHEN EXCLUDED.release_date != '' THEN EXCLUDED.release_date 
-            ELSE albums.release_date 
-          END,
-          country = CASE 
-            WHEN EXCLUDED.country != '' THEN EXCLUDED.country 
-            ELSE albums.country 
-          END,
-          ${PRESERVE_STRUCTURED_GENRES_SQL}
-          tracks = COALESCE(EXCLUDED.tracks, albums.tracks),
-          updated_at = EXCLUDED.updated_at
-        RETURNING 
-          album_id, artist, album,
-          OLD.id IS NULL AS was_inserted,
-          cover_image IS NULL AS needs_cover_fetch,
-          summary_fetched_at IS NULL AS needs_summary_fetch,
-          tracks IS NULL AS needs_tracks_fetch`,
-        [
-          albumIds,
-          artists,
-          albumNames,
-          releaseDates,
-          countries,
-          genres1,
-          genres2,
-          tracksList,
-          createdAts,
-          updatedAts,
-        ],
-        { name: 'album-canonical-batch-upsert-without-id' }
-      );
-
-      // Map results by artist|album key
-      result.rows.forEach((row) => {
-        const key = `${row.artist}|${row.album}`;
-        results.set(key, {
-          albumId: row.album_id,
-          wasInserted: row.was_inserted,
-          wasMerged: !row.was_inserted,
-          needsSummaryFetch: row.needs_summary_fetch,
-          needsCoverFetch: row.needs_cover_fetch,
-          needsTracksFetch: row.needs_tracks_fetch,
-        });
-      });
-
-      log.debug('Batch upsert (without album_id)', {
-        count: withoutId.length,
-        inserted: result.rows.filter((r) => r.was_inserted).length,
-        updated: result.rows.filter((r) => !r.was_inserted).length,
       });
     }
 

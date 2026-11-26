@@ -34,7 +34,7 @@ async function toggleMainStatus(ctx, listId, userId, isMain) {
 
     if (isMain === false) {
       await client.query(
-        `UPDATE lists SET is_main = FALSE, updated_at = NOW() WHERE id = $1`,
+        `UPDATE lists SET is_main = FALSE, updated_at = NOW() WHERE id = $1 AND is_main IS DISTINCT FROM FALSE`,
         [list.id]
       );
       return { list, year: listYear, isRemoval: true };
@@ -58,17 +58,17 @@ async function toggleMainStatus(ctx, listId, userId, isMain) {
 
     await client.query(
       `UPDATE lists SET is_main = FALSE, updated_at = NOW()
-       WHERE user_id = $1
+       WHERE user_id = $1 AND is_main AND id <> $3
          AND id IN (
            SELECT l.id FROM lists l
            LEFT JOIN list_groups g ON l.group_id = g.id
            WHERE l.user_id = $1 AND (l.year = $2 OR g.year = $2)
          )`,
-      [userId, listYear]
+      [userId, listYear, list.id]
     );
 
     await client.query(
-      `UPDATE lists SET is_main = TRUE, updated_at = NOW() WHERE id = $1`,
+      `UPDATE lists SET is_main = TRUE, updated_at = NOW() WHERE id = $1 AND is_main IS DISTINCT FROM TRUE`,
       [list.id]
     );
 

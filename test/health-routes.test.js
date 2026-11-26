@@ -78,6 +78,28 @@ test('GET /api/health reports unhealthy when db response time is missing', async
   assert.strictEqual(response.body.readiness.latencyHealthy, false);
 });
 
+test('readiness retries pending migrations, reuses a clean check and still detects a database outage', async () => {
+  const app = express();
+  let checks = 0;
+  let status = 'healthy';
+  registerHealthRoutes(
+    app,
+    {},
+    {
+      ready: Promise.resolve(),
+      healthCheck: async () => ({ status, responseTime: 1 }),
+      createMigrationManager: () => ({
+        getMigrationStatus: async () => [{ executed: ++checks > 1 }],
+      }),
+    }
+  );
+  await request(app).get('/ready').expect(503);
+  await request(app).get('/ready').expect(200);
+  status = 'unhealthy';
+  await request(app).get('/ready').expect(503);
+  assert.equal(checks, 2);
+});
+
 test('metrics retains published localhost/private-network and development access', async (t) => {
   const previous = process.env.NODE_ENV;
   try {

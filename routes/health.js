@@ -43,17 +43,31 @@ function registerHealthRoutes(app, pool, options = {}) {
     });
 
   const migrationManager = createMigrationManager(pool);
+  // Each managed database epoch starts a new application process. Only cache a
+  // clean check, and periodically revalidate even within the same epoch.
+  let verifiedUntil = 0;
+  let checking;
+  function pendingCount() {
+    if (Date.now() < verifiedUntil) return 0;
+    checking ??= migrationManager
+      .getMigrationStatus()
+      .then((entries) => {
+        const count = entries.filter((entry) => !entry.executed).length;
+        if (!count) verifiedUntil = Date.now() + 30_000;
+        return count;
+      })
+      .finally(() => {
+        checking = null;
+      });
+    return checking;
+  }
 
   async function getReadiness() {
     const dbHealth = await healthCheckFn(pool);
     const responseTime = dbHealth.responseTime ?? Number.MAX_SAFE_INTEGER;
     const latencyThresholdMs =
       Number.parseInt(process.env.DB_READY_MAX_MS || '1000', 10) || 1000;
-    const pendingMigrations = startupState.ready
-      ? (await migrationManager.getMigrationStatus()).filter(
-          (item) => !item.executed
-        ).length
-      : null;
+    const pendingMigrations = startupState.ready ? await pendingCount() : null;
 
     const poolState = {
       total: pool?.totalCount || 0,

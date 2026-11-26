@@ -42,38 +42,28 @@ function createListFetchers(deps = {}) {
          a.genre_2,
          a.album_taxonomy,
          a.taxonomy_updated_at,
-         (SELECT m.external_album_id FROM album_service_mappings m
-           WHERE m.album_id = li.album_id AND m.service = 'rateyourmusic'
-           LIMIT 1) AS rym_numeric_id,
-         (SELECT m.external_url FROM album_service_mappings m
-           WHERE m.album_id = li.album_id AND m.service = 'rateyourmusic'
-           LIMIT 1) AS rym_canonical_url,
+          mx.rym_numeric_id, mx.rym_canonical_url,
          a.tracks,
           a.cover_image_format,
            a.cover_image_updated_at,
            a.cover_thumbnail_updated_at,
           a.summary,
          a.summary_source,
-         COALESCE((
-           SELECT json_agg(m.service ORDER BY m.service)
-           FROM album_service_mappings m
-            WHERE m.album_id = li.album_id
-               AND (m.strategy LIKE 'availability:%' OR m.external_url IS NOT NULL)
-              AND m.service = ANY($2)
-          ), '[]'::json) AS availability,
-         COALESCE((
-           SELECT json_agg(
-             json_build_object('service', m.service, 'url', m.external_url)
-             ORDER BY m.service
-           )
-           FROM album_service_mappings m
-            WHERE m.album_id = li.album_id
-               AND m.service = ANY($2)
-               AND m.external_url IS NOT NULL
-         ), '[]'::json) AS availability_links
+          COALESCE(mx.services, '[]'::json) AS availability,
+          COALESCE(mx.links, '[]'::json) AS availability_links
        FROM lists l
        LEFT JOIN list_items li ON li.list_id = l._id
-       LEFT JOIN albums a ON li.album_id = a.album_id
+        LEFT JOIN albums a ON li.album_id = a.album_id
+        LEFT JOIN LATERAL (
+          SELECT max(external_album_id) FILTER (WHERE service = 'rateyourmusic') AS rym_numeric_id,
+                 max(external_url) FILTER (WHERE service = 'rateyourmusic') AS rym_canonical_url,
+                 json_agg(service ORDER BY service) FILTER (
+                   WHERE service = ANY($2) AND (strategy LIKE 'availability:%' OR external_url IS NOT NULL)
+                 ) AS services,
+                 json_agg(json_build_object('service', service, 'url', external_url) ORDER BY service)
+                   FILTER (WHERE service = ANY($2) AND external_url IS NOT NULL) AS links
+          FROM album_service_mappings WHERE album_id = li.album_id
+        ) mx ON true
        WHERE l.user_id = $1
        ORDER BY l.sort_order, l.name, li.position`,
       [userId, AVAILABILITY_SERVICES],

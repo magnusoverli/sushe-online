@@ -1,5 +1,6 @@
 const { triggerPlaycountRefresh } = require('./item-playcount-refresh');
 const { ensureDb } = require('../../db/postgres');
+const { albumBatchKey } = require('../../utils/album-batch-key');
 
 function toBackgroundItem({ album, upsertResult }) {
   return {
@@ -52,7 +53,14 @@ function buildBatchInsertPayload(itemsToInsert, listId, timestamp) {
   return payload;
 }
 
-async function insertListItems(ctx, client, listId, albums, timestamp) {
+async function insertListItems(
+  ctx,
+  client,
+  listId,
+  albums,
+  timestamp,
+  existingItems
+) {
   const result = {
     sourceObservationResults: [],
     warnings: [],
@@ -63,7 +71,11 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
     .map((album, index) => ({ album, index }))
     .filter(({ album }) => album);
   const validAlbums = validEntries.map(({ album }) => album);
-  if (validAlbums.length === 0) return result;
+  if (validAlbums.length === 0) {
+    if (existingItems?.length)
+      await client.query('DELETE FROM list_items WHERE list_id = $1', [listId]);
+    return result;
+  }
 
   const upsertResults = await ctx.batchUpsertAlbumRecords(
     validAlbums,
@@ -72,7 +84,7 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
   );
 
   const canonicalEntries = validEntries.map(({ album, index }) => {
-    const key = `${album.artist}|${album.album}`;
+    const key = albumBatchKey(album);
     const upsertResult = upsertResults.get(key);
     if (!upsertResult) {
       throw new Error(
@@ -86,13 +98,19 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
   await applySourceObservations(ctx, client, canonicalEntries, result);
   result.backgroundItems = canonicalEntries.map(toBackgroundItem);
 
+  const existingIds = new Map(
+    (existingItems || []).map((row) => [row.album_id, row._id])
+  );
   const itemsToInsert = canonicalEntries.map(({ album, albumId }, index) => {
     return {
       // Reuse the client-provided id for existing items so a full-list save
       // (replaceListItems) keeps list-item _ids stable. Other features key on
       // _id (track picks, playcounts); regenerating it orphaned them until a
       // page refresh. New items (no _id yet) still get a fresh id.
-      _id: album._id || ctx.crypto.randomBytes(12).toString('hex'),
+      _id:
+        existingIds.get(albumId) ||
+        album._id ||
+        ctx.crypto.randomBytes(12).toString('hex'),
       album_id: albumId,
       position: index + 1,
       comments: album.comments || null,
@@ -107,33 +125,18 @@ async function insertListItems(ctx, client, listId, albums, timestamp) {
     };
   });
 
-  const payload = buildBatchInsertPayload(itemsToInsert, listId, timestamp);
-  await client.query(
-    `INSERT INTO list_items (
-      _id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track,
-      is_disqualified, disqualification_reason,
-      created_at, updated_at
-    )
-    SELECT * FROM UNNEST(
-      $1::text[], $2::text[], $3::text[], $4::int[], $5::text[], $6::text[],
-      $7::text[], $8::text[], $9::boolean[], $10::text[], $11::timestamptz[], $12::timestamptz[]
-    ) AS t(_id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track,
-      is_disqualified, disqualification_reason, created_at, updated_at)`,
-    [
-      payload.itemIds,
-      payload.listIds,
-      payload.albumIds,
-      payload.positions,
-      payload.comments,
-      payload.comments2,
-      payload.primaryTracks,
-      payload.secondaryTracks,
-      payload.disqualified,
-      payload.disqualificationReasons,
-      payload.createdAts,
-      payload.updatedAts,
-    ]
-  );
+  if (existingItems) {
+    const retained = new Set(itemsToInsert.map((item) => item.album_id));
+    const obsolete = existingItems.filter(
+      (item) => !retained.has(item.album_id)
+    );
+    if (obsolete.length)
+      await client.query(
+        'DELETE FROM list_items WHERE list_id = $1 AND _id = ANY($2::text[])',
+        [listId, obsolete.map((item) => item._id)]
+      );
+  }
+  await writeBatch(client, listId, itemsToInsert, timestamp, !!existingItems);
 
   ctx.logger?.debug('Inserted full list item batch', {
     listId,
@@ -265,7 +268,7 @@ async function processAdditions(ctx, client, list, added, timestamp) {
     client
   );
   const canonicalEntries = validEntries.map(({ album, index }) => {
-    const upsertResult = upsertResults.get(`${album.artist}|${album.album}`);
+    const upsertResult = upsertResults.get(albumBatchKey(album));
     return { album, index, albumId: upsertResult?.albumId, upsertResult };
   });
   await applySourceObservations(
@@ -309,40 +312,57 @@ async function processAdditions(ctx, client, list, added, timestamp) {
 
   if (itemsToInsert.length === 0) return result;
 
-  const payload = buildBatchInsertPayload(itemsToInsert, list._id, timestamp);
-  await client.query(
-    `INSERT INTO list_items (
-      _id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track,
-      is_disqualified, disqualification_reason,
-      created_at, updated_at
-    )
-    SELECT * FROM UNNEST(
-      $1::text[], $2::text[], $3::text[], $4::int[], $5::text[], $6::text[],
-      $7::text[], $8::text[], $9::boolean[], $10::text[], $11::timestamptz[], $12::timestamptz[]
-    ) AS t(_id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track,
-      is_disqualified, disqualification_reason, created_at, updated_at)`,
-    [
-      payload.itemIds,
-      payload.listIds,
-      payload.albumIds,
-      payload.positions,
-      payload.comments,
-      payload.comments2,
-      payload.primaryTracks,
-      payload.secondaryTracks,
-      payload.disqualified,
-      payload.disqualificationReasons,
-      payload.createdAts,
-      payload.updatedAts,
-    ]
-  );
-
+  await writeBatch(client, list._id, itemsToInsert, timestamp);
   result.changeCount = itemsToInsert.length;
   ctx.logger?.debug('Batch insert list items', {
     listId: list._id,
     count: itemsToInsert.length,
   });
   return result;
+}
+
+async function writeBatch(client, listId, items, timestamp, replace = false) {
+  const payload = buildBatchInsertPayload(items, listId, timestamp);
+  const columns = `_id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track,
+      is_disqualified, disqualification_reason, created_at, updated_at`;
+  const source = `UNNEST(
+      $1::text[], $2::text[], $3::text[], $4::int[], $5::text[], $6::text[],
+      $7::text[], $8::text[], $9::boolean[], $10::text[], $11::timestamptz[], $12::timestamptz[]
+    ) AS t(${columns})`;
+  const fields = [
+    'position',
+    'comments',
+    'comments_2',
+    'primary_track',
+    'secondary_track',
+    'is_disqualified',
+    'disqualification_reason',
+  ];
+  const tuple = (alias) =>
+    fields.map((field) => `${alias}.${field}`).join(', ');
+  const sql = replace
+    ? `MERGE INTO list_items AS li USING ${source} ON li.list_id = t.list_id AND li.album_id = t.album_id
+       WHEN MATCHED AND (${tuple('li')}) IS DISTINCT FROM (${tuple('t')})
+         THEN UPDATE SET (${fields.join(', ')}, updated_at) = (${tuple('t')}, t.updated_at)
+       WHEN NOT MATCHED THEN INSERT (${columns}) VALUES (${columns
+         .split(',')
+         .map((c) => `t.${c.trim()}`)
+         .join(', ')})`
+    : `INSERT INTO list_items (${columns}) SELECT * FROM ${source}`;
+  await client.query(sql, [
+    payload.itemIds,
+    payload.listIds,
+    payload.albumIds,
+    payload.positions,
+    payload.comments,
+    payload.comments2,
+    payload.primaryTracks,
+    payload.secondaryTracks,
+    payload.disqualified,
+    payload.disqualificationReasons,
+    payload.createdAts,
+    payload.updatedAts,
+  ]);
 }
 
 async function processPositionUpdates(client, listId, updated, timestamp) {
@@ -392,8 +412,21 @@ function createListItemOperations(deps = {}) {
   }
 
   return {
-    insertListItems: (client, listId, albums, timestamp) =>
-      insertListItems(context, client, listId, albums, timestamp),
+    insertListItems: (
+      client,
+      listId,
+      albums,
+      timestamp,
+      existingItems = undefined
+    ) =>
+      insertListItems(
+        context,
+        client,
+        listId,
+        albums,
+        timestamp,
+        existingItems
+      ),
     processRemovals,
     processAdditions: (client, list, added, timestamp) =>
       processAdditions(context, client, list, added, timestamp),

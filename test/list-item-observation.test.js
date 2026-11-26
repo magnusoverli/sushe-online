@@ -31,7 +31,8 @@ it('maps duplicate-name inputs to one canonical ID and applies both observations
     crypto: { randomBytes: () => Buffer.from('123456789012') },
     upsertAlbumRecord: mock.fn(),
     batchUpsertAlbumRecords: mock.fn(
-      async () => new Map([['Artist|Album', { albumId: 'canonical-1' }]])
+      async () =>
+        new Map([['[null,"Artist","Album"]', { albumId: 'canonical-1' }]])
     ),
     sourceObservationService,
   });

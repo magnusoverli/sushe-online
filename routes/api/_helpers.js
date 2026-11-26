@@ -7,6 +7,7 @@
 // Import shared utilities
 const { createAggregateList } = require('../../services/aggregate-list');
 const { createAlbumCanonical } = require('../../services/album-canonical');
+const { albumBatchKey } = require('../../utils/album-batch-key');
 const {
   createAlbumCoverService,
 } = require('../../services/album-cover-service');
@@ -292,7 +293,7 @@ function createHelpers(deps) {
     const explicitCoverAlbumIds = new Set();
     for (const album of albums) {
       if (!album?.cover_image) continue;
-      const key = `${album.artist}|${album.album}`;
+      const key = albumBatchKey(album);
       const result = results.get(key);
       if (!result) continue;
 
@@ -356,7 +357,7 @@ function createHelpers(deps) {
     }
 
     results.forEach((result, key) => {
-      const [artist, album] = key.split('|');
+      const [, artist, album] = JSON.parse(key);
 
       // Trigger summary fetch if needed
       if (result.needsSummaryFetch) {

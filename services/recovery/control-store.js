@@ -39,7 +39,9 @@ function createControlStore(connectionString) {
     },
     async uploaded(id, size) {
       const result = await pool.query(
-        "UPDATE recovery_jobs SET status = 'received', file_bytes = $2, updated_at = NOW() WHERE id = $1 AND status = 'uploading' RETURNING id",
+        `WITH received AS (UPDATE recovery_jobs SET status='received', file_bytes=$2, updated_at=NOW()
+          WHERE id=$1 AND status='uploading' RETURNING id)
+         SELECT id, pg_notify('sushe_recovery_received','') FROM received`,
         [id, size]
       );
       return result.rows.length === 1;

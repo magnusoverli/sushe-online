@@ -170,6 +170,15 @@ async function prepareLegacyUpgrade(deployment, env, abort) {
     )
       throw new Error('Another managed application owns this deployment');
     if (!state.cloned) await verifyCloneCapacity(client, state.original);
+    // The lease connects to the postgres operator DB, outside app backups.
+    if (
+      (
+        await client.query(
+          "SELECT 'pg_stat_statements' = ANY(string_to_array(replace(current_setting('shared_preload_libraries'),' ',''),',')) AS enabled"
+        )
+      ).rows[0]?.enabled
+    )
+      await client.query('CREATE EXTENSION IF NOT EXISTS pg_stat_statements');
     logger.info('Automatic deployment: verifying database authentication');
     await hardenAuthentication(client, deployment);
     await client.query(
